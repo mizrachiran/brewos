@@ -70,7 +70,7 @@ endif()
 # -----------------------------------------------------------------------------
 
 if(NOT DEFINED PCB_TYPE)
-    set(PCB_TYPE "PCB_TYPE_V1")
+    set(PCB_TYPE "PCB_TYPE_ECM_V1")
 endif()
 message(STATUS "Building for PCB: ${PCB_TYPE}")
 
