@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BrewOS - Open Source Espresso Machine Firmware</title>
+    <meta name="description" content="Open-source firmware for espresso machine control. PID temperature control, WiFi connectivity, and multi-machine support.">
+    <meta name="keywords" content="espresso, coffee, PID, firmware, raspberry pi pico, esp32, open source">
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="BrewOS - Open Source Espresso Machine Firmware">
+    <meta property="og:description" content="Transform your espresso machine with precise PID control, WiFi monitoring, and OTA updates.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://brewos.io">
+    
+    <!-- Favicon (add your own) -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☕</text></svg>">
+    
+    <style>
+        :root {
+            --bg-dark: #0d1117;
+            --bg-card: #161b22;
+            --border: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent: #f97316;
+            --accent-glow: rgba(249, 115, 22, 0.3);
+            --success: #3fb950;
+            --gradient-start: #1a1a2e;
+            --gradient-end: #16213e;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+        
+        /* Header */
+        header {
+            padding: 24px 0;
+            border-bottom: 1px solid var(--border);
+            background: rgba(13, 17, 23, 0.8);
+            backdrop-filter: blur(10px);
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 100;
+        }
+        
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .logo-icon {
+            font-size: 1.8rem;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 32px;
+            list-style: none;
+        }
+        
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        
+        .nav-links a:hover {
+            color: var(--text-primary);
+        }
+        
+        /* Hero */
+        .hero {
+            padding: 160px 0 100px;
+            text-align: center;
+        }
+        
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin-bottom: 24px;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto 40px;
+        }
+        
+        .cta-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 14px 28px;
+            border-radius: 8px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 30px var(--accent-glow);
+        }
+        
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+        
+        .btn-secondary:hover {
+            border-color: var(--text-secondary);
+        }
+        
+        /* Features */
+        .features {
+            padding: 80px 0;
+        }
+        
+        .section-title {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 48px;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+        
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 32px;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--accent);
+        }
+        
+        .feature-icon {
+            font-size: 2.5rem;
+            margin-bottom: 16px;
+        }
+        
+        .feature-card h3 {
+            font-size: 1.25rem;
+            margin-bottom: 12px;
+        }
+        
+        .feature-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+        
+        /* Machines */
+        .machines {
+            padding: 80px 0;
+            background: rgba(0, 0, 0, 0.2);
+        }
+        
+        .machine-list {
+            display: flex;
+            justify-content: center;
+            gap: 48px;
+            flex-wrap: wrap;
+        }
+        
+        .machine-item {
+            text-align: center;
+        }
+        
+        .machine-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-top: 8px;
+        }
+        
+        .status-supported {
+            background: rgba(63, 185, 80, 0.2);
+            color: var(--success);
+        }
+        
+        .status-planned {
+            background: rgba(139, 148, 158, 0.2);
+            color: var(--text-secondary);
+        }
+        
+        /* Architecture */
+        .architecture {
+            padding: 80px 0;
+        }
+        
+        .arch-diagram {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 32px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            white-space: pre;
+            line-height: 1.4;
+            color: var(--text-secondary);
+        }
+        
+        /* Footer */
+        footer {
+            padding: 48px 0;
+            border-top: 1px solid var(--border);
+            text-align: center;
+        }
+        
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+        
+        .footer-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        
+        .footer-links a:hover {
+            color: var(--text-primary);
+        }
+        
+        .copyright {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+            
+            .nav-links {
+                display: none;
+            }
+            
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav class="container">
+            <a href="/" class="logo">
+                <span class="logo-icon">☕</span>
+                <span>BrewOS</span>
+            </a>
+            <ul class="nav-links">
+                <li><a href="#features">Features</a></li>
+                <li><a href="#machines">Machines</a></li>
+                <li><a href="https://github.com/mizrachiran/brewos">GitHub</a></li>
+                <li><a href="https://github.com/mizrachiran/brewos/blob/main/SETUP.md">Docs</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="container">
+                <h1>Upgrade Your Espresso Machine</h1>
+                <p>Open-source firmware that brings precise PID temperature control, WiFi connectivity, and modern features to your espresso machine.</p>
+                <div class="cta-buttons">
+                    <a href="https://github.com/mizrachiran/brewos" class="btn btn-primary">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                        View on GitHub
+                    </a>
+                    <a href="https://github.com/mizrachiran/brewos/blob/main/SETUP.md" class="btn btn-secondary">
+                        Get Started →
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <section class="features" id="features">
+            <div class="container">
+                <h2 class="section-title">Features</h2>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">🎯</div>
+                        <h3>Precise PID Control</h3>
+                        <p>Sub-degree temperature stability with dual independent PID loops for brew and steam boilers.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">📱</div>
+                        <h3>WiFi Connected</h3>
+                        <p>Monitor and control via web interface. Real-time temperature graphs and shot statistics.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🔄</div>
+                        <h3>OTA Updates</h3>
+                        <p>Update firmware wirelessly through the web interface. No cables needed after initial setup.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🛡️</div>
+                        <h3>Safety First</h3>
+                        <p>Hardware watchdog, temperature limits, water interlocks, and fail-safe design.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🔧</div>
+                        <h3>Multi-Machine</h3>
+                        <p>One firmware supports dual boiler, single boiler, and heat exchanger machines.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">📊</div>
+                        <h3>Data Logging</h3>
+                        <p>Track shots, temperatures, and power consumption. Cleaning reminders included.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="machines" id="machines">
+            <div class="container">
+                <h2 class="section-title">Supported Machines</h2>
+                <div class="machine-list">
+                    <div class="machine-item">
+                        <h3>Dual Boiler</h3>
+                        <p>ECM Synchronika, Profitec Pro 700</p>
+                        <span class="machine-status status-supported">✓ Supported</span>
+                    </div>
+                    <div class="machine-item">
+                        <h3>Single Boiler</h3>
+                        <p>Rancilio Silvia, Gaggia Classic</p>
+                        <span class="machine-status status-supported">✓ Supported</span>
+                    </div>
+                    <div class="machine-item">
+                        <h3>Heat Exchanger</h3>
+                        <p>E61 HX machines</p>
+                        <span class="machine-status status-supported">✓ Supported</span>
+                    </div>
+                    <div class="machine-item">
+                        <h3>Thermoblock</h3>
+                        <p>Coming soon</p>
+                        <span class="machine-status status-planned">Planned</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="architecture">
+            <div class="container">
+                <h2 class="section-title">Architecture</h2>
+                <div class="arch-diagram">
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              SYSTEM ARCHITECTURE                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│    ┌──────────────┐         ┌──────────────┐         ┌──────────────┐       │
+│    │   SENSORS    │         │  PICO RP2040 │         │   ACTUATORS  │       │
+│    │              │         │              │         │              │       │
+│    │ • NTC ×2     │────────▶│ • Safety     │────────▶│ • SSR ×2     │       │
+│    │ • Thermocouple│        │ • PID Control│         │ • Relay ×4   │       │
+│    │ • Pressure   │         │ • State Mgmt │         │ • Buzzer     │       │
+│    │ • Levels ×3  │         │              │         │ • LED        │       │
+│    └──────────────┘         └──────┬───────┘         └──────────────┘       │
+│                                    │                                         │
+│                                    │ Binary UART (921600 baud)               │
+│                                    ▼                                         │
+│                           ┌──────────────┐                                   │
+│    ┌──────────────┐       │    ESP32     │       ┌──────────────┐           │
+│    │    PZEM      │──────▶│   Display    │◀─────▶│  External    │           │
+│    │  Power Meter │ UART  │   Module     │ WiFi  │  (MQTT, App) │           │
+│    └──────────────┘       └──────────────┘       └──────────────┘           │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-links">
+                <a href="https://github.com/mizrachiran/brewos">GitHub</a>
+                <a href="https://github.com/mizrachiran/brewos/blob/main/SETUP.md">Documentation</a>
+                <a href="https://github.com/mizrachiran/brewos/issues">Issues</a>
+                <a href="https://github.com/mizrachiran/brewos/discussions">Discussions</a>
+                <a href="https://github.com/mizrachiran/brewos/blob/main/LICENSE">License</a>
+            </div>
+            <p class="copyright">
+                ☕ BrewOS — Apache 2.0 + Commons Clause
+            </p>
+        </div>
+    </footer>
+</body>
+</html>
+
