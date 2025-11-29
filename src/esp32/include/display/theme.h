@@ -1,7 +1,11 @@
 /**
  * BrewOS Coffee Theme
  * 
- * Dark theme with warm coffee-inspired accent colors
+ * Dark theme using official BrewOS brand colors:
+ * - Primary Dark:   #361E12 (rich coffee brown)
+ * - Accent:         #D5A071 (caramel/tan)
+ * - Medium:         #714C30 (medium brown)
+ * - Background:     #1A0F0A (darkest coffee)
  */
 
 #ifndef THEME_H
@@ -10,18 +14,19 @@
 #include <lvgl.h>
 
 // =============================================================================
-// Color Definitions (RGB888 format)
+// Color Definitions (RGB888 format) - BrewOS Brand Colors
 // =============================================================================
 
-// Background colors
-#define COLOR_BG_DARK           lv_color_hex(0x1A1512)  // Dark brown/black
-#define COLOR_BG_CARD           lv_color_hex(0x2D2420)  // Card background
-#define COLOR_BG_ELEVATED       lv_color_hex(0x3D322C)  // Elevated surface
+// Background colors (from brand palette)
+#define COLOR_BG_DARK           lv_color_hex(0x1A0F0A)  // Darkest coffee
+#define COLOR_BG_CARD           lv_color_hex(0x361E12)  // Dark brown (brand primary)
+#define COLOR_BG_ELEVATED       lv_color_hex(0x4A2A1A)  // Elevated surface
 
-// Accent colors
-#define COLOR_ACCENT_AMBER      lv_color_hex(0xD4A574)  // Warm amber (primary)
-#define COLOR_ACCENT_ORANGE     lv_color_hex(0xE85D04)  // Brewing orange
-#define COLOR_ACCENT_COPPER     lv_color_hex(0xB87333)  // Copper accent
+// Accent colors (from brand palette)
+#define COLOR_ACCENT_PRIMARY    lv_color_hex(0xD5A071)  // Caramel/tan (brand accent)
+#define COLOR_ACCENT_AMBER      lv_color_hex(0xD5A071)  // Alias for primary
+#define COLOR_ACCENT_ORANGE     lv_color_hex(0xC4703C)  // Warm orange
+#define COLOR_ACCENT_COPPER     lv_color_hex(0x714C30)  // Medium brown (brand)
 
 // Temperature indicator colors
 #define COLOR_TEMP_COLD         lv_color_hex(0x3B82F6)  // Blue (cold/heating up)
@@ -35,11 +40,11 @@
 #define COLOR_ERROR             lv_color_hex(0xDC2626)  // Red
 #define COLOR_INFO              lv_color_hex(0x3B82F6)  // Blue
 
-// Text colors
-#define COLOR_TEXT_PRIMARY      lv_color_hex(0xFAFAFA)  // White
-#define COLOR_TEXT_SECONDARY    lv_color_hex(0xD4D4D4)  // Light gray
-#define COLOR_TEXT_MUTED        lv_color_hex(0x9CA3AF)  // Gray
-#define COLOR_TEXT_DISABLED     lv_color_hex(0x6B7280)  // Dark gray
+// Text colors (optimized for dark brown backgrounds)
+#define COLOR_TEXT_PRIMARY      lv_color_hex(0xFBFCF8)  // Cream white
+#define COLOR_TEXT_SECONDARY    lv_color_hex(0xD5A071)  // Caramel (accent)
+#define COLOR_TEXT_MUTED        lv_color_hex(0x9B6E46)  // Light coffee
+#define COLOR_TEXT_DISABLED     lv_color_hex(0x714C30)  // Medium brown
 
 // Pressure gauge colors
 #define COLOR_PRESSURE_LOW      lv_color_hex(0x3B82F6)  // Blue (< 5 bar)
@@ -50,8 +55,16 @@
 // Arc/Gauge Colors
 // =============================================================================
 
-#define COLOR_ARC_BG            lv_color_hex(0x3D322C)  // Arc background
-#define COLOR_ARC_INDICATOR     COLOR_ACCENT_AMBER      // Arc indicator
+#define COLOR_ARC_BG            lv_color_hex(0x4A2A1A)  // Arc background (elevated)
+#define COLOR_ARC_INDICATOR     COLOR_ACCENT_PRIMARY    // Arc indicator (caramel)
+
+// =============================================================================
+// Brand-specific UI Colors
+// =============================================================================
+
+#define COLOR_GEAR_SILVER       lv_color_hex(0xBBB9B5)  // Gear/metallic elements
+#define COLOR_CREAM             lv_color_hex(0xFBFCF8)  // Cream white
+#define COLOR_COFFEE_LIGHT      lv_color_hex(0x9B6E46)  // Light coffee
 
 // =============================================================================
 // Font Definitions
