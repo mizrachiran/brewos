@@ -32,6 +32,9 @@
 // BLE Scale
 #include "scale/scale_manager.h"
 
+// Brew-by-Weight
+#include "brew_by_weight.h"
+
 // Global instances
 WiFiManager wifiManager;
 PicoUART picoUart(Serial1);
@@ -180,6 +183,7 @@ void setup() {
     
     ui.onSetTargetWeight([](float weight) {
         LOG_I("UI: Set target weight to %.1fg", weight);
+        brewByWeight.setTargetWeight(weight);
         machineState.target_weight = weight;
     });
     
@@ -311,10 +315,31 @@ void setup() {
         }
     }
     
-    // Set default state values for demo
+    // Initialize Brew-by-Weight controller
+    LOG_I("Initializing Brew-by-Weight...");
+    brewByWeight.begin();
+    
+    // Connect brew-by-weight callbacks
+    brewByWeight.onStop([]() {
+        LOG_I("BBW: Sending WEIGHT_STOP signal to Pico");
+        picoUart.setWeightStop(true);
+        ui.showNotification("Target Reached!", 2000);
+        
+        // Clear stop signal after a short delay
+        // (Pico will latch the stop, we just pulse the signal)
+        delay(100);
+        picoUart.setWeightStop(false);
+    });
+    
+    brewByWeight.onTare([]() {
+        scaleManager.tare();
+    });
+    
+    // Set default state values from BBW settings
     machineState.brew_setpoint = 93.0f;
     machineState.steam_setpoint = 145.0f;
-    machineState.target_weight = 36.0f;
+    machineState.target_weight = brewByWeight.getTargetWeight();
+    machineState.dose_weight = brewByWeight.getDoseWeight();
     machineState.brew_max_temp = 105.0f;
     machineState.steam_max_temp = 160.0f;
     machineState.dose_weight = 18.0f;
@@ -344,6 +369,20 @@ void loop() {
     // Update BLE Scale
     if (scaleEnabled) {
         scaleManager.loop();
+    }
+    
+    // Update Brew-by-Weight controller
+    brewByWeight.update(
+        machineState.is_brewing,
+        scaleManager.getState().weight,
+        scaleManager.isConnected()
+    );
+    
+    // Sync BBW state to machine state
+    if (brewByWeight.isActive()) {
+        machineState.brew_weight = brewByWeight.getState().current_weight;
+        machineState.target_weight = brewByWeight.getTargetWeight();
+        machineState.dose_weight = brewByWeight.getDoseWeight();
     }
     
     // Update Pico connection status

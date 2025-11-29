@@ -11,6 +11,7 @@ The ESP32-S3 handles connectivity, user interface, and advanced features for the
 | [MQTT Integration](integrations/MQTT.md) | MQTT setup and Home Assistant |
 | [Web API Reference](integrations/Web_API.md) | HTTP endpoints and WebSocket |
 | [BLE Scales](integrations/BLE_Scales.md) | Bluetooth scale integration |
+| [Brew-by-Weight](integrations/Brew_By_Weight.md) | Auto-stop at target weight |
 
 ## Hardware
 
@@ -32,8 +33,8 @@ The ESP32-S3 handles connectivity, user interface, and advanced features for the
 
 ### In Progress 🔲
 
-- LVGL display UI
 - BLE scale integration
+- Brew-by-weight auto-stop
 - Cloud connectivity
 
 ## Building
@@ -60,8 +61,9 @@ docs/esp32/
 ├── Implementation_Plan.md # Development status
 ├── UI_Design.md           # Display UI specification
 └── integrations/
-    ├── MQTT.md            # MQTT documentation
-    ├── Web_API.md         # API reference
-    └── BLE_Scales.md      # Bluetooth scales
+    ├── MQTT.md              # MQTT documentation
+    ├── Web_API.md           # API reference
+    ├── BLE_Scales.md        # Bluetooth scales
+    └── Brew_By_Weight.md    # Auto-stop feature
 ```
 

@@ -2,6 +2,8 @@
 #include "config.h"
 #include "pico_uart.h"
 #include "mqtt_client.h"
+#include "brew_by_weight.h"
+#include "scale/scale_manager.h"
 #include <LittleFS.h>
 
 WebServer::WebServer(WiFiManager& wifiManager, PicoUART& picoUart, MQTTClient& mqttClient)
@@ -111,6 +113,75 @@ void WebServer::setupRoutes() {
     
     _server.on("/api/mqtt/test", HTTP_POST, [this](AsyncWebServerRequest* request) {
         handleTestMQTT(request);
+    });
+    
+    // Brew-by-Weight settings
+    _server.on("/api/scale/settings", HTTP_GET, [](AsyncWebServerRequest* request) {
+        JsonDocument doc;
+        bbw_settings_t settings = brewByWeight.getSettings();
+        
+        doc["target_weight"] = settings.target_weight;
+        doc["dose_weight"] = settings.dose_weight;
+        doc["stop_offset"] = settings.stop_offset;
+        doc["auto_stop"] = settings.auto_stop;
+        doc["auto_tare"] = settings.auto_tare;
+        
+        String response;
+        serializeJson(doc, response);
+        request->send(200, "application/json", response);
+    });
+    
+    _server.on("/api/scale/settings", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            JsonDocument doc;
+            if (deserializeJson(doc, data, len)) {
+                request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            
+            if (!doc["target_weight"].isNull()) {
+                brewByWeight.setTargetWeight(doc["target_weight"].as<float>());
+            }
+            if (!doc["dose_weight"].isNull()) {
+                brewByWeight.setDoseWeight(doc["dose_weight"].as<float>());
+            }
+            if (!doc["stop_offset"].isNull()) {
+                brewByWeight.setStopOffset(doc["stop_offset"].as<float>());
+            }
+            if (!doc["auto_stop"].isNull()) {
+                brewByWeight.setAutoStop(doc["auto_stop"].as<bool>());
+            }
+            if (!doc["auto_tare"].isNull()) {
+                brewByWeight.setAutoTare(doc["auto_tare"].as<bool>());
+            }
+            
+            request->send(200, "application/json", "{\"status\":\"ok\"}");
+        }
+    );
+    
+    _server.on("/api/scale/state", HTTP_GET, [](AsyncWebServerRequest* request) {
+        JsonDocument doc;
+        bbw_state_t state = brewByWeight.getState();
+        bbw_settings_t settings = brewByWeight.getSettings();
+        
+        doc["active"] = state.active;
+        doc["current_weight"] = state.current_weight;
+        doc["target_weight"] = settings.target_weight;
+        doc["progress"] = brewByWeight.getProgress();
+        doc["ratio"] = brewByWeight.getCurrentRatio();
+        doc["target_reached"] = state.target_reached;
+        doc["stop_signaled"] = state.stop_signaled;
+        
+        String response;
+        serializeJson(doc, response);
+        request->send(200, "application/json", response);
+    });
+    
+    _server.on("/api/scale/tare", HTTP_POST, [](AsyncWebServerRequest* request) {
+        scaleManager.tare();
+        request->send(200, "application/json", "{\"status\":\"ok\"}");
     });
     
     // 404 handler
