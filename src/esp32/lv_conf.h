@@ -50,7 +50,11 @@
 
 /* Use a custom tick source */
 #define LV_TICK_CUSTOM 1
-#define LV_TICK_CUSTOM_INCLUDE "Arduino.h"
+#ifdef SIMULATOR
+    #define LV_TICK_CUSTOM_INCLUDE "simulator/lv_tick.h"
+#else
+    #define LV_TICK_CUSTOM_INCLUDE "Arduino.h"
+#endif
 #define LV_TICK_CUSTOM_SYS_TIME_EXPR (millis())
 
 /*====================

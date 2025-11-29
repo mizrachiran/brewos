@@ -8,6 +8,7 @@ The ESP32-S3 handles connectivity, user interface, and advanced features for the
 |----------|-------------|
 | [Implementation Plan](Implementation_Plan.md) | Development roadmap and status |
 | [UI Design](UI_Design.md) | Display screens and navigation |
+| [UI Simulator](Simulator.md) | Desktop UI preview tool |
 | [MQTT Integration](integrations/MQTT.md) | MQTT setup and Home Assistant |
 | [Web API Reference](integrations/Web_API.md) | HTTP endpoints and WebSocket |
 | [BLE Scales](integrations/BLE_Scales.md) | Bluetooth scale integration |
@@ -43,10 +44,21 @@ The ESP32-S3 handles connectivity, user interface, and advanced features for the
 
 ```bash
 cd src/esp32
-pio run           # Build
-pio run -t upload # Flash
-pio run -t uploadfs # Upload web UI
+pio run              # Build for ESP32-S3
+pio run -t upload    # Flash to device
+pio run -t uploadfs  # Upload web UI files
+pio run -e simulator # Build UI simulator
 ```
+
+### UI Simulator
+
+Preview theme colors and UI elements on your desktop:
+
+```bash
+./src/scripts/run_simulator.sh
+```
+
+See [Simulator.md](Simulator.md) for details.
 
 ## Configuration
 
@@ -62,6 +74,7 @@ docs/esp32/
 ├── README.md              # This file
 ├── Implementation_Plan.md # Development status
 ├── UI_Design.md           # Display UI specification
+├── Simulator.md           # Desktop UI simulator
 └── integrations/
     ├── MQTT.md              # MQTT documentation
     ├── Web_API.md           # API reference
