@@ -118,19 +118,22 @@ BrewOS supports multiple espresso machine architectures through compile-time con
 | Machine Type | Status | Examples |
 |--------------|--------|----------|
 | **Dual Boiler** | ✅ Supported | ECM Synchronika, Profitec Pro 700, Lelit Bianca |
-| **Single Boiler** | ✅ Supported | Rancilio Silvia, Gaggia Classic, Lelit Anna |
-| **Heat Exchanger** | ✅ Supported | E61 HX machines, Bezzera BZ10 |
+| **Single Boiler** | ✅ Supported | ECM Barista, Profitec Pro 300, Rancilio Silvia |
+| **Heat Exchanger** | ✅ Supported | ECM Mechanika, Profitec Pro 500, E61 HX machines |
 | **Thermoblock** | 🔮 Planned | - |
+
+**👉 [Full Compatibility List](docs/Compatibility.md)** - See validated machines and expected compatible models.
 
 ### Reference Implementation
 
-The ECM Synchronika serves as the reference implementation with complete schematics and documentation:
+The **ECM Synchronika** serves as the reference implementation with complete schematics and documentation:
 
 | Resource | Description |
 |----------|-------------|
 | [Schematic](schematics/ECM_Schematic_Reference.md) | Complete circuit diagrams |
 | [Netlist](schematics/ECM_Netlist.csv) | Component list for PCB |
 | [Wiring Guide](hardware/ESP32_Display_Wiring.md) | Connection details |
+| [Compatibility](docs/Compatibility.md) | Validated & compatible machines |
 
 ---
 
