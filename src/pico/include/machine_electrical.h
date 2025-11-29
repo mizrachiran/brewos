@@ -4,7 +4,7 @@
  * Defines machine-specific electrical specifications (heater power ratings).
  * These are hardware-specific and fixed for each machine model.
  * 
- * See docs/firmware/Machine_Configurations.md for details.
+ * See docs/pico/Machine_Configurations.md for details.
  */
 
 #ifndef MACHINE_ELECTRICAL_H

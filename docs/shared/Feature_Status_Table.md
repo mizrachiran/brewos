@@ -335,16 +335,18 @@ make
 
 | Feature | Status | Location | Notes |
 |---------|--------|----------|-------|
-| **Architecture Documentation** | ✅ | `docs/firmware/Architecture.md` | Complete system architecture |
-| **Requirements Documentation** | ✅ | `docs/firmware/Requirements.md` | Full requirements spec |
-| **Communication Protocol** | ✅ | `docs/firmware/Communication_Protocol.md` | Complete protocol spec |
-| **Implementation Plan** | ✅ | `docs/firmware/Implementation_Plan.md` | Historical phase summaries (see Feature Status Table for current status) |
-| **Phase Summaries** | ✅ | `docs/firmware/Phase*_Summary.md` | Detailed phase documentation |
-| **Water Management Docs** | ✅ | `docs/firmware/Water_Management_Implementation.md` | Water system documentation |
-| **Shot Timer Display Guide** | ✅ | `docs/firmware/Shot_Timer_Display.md` | ESP32 display implementation |
-| **Cleaning Mode Docs** | ✅ | `docs/firmware/Cleaning_Mode_Implementation.md` | Cleaning mode documentation |
-| **Statistics Feature Docs** | ✅ | `docs/firmware/Statistics_Feature.md` | Statistics and analytics documentation |
-| **Error Handling Docs** | ✅ | `docs/firmware/Error_Handling.md` | Error handling and recovery documentation |
+| **Pico Architecture** | ✅ | `docs/pico/Architecture.md` | Complete system architecture |
+| **Pico Requirements** | ✅ | `docs/pico/Requirements.md` | Full requirements spec |
+| **Communication Protocol** | ✅ | `docs/shared/Communication_Protocol.md` | Complete protocol spec |
+| **Pico Implementation Plan** | ✅ | `docs/pico/Implementation_Plan.md` | Pico development status |
+| **ESP32 Implementation Plan** | ✅ | `docs/esp32/Implementation_Plan.md` | ESP32 development status |
+| **MQTT Integration** | ✅ | `docs/esp32/integrations/MQTT.md` | Home Assistant integration |
+| **Web API** | ✅ | `docs/esp32/integrations/Web_API.md` | REST API documentation |
+| **Water Management Docs** | ✅ | `docs/pico/features/Water_Management_Implementation.md` | Water system documentation |
+| **Shot Timer Display Guide** | ✅ | `docs/pico/features/Shot_Timer_Display.md` | Shot timer implementation |
+| **Cleaning Mode Docs** | ✅ | `docs/pico/features/Cleaning_Mode_Implementation.md` | Cleaning mode documentation |
+| **Statistics Feature Docs** | ✅ | `docs/pico/features/Statistics_Feature.md` | Statistics and analytics documentation |
+| **Error Handling Docs** | ✅ | `docs/pico/features/Error_Handling.md` | Error handling and recovery documentation |
 | **Setup Guide** | ✅ | `SETUP.md` | Development environment setup and OTA updates |
 | **Bootloader Implementation** | ✅ | `src/pico/src/bootloader.c` | Serial bootloader for OTA firmware updates |
 | **Code Comments** | ✅ | All source files | Inline documentation |

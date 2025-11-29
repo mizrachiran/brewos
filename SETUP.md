@@ -3,9 +3,10 @@
 This guide will help you set up your development environment for BrewOS.
 
 **See also:**
-- [Firmware Documentation](docs/firmware/README.md) - Firmware overview and architecture
-- [Communication Protocol](docs/firmware/Communication_Protocol.md) - UART protocol details (includes OTA firmware streaming)
-- [Hardware Documentation](docs/README.md) - Complete documentation index
+- [Pico Documentation](docs/pico/README.md) - Pico firmware overview and architecture
+- [ESP32 Documentation](docs/esp32/README.md) - ESP32 firmware and integrations
+- [Communication Protocol](docs/shared/Communication_Protocol.md) - UART protocol details
+- [Documentation Index](docs/README.md) - Complete documentation index
 
 ## Prerequisites
 

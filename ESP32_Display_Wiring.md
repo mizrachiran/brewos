@@ -248,7 +248,7 @@ The Pico side doesn't need changes - it always reads from GPIO21.
 ---
 
 **See Also:**
-- [Hardware Specification](Specification.md) - Complete J15 pinout details
-- [Communication Protocol](../firmware/Communication_Protocol.md) - UART protocol details
-- [ESP32 Firmware Config](../src/esp32/include/config.h) - GPIO pin definitions
+- [Hardware Specification](hardware/Specification.md) - Complete J15 pinout details
+- [Communication Protocol](docs/shared/Communication_Protocol.md) - UART protocol details
+- [ESP32 Firmware Config](src/esp32/include/config.h) - GPIO pin definitions
 

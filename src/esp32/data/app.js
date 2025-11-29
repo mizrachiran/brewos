@@ -51,7 +51,9 @@ const elements = {
 document.addEventListener('DOMContentLoaded', () => {
     initWebSocket();
     initButtons();
+    initMQTT();
     fetchStatus();
+    fetchMQTTConfig();
     
     // Periodic status fetch
     setInterval(fetchStatus, 5000);
@@ -212,12 +214,29 @@ async function fetchStatus() {
         const data = await response.json();
         
         elements.espVersion.textContent = data.esp32?.version || '--';
+        elements.espHeap.textContent = formatBytes(data.esp32?.freeHeap || 0);
+        elements.espUptime.textContent = formatUptime(data.esp32?.uptime || 0);
         
         // Check if in AP mode
         if (data.wifi?.mode === 1) {  // AP_MODE
             elements.wifiSetup.classList.remove('hidden');
         } else {
             elements.wifiSetup.classList.add('hidden');
+        }
+        
+        // Update MQTT status
+        if (data.mqtt) {
+            const statusEl = document.getElementById('mqtt-status');
+            if (!data.mqtt.enabled) {
+                statusEl.textContent = 'Disabled';
+                statusEl.className = 'status-badge disconnected';
+            } else if (data.mqtt.connected) {
+                statusEl.textContent = 'Connected';
+                statusEl.className = 'status-badge connected';
+            } else {
+                statusEl.textContent = data.mqtt.status || 'Disconnected';
+                statusEl.className = 'status-badge disconnected';
+            }
         }
     } catch (e) {
         console.error('Status fetch failed:', e);
@@ -446,6 +465,125 @@ function formatUptime(ms) {
         return `${minutes}m ${seconds % 60}s`;
     } else {
         return `${seconds}s`;
+    }
+}
+
+// MQTT Configuration
+function initMQTT() {
+    document.getElementById('mqtt-save-btn').addEventListener('click', saveMQTTConfig);
+    document.getElementById('mqtt-test-btn').addEventListener('click', testMQTT);
+}
+
+async function fetchMQTTConfig() {
+    try {
+        const response = await fetch('/api/mqtt/config');
+        const config = await response.json();
+        
+        document.getElementById('mqtt-enabled').checked = config.enabled || false;
+        document.getElementById('mqtt-broker').value = config.broker || '';
+        document.getElementById('mqtt-port').value = config.port || 1883;
+        document.getElementById('mqtt-username').value = config.username || '';
+        document.getElementById('mqtt-password').value = '';  // Don't show password
+        document.getElementById('mqtt-topic-prefix').value = config.topic_prefix || 'brewos';
+        document.getElementById('mqtt-ha-discovery').checked = config.ha_discovery !== false;
+        document.getElementById('mqtt-device-id').value = config.ha_device_id || '';
+        
+        updateMQTTStatus(config);
+    } catch (error) {
+        log('Failed to fetch MQTT config: ' + error, 'error');
+    }
+}
+
+function updateMQTTStatus(config) {
+    const statusEl = document.getElementById('mqtt-status');
+    if (!config.enabled) {
+        statusEl.textContent = 'Disabled';
+        statusEl.className = 'status-badge disconnected';
+    } else if (config.connected) {
+        statusEl.textContent = 'Connected';
+        statusEl.className = 'status-badge connected';
+    } else {
+        statusEl.textContent = config.status || 'Disconnected';
+        statusEl.className = 'status-badge disconnected';
+    }
+}
+
+async function saveMQTTConfig() {
+    const messageEl = document.getElementById('mqtt-message');
+    messageEl.textContent = 'Saving...';
+    messageEl.className = 'mqtt-message info';
+    
+    const config = {
+        enabled: document.getElementById('mqtt-enabled').checked,
+        broker: document.getElementById('mqtt-broker').value.trim(),
+        port: parseInt(document.getElementById('mqtt-port').value) || 1883,
+        username: document.getElementById('mqtt-username').value.trim(),
+        password: document.getElementById('mqtt-password').value,
+        topic_prefix: document.getElementById('mqtt-topic-prefix').value.trim() || 'brewos',
+        ha_discovery: document.getElementById('mqtt-ha-discovery').checked,
+        ha_device_id: document.getElementById('mqtt-device-id').value.trim()
+    };
+    
+    // Validate
+    if (config.enabled && !config.broker) {
+        messageEl.textContent = 'Error: Broker address is required';
+        messageEl.className = 'mqtt-message error';
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/mqtt/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            messageEl.textContent = 'Configuration saved successfully';
+            messageEl.className = 'mqtt-message success';
+            log('MQTT configuration saved', 'info');
+            
+            // Refresh config to get updated status
+            setTimeout(fetchMQTTConfig, 1000);
+        } else {
+            messageEl.textContent = 'Error: ' + (result.error || 'Failed to save');
+            messageEl.className = 'mqtt-message error';
+            log('Failed to save MQTT config: ' + (result.error || 'Unknown error'), 'error');
+        }
+    } catch (error) {
+        messageEl.textContent = 'Error: ' + error.message;
+        messageEl.className = 'mqtt-message error';
+        log('Failed to save MQTT config: ' + error, 'error');
+    }
+}
+
+async function testMQTT() {
+    const messageEl = document.getElementById('mqtt-message');
+    messageEl.textContent = 'Testing connection...';
+    messageEl.className = 'mqtt-message info';
+    
+    try {
+        const response = await fetch('/api/mqtt/test', {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            messageEl.textContent = result.message || 'Connection successful!';
+            messageEl.className = 'mqtt-message success';
+            log('MQTT connection test successful', 'info');
+        } else {
+            messageEl.textContent = 'Error: ' + (result.error || 'Connection failed');
+            messageEl.className = 'mqtt-message error';
+            log('MQTT connection test failed: ' + (result.error || 'Unknown error'), 'error');
+        }
+    } catch (error) {
+        messageEl.textContent = 'Error: ' + error.message;
+        messageEl.className = 'mqtt-message error';
+        log('Failed to test MQTT connection: ' + error, 'error');
     }
 }
 

@@ -8,10 +8,11 @@
 
 // Forward declarations
 class PicoUART;
+class MQTTClient;
 
 class WebServer {
 public:
-    WebServer(WiFiManager& wifiManager, PicoUART& picoUart);
+    WebServer(WiFiManager& wifiManager, PicoUART& picoUart, MQTTClient& mqttClient);
     
     // Initialize
     void begin();
@@ -32,6 +33,7 @@ private:
     AsyncWebSocket _ws;
     WiFiManager& _wifiManager;
     PicoUART& _picoUart;
+    MQTTClient& _mqttClient;
     
     // Request handlers
     void setupRoutes();
@@ -41,6 +43,9 @@ private:
     void handleSetWiFi(AsyncWebServerRequest* request, uint8_t* data, size_t len);
     void handleGetConfig(AsyncWebServerRequest* request);
     void handleCommand(AsyncWebServerRequest* request, uint8_t* data, size_t len);
+    void handleGetMQTTConfig(AsyncWebServerRequest* request);
+    void handleSetMQTTConfig(AsyncWebServerRequest* request, uint8_t* data, size_t len);
+    void handleTestMQTT(AsyncWebServerRequest* request);
     void handleOTAUpload(AsyncWebServerRequest* request, const String& filename,
                          size_t index, uint8_t* data, size_t len, bool final);
     void handleStartOTA(AsyncWebServerRequest* request);

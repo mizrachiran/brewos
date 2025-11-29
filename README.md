@@ -194,19 +194,24 @@ See [SETUP.md](SETUP.md) for detailed instructions.
 |----------|-------------|
 | **Getting Started** | |
 | [Setup Guide](SETUP.md) | Development environment setup |
-| [Quick Start](firmware/Quick_Start.md) | Quick reference for common tasks |
-| **Firmware** | |
-| [Architecture](firmware/Architecture.md) | Module structure, dual-core design |
-| [Requirements](firmware/Requirements.md) | Functional and safety requirements |
-| [Communication Protocol](firmware/Communication_Protocol.md) | Binary protocol between Pico ↔ ESP32 |
-| [Machine Configurations](firmware/Machine_Configurations.md) | Multi-machine support, adding new machines |
+| [Quick Start](docs/pico/Quick_Start.md) | Quick reference for common tasks |
+| **Pico Firmware** | |
+| [Architecture](docs/pico/Architecture.md) | Module structure, dual-core design |
+| [Requirements](docs/pico/Requirements.md) | Functional and safety requirements |
+| [Machine Configurations](docs/pico/Machine_Configurations.md) | Multi-machine support |
+| **ESP32 Firmware** | |
+| [Implementation Plan](docs/esp32/Implementation_Plan.md) | ESP32 development status |
+| [MQTT Integration](docs/esp32/integrations/MQTT.md) | Home Assistant integration |
+| [Web API](docs/esp32/integrations/Web_API.md) | REST API reference |
+| **Shared** | |
+| [Communication Protocol](docs/shared/Communication_Protocol.md) | Binary protocol Pico ↔ ESP32 |
 | **Hardware** | |
 | [Specification](hardware/Specification.md) | PCB design, component selection |
 | [Test Procedures](hardware/Test_Procedures.md) | Hardware testing procedures |
 | **Features** | |
-| [Cleaning Mode](firmware/Cleaning_Mode_Implementation.md) | Backflush cycle implementation |
-| [Statistics](firmware/Statistics_Feature.md) | Shot tracking and analytics |
-| [Water Management](firmware/Water_Management_Implementation.md) | Auto-fill system |
+| [Cleaning Mode](docs/pico/features/Cleaning_Mode_Implementation.md) | Backflush cycle |
+| [Statistics](docs/pico/features/Statistics_Feature.md) | Shot tracking |
+| [Water Management](docs/pico/features/Water_Management_Implementation.md) | Auto-fill system |
 
 ---
 
@@ -250,7 +255,7 @@ Improper handling can result in death or serious injury.
 • Follow all local electrical codes and regulations
 ```
 
-**Safety is not optional.** The firmware includes multiple safety layers, but hardware installation must be performed by qualified individuals. See [Safety Requirements](firmware/Requirements.md#2-safety-requirements-critical) for details.
+**Safety is not optional.** The firmware includes multiple safety layers, but hardware installation must be performed by qualified individuals. See [Safety Requirements](docs/pico/Requirements.md#2-safety-requirements-critical) for details.
 
 ---
 
@@ -258,7 +263,7 @@ Improper handling can result in death or serious injury.
 
 We welcome contributions! Please read our guidelines before getting started:
 
-1. **Read the docs** - Understand the [Architecture](firmware/Architecture.md) and [Requirements](firmware/Requirements.md)
+1. **Read the docs** - Understand the [Architecture](docs/pico/Architecture.md) and [Requirements](docs/pico/Requirements.md)
 2. **Check existing issues** - See what's being worked on
 3. **Follow code style** - Match existing patterns
 4. **Test thoroughly** - Especially safety-critical code

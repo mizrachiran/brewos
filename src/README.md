@@ -152,7 +152,7 @@ Binary protocol over UART:
 | SYNC (0xAA) | TYPE | LENGTH | SEQ | PAYLOAD... | CRC16 |
 ```
 
-See `docs/firmware/Communication_Protocol.md` for details.
+See `docs/shared/Communication_Protocol.md` for details.
 
 ## Version Management
 
@@ -172,7 +172,7 @@ python scripts/version.py --bump minor
 python scripts/version.py --set 1.2.3
 ```
 
-See `docs/firmware/Versioning.md` for complete versioning guide.
+See `docs/pico/Versioning.md` for complete versioning guide.
 
 ## Simulation Mode
 

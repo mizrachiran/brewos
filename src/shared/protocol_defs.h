@@ -20,7 +20,7 @@ extern "C" {
 // Version
 // =============================================================================
 // Protocol version - increment for breaking changes
-// See docs/firmware/Communication_Protocol.md for update strategy
+// See docs/shared/Communication_Protocol.md for update strategy
 #define ECM_PROTOCOL_VERSION    1
 
 // =============================================================================

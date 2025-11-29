@@ -25,10 +25,14 @@
 #include "display/theme.h"
 #include "ui/ui.h"
 
+// MQTT
+#include "mqtt_client.h"
+
 // Global instances
 WiFiManager wifiManager;
 PicoUART picoUart(Serial1);
-WebServer webServer(wifiManager, picoUart);
+MQTTClient mqttClient;
+WebServer webServer(wifiManager, picoUart, mqttClient);
 
 // Machine state from Pico
 static ui_state_t machineState = {0};
@@ -145,6 +149,11 @@ void setup() {
         strncpy(machineState.wifi_ssid, ws.ssid.c_str(), sizeof(machineState.wifi_ssid) - 1);
         machineState.wifi_rssi = WiFi.RSSI();
         ui.showNotification("WiFi Connected", 2000);
+        
+        // Try MQTT connection if enabled
+        if (mqttClient.getConfig().enabled) {
+            mqttClient.testConnection();
+        }
     });
     
     wifiManager.onDisconnected([]() {
@@ -187,13 +196,26 @@ void loop() {
     // Update web server
     webServer.loop();
     
+    // Update MQTT
+    mqttClient.loop();
+    
     // Update Pico connection status
     machineState.pico_connected = picoUart.isConnected();
+    machineState.mqtt_connected = mqttClient.isConnected();
     
     // Update UI state periodically
     if (millis() - lastUIUpdate > 100) {  // 10Hz UI update
         lastUIUpdate = millis();
         ui.update(machineState);
+    }
+    
+    // Publish MQTT status periodically (every 1 second)
+    static unsigned long lastMQTTPublish = 0;
+    if (millis() - lastMQTTPublish > 1000) {
+        lastMQTTPublish = millis();
+        if (mqttClient.isConnected()) {
+            mqttClient.publishStatus(machineState);
+        }
     }
     
     // Periodic ping to Pico

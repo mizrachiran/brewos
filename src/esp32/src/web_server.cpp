@@ -1,13 +1,15 @@
 #include "web_server.h"
 #include "config.h"
 #include "pico_uart.h"
+#include "mqtt_client.h"
 #include <LittleFS.h>
 
-WebServer::WebServer(WiFiManager& wifiManager, PicoUART& picoUart)
+WebServer::WebServer(WiFiManager& wifiManager, PicoUART& picoUart, MQTTClient& mqttClient)
     : _server(WEB_SERVER_PORT)
     , _ws(WEBSOCKET_PATH)
     , _wifiManager(wifiManager)
-    , _picoUart(picoUart) {
+    , _picoUart(picoUart)
+    , _mqttClient(mqttClient) {
 }
 
 void WebServer::begin() {
@@ -94,6 +96,23 @@ void WebServer::setupRoutes() {
         request->send(200, "application/json", "{\"status\":\"ok\"}");
     });
     
+    // MQTT endpoints
+    _server.on("/api/mqtt/config", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        handleGetMQTTConfig(request);
+    });
+    
+    _server.on("/api/mqtt/config", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            handleSetMQTTConfig(request, data, len);
+        }
+    );
+    
+    _server.on("/api/mqtt/test", HTTP_POST, [this](AsyncWebServerRequest* request) {
+        handleTestMQTT(request);
+    });
+    
     // 404 handler
     _server.onNotFound([](AsyncWebServerRequest* request) {
         request->send(404, "text/plain", "Not found");
@@ -120,6 +139,11 @@ void WebServer::handleGetStatus(AsyncWebServerRequest* request) {
     doc["esp32"]["uptime"] = millis();
     doc["esp32"]["freeHeap"] = ESP.getFreeHeap();
     doc["esp32"]["version"] = ESP32_VERSION;
+    
+    // MQTT status
+    doc["mqtt"]["enabled"] = _mqttClient.getConfig().enabled;
+    doc["mqtt"]["connected"] = _mqttClient.isConnected();
+    doc["mqtt"]["status"] = _mqttClient.getStatusString();
     
     // WebSocket clients
     doc["clients"] = getClientCount();
@@ -526,5 +550,81 @@ bool WebServer::streamFirmwareToPico(File& firmwareFile, size_t firmwareSize) {
     LOG_I("Firmware streaming complete: %d bytes in %d chunks", bytesSent, chunkNumber);
     broadcastLog("Firmware streaming complete: " + String(bytesSent) + " bytes in " + String(chunkNumber) + " chunks", "info");
     return true;
+}
+
+void WebServer::handleGetMQTTConfig(AsyncWebServerRequest* request) {
+    MQTTConfig config = _mqttClient.getConfig();
+    
+    JsonDocument doc;
+    doc["enabled"] = config.enabled;
+    doc["broker"] = config.broker;
+    doc["port"] = config.port;
+    doc["username"] = config.username;
+    doc["password"] = "";  // Don't send password back
+    doc["client_id"] = config.client_id;
+    doc["topic_prefix"] = config.topic_prefix;
+    doc["use_tls"] = config.use_tls;
+    doc["ha_discovery"] = config.ha_discovery;
+    doc["ha_device_id"] = config.ha_device_id;
+    doc["connected"] = _mqttClient.isConnected();
+    doc["status"] = _mqttClient.getStatusString();
+    
+    String response;
+    serializeJson(doc, response);
+    request->send(200, "application/json", response);
+}
+
+void WebServer::handleSetMQTTConfig(AsyncWebServerRequest* request, uint8_t* data, size_t len) {
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, data, len);
+    
+    if (error) {
+        request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+        return;
+    }
+    
+    MQTTConfig config = _mqttClient.getConfig();
+    
+    // Update from JSON - use is<T>() to check if key exists (ArduinoJson 7.x API)
+    if (!doc["enabled"].isNull()) config.enabled = doc["enabled"].as<bool>();
+    if (!doc["broker"].isNull()) strncpy(config.broker, doc["broker"].as<const char*>(), sizeof(config.broker) - 1);
+    if (!doc["port"].isNull()) config.port = doc["port"].as<uint16_t>();
+    if (!doc["username"].isNull()) strncpy(config.username, doc["username"].as<const char*>(), sizeof(config.username) - 1);
+    
+    // Only update password if provided and non-empty
+    if (!doc["password"].isNull()) {
+        const char* pwd = doc["password"].as<const char*>();
+        if (pwd && strlen(pwd) > 0) {
+            strncpy(config.password, pwd, sizeof(config.password) - 1);
+        }
+    }
+    
+    if (!doc["client_id"].isNull()) strncpy(config.client_id, doc["client_id"].as<const char*>(), sizeof(config.client_id) - 1);
+    if (!doc["topic_prefix"].isNull()) {
+        const char* prefix = doc["topic_prefix"].as<const char*>();
+        if (prefix && strlen(prefix) > 0) {
+            strncpy(config.topic_prefix, prefix, sizeof(config.topic_prefix) - 1);
+        }
+    }
+    if (!doc["use_tls"].isNull()) config.use_tls = doc["use_tls"].as<bool>();
+    if (!doc["ha_discovery"].isNull()) config.ha_discovery = doc["ha_discovery"].as<bool>();
+    if (!doc["ha_device_id"].isNull()) strncpy(config.ha_device_id, doc["ha_device_id"].as<const char*>(), sizeof(config.ha_device_id) - 1);
+    
+    if (_mqttClient.setConfig(config)) {
+        request->send(200, "application/json", "{\"status\":\"ok\"}");
+        broadcastLog("MQTT configuration updated", "info");
+    } else {
+        request->send(400, "application/json", "{\"error\":\"Invalid configuration\"}");
+    }
+}
+
+void WebServer::handleTestMQTT(AsyncWebServerRequest* request) {
+    if (_mqttClient.testConnection()) {
+        request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Connection successful\"}");
+        broadcastLog("MQTT connection test successful", "info");
+    } else {
+        request->send(500, "application/json", "{\"error\":\"Connection failed\"}");
+        broadcastLog("MQTT connection test failed", "error");
+    }
 }
 

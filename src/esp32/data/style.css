@@ -478,3 +478,83 @@ body {
     background: #444;
 }
 
+/* MQTT Card */
+.mqtt-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-group label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group input[type="password"] {
+    padding: 10px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-family: var(--font-mono);
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--accent-warm);
+}
+
+.form-group input[type="checkbox"] {
+    margin-right: 8px;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.form-group small {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: -4px;
+}
+
+.form-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.mqtt-message {
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    margin-top: 8px;
+}
+
+.mqtt-message.info {
+    background: rgba(74, 144, 217, 0.2);
+    border: 1px solid var(--accent-cool);
+    color: var(--accent-cool);
+}
+
+.mqtt-message.success {
+    background: rgba(76, 175, 80, 0.2);
+    border: 1px solid var(--accent-success);
+    color: var(--accent-success);
+}
+
+.mqtt-message.error {
+    background: rgba(244, 67, 54, 0.2);
+    border: 1px solid var(--accent-error);
+    color: var(--accent-error);
+}
+

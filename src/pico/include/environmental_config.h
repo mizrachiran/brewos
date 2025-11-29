@@ -4,7 +4,7 @@
  * Defines installation-specific electrical parameters (voltage, current limits).
  * These vary by installation location and can be set at compile-time or runtime.
  * 
- * See docs/firmware/Environmental_Configuration.md for details.
+ * See docs/pico/Environmental_Configuration.md for details.
  */
 
 #ifndef ENVIRONMENTAL_CONFIG_H

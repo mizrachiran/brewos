@@ -9,7 +9,7 @@
  *   - Each PCB type can have multiple versions
  *   - Pin assignments are validated at compile time
  * 
- * See docs/firmware/Machine_Configurations.md for pin mapping details.
+ * See docs/pico/Machine_Configurations.md for pin mapping details.
  */
 
 #ifndef PCB_CONFIG_H
