@@ -13,8 +13,14 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://brewos.coffee">
     
-    <!-- Favicon (add your own) -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☕</text></svg>">
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="../assets/4. Sizes/1 Favicon/3 Icon Only/1 Full Color/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="../assets/4. Sizes/1 Favicon/3 Icon Only/1 Full Color/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../assets/4. Sizes/1 Favicon/3 Icon Only/1 Full Color/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="../assets/4. Sizes/1 Favicon/3 Icon Only/1 Full Color/apple-touch-icon.png">
+    
+    <!-- Open Graph Image -->
+    <meta property="og:image" content="https://brewos.coffee/assets/4.%20Sizes/2%20Social%20Media-1080x1080/3%20Icon%20Only/1%20Full%20Color/Brewos-1080x1080.png">
     
     <style>
         :root {
@@ -69,17 +75,19 @@
         }
         
         .logo {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--text-primary);
             text-decoration: none;
             display: flex;
             align-items: center;
-            gap: 8px;
         }
         
-        .logo-icon {
-            font-size: 1.8rem;
+        .logo img {
+            height: 36px;
+            width: auto;
+        }
+        
+        .hero-logo {
+            max-width: 280px;
+            margin-bottom: 24px;
         }
         
         .nav-links {
@@ -310,8 +318,7 @@
     <header>
         <nav class="container">
             <a href="/" class="logo">
-                <span class="logo-icon">☕</span>
-                <span>BrewOS</span>
+                <img src="../assets/5. 1080/1 Horizontal/1 Full Color/Brewos-1080.png" alt="BrewOS">
             </a>
             <ul class="nav-links">
                 <li><a href="#features">Features</a></li>
@@ -325,6 +332,7 @@
     <main>
         <section class="hero">
             <div class="container">
+                <img src="../assets/5. 1080/1 Horizontal/1 Full Color/Brewos-1080.png" alt="BrewOS" class="hero-logo">
                 <h1>Upgrade Your Espresso Machine</h1>
                 <p>Open-source firmware that brings precise PID temperature control, WiFi connectivity, and modern features to your espresso machine.</p>
                 <div class="cta-buttons">
@@ -445,7 +453,7 @@
                 <a href="https://github.com/mizrachiran/brewos/blob/main/LICENSE">License</a>
             </div>
             <p class="copyright">
-                ☕ BrewOS — Apache 2.0 + Commons Clause
+                BrewOS — Apache 2.0 + Commons Clause
             </p>
         </div>
     </footer>

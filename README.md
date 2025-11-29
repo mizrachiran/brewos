@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="docs/assets/brewos-logo.png" alt="BrewOS Logo" width="200">
+  <img src="assets/5. 1080/1 Horizontal/1 Full Color/Brewos-1080.png" alt="BrewOS Logo" width="400">
 </p>
-
-<h1 align="center">BrewOS</h1>
 
 <p align="center">
   <strong>Open-source firmware for espresso machine control</strong>
