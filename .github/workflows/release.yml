@@ -56,7 +56,7 @@ jobs:
       - name: Build ESP32 Firmware
         run: |
           cd src/esp32
-          pio run
+          pio run -e esp32s3
 
       # ===== Prepare Release Assets =====
       - name: Prepare Release Files
