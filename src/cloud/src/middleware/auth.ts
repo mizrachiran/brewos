@@ -1,5 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import { supabaseAdmin } from '../lib/supabase.js';
+import jwt from 'jsonwebtoken';
+import { ensureProfile } from '../services/device.js';
+
+// Supabase JWT secret (from project settings)
+const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET || '';
 
 // Extend Express Request type
 declare global {
@@ -13,14 +17,26 @@ declare global {
   }
 }
 
+interface SupabaseJWTPayload {
+  sub: string;           // User ID
+  email?: string;
+  user_metadata?: {
+    full_name?: string;
+    name?: string;
+    avatar_url?: string;
+  };
+  iat: number;
+  exp: number;
+}
+
 /**
  * Middleware to verify Supabase JWT token
  */
-export async function supabaseAuthMiddleware(
+export function supabaseAuthMiddleware(
   req: Request,
   res: Response,
   next: NextFunction
-): Promise<void> {
+): void {
   const authHeader = req.headers.authorization;
 
   if (!authHeader?.startsWith('Bearer ')) {
@@ -30,50 +46,57 @@ export async function supabaseAuthMiddleware(
 
   const token = authHeader.slice(7);
 
-  try {
-    // Verify the JWT with Supabase
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  if (!SUPABASE_JWT_SECRET) {
+    console.error('[Auth] SUPABASE_JWT_SECRET not configured');
+    res.status(500).json({ error: 'Auth not configured' });
+    return;
+  }
 
-    if (error || !user) {
-      res.status(401).json({ error: 'Invalid or expired token' });
-      return;
-    }
+  try {
+    // Verify the JWT
+    const payload = jwt.verify(token, SUPABASE_JWT_SECRET) as SupabaseJWTPayload;
 
     // Attach user to request
     req.user = {
-      id: user.id,
-      email: user.email || '',
+      id: payload.sub,
+      email: payload.email || '',
     };
+
+    // Ensure profile exists in local DB
+    ensureProfile(
+      payload.sub,
+      payload.email,
+      payload.user_metadata?.full_name || payload.user_metadata?.name,
+      payload.user_metadata?.avatar_url
+    );
 
     next();
   } catch (error) {
     console.error('[Auth] Token verification failed:', error);
-    res.status(401).json({ error: 'Authentication failed' });
+    res.status(401).json({ error: 'Invalid or expired token' });
   }
 }
 
 /**
  * Optional auth - doesn't require auth but attaches user if present
  */
-export async function optionalAuthMiddleware(
+export function optionalAuthMiddleware(
   req: Request,
   _res: Response,
   next: NextFunction
-): Promise<void> {
+): void {
   const authHeader = req.headers.authorization;
 
-  if (authHeader?.startsWith('Bearer ')) {
+  if (authHeader?.startsWith('Bearer ') && SUPABASE_JWT_SECRET) {
     const token = authHeader.slice(7);
 
     try {
-      const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-      
-      if (user) {
-        req.user = {
-          id: user.id,
-          email: user.email || '',
-        };
-      }
+      const payload = jwt.verify(token, SUPABASE_JWT_SECRET) as SupabaseJWTPayload;
+
+      req.user = {
+        id: payload.sub,
+        email: payload.email || '',
+      };
     } catch {
       // Ignore errors - just continue without user
     }
@@ -81,4 +104,3 @@ export async function optionalAuthMiddleware(
 
   next();
 }
-

@@ -1,13 +1,13 @@
 # BrewOS Cloud Service
 
-The BrewOS cloud service is a WebSocket relay that enables remote access to your espresso machine from anywhere in the world, with Supabase for authentication and device management.
+The BrewOS cloud service is a WebSocket relay that enables remote access to your espresso machine from anywhere in the world.
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         CLOUD SERVICE                                   │
-│              (WebSocket Relay + Supabase Auth/Database)                 │
+│              (WebSocket Relay + SQLite + Supabase Auth)                 │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │   /ws/device                              /ws/client                    │
@@ -21,8 +21,7 @@ The BrewOS cloud service is a WebSocket relay that enables remote access to your
 │         └────────────────┬───────────────────────┘                      │
 │                          ▼                                              │
 │                    ┌───────────┐                                        │
-│                    │  Supabase │                                        │
-│                    │ (Auth+DB) │                                        │
+│                    │  SQLite   │  (device ownership, profiles)          │
 │                    └───────────┘                                        │
 └─────────────────────────────────────────────────────────────────────────┘
          ▲                                        ▲
@@ -36,12 +35,11 @@ The BrewOS cloud service is a WebSocket relay that enables remote access to your
 
 ## Key Features
 
-- **Supabase Auth** - Google, Apple, email sign-in via Supabase
-- **PostgreSQL** - Device and user management with RLS
+- **SQLite Database** - Embedded, file-based, no external DB needed
+- **Supabase Auth** - Google, Apple sign-in (JWT verification only)
 - **QR Code Pairing** - Scan to link devices to your account
 - **Pure WebSocket** - No MQTT dependency, deploy anywhere
 - **Low Latency** - Direct message relay between clients and devices
-- **Multi-Client** - Multiple apps can connect to the same device
 
 ## Project Structure
 
@@ -51,8 +49,16 @@ src/cloud/
 │   ├── server.ts          # Express + WebSocket server
 │   ├── device-relay.ts    # ESP32 device connection handler
 │   ├── client-proxy.ts    # Client app connection handler
-│   ├── auth.ts            # JWT authentication
-│   └── types.ts           # TypeScript interfaces
+│   ├── lib/
+│   │   └── database.ts    # SQLite database (sql.js)
+│   ├── middleware/
+│   │   └── auth.ts        # Supabase JWT verification
+│   ├── routes/
+│   │   └── devices.ts     # Device management API
+│   ├── services/
+│   │   └── device.ts      # Device CRUD operations
+│   └── types/
+│       └── sql.js.d.ts    # TypeScript types
 ├── package.json
 └── tsconfig.json
 ```
@@ -63,25 +69,19 @@ src/cloud/
 
 - Node.js 18+
 - npm or yarn
-- Supabase account (free tier works)
+- Supabase account (for auth only - free tier)
 
-### Supabase Setup
+### Supabase Auth Setup
 
 1. **Create a Supabase Project**
    - Go to [supabase.com](https://supabase.com)
    - Create a new project
-   - Note your Project URL and API keys
+   - Note your JWT Secret (Settings → API → JWT Secret)
 
-2. **Run Database Migration**
-   - Go to SQL Editor in Supabase Dashboard
-   - Copy contents of `src/cloud/supabase/migrations/001_initial_schema.sql`
-   - Run the SQL
-
-3. **Enable Google Auth**
+2. **Enable Google Auth**
    - Go to Authentication → Providers → Google
    - Enable Google provider
    - Add your Google OAuth credentials
-   - Set redirect URL to your app's callback URL
 
 ### Installation
 
@@ -98,23 +98,17 @@ Create a `.env` file (see `env.example`):
 PORT=3001
 NODE_ENV=development
 
+# Data directory for SQLite database
+DATA_DIR=./data
+
+# Supabase JWT secret (for token verification only)
+SUPABASE_JWT_SECRET=your-jwt-secret
+
 # CORS
 CORS_ORIGIN=http://localhost:5173
 
-# Supabase
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_KEY=your-service-key
-
 # Web UI path
 WEB_DIST_PATH=../web/dist
-```
-
-For the web app, create `src/web/.env`:
-
-```env
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
 ```
 
 ### Run Development Server
@@ -129,6 +123,25 @@ npm run dev
 npm run build
 npm start
 ```
+
+## Database
+
+The service uses **SQLite** (via sql.js) for data storage:
+
+```sql
+-- Device ownership
+devices (id, owner_id, name, is_online, ...)
+
+-- QR code pairing tokens
+device_claim_tokens (device_id, token_hash, expires_at)
+
+-- User profiles (synced from Supabase Auth)
+profiles (id, email, display_name, avatar_url)
+```
+
+**Data is stored in a single file:** `brewos.db`
+
+For persistence on cloud platforms, mount a volume to `DATA_DIR`.
 
 ## API Endpoints
 
@@ -161,193 +174,74 @@ npm start
 
 2. **User scans QR code**
    - Opens pairing URL in browser
-   - Redirects to login (Google/Apple) if not authenticated
+   - Redirects to login (Google) if not authenticated
    - Shows device confirmation screen
 
 3. **User claims device**
    - App calls `/api/devices/claim` with device ID and token
    - Server verifies token hash matches
    - Device is added to user's account
-   - ESP32 receives confirmation via WebSocket
-
-```
-┌──────────┐      ┌───────────┐      ┌────────────┐
-│  ESP32   │      │   Cloud   │      │  Web App   │
-└────┬─────┘      └─────┬─────┘      └──────┬─────┘
-     │                  │                   │
-     │ Generate token   │                   │
-     │─────────────────>│                   │
-     │                  │ Store hash        │
-     │                  │                   │
-     │ Display QR       │                   │
-     │                  │                   │
-     │                  │    Scan QR code   │
-     │                  │<──────────────────│
-     │                  │                   │
-     │                  │    Sign in        │
-     │                  │<──────────────────│
-     │                  │                   │
-     │                  │    Claim device   │
-     │                  │<──────────────────│
-     │                  │                   │
-     │ Device claimed!  │    Success!       │
-     │<─────────────────│──────────────────>│
-     │                  │                   │
-```
-
-## Connection Protocol
-
-### Device Connection (ESP32)
-
-ESP32 devices connect to establish a persistent WebSocket:
-
-```
-ws://cloud.brewos.dev/ws/device?id=DEVICE_ID&key=DEVICE_KEY
-```
-
-Parameters:
-- `id` - Unique device identifier
-- `key` - Device authentication key
-
-### Client Connection (Web/Mobile)
-
-Client apps connect with JWT authentication:
-
-```
-wss://cloud.brewos.dev/ws/client?token=JWT_TOKEN&device=DEVICE_ID
-```
-
-Parameters:
-- `token` - JWT authentication token
-- `device` - Target device ID
-
-## Message Flow
-
-1. **ESP32 → Cloud → Client**
-   - Device sends status updates
-   - Cloud broadcasts to all connected clients for that device
-
-2. **Client → Cloud → ESP32**
-   - Client sends commands
-   - Cloud forwards to the target device
-   - If device offline, client receives error
-
-## Authentication
-
-### JWT Tokens
-
-Generate tokens for clients:
-
-```typescript
-import { generateToken } from './auth.js';
-
-const token = generateToken(userId, email);
-// Returns: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
-Token payload:
-```json
-{
-  "userId": "user-uuid",
-  "email": "user@example.com",
-  "iat": 1699876543,
-  "exp": 1700481343
-}
-```
-
-### Device Keys
-
-Devices authenticate with a pre-shared key. In production, validate against a database.
 
 ## Deployment
 
 ### Docker
 
 ```dockerfile
-FROM node:18-alpine
+FROM node:20-alpine
 WORKDIR /app
+
+# Create data directory
+RUN mkdir -p /data
+
 COPY package*.json ./
 RUN npm ci --production
+
 COPY dist ./dist
+
+ENV DATA_DIR=/data
+ENV PORT=3001
+
 EXPOSE 3001
 CMD ["node", "dist/server.js"]
 ```
 
 ### Platform Guides
 
-**Fly.io:**
-```bash
-fly launch
-fly secrets set JWT_SECRET=your-secret
-fly deploy
-```
-
 **Railway:**
 ```bash
 railway init
 railway add
+# Add volume for SQLite: /data
 railway up
+```
+
+**Fly.io:**
+```bash
+fly launch
+fly volumes create brewos_data --size 1
+# Update fly.toml to mount volume
+fly deploy
 ```
 
 **Render:**
 - Connect GitHub repo
-- Set build command: `npm run build`
-- Set start command: `npm start`
+- Add persistent disk mounted at `/data`
+- Set `DATA_DIR=/data`
 
 ### Environment Variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `PORT` | No | 3001 | HTTP/WS port |
-| `SUPABASE_URL` | Yes | - | Supabase project URL |
-| `SUPABASE_ANON_KEY` | Yes | - | Supabase anon/public key |
-| `SUPABASE_SERVICE_KEY` | Yes | - | Supabase service key (server-side) |
+| `DATA_DIR` | No | `.` | Directory for SQLite database |
+| `SUPABASE_JWT_SECRET` | Yes | - | Supabase JWT secret for auth |
 | `CORS_ORIGIN` | No | `*` | Allowed CORS origins |
 | `WEB_DIST_PATH` | No | `../web/dist` | Path to web UI build |
-
-## Scaling
-
-The service is stateless by design:
-
-- **Horizontal Scaling** - Run multiple instances behind a load balancer
-- **Sticky Sessions** - Not required, but improves efficiency
-- **State** - All state is in-memory (active connections)
-
-For high availability, consider:
-- Redis for session/device state sharing
-- Database for device/user management
-
-## Monitoring
-
-### Health Check
-
-```bash
-curl http://localhost:3001/api/health
-```
-
-Response:
-```json
-{
-  "status": "ok",
-  "timestamp": "2024-01-15T10:30:00.000Z",
-  "devices": 5,
-  "clients": 12
-}
-```
-
-### Logging
-
-The service logs to stdout:
-- Device connections/disconnections
-- Client connections/disconnections
-- Message routing (debug level)
-- Errors
 
 ## Security Considerations
 
 1. **Use HTTPS/WSS in production** - Terminate TLS at load balancer
-2. **Rotate JWT secrets** - Use short-lived tokens
+2. **Protect JWT secret** - Store securely, don't commit to git
 3. **Validate device ownership** - Check user has access to device
 4. **Rate limiting** - Add rate limiting for API endpoints
-5. **Input validation** - Sanitize all incoming messages
-
+5. **Backup SQLite** - Regular backups of `brewos.db` file

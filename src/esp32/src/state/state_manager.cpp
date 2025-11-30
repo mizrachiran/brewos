@@ -326,7 +326,7 @@ void StateManager::loadShotHistory() {
         return;
     }
     
-    StaticJsonDocument<8192> doc;
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, file);
     file.close();
     
@@ -346,7 +346,7 @@ void StateManager::saveShotHistory() {
         return;
     }
     
-    StaticJsonDocument<8192> doc;
+    JsonDocument doc;
     JsonArray arr = doc.to<JsonArray>();
     _shotHistory.toJson(arr);
     
@@ -516,16 +516,16 @@ void StateManager::notifyStateChanged() {
 // =============================================================================
 
 void StateManager::getFullStateJson(JsonDocument& doc) const {
-    JsonObject settings = doc.createNestedObject("settings");
+    // Settings go at root level via the toJson method
     getSettingsJson(doc);
     
-    JsonObject stats = doc.createNestedObject("stats");
+    JsonObject stats = doc["stats"].to<JsonObject>();
     getStatsJson(stats);
     
-    JsonObject state = doc.createNestedObject("state");
+    JsonObject state = doc["state"].to<JsonObject>();
     getStateJson(state);
     
-    JsonArray history = doc.createNestedArray("shotHistory");
+    JsonArray history = doc["shotHistory"].to<JsonArray>();
     getShotHistoryJson(history);
 }
 

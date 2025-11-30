@@ -1,6 +1,6 @@
 # Cloud Service Deployment Guide
 
-This guide covers deploying the BrewOS cloud service to various platforms.
+This guide covers deploying the BrewOS cloud service.
 
 ## Prerequisites
 
@@ -27,6 +27,16 @@ npm run dev
 
 Access at `http://localhost:3001`
 
+## Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `PORT` | No | 3001 | HTTP/WebSocket port |
+| `DATA_DIR` | No | `.` | Directory for SQLite database |
+| `SUPABASE_JWT_SECRET` | Yes | - | Supabase JWT secret for auth |
+| `CORS_ORIGIN` | No | `*` | Allowed CORS origins |
+| `WEB_DIST_PATH` | No | `../web/dist` | Path to web UI build |
+
 ## Docker Deployment
 
 ### Dockerfile
@@ -35,7 +45,7 @@ Create `src/cloud/Dockerfile`:
 
 ```dockerfile
 # Build stage
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Copy package files
@@ -48,8 +58,11 @@ COPY src ./src
 RUN npm run build
 
 # Production stage
-FROM node:18-alpine
+FROM node:20-alpine
 WORKDIR /app
+
+# Create data directory for SQLite
+RUN mkdir -p /data
 
 # Copy built files
 COPY --from=builder /app/dist ./dist
@@ -61,6 +74,7 @@ COPY ../web/dist ./web
 
 ENV NODE_ENV=production
 ENV WEB_DIST_PATH=./web
+ENV DATA_DIR=/data
 EXPOSE 3001
 
 CMD ["node", "dist/server.js"]
@@ -78,192 +92,26 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3001:3001"
+    volumes:
+      - brewos-data:/data
     environment:
       - PORT=3001
-      - JWT_SECRET=${JWT_SECRET}
+      - DATA_DIR=/data
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
     restart: unless-stopped
+
+volumes:
+  brewos-data:
 ```
 
 ### Build and Run
 
 ```bash
 docker build -t brewos-cloud .
-docker run -p 3001:3001 -e JWT_SECRET=your-secret brewos-cloud
-```
-
-## Fly.io
-
-### Setup
-
-```bash
-cd src/cloud
-fly launch --no-deploy
-```
-
-### Configure
-
-Edit `fly.toml`:
-
-```toml
-app = "brewos-cloud"
-
-[build]
-  builder = "heroku/buildpacks:20"
-
-[env]
-  PORT = "8080"
-  WEB_DIST_PATH = "./web"
-
-[[services]]
-  internal_port = 8080
-  protocol = "tcp"
-
-  [[services.ports]]
-    handlers = ["http"]
-    port = 80
-
-  [[services.ports]]
-    handlers = ["tls", "http"]
-    port = 443
-
-  [[services.http_checks]]
-    path = "/api/health"
-    interval = 10000
-    timeout = 2000
-```
-
-### Deploy
-
-```bash
-fly secrets set JWT_SECRET=your-super-secret-key
-fly deploy
-```
-
-## Railway
-
-### Setup
-
-1. Connect your GitHub repository
-2. Select the `src/cloud` directory as root
-
-### Configure
-
-Add environment variables:
-- `JWT_SECRET` - Your secret key
-- `WEB_DIST_PATH` - `./web`
-
-### Build Settings
-
-- Build command: `npm run build`
-- Start command: `npm start`
-
-## Render
-
-### Web Service
-
-1. New → Web Service
-2. Connect repository
-3. Configure:
-   - **Root Directory**: `src/cloud`
-   - **Build Command**: `npm install && npm run build`
-   - **Start Command**: `npm start`
-   - **Health Check Path**: `/api/health`
-
-### Environment Variables
-
-Add in dashboard:
-- `JWT_SECRET`
-- `WEB_DIST_PATH=./web`
-
-## AWS (Elastic Beanstalk)
-
-### Setup
-
-```bash
-cd src/cloud
-eb init brewos-cloud --platform node.js
-eb create production
-```
-
-### Configure
-
-`.ebextensions/env.config`:
-
-```yaml
-option_settings:
-  aws:elasticbeanstalk:application:environment:
-    JWT_SECRET: your-secret
-    WEB_DIST_PATH: ./web
-```
-
-## Google Cloud Run
-
-### Build Container
-
-```bash
-gcloud builds submit --tag gcr.io/PROJECT_ID/brewos-cloud
-```
-
-### Deploy
-
-```bash
-gcloud run deploy brewos-cloud \
-  --image gcr.io/PROJECT_ID/brewos-cloud \
-  --platform managed \
-  --allow-unauthenticated \
-  --set-env-vars JWT_SECRET=your-secret
-```
-
-## Kubernetes
-
-### Deployment
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: brewos-cloud
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: brewos-cloud
-  template:
-    metadata:
-      labels:
-        app: brewos-cloud
-    spec:
-      containers:
-      - name: brewos-cloud
-        image: brewos-cloud:latest
-        ports:
-        - containerPort: 3001
-        env:
-        - name: JWT_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: brewos-secrets
-              key: jwt-secret
-        - name: WEB_DIST_PATH
-          value: "./web"
-        livenessProbe:
-          httpGet:
-            path: /api/health
-            port: 3001
-          initialDelaySeconds: 5
-          periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: brewos-cloud
-spec:
-  type: LoadBalancer
-  ports:
-  - port: 80
-    targetPort: 3001
-  selector:
-    app: brewos-cloud
+docker run -p 3001:3001 \
+  -v brewos-data:/data \
+  -e SUPABASE_JWT_SECRET=your-secret \
+  brewos-cloud
 ```
 
 ## SSL/TLS Configuration
@@ -273,10 +121,10 @@ spec:
 ```nginx
 server {
     listen 443 ssl http2;
-    server_name cloud.brewos.dev;
+    server_name cloud.example.com;
 
-    ssl_certificate /etc/letsencrypt/live/cloud.brewos.dev/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/cloud.brewos.dev/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/cloud.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/cloud.example.com/privkey.pem;
 
     location / {
         proxy_pass http://localhost:3001;
@@ -289,35 +137,35 @@ server {
 }
 ```
 
-### Cloudflare Tunnel
+### Using Caddy (Automatic HTTPS)
+
+```
+cloud.example.com {
+    reverse_proxy localhost:3001
+}
+```
+
+## Health Checks
+
+The service exposes `/api/health` for health monitoring:
 
 ```bash
-cloudflared tunnel create brewos
-cloudflared tunnel route dns brewos cloud.brewos.dev
-cloudflared tunnel run --url http://localhost:3001 brewos
+curl http://localhost:3001/api/health
 ```
 
-## Monitoring & Logging
-
-### Health Checks
-
-All platforms should use `/api/health` for health checks.
-
-### Structured Logging
-
-For production, consider adding structured logging:
-
-```typescript
-import pino from 'pino';
-const logger = pino({ level: 'info' });
-
-logger.info({ event: 'device_connected', deviceId });
+Response:
+```json
+{
+  "status": "ok",
+  "timestamp": "2024-01-01T00:00:00.000Z",
+  "devices": 5,
+  "clients": 12
+}
 ```
 
-### Metrics
+## Data Persistence
 
-Consider adding Prometheus metrics:
-- `brewos_devices_connected` - Gauge of connected devices
-- `brewos_clients_connected` - Gauge of connected clients
-- `brewos_messages_relayed` - Counter of relayed messages
-
+The SQLite database is stored in `DATA_DIR/brewos.db`. Ensure this directory is:
+- Mounted as a volume in Docker
+- Backed up regularly
+- On persistent storage if using cloud platforms

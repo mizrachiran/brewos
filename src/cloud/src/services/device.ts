@@ -1,6 +1,5 @@
-import { createHash, timingSafeEqual } from 'crypto';
-import { supabaseAdmin } from '../lib/supabase.js';
-import type { Device, DeviceInsert } from '../types/database.js';
+import { createHash, randomUUID, timingSafeEqual } from 'crypto';
+import { getDb, saveDatabase, Device, resultToObjects } from '../lib/database.js';
 
 /**
  * Generate a hash for token comparison
@@ -13,45 +12,46 @@ function hashToken(token: string): string {
  * Create or update a claim token for a device
  * Called by ESP32 when generating QR code
  */
-export async function createClaimToken(deviceId: string, token: string): Promise<void> {
+export function createClaimToken(deviceId: string, token: string): void {
+  const db = getDb();
   const tokenHash = hashToken(token);
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes
+  const id = randomUUID();
 
-  // Upsert the claim token
-  const { error } = await supabaseAdmin
-    .from('device_claim_tokens')
-    .upsert({
-      device_id: deviceId,
-      token_hash: tokenHash,
-      expires_at: expiresAt.toISOString(),
-    }, {
-      onConflict: 'device_id',
-    });
+  // Delete existing token for this device
+  db.run(`DELETE FROM device_claim_tokens WHERE device_id = ?`, [deviceId]);
 
-  if (error) {
-    console.error('[Device] Failed to create claim token:', error);
-    throw new Error('Failed to create claim token');
-  }
+  // Insert new token
+  db.run(
+    `INSERT INTO device_claim_tokens (id, device_id, token_hash, expires_at) VALUES (?, ?, ?, ?)`,
+    [id, deviceId, tokenHash, expiresAt]
+  );
+
+  saveDatabase();
 }
 
 /**
  * Verify a claim token is valid
  */
-export async function verifyClaimToken(deviceId: string, token: string): Promise<boolean> {
+export function verifyClaimToken(deviceId: string, token: string): boolean {
+  const db = getDb();
   const tokenHash = hashToken(token);
 
-  const { data, error } = await supabaseAdmin
-    .from('device_claim_tokens')
-    .select('token_hash, expires_at')
-    .eq('device_id', deviceId)
-    .single();
+  const result = db.exec(
+    `SELECT token_hash, expires_at FROM device_claim_tokens WHERE device_id = ?`,
+    [deviceId]
+  );
 
-  if (error || !data) {
+  if (result.length === 0 || result[0].values.length === 0) {
     return false;
   }
 
+  const row = result[0].values[0];
+  const storedHash = row[0] as string;
+  const expiresAt = row[1] as string;
+
   // Check expiration
-  if (new Date(data.expires_at) < new Date()) {
+  if (new Date(expiresAt) < new Date()) {
     return false;
   }
 
@@ -59,7 +59,7 @@ export async function verifyClaimToken(deviceId: string, token: string): Promise
   try {
     return timingSafeEqual(
       Buffer.from(tokenHash, 'hex'),
-      Buffer.from(data.token_hash, 'hex')
+      Buffer.from(storedHash, 'hex')
     );
   } catch {
     return false;
@@ -69,153 +69,212 @@ export async function verifyClaimToken(deviceId: string, token: string): Promise
 /**
  * Claim a device for a user
  */
-export async function claimDevice(
+export function claimDevice(
   deviceId: string,
   userId: string,
   name?: string
-): Promise<Device> {
-  // Check if device exists
-  const { data: existing } = await supabaseAdmin
-    .from('devices')
-    .select('id, owner_id')
-    .eq('id', deviceId)
-    .single();
+): Device {
+  const db = getDb();
 
-  if (existing?.owner_id) {
-    throw new Error('Device is already claimed');
+  // Check if device exists and is already claimed
+  const existingResult = db.exec(
+    `SELECT id, owner_id FROM devices WHERE id = ?`,
+    [deviceId]
+  );
+
+  if (existingResult.length > 0 && existingResult[0].values.length > 0) {
+    const ownerId = existingResult[0].values[0][1];
+    if (ownerId) {
+      throw new Error('Device is already claimed');
+    }
   }
 
-  // Upsert device with owner
-  const deviceData: DeviceInsert = {
-    id: deviceId,
-    owner_id: userId,
-    name: name || 'My BrewOS',
-    claimed_at: new Date().toISOString(),
-  };
+  const now = new Date().toISOString();
+  const deviceName = name || 'My BrewOS';
 
-  const { data, error } = await supabaseAdmin
-    .from('devices')
-    .upsert(deviceData)
-    .select()
-    .single();
-
-  if (error) {
-    console.error('[Device] Failed to claim device:', error);
-    throw new Error('Failed to claim device');
+  // Check if device exists
+  if (existingResult.length > 0 && existingResult[0].values.length > 0) {
+    // Update existing device
+    db.run(
+      `UPDATE devices SET owner_id = ?, name = ?, claimed_at = ?, updated_at = ? WHERE id = ?`,
+      [userId, deviceName, now, now, deviceId]
+    );
+  } else {
+    // Insert new device
+    db.run(
+      `INSERT INTO devices (id, owner_id, name, claimed_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      [deviceId, userId, deviceName, now, now]
+    );
   }
 
   // Delete the claim token
-  await supabaseAdmin
-    .from('device_claim_tokens')
-    .delete()
-    .eq('device_id', deviceId);
+  db.run(`DELETE FROM device_claim_tokens WHERE device_id = ?`, [deviceId]);
 
-  return data;
+  saveDatabase();
+
+  // Return the device
+  const deviceResult = db.exec(`SELECT * FROM devices WHERE id = ?`, [deviceId]);
+  return resultToObjects<Device>(deviceResult[0])[0];
 }
 
 /**
  * Get devices for a user
  */
-export async function getUserDevices(userId: string): Promise<Device[]> {
-  const { data, error } = await supabaseAdmin
-    .from('devices')
-    .select('*')
-    .eq('owner_id', userId)
-    .order('created_at', { ascending: false });
+export function getUserDevices(userId: string): Device[] {
+  const db = getDb();
+  const result = db.exec(
+    `SELECT * FROM devices WHERE owner_id = ? ORDER BY created_at DESC`,
+    [userId]
+  );
 
-  if (error) {
-    console.error('[Device] Failed to get devices:', error);
+  if (result.length === 0) {
     return [];
   }
 
-  return data || [];
+  return resultToObjects<Device>(result[0]);
 }
 
 /**
  * Get a single device by ID
  */
-export async function getDevice(deviceId: string): Promise<Device | null> {
-  const { data, error } = await supabaseAdmin
-    .from('devices')
-    .select('*')
-    .eq('id', deviceId)
-    .single();
+export function getDevice(deviceId: string): Device | null {
+  const db = getDb();
+  const result = db.exec(`SELECT * FROM devices WHERE id = ?`, [deviceId]);
 
-  if (error) {
+  if (result.length === 0 || result[0].values.length === 0) {
     return null;
   }
 
-  return data;
+  return resultToObjects<Device>(result[0])[0];
 }
 
 /**
  * Check if user owns a device
  */
-export async function userOwnsDevice(userId: string, deviceId: string): Promise<boolean> {
-  const { data } = await supabaseAdmin
-    .from('devices')
-    .select('id')
-    .eq('id', deviceId)
-    .eq('owner_id', userId)
-    .single();
+export function userOwnsDevice(userId: string, deviceId: string): boolean {
+  const db = getDb();
+  const result = db.exec(
+    `SELECT id FROM devices WHERE id = ? AND owner_id = ?`,
+    [deviceId, userId]
+  );
 
-  return !!data;
+  return result.length > 0 && result[0].values.length > 0;
 }
 
 /**
  * Update device online status
  */
-export async function updateDeviceStatus(
+export function updateDeviceStatus(
   deviceId: string,
   isOnline: boolean,
   firmwareVersion?: string
-): Promise<void> {
-  const update: Partial<Device> = {
-    is_online: isOnline,
-    last_seen_at: new Date().toISOString(),
-  };
+): void {
+  const db = getDb();
+  const now = new Date().toISOString();
 
   if (firmwareVersion) {
-    update.firmware_version = firmwareVersion;
+    db.run(
+      `UPDATE devices SET is_online = ?, last_seen_at = ?, firmware_version = ?, updated_at = ? WHERE id = ?`,
+      [isOnline ? 1 : 0, now, firmwareVersion, now, deviceId]
+    );
+  } else {
+    db.run(
+      `UPDATE devices SET is_online = ?, last_seen_at = ?, updated_at = ? WHERE id = ?`,
+      [isOnline ? 1 : 0, now, now, deviceId]
+    );
   }
 
-  await supabaseAdmin
-    .from('devices')
-    .update(update)
-    .eq('id', deviceId);
+  saveDatabase();
 }
 
 /**
  * Remove a device from user's account
  */
-export async function removeDevice(deviceId: string, userId: string): Promise<void> {
-  const { error } = await supabaseAdmin
-    .from('devices')
-    .update({ owner_id: null, claimed_at: null })
-    .eq('id', deviceId)
-    .eq('owner_id', userId);
+export function removeDevice(deviceId: string, userId: string): void {
+  const db = getDb();
+  const now = new Date().toISOString();
 
-  if (error) {
+  db.run(
+    `UPDATE devices SET owner_id = NULL, claimed_at = NULL, updated_at = ? WHERE id = ? AND owner_id = ?`,
+    [now, deviceId, userId]
+  );
+
+  if (db.getRowsModified() === 0) {
     throw new Error('Failed to remove device');
   }
+
+  saveDatabase();
 }
 
 /**
  * Rename a device
  */
-export async function renameDevice(
+export function renameDevice(
   deviceId: string,
   userId: string,
   name: string
-): Promise<void> {
-  const { error } = await supabaseAdmin
-    .from('devices')
-    .update({ name })
-    .eq('id', deviceId)
-    .eq('owner_id', userId);
+): void {
+  const db = getDb();
+  const now = new Date().toISOString();
 
-  if (error) {
+  db.run(
+    `UPDATE devices SET name = ?, updated_at = ? WHERE id = ? AND owner_id = ?`,
+    [name, now, deviceId, userId]
+  );
+
+  if (db.getRowsModified() === 0) {
     throw new Error('Failed to rename device');
   }
+
+  saveDatabase();
 }
 
+/**
+ * Cleanup expired claim tokens
+ */
+export function cleanupExpiredTokens(): number {
+  const db = getDb();
+  db.run(`DELETE FROM device_claim_tokens WHERE expires_at < datetime('now')`);
+  const deleted = db.getRowsModified();
+  
+  if (deleted > 0) {
+    saveDatabase();
+  }
+  
+  return deleted;
+}
+
+/**
+ * Ensure user profile exists (upsert from auth provider)
+ */
+export function ensureProfile(
+  userId: string,
+  email?: string,
+  displayName?: string,
+  avatarUrl?: string
+): void {
+  const db = getDb();
+  const now = new Date().toISOString();
+
+  // Check if profile exists
+  const result = db.exec(`SELECT id FROM profiles WHERE id = ?`, [userId]);
+
+  if (result.length > 0 && result[0].values.length > 0) {
+    // Update existing profile
+    db.run(
+      `UPDATE profiles SET 
+        email = COALESCE(?, email),
+        display_name = COALESCE(?, display_name),
+        avatar_url = COALESCE(?, avatar_url),
+        updated_at = ?
+       WHERE id = ?`,
+      [email || null, displayName || null, avatarUrl || null, now, userId]
+    );
+  } else {
+    // Insert new profile
+    db.run(
+      `INSERT INTO profiles (id, email, display_name, avatar_url, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      [userId, email || null, displayName || null, avatarUrl || null, now]
+    );
+  }
+}

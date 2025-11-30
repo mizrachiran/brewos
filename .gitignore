@@ -44,6 +44,11 @@ yarn-error.log*
 .env.*.local
 *.env
 
+# SQLite database
+*.db
+*.db-wal
+*.db-shm
+
 # IDE
 .vscode/
 .idea/

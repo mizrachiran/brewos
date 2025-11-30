@@ -18,7 +18,7 @@ const router = Router();
  * Called by ESP32 to register a claim token
  * No auth required (the token itself is the auth)
  */
-router.post('/register-claim', async (req, res) => {
+router.post('/register-claim', (req, res) => {
   try {
     const { deviceId, token } = req.body;
 
@@ -31,7 +31,7 @@ router.post('/register-claim', async (req, res) => {
       return res.status(400).json({ error: 'Invalid device ID format' });
     }
 
-    await createClaimToken(deviceId, token);
+    createClaimToken(deviceId, token);
 
     res.json({ success: true });
   } catch (error) {
@@ -44,7 +44,7 @@ router.post('/register-claim', async (req, res) => {
  * POST /api/devices/claim
  * Claim a device using QR code token
  */
-router.post('/claim', supabaseAuthMiddleware, async (req, res) => {
+router.post('/claim', supabaseAuthMiddleware, (req, res) => {
   try {
     const { deviceId, token, name } = req.body;
     const userId = req.user!.id;
@@ -54,13 +54,13 @@ router.post('/claim', supabaseAuthMiddleware, async (req, res) => {
     }
 
     // Verify the claim token
-    const isValid = await verifyClaimToken(deviceId, token);
+    const isValid = verifyClaimToken(deviceId, token);
     if (!isValid) {
       return res.status(400).json({ error: 'Invalid or expired claim token' });
     }
 
     // Claim the device
-    const device = await claimDevice(deviceId, userId, name);
+    const device = claimDevice(deviceId, userId, name);
 
     res.json({
       success: true,
@@ -80,15 +80,15 @@ router.post('/claim', supabaseAuthMiddleware, async (req, res) => {
  * GET /api/devices
  * List user's devices
  */
-router.get('/', supabaseAuthMiddleware, async (req, res) => {
+router.get('/', supabaseAuthMiddleware, (req, res) => {
   try {
-    const devices = await getUserDevices(req.user!.id);
+    const devices = getUserDevices(req.user!.id);
 
     res.json({
       devices: devices.map(d => ({
         id: d.id,
         name: d.name,
-        isOnline: d.is_online,
+        isOnline: !!d.is_online,
         lastSeen: d.last_seen_at,
         firmwareVersion: d.firmware_version,
         machineType: d.machine_type,
@@ -104,17 +104,16 @@ router.get('/', supabaseAuthMiddleware, async (req, res) => {
  * GET /api/devices/:id
  * Get a specific device
  */
-router.get('/:id', supabaseAuthMiddleware, async (req, res) => {
+router.get('/:id', supabaseAuthMiddleware, (req, res) => {
   try {
     const { id } = req.params;
 
     // Check ownership
-    const owns = await userOwnsDevice(req.user!.id, id);
-    if (!owns) {
+    if (!userOwnsDevice(req.user!.id, id)) {
       return res.status(404).json({ error: 'Device not found' });
     }
 
-    const device = await getDevice(id);
+    const device = getDevice(id);
     if (!device) {
       return res.status(404).json({ error: 'Device not found' });
     }
@@ -123,7 +122,7 @@ router.get('/:id', supabaseAuthMiddleware, async (req, res) => {
       device: {
         id: device.id,
         name: device.name,
-        isOnline: device.is_online,
+        isOnline: !!device.is_online,
         lastSeen: device.last_seen_at,
         firmwareVersion: device.firmware_version,
         machineType: device.machine_type,
@@ -139,7 +138,7 @@ router.get('/:id', supabaseAuthMiddleware, async (req, res) => {
  * PATCH /api/devices/:id
  * Update device (rename)
  */
-router.patch('/:id', supabaseAuthMiddleware, async (req, res) => {
+router.patch('/:id', supabaseAuthMiddleware, (req, res) => {
   try {
     const { id } = req.params;
     const { name } = req.body;
@@ -148,7 +147,7 @@ router.patch('/:id', supabaseAuthMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Missing name' });
     }
 
-    await renameDevice(id, req.user!.id, name);
+    renameDevice(id, req.user!.id, name);
 
     res.json({ success: true });
   } catch (error) {
@@ -160,11 +159,11 @@ router.patch('/:id', supabaseAuthMiddleware, async (req, res) => {
  * DELETE /api/devices/:id
  * Remove device from account
  */
-router.delete('/:id', supabaseAuthMiddleware, async (req, res) => {
+router.delete('/:id', supabaseAuthMiddleware, (req, res) => {
   try {
     const { id } = req.params;
 
-    await removeDevice(id, req.user!.id);
+    removeDevice(id, req.user!.id);
 
     res.json({ success: true });
   } catch (error) {
@@ -173,4 +172,3 @@ router.delete('/:id', supabaseAuthMiddleware, async (req, res) => {
 });
 
 export default router;
-

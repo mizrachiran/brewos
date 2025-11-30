@@ -16,12 +16,12 @@ void TemperatureSettings::toJson(JsonObject& obj) const {
 }
 
 bool TemperatureSettings::fromJson(const JsonObject& obj) {
-    if (obj.containsKey("brewSetpoint")) brewSetpoint = obj["brewSetpoint"];
-    if (obj.containsKey("steamSetpoint")) steamSetpoint = obj["steamSetpoint"];
-    if (obj.containsKey("brewOffset")) brewOffset = obj["brewOffset"];
-    if (obj.containsKey("steamOffset")) steamOffset = obj["steamOffset"];
-    if (obj.containsKey("ecoBrewTemp")) ecoBrewTemp = obj["ecoBrewTemp"];
-    if (obj.containsKey("ecoTimeoutMinutes")) ecoTimeoutMinutes = obj["ecoTimeoutMinutes"];
+    if (obj["brewSetpoint"].is<float>()) brewSetpoint = obj["brewSetpoint"];
+    if (obj["steamSetpoint"].is<float>()) steamSetpoint = obj["steamSetpoint"];
+    if (obj["brewOffset"].is<float>()) brewOffset = obj["brewOffset"];
+    if (obj["steamOffset"].is<float>()) steamOffset = obj["steamOffset"];
+    if (obj["ecoBrewTemp"].is<float>()) ecoBrewTemp = obj["ecoBrewTemp"];
+    if (obj["ecoTimeoutMinutes"].is<uint16_t>()) ecoTimeoutMinutes = obj["ecoTimeoutMinutes"];
     return true;
 }
 
@@ -40,13 +40,13 @@ void BrewSettings::toJson(JsonObject& obj) const {
 }
 
 bool BrewSettings::fromJson(const JsonObject& obj) {
-    if (obj.containsKey("bbwEnabled")) bbwEnabled = obj["bbwEnabled"];
-    if (obj.containsKey("doseWeight")) doseWeight = obj["doseWeight"];
-    if (obj.containsKey("targetWeight")) targetWeight = obj["targetWeight"];
-    if (obj.containsKey("stopOffset")) stopOffset = obj["stopOffset"];
-    if (obj.containsKey("autoTare")) autoTare = obj["autoTare"];
-    if (obj.containsKey("preinfusionTime")) preinfusionTime = obj["preinfusionTime"];
-    if (obj.containsKey("preinfusionPressure")) preinfusionPressure = obj["preinfusionPressure"];
+    if (obj["bbwEnabled"].is<bool>()) bbwEnabled = obj["bbwEnabled"];
+    if (obj["doseWeight"].is<float>()) doseWeight = obj["doseWeight"];
+    if (obj["targetWeight"].is<float>()) targetWeight = obj["targetWeight"];
+    if (obj["stopOffset"].is<float>()) stopOffset = obj["stopOffset"];
+    if (obj["autoTare"].is<bool>()) autoTare = obj["autoTare"];
+    if (obj["preinfusionTime"].is<uint16_t>()) preinfusionTime = obj["preinfusionTime"];
+    if (obj["preinfusionPressure"].is<float>()) preinfusionPressure = obj["preinfusionPressure"];
     return true;
 }
 
@@ -61,9 +61,9 @@ void PowerSettings::toJson(JsonObject& obj) const {
 }
 
 bool PowerSettings::fromJson(const JsonObject& obj) {
-    if (obj.containsKey("mainsVoltage")) mainsVoltage = obj["mainsVoltage"];
-    if (obj.containsKey("maxCurrent")) maxCurrent = obj["maxCurrent"];
-    if (obj.containsKey("powerOnBoot")) powerOnBoot = obj["powerOnBoot"];
+    if (obj["mainsVoltage"].is<uint16_t>()) mainsVoltage = obj["mainsVoltage"];
+    if (obj["maxCurrent"].is<float>()) maxCurrent = obj["maxCurrent"];
+    if (obj["powerOnBoot"].is<bool>()) powerOnBoot = obj["powerOnBoot"];
     return true;
 }
 
@@ -79,14 +79,14 @@ void NetworkSettings::toJson(JsonObject& obj) const {
 }
 
 bool NetworkSettings::fromJson(const JsonObject& obj) {
-    if (obj.containsKey("wifiSsid")) {
+    if (obj["wifiSsid"].is<const char*>()) {
         strncpy(wifiSsid, obj["wifiSsid"] | "", sizeof(wifiSsid) - 1);
     }
-    if (obj.containsKey("wifiPassword")) {
+    if (obj["wifiPassword"].is<const char*>()) {
         strncpy(wifiPassword, obj["wifiPassword"] | "", sizeof(wifiPassword) - 1);
         wifiConfigured = strlen(wifiSsid) > 0;
     }
-    if (obj.containsKey("hostname")) {
+    if (obj["hostname"].is<const char*>()) {
         strncpy(hostname, obj["hostname"] | "brewos", sizeof(hostname) - 1);
     }
     return true;
@@ -107,13 +107,13 @@ void MQTTSettings::toJson(JsonObject& obj) const {
 }
 
 bool MQTTSettings::fromJson(const JsonObject& obj) {
-    if (obj.containsKey("enabled")) enabled = obj["enabled"];
-    if (obj.containsKey("broker")) strncpy(broker, obj["broker"] | "", sizeof(broker) - 1);
-    if (obj.containsKey("port")) port = obj["port"];
-    if (obj.containsKey("username")) strncpy(username, obj["username"] | "", sizeof(username) - 1);
-    if (obj.containsKey("password")) strncpy(password, obj["password"] | "", sizeof(password) - 1);
-    if (obj.containsKey("baseTopic")) strncpy(baseTopic, obj["baseTopic"] | "brewos", sizeof(baseTopic) - 1);
-    if (obj.containsKey("discovery")) discovery = obj["discovery"];
+    if (obj["enabled"].is<bool>()) enabled = obj["enabled"];
+    if (obj["broker"].is<const char*>()) strncpy(broker, obj["broker"] | "", sizeof(broker) - 1);
+    if (obj["port"].is<uint16_t>()) port = obj["port"];
+    if (obj["username"].is<const char*>()) strncpy(username, obj["username"] | "", sizeof(username) - 1);
+    if (obj["password"].is<const char*>()) strncpy(password, obj["password"] | "", sizeof(password) - 1);
+    if (obj["baseTopic"].is<const char*>()) strncpy(baseTopic, obj["baseTopic"] | "brewos", sizeof(baseTopic) - 1);
+    if (obj["discovery"].is<bool>()) discovery = obj["discovery"];
     return true;
 }
 
@@ -129,10 +129,10 @@ void CloudSettings::toJson(JsonObject& obj) const {
 }
 
 bool CloudSettings::fromJson(const JsonObject& obj) {
-    if (obj.containsKey("enabled")) enabled = obj["enabled"];
-    if (obj.containsKey("serverUrl")) strncpy(serverUrl, obj["serverUrl"] | "", sizeof(serverUrl) - 1);
-    if (obj.containsKey("deviceId")) strncpy(deviceId, obj["deviceId"] | "", sizeof(deviceId) - 1);
-    if (obj.containsKey("deviceKey")) strncpy(deviceKey, obj["deviceKey"] | "", sizeof(deviceKey) - 1);
+    if (obj["enabled"].is<bool>()) enabled = obj["enabled"];
+    if (obj["serverUrl"].is<const char*>()) strncpy(serverUrl, obj["serverUrl"] | "", sizeof(serverUrl) - 1);
+    if (obj["deviceId"].is<const char*>()) strncpy(deviceId, obj["deviceId"] | "", sizeof(deviceId) - 1);
+    if (obj["deviceKey"].is<const char*>()) strncpy(deviceKey, obj["deviceKey"] | "", sizeof(deviceKey) - 1);
     return true;
 }
 
@@ -148,10 +148,10 @@ void ScaleSettings::toJson(JsonObject& obj) const {
 }
 
 bool ScaleSettings::fromJson(const JsonObject& obj) {
-    if (obj.containsKey("enabled")) enabled = obj["enabled"];
-    if (obj.containsKey("pairedAddress")) strncpy(pairedAddress, obj["pairedAddress"] | "", sizeof(pairedAddress) - 1);
-    if (obj.containsKey("pairedName")) strncpy(pairedName, obj["pairedName"] | "", sizeof(pairedName) - 1);
-    if (obj.containsKey("scaleType")) scaleType = obj["scaleType"];
+    if (obj["enabled"].is<bool>()) enabled = obj["enabled"];
+    if (obj["pairedAddress"].is<const char*>()) strncpy(pairedAddress, obj["pairedAddress"] | "", sizeof(pairedAddress) - 1);
+    if (obj["pairedName"].is<const char*>()) strncpy(pairedName, obj["pairedName"] | "", sizeof(pairedName) - 1);
+    if (obj["scaleType"].is<uint8_t>()) scaleType = obj["scaleType"];
     return true;
 }
 
@@ -168,11 +168,11 @@ void DisplaySettings::toJson(JsonObject& obj) const {
 }
 
 bool DisplaySettings::fromJson(const JsonObject& obj) {
-    if (obj.containsKey("brightness")) brightness = obj["brightness"];
-    if (obj.containsKey("screenTimeout")) screenTimeout = obj["screenTimeout"];
-    if (obj.containsKey("showShotTimer")) showShotTimer = obj["showShotTimer"];
-    if (obj.containsKey("showWeight")) showWeight = obj["showWeight"];
-    if (obj.containsKey("showPressure")) showPressure = obj["showPressure"];
+    if (obj["brightness"].is<uint8_t>()) brightness = obj["brightness"];
+    if (obj["screenTimeout"].is<uint16_t>()) screenTimeout = obj["screenTimeout"];
+    if (obj["showShotTimer"].is<bool>()) showShotTimer = obj["showShotTimer"];
+    if (obj["showWeight"].is<bool>()) showWeight = obj["showWeight"];
+    if (obj["showPressure"].is<bool>()) showPressure = obj["showPressure"];
     return true;
 }
 
@@ -181,40 +181,40 @@ bool DisplaySettings::fromJson(const JsonObject& obj) {
 // =============================================================================
 
 void Settings::toJson(JsonDocument& doc) const {
-    JsonObject tempObj = doc.createNestedObject("temperature");
+    JsonObject tempObj = doc["temperature"].to<JsonObject>();
     temperature.toJson(tempObj);
     
-    JsonObject brewObj = doc.createNestedObject("brew");
+    JsonObject brewObj = doc["brew"].to<JsonObject>();
     brew.toJson(brewObj);
     
-    JsonObject powerObj = doc.createNestedObject("power");
+    JsonObject powerObj = doc["power"].to<JsonObject>();
     power.toJson(powerObj);
     
-    JsonObject networkObj = doc.createNestedObject("network");
+    JsonObject networkObj = doc["network"].to<JsonObject>();
     network.toJson(networkObj);
     
-    JsonObject mqttObj = doc.createNestedObject("mqtt");
+    JsonObject mqttObj = doc["mqtt"].to<JsonObject>();
     mqtt.toJson(mqttObj);
     
-    JsonObject cloudObj = doc.createNestedObject("cloud");
+    JsonObject cloudObj = doc["cloud"].to<JsonObject>();
     cloud.toJson(cloudObj);
     
-    JsonObject scaleObj = doc.createNestedObject("scale");
+    JsonObject scaleObj = doc["scale"].to<JsonObject>();
     scale.toJson(scaleObj);
     
-    JsonObject displayObj = doc.createNestedObject("display");
+    JsonObject displayObj = doc["display"].to<JsonObject>();
     display.toJson(displayObj);
 }
 
 bool Settings::fromJson(const JsonDocument& doc) {
-    if (doc.containsKey("temperature")) temperature.fromJson(doc["temperature"]);
-    if (doc.containsKey("brew")) brew.fromJson(doc["brew"]);
-    if (doc.containsKey("power")) power.fromJson(doc["power"]);
-    if (doc.containsKey("network")) network.fromJson(doc["network"]);
-    if (doc.containsKey("mqtt")) mqtt.fromJson(doc["mqtt"]);
-    if (doc.containsKey("cloud")) cloud.fromJson(doc["cloud"]);
-    if (doc.containsKey("scale")) scale.fromJson(doc["scale"]);
-    if (doc.containsKey("display")) display.fromJson(doc["display"]);
+    if (doc["temperature"].is<JsonObject>()) temperature.fromJson(doc["temperature"].as<JsonObject>());
+    if (doc["brew"].is<JsonObject>()) brew.fromJson(doc["brew"].as<JsonObject>());
+    if (doc["power"].is<JsonObject>()) power.fromJson(doc["power"].as<JsonObject>());
+    if (doc["network"].is<JsonObject>()) network.fromJson(doc["network"].as<JsonObject>());
+    if (doc["mqtt"].is<JsonObject>()) mqtt.fromJson(doc["mqtt"].as<JsonObject>());
+    if (doc["cloud"].is<JsonObject>()) cloud.fromJson(doc["cloud"].as<JsonObject>());
+    if (doc["scale"].is<JsonObject>()) scale.fromJson(doc["scale"].as<JsonObject>());
+    if (doc["display"].is<JsonObject>()) display.fromJson(doc["display"].as<JsonObject>());
     return true;
 }
 
@@ -248,16 +248,16 @@ void Statistics::toJson(JsonObject& obj) const {
 }
 
 bool Statistics::fromJson(const JsonObject& obj) {
-    if (obj.containsKey("totalShots")) totalShots = obj["totalShots"];
-    if (obj.containsKey("totalSteamCycles")) totalSteamCycles = obj["totalSteamCycles"];
-    if (obj.containsKey("totalKwh")) totalKwh = obj["totalKwh"];
-    if (obj.containsKey("totalOnTimeMinutes")) totalOnTimeMinutes = obj["totalOnTimeMinutes"];
-    if (obj.containsKey("shotsSinceDescale")) shotsSinceDescale = obj["shotsSinceDescale"];
-    if (obj.containsKey("shotsSinceGroupClean")) shotsSinceGroupClean = obj["shotsSinceGroupClean"];
-    if (obj.containsKey("shotsSinceBackflush")) shotsSinceBackflush = obj["shotsSinceBackflush"];
-    if (obj.containsKey("lastDescaleTimestamp")) lastDescaleTimestamp = obj["lastDescaleTimestamp"];
-    if (obj.containsKey("lastGroupCleanTimestamp")) lastGroupCleanTimestamp = obj["lastGroupCleanTimestamp"];
-    if (obj.containsKey("lastBackflushTimestamp")) lastBackflushTimestamp = obj["lastBackflushTimestamp"];
+    if (obj["totalShots"].is<uint32_t>()) totalShots = obj["totalShots"];
+    if (obj["totalSteamCycles"].is<uint32_t>()) totalSteamCycles = obj["totalSteamCycles"];
+    if (obj["totalKwh"].is<float>()) totalKwh = obj["totalKwh"];
+    if (obj["totalOnTimeMinutes"].is<uint32_t>()) totalOnTimeMinutes = obj["totalOnTimeMinutes"];
+    if (obj["shotsSinceDescale"].is<uint16_t>()) shotsSinceDescale = obj["shotsSinceDescale"];
+    if (obj["shotsSinceGroupClean"].is<uint16_t>()) shotsSinceGroupClean = obj["shotsSinceGroupClean"];
+    if (obj["shotsSinceBackflush"].is<uint16_t>()) shotsSinceBackflush = obj["shotsSinceBackflush"];
+    if (obj["lastDescaleTimestamp"].is<uint32_t>()) lastDescaleTimestamp = obj["lastDescaleTimestamp"];
+    if (obj["lastGroupCleanTimestamp"].is<uint32_t>()) lastGroupCleanTimestamp = obj["lastGroupCleanTimestamp"];
+    if (obj["lastBackflushTimestamp"].is<uint32_t>()) lastBackflushTimestamp = obj["lastBackflushTimestamp"];
     return true;
 }
 
@@ -299,15 +299,15 @@ void ShotRecord::toJson(JsonObject& obj) const {
 }
 
 bool ShotRecord::fromJson(const JsonObject& obj) {
-    if (obj.containsKey("timestamp")) timestamp = obj["timestamp"];
-    if (obj.containsKey("doseWeight")) doseWeight = obj["doseWeight"];
-    if (obj.containsKey("yieldWeight")) yieldWeight = obj["yieldWeight"];
-    if (obj.containsKey("durationMs")) durationMs = obj["durationMs"];
-    if (obj.containsKey("preinfusionMs")) preinfusionMs = obj["preinfusionMs"];
-    if (obj.containsKey("avgFlowRate")) avgFlowRate = obj["avgFlowRate"];
-    if (obj.containsKey("peakPressure")) peakPressure = obj["peakPressure"];
-    if (obj.containsKey("avgTemperature")) avgTemperature = obj["avgTemperature"];
-    if (obj.containsKey("rating")) rating = obj["rating"];
+    if (obj["timestamp"].is<uint32_t>()) timestamp = obj["timestamp"];
+    if (obj["doseWeight"].is<float>()) doseWeight = obj["doseWeight"];
+    if (obj["yieldWeight"].is<float>()) yieldWeight = obj["yieldWeight"];
+    if (obj["durationMs"].is<uint32_t>()) durationMs = obj["durationMs"];
+    if (obj["preinfusionMs"].is<uint32_t>()) preinfusionMs = obj["preinfusionMs"];
+    if (obj["avgFlowRate"].is<float>()) avgFlowRate = obj["avgFlowRate"];
+    if (obj["peakPressure"].is<float>()) peakPressure = obj["peakPressure"];
+    if (obj["avgTemperature"].is<float>()) avgTemperature = obj["avgTemperature"];
+    if (obj["rating"].is<uint8_t>()) rating = obj["rating"];
     return true;
 }
 
@@ -332,7 +332,7 @@ void ShotHistory::toJson(JsonArray& arr) const {
     for (uint8_t i = 0; i < count; i++) {
         const ShotRecord* shot = getShot(i);
         if (shot) {
-            JsonObject obj = arr.createNestedObject();
+            JsonObject obj = arr.add<JsonObject>();
             shot->toJson(obj);
         }
     }
@@ -433,4 +433,3 @@ MachineMode stringToMachineMode(const char* str) {
 }
 
 } // namespace BrewOS
-

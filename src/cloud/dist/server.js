@@ -7,6 +7,8 @@ import { WebSocketServer } from 'ws';
 import { DeviceRelay } from './device-relay.js';
 import { ClientProxy } from './client-proxy.js';
 import devicesRouter from './routes/devices.js';
+import { initDatabase } from './lib/database.js';
+import { cleanupExpiredTokens } from './services/device.js';
 const app = express();
 const port = process.env.PORT || 3001;
 // Middleware
@@ -18,6 +20,14 @@ app.use(express.json());
 // Serve static files (the shared web UI)
 const webDistPath = process.env.WEB_DIST_PATH || path.join(process.cwd(), '../web/dist');
 app.use(express.static(webDistPath));
+// Create HTTP server
+const server = createServer(app);
+// WebSocket server for ESP32 devices
+const deviceWss = new WebSocketServer({ noServer: true });
+const deviceRelay = new DeviceRelay(deviceWss);
+// WebSocket server for client apps (web, mobile)
+const clientWss = new WebSocketServer({ noServer: true });
+const clientProxy = new ClientProxy(clientWss, deviceRelay);
 // Health check
 app.get('/api/health', (_req, res) => {
     res.json({
@@ -33,14 +43,6 @@ app.use('/api/devices', devicesRouter);
 app.get('*', (_req, res) => {
     res.sendFile(path.join(webDistPath, 'index.html'));
 });
-// Create HTTP server
-const server = createServer(app);
-// WebSocket server for ESP32 devices
-const deviceWss = new WebSocketServer({ noServer: true });
-const deviceRelay = new DeviceRelay(deviceWss);
-// WebSocket server for client apps (web, mobile)
-const clientWss = new WebSocketServer({ noServer: true });
-const clientProxy = new ClientProxy(clientWss, deviceRelay);
 // Route WebSocket upgrades based on path
 server.on('upgrade', (request, socket, head) => {
     const url = new URL(request.url || '', `http://${request.headers.host}`);
@@ -60,18 +62,43 @@ server.on('upgrade', (request, socket, head) => {
         socket.destroy();
     }
 });
-// Start server
-server.listen(port, () => {
-    console.log(`
+// Initialize database and start server
+async function start() {
+    try {
+        // Initialize SQLite database
+        await initDatabase();
+        // Cleanup expired tokens every 5 minutes
+        setInterval(() => {
+            try {
+                const deleted = cleanupExpiredTokens();
+                if (deleted > 0) {
+                    console.log(`[Cleanup] Deleted ${deleted} expired claim tokens`);
+                }
+            }
+            catch (error) {
+                console.error('[Cleanup] Error:', error);
+            }
+        }, 5 * 60 * 1000);
+        // Start server
+        server.listen(port, () => {
+            console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                  BrewOS Cloud Service                     ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  HTTP:    http://localhost:${port}                           ║
 ║  Device:  ws://localhost:${port}/ws/device                   ║
 ║  Client:  ws://localhost:${port}/ws/client                   ║
+║  DB:      SQLite (sql.js)                                 ║
 ╚═══════════════════════════════════════════════════════════╝
-  `);
-});
+      `);
+        });
+    }
+    catch (error) {
+        console.error('Failed to start server:', error);
+        process.exit(1);
+    }
+}
+start();
 // Graceful shutdown
 process.on('SIGTERM', () => {
     console.log('[Cloud] Shutting down...');
