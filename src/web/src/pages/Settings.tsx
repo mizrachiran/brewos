@@ -144,14 +144,15 @@ export function Settings() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all',
+                  'flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all',
                   isActive
                     ? 'bg-coffee-800 text-white shadow-soft'
                     : 'text-coffee-600 hover:bg-cream-200'
                 )}
+                title={tab.label}
               >
-                <Icon className="w-4 h-4" />
-                <span>{tab.label}</span>
+                <Icon className="w-4 h-4 flex-shrink-0" />
+                <span className="hidden sm:inline">{tab.label}</span>
               </button>
             );
           })}
