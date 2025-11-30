@@ -209,24 +209,6 @@ Available commands:
 - `set_auto_off` - Set auto power-off (`enabled`, `minutes`)
 - `get_schedules` - Request schedules (broadcasts via state)
 
-## Implementation Details
-
-### Files Modified
-
-**ESP32:**
-- `include/state/state_types.h` - Schedule data structures
-- `src/state/state_types.cpp` - JSON serialization
-- `include/state/state_manager.h` - Schedule management API
-- `src/state/state_manager.cpp` - Schedule persistence & execution
-- `src/web_server.cpp` - REST API & WebSocket handlers
-- `src/main.cpp` - Schedule callback setup
-
-**Web:**
-- `src/pages/Schedules.tsx` - Schedule management UI
-- `src/pages/index.ts` - Export
-- `src/App.tsx` - Route
-- `src/components/Layout.tsx` - Navigation
-
 ### Persistence
 
 Schedules are stored in `/schedules.json` on LittleFS:

@@ -119,24 +119,12 @@ The Pico firmware manages eco mode state:
 3. **Setpoint Management**: Saves/restores normal setpoint on eco entry/exit
 4. **Persistence**: Eco configuration saved to flash
 
-**Files Modified:**
-- `src/pico/include/state.h` - Added eco_config_t, MODE_ECO, STATE_ECO
-- `src/pico/src/state.c` - Eco mode state transitions and timer logic
-- `src/pico/include/config_persistence.h` - Eco config storage
-- `src/pico/src/config_persistence.c` - Eco config persistence functions
-- `src/pico/src/main.c` - MSG_CMD_SET_ECO command handler
-
 ### ESP32 Firmware
 
 The ESP32 handles:
 - WebSocket command forwarding to Pico
 - MQTT command integration
 - Status broadcast including eco state
-
-**Files Modified:**
-- `src/esp32/src/web_server.cpp` - WebSocket eco commands
-- `src/esp32/src/mqtt_client.cpp` - MQTT eco commands
-- `src/esp32/src/main.cpp` - MQTT callback handling
 
 ### Web Application
 

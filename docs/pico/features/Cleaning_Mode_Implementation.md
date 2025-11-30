@@ -43,31 +43,6 @@ Based on research, the ECM Synchronika cleaning mode works as follows:
 
 ---
 
-## Implementation
-
-### Files Created
-
-- **`src/pico/include/cleaning.h`**: Cleaning mode API
-- **`src/pico/src/cleaning.c`**: Cleaning mode implementation
-
-### Files Modified
-
-- **`src/pico/src/state.c`**: 
-  - Records brew cycles (≥15s) for cleaning counter
-  - Integrates cleaning mode with state machine
-  - Handles cleaning cycle via brew switch
-
-- **`src/pico/src/main.c`**: 
-  - Initializes cleaning mode
-  - Updates cleaning mode in main loop
-  - Handles cleaning commands from ESP32
-
-- **`src/pico/CMakeLists.txt`**: Added `cleaning.c` to build
-
-- **`src/shared/protocol_defs.h`**: Added cleaning mode commands
-
----
-
 ## API
 
 ### Initialization

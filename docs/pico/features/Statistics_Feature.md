@@ -35,21 +35,6 @@ The statistics feature provides comprehensive tracking and analytics for brew cy
 
 ---
 
-## Implementation
-
-### Files Created
-
-- **`src/pico/include/statistics.h`**: Statistics API
-- **`src/pico/src/statistics.c`**: Statistics implementation
-
-### Files Modified
-
-- **`src/pico/src/state.c`**: Records brews for statistics
-- **`src/pico/src/main.c`**: Initializes statistics module
-- **`src/pico/CMakeLists.txt`**: Added `statistics.c` to build
-
----
-
 ## API
 
 ### Initialization
