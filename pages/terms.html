@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terms of Service - BrewOS</title>
+    <meta name="description" content="BrewOS Terms of Service - The terms and conditions governing your use of BrewOS firmware and services.">
+    <meta name="theme-color" content="#391f12">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="assets/sizes/favicon/icon/full-color/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/sizes/favicon/icon/full-color/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/sizes/favicon/icon/full-color/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/sizes/favicon/icon/full-color/apple-touch-icon.png">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --coffee-900: #1a0f0a;
+            --coffee-800: #391f12;
+            --coffee-700: #5c3d2e;
+            --coffee-600: #7c5a47;
+            --coffee-500: #9b7a68;
+            --cream-100: #faf8f5;
+            --cream-200: #f5f0e8;
+            --cream-300: #e8e0d5;
+            --cream-400: #d4c8b8;
+            --accent: #c4703c;
+            --accent-light: #e8a066;
+            --text-primary: #1a0f0a;
+            --text-secondary: #5c3d2e;
+            --text-muted: #9b7a68;
+            --white: #ffffff;
+            --shadow-sm: 0 1px 2px rgba(26, 15, 10, 0.05);
+            --shadow-md: 0 4px 12px rgba(26, 15, 10, 0.08);
+            --warning: #b45309;
+            --warning-bg: #fef3c7;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html {
+            scroll-behavior: smooth;
+        }
+        
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--cream-100);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+        
+        /* Header */
+        header {
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+            background: rgba(250, 248, 245, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(212, 200, 184, 0.5);
+            padding: 10px 0;
+        }
+        
+        nav {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+        }
+        
+        .logo img {
+            height: 44px;
+            width: auto;
+        }
+        
+        .back-link {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.95rem;
+            padding: 10px 16px;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .back-link:hover {
+            background: var(--cream-200);
+        }
+        
+        /* Content */
+        main {
+            padding: 140px 0 80px;
+        }
+        
+        .page-header {
+            margin-bottom: 48px;
+            padding-bottom: 32px;
+            border-bottom: 1px solid var(--cream-300);
+        }
+        
+        .page-header h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--coffee-800);
+            margin-bottom: 12px;
+            letter-spacing: -0.02em;
+        }
+        
+        .last-updated {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+        }
+        
+        .content-section {
+            margin-bottom: 40px;
+        }
+        
+        .content-section h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--coffee-800);
+            margin-bottom: 16px;
+            padding-top: 8px;
+        }
+        
+        .content-section h3 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: var(--coffee-700);
+            margin-bottom: 12px;
+            margin-top: 24px;
+        }
+        
+        .content-section p {
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            font-size: 1rem;
+            line-height: 1.8;
+        }
+        
+        .content-section ul, .content-section ol {
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            padding-left: 24px;
+        }
+        
+        .content-section li {
+            margin-bottom: 8px;
+            line-height: 1.7;
+        }
+        
+        .content-section a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+        
+        .content-section a:hover {
+            text-decoration: underline;
+        }
+        
+        .highlight-box {
+            background: var(--white);
+            border: 1px solid var(--cream-300);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 24px 0;
+        }
+        
+        .highlight-box p {
+            margin-bottom: 0;
+        }
+        
+        .warning-box {
+            background: var(--warning-bg);
+            border: 1px solid var(--warning);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 24px 0;
+        }
+        
+        .warning-box h4 {
+            color: var(--warning);
+            font-weight: 700;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .warning-box p {
+            color: var(--coffee-700);
+            margin-bottom: 0;
+        }
+        
+        /* Footer */
+        footer {
+            padding: 40px 0;
+            background: var(--coffee-900);
+            color: var(--cream-400);
+        }
+        
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        
+        .footer-links {
+            display: flex;
+            gap: 24px;
+        }
+        
+        .footer-links a {
+            color: var(--cream-400);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+        }
+        
+        .footer-links a:hover {
+            color: var(--white);
+        }
+        
+        @media (max-width: 768px) {
+            .page-header h1 {
+                font-size: 2rem;
+            }
+            
+            .content-section h2 {
+                font-size: 1.3rem;
+            }
+            
+            .footer-content {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="logo">
+                <img src="assets/1080/horizontal/full-color/Brewos-1080.png" alt="BrewOS">
+            </a>
+            <a href="/" class="back-link">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                </svg>
+                Back to Home
+            </a>
+        </nav>
+    </header>
+
+    <main>
+        <div class="container">
+            <div class="page-header">
+                <h1>Terms of Service</h1>
+                <p class="last-updated">Last updated: November 30, 2025</p>
+            </div>
+
+            <div class="content-section">
+                <p>Welcome to BrewOS. These Terms of Service ("Terms") govern your use of the BrewOS firmware, cloud services, website, and related documentation (collectively, the "Service"). By using our Service, you agree to these Terms.</p>
+            </div>
+
+            <div class="content-section">
+                <h2>1. Acceptance of Terms</h2>
+                <p>By accessing or using BrewOS, you agree to be bound by these Terms and our <a href="/privacy.html">Privacy Policy</a>. If you do not agree to these Terms, do not use the Service.</p>
+            </div>
+
+            <div class="content-section">
+                <h2>2. Description of Service</h2>
+                <p>BrewOS provides:</p>
+                <ul>
+                    <li><strong>Open-Source Firmware:</strong> Software for controlling espresso machines using Raspberry Pi Pico and ESP32 microcontrollers</li>
+                    <li><strong>Cloud Services:</strong> Optional remote monitoring, control, and data synchronization features</li>
+                    <li><strong>Documentation:</strong> Installation guides, technical specifications, and support resources</li>
+                    <li><strong>Community:</strong> Forums and discussion spaces for users and contributors</li>
+                </ul>
+            </div>
+
+            <div class="content-section">
+                <h2>3. Open Source License</h2>
+                <p>The BrewOS firmware and related software are licensed under the Apache License 2.0 with Commons Clause. This means:</p>
+                <ul>
+                    <li>You may use, modify, and distribute the software for personal and non-commercial purposes</li>
+                    <li>You must include the original copyright notice and license in any copies or distributions</li>
+                    <li>You may not sell the software or services derived primarily from it without permission</li>
+                    <li>Commercial licensing is available upon request</li>
+                </ul>
+                <p>The full license text is available in our <a href="https://github.com/mizrachiran/brewos/blob/main/LICENSE" target="_blank">GitHub repository</a>.</p>
+            </div>
+
+            <div class="content-section">
+                <h2>4. User Responsibilities</h2>
+                
+                <div class="warning-box">
+                    <h4>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                            <line x1="12" y1="9" x2="12" y2="13"></line>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                        Important Safety Notice
+                    </h4>
+                    <p>Modifying espresso machines involves working with high voltage electricity, high pressure, and high temperatures. Improper installation can result in serious injury, death, fire, or property damage. You must have appropriate technical knowledge and take all necessary safety precautions.</p>
+                </div>
+
+                <h3>4.1 Technical Competence</h3>
+                <p>You acknowledge that:</p>
+                <ul>
+                    <li>Installing BrewOS requires technical skills including electronics, soldering, and basic programming</li>
+                    <li>You are solely responsible for ensuring safe installation and operation</li>
+                    <li>You should consult with qualified professionals if you are uncertain about any aspect of the installation</li>
+                </ul>
+
+                <h3>4.2 Machine Warranty</h3>
+                <p>Installing BrewOS may void your espresso machine's manufacturer warranty. You accept this risk and any consequences that may result.</p>
+
+                <h3>4.3 Compliance</h3>
+                <p>You agree to:</p>
+                <ul>
+                    <li>Comply with all applicable local, state, national, and international laws</li>
+                    <li>Not use the Service for any unlawful purpose</li>
+                    <li>Not attempt to gain unauthorized access to any portion of the Service</li>
+                    <li>Not interfere with or disrupt the Service or servers</li>
+                </ul>
+            </div>
+
+            <div class="content-section">
+                <h2>5. Cloud Services</h2>
+                
+                <h3>5.1 Account Registration</h3>
+                <p>To use BrewOS Cloud services, you must:</p>
+                <ul>
+                    <li>Provide accurate and complete registration information</li>
+                    <li>Maintain the security of your account credentials</li>
+                    <li>Promptly notify us of any unauthorized use of your account</li>
+                    <li>Accept responsibility for all activities under your account</li>
+                </ul>
+
+                <h3>5.2 Service Availability</h3>
+                <p>We strive to provide reliable cloud services, but we do not guarantee:</p>
+                <ul>
+                    <li>Continuous, uninterrupted access to the Service</li>
+                    <li>That the Service will be free from errors or defects</li>
+                    <li>The security or integrity of any data stored on our servers</li>
+                </ul>
+                <p>We recommend maintaining local backups of any important configurations or data.</p>
+
+                <h3>5.3 Service Modifications</h3>
+                <p>We reserve the right to modify, suspend, or discontinue any part of the Service at any time, with or without notice. We will make reasonable efforts to provide advance notice of significant changes.</p>
+            </div>
+
+            <div class="content-section">
+                <h2>6. Intellectual Property</h2>
+                <p>Subject to the open source license:</p>
+                <ul>
+                    <li>The BrewOS name, logo, and branding are trademarks of the BrewOS project</li>
+                    <li>You may not use our trademarks without prior written permission</li>
+                    <li>User contributions to the open source project are subject to the project's contributor license agreement</li>
+                </ul>
+            </div>
+
+            <div class="content-section">
+                <h2>7. Disclaimer of Warranties</h2>
+                <div class="highlight-box">
+                    <p><strong>THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, WHETHER EXPRESS, IMPLIED, OR STATUTORY.</strong> We expressly disclaim all warranties including, but not limited to, implied warranties of merchantability, fitness for a particular purpose, title, and non-infringement.</p>
+                </div>
+                <p>We do not warrant that:</p>
+                <ul>
+                    <li>The firmware will be compatible with your specific machine</li>
+                    <li>The Service will meet your requirements</li>
+                    <li>The Service will be error-free or secure</li>
+                    <li>Any defects will be corrected</li>
+                </ul>
+            </div>
+
+            <div class="content-section">
+                <h2>8. Limitation of Liability</h2>
+                <p>TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT SHALL BREWOS, ITS CONTRIBUTORS, OR AFFILIATES BE LIABLE FOR:</p>
+                <ul>
+                    <li>Any indirect, incidental, special, consequential, or punitive damages</li>
+                    <li>Any loss of profits, revenue, data, or use</li>
+                    <li>Any damage to your espresso machine or property</li>
+                    <li>Any personal injury or death</li>
+                </ul>
+                <p>arising out of or related to your use of the Service, even if we have been advised of the possibility of such damages.</p>
+                <p>Our total liability for any claims arising from these Terms or your use of the Service shall not exceed the amount you paid us (if any) in the twelve (12) months preceding the claim.</p>
+            </div>
+
+            <div class="content-section">
+                <h2>9. Indemnification</h2>
+                <p>You agree to indemnify, defend, and hold harmless BrewOS, its contributors, and affiliates from any claims, damages, losses, liabilities, costs, and expenses (including reasonable attorneys' fees) arising from:</p>
+                <ul>
+                    <li>Your use of the Service</li>
+                    <li>Your violation of these Terms</li>
+                    <li>Your violation of any rights of another party</li>
+                    <li>Any modifications you make to the firmware or hardware</li>
+                </ul>
+            </div>
+
+            <div class="content-section">
+                <h2>10. Termination</h2>
+                <p>We may terminate or suspend your access to the Service at any time, with or without cause, with or without notice. Upon termination:</p>
+                <ul>
+                    <li>Your right to use cloud services will immediately cease</li>
+                    <li>You may continue to use the open source firmware under its license terms</li>
+                    <li>We may delete your account data after a reasonable retention period</li>
+                </ul>
+            </div>
+
+            <div class="content-section">
+                <h2>11. Governing Law</h2>
+                <p>These Terms shall be governed by and construed in accordance with the laws of the State of California, United States, without regard to its conflict of law provisions. Any disputes arising from these Terms shall be resolved in the courts of California.</p>
+            </div>
+
+            <div class="content-section">
+                <h2>12. Changes to Terms</h2>
+                <p>We reserve the right to modify these Terms at any time. We will provide notice of material changes by:</p>
+                <ul>
+                    <li>Posting the updated Terms on this page</li>
+                    <li>Updating the "Last updated" date</li>
+                    <li>Sending an email notification for significant changes (if you have an account)</li>
+                </ul>
+                <p>Your continued use of the Service after changes take effect constitutes acceptance of the revised Terms.</p>
+            </div>
+
+            <div class="content-section">
+                <h2>13. Severability</h2>
+                <p>If any provision of these Terms is found to be unenforceable or invalid, that provision shall be limited or eliminated to the minimum extent necessary, and the remaining provisions shall remain in full force and effect.</p>
+            </div>
+
+            <div class="content-section">
+                <h2>14. Entire Agreement</h2>
+                <p>These Terms, together with our Privacy Policy, constitute the entire agreement between you and BrewOS regarding the Service and supersede all prior agreements and understandings.</p>
+            </div>
+
+            <div class="content-section">
+                <h2>15. Contact Information</h2>
+                <p>If you have any questions about these Terms, please contact us:</p>
+                <ul>
+                    <li>Email: <a href="mailto:legal@brewos.coffee">legal@brewos.coffee</a></li>
+                    <li>GitHub: <a href="https://github.com/mizrachiran/brewos/issues" target="_blank">Open an Issue</a></li>
+                </ul>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <div class="footer-content">
+            <p>© 2025 BrewOS — Apache 2.0 + Commons Clause</p>
+            <div class="footer-links">
+                <a href="/">Home</a>
+                <a href="/privacy.html">Privacy Policy</a>
+                <a href="/terms.html">Terms of Service</a>
+                <a href="https://github.com/mizrachiran/brewos" target="_blank">GitHub</a>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
+

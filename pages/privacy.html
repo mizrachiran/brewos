@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - BrewOS</title>
+    <meta name="description" content="BrewOS Privacy Policy - Learn how we collect, use, and protect your personal information.">
+    <meta name="theme-color" content="#391f12">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="assets/sizes/favicon/icon/full-color/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/sizes/favicon/icon/full-color/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/sizes/favicon/icon/full-color/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/sizes/favicon/icon/full-color/apple-touch-icon.png">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --coffee-900: #1a0f0a;
+            --coffee-800: #391f12;
+            --coffee-700: #5c3d2e;
+            --coffee-600: #7c5a47;
+            --coffee-500: #9b7a68;
+            --cream-100: #faf8f5;
+            --cream-200: #f5f0e8;
+            --cream-300: #e8e0d5;
+            --cream-400: #d4c8b8;
+            --accent: #c4703c;
+            --accent-light: #e8a066;
+            --text-primary: #1a0f0a;
+            --text-secondary: #5c3d2e;
+            --text-muted: #9b7a68;
+            --white: #ffffff;
+            --shadow-sm: 0 1px 2px rgba(26, 15, 10, 0.05);
+            --shadow-md: 0 4px 12px rgba(26, 15, 10, 0.08);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html {
+            scroll-behavior: smooth;
+        }
+        
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--cream-100);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+        
+        /* Header */
+        header {
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+            background: rgba(250, 248, 245, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(212, 200, 184, 0.5);
+            padding: 10px 0;
+        }
+        
+        nav {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+        }
+        
+        .logo img {
+            height: 44px;
+            width: auto;
+        }
+        
+        .back-link {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.95rem;
+            padding: 10px 16px;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .back-link:hover {
+            background: var(--cream-200);
+        }
+        
+        /* Content */
+        main {
+            padding: 140px 0 80px;
+        }
+        
+        .page-header {
+            margin-bottom: 48px;
+            padding-bottom: 32px;
+            border-bottom: 1px solid var(--cream-300);
+        }
+        
+        .page-header h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--coffee-800);
+            margin-bottom: 12px;
+            letter-spacing: -0.02em;
+        }
+        
+        .last-updated {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+        }
+        
+        .content-section {
+            margin-bottom: 40px;
+        }
+        
+        .content-section h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--coffee-800);
+            margin-bottom: 16px;
+            padding-top: 8px;
+        }
+        
+        .content-section h3 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: var(--coffee-700);
+            margin-bottom: 12px;
+            margin-top: 24px;
+        }
+        
+        .content-section p {
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            font-size: 1rem;
+            line-height: 1.8;
+        }
+        
+        .content-section ul, .content-section ol {
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            padding-left: 24px;
+        }
+        
+        .content-section li {
+            margin-bottom: 8px;
+            line-height: 1.7;
+        }
+        
+        .content-section a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+        
+        .content-section a:hover {
+            text-decoration: underline;
+        }
+        
+        .highlight-box {
+            background: var(--white);
+            border: 1px solid var(--cream-300);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 24px 0;
+        }
+        
+        .highlight-box p {
+            margin-bottom: 0;
+        }
+        
+        /* Footer */
+        footer {
+            padding: 40px 0;
+            background: var(--coffee-900);
+            color: var(--cream-400);
+        }
+        
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        
+        .footer-links {
+            display: flex;
+            gap: 24px;
+        }
+        
+        .footer-links a {
+            color: var(--cream-400);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+        }
+        
+        .footer-links a:hover {
+            color: var(--white);
+        }
+        
+        @media (max-width: 768px) {
+            .page-header h1 {
+                font-size: 2rem;
+            }
+            
+            .content-section h2 {
+                font-size: 1.3rem;
+            }
+            
+            .footer-content {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="logo">
+                <img src="assets/1080/horizontal/full-color/Brewos-1080.png" alt="BrewOS">
+            </a>
+            <a href="/" class="back-link">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                </svg>
+                Back to Home
+            </a>
+        </nav>
+    </header>
+
+    <main>
+        <div class="container">
+            <div class="page-header">
+                <h1>Privacy Policy</h1>
+                <p class="last-updated">Last updated: November 30, 2025</p>
+            </div>
+
+            <div class="content-section">
+                <p>BrewOS ("we", "our", or "us") respects your privacy and is committed to protecting your personal data. This privacy policy explains how we collect, use, and safeguard your information when you use our firmware, cloud services, and website.</p>
+            </div>
+
+            <div class="content-section">
+                <h2>1. Information We Collect</h2>
+                
+                <h3>1.1 Account Information</h3>
+                <p>When you create a BrewOS Cloud account, we collect:</p>
+                <ul>
+                    <li>Email address</li>
+                    <li>Display name (optional)</li>
+                    <li>Authentication credentials (hashed and encrypted)</li>
+                </ul>
+
+                <h3>1.2 Device and Machine Data</h3>
+                <p>When you connect your espresso machine to BrewOS Cloud, we may collect:</p>
+                <ul>
+                    <li>Device identifiers (ESP32 MAC address, device ID)</li>
+                    <li>Machine configuration and settings</li>
+                    <li>Temperature readings, pressure data, and shot statistics</li>
+                    <li>Firmware version information</li>
+                    <li>Error logs and diagnostic data</li>
+                </ul>
+
+                <h3>1.3 Usage Data</h3>
+                <p>We automatically collect certain information when you use our services:</p>
+                <ul>
+                    <li>Shot history and brewing patterns (anonymized for analytics)</li>
+                    <li>Feature usage statistics</li>
+                    <li>Connection timestamps and session duration</li>
+                </ul>
+
+                <h3>1.4 Local-Only Data</h3>
+                <p>The following data is stored only on your device and never transmitted to our servers unless you explicitly enable cloud sync:</p>
+                <ul>
+                    <li>PID tuning parameters</li>
+                    <li>Custom profiles and recipes</li>
+                    <li>WiFi credentials (stored encrypted on ESP32)</li>
+                </ul>
+            </div>
+
+            <div class="content-section">
+                <h2>2. How We Use Your Information</h2>
+                <p>We use the collected information for the following purposes:</p>
+                <ul>
+                    <li><strong>Service Provision:</strong> To operate and maintain BrewOS Cloud services, including remote monitoring and control features</li>
+                    <li><strong>Improvement:</strong> To analyze usage patterns and improve our firmware and services</li>
+                    <li><strong>Support:</strong> To provide technical support and troubleshoot issues</li>
+                    <li><strong>Communication:</strong> To send service-related notifications, updates, and security alerts</li>
+                    <li><strong>Safety:</strong> To detect and prevent potential safety issues or misuse</li>
+                </ul>
+            </div>
+
+            <div class="content-section">
+                <h2>3. Data Sharing and Disclosure</h2>
+                <p>We do not sell your personal information. We may share your data only in the following circumstances:</p>
+                <ul>
+                    <li><strong>With Your Consent:</strong> When you explicitly authorize sharing</li>
+                    <li><strong>Service Providers:</strong> With trusted third-party service providers who assist in operating our services (e.g., cloud hosting providers)</li>
+                    <li><strong>Legal Requirements:</strong> When required by law or to protect our legal rights</li>
+                    <li><strong>Aggregated Data:</strong> We may share anonymized, aggregated statistics that cannot identify individual users</li>
+                </ul>
+            </div>
+
+            <div class="content-section">
+                <h2>4. Data Security</h2>
+                <p>We implement appropriate technical and organizational measures to protect your data:</p>
+                <ul>
+                    <li>All data transmitted between your device and our servers is encrypted using TLS 1.3</li>
+                    <li>Passwords are hashed using industry-standard algorithms</li>
+                    <li>Access to user data is restricted to authorized personnel only</li>
+                    <li>Regular security audits and vulnerability assessments</li>
+                </ul>
+                
+                <div class="highlight-box">
+                    <p><strong>Open Source Transparency:</strong> BrewOS firmware is open source, allowing you to audit exactly what data is collected and transmitted. You can review the code on our <a href="https://github.com/mizrachiran/brewos" target="_blank">GitHub repository</a>.</p>
+                </div>
+            </div>
+
+            <div class="content-section">
+                <h2>5. Data Retention</h2>
+                <p>We retain your data for as long as your account is active or as needed to provide services. Specifically:</p>
+                <ul>
+                    <li>Account information is retained until you delete your account</li>
+                    <li>Shot history and statistics are retained for 2 years by default (configurable)</li>
+                    <li>Diagnostic logs are retained for 90 days</li>
+                    <li>You can request data deletion at any time</li>
+                </ul>
+            </div>
+
+            <div class="content-section">
+                <h2>6. Your Rights</h2>
+                <p>Depending on your location, you may have the following rights:</p>
+                <ul>
+                    <li><strong>Access:</strong> Request a copy of your personal data</li>
+                    <li><strong>Correction:</strong> Request correction of inaccurate data</li>
+                    <li><strong>Deletion:</strong> Request deletion of your data</li>
+                    <li><strong>Portability:</strong> Request your data in a machine-readable format</li>
+                    <li><strong>Objection:</strong> Object to certain processing of your data</li>
+                    <li><strong>Withdrawal:</strong> Withdraw consent where processing is based on consent</li>
+                </ul>
+                <p>To exercise these rights, contact us at <a href="mailto:privacy@brewos.coffee">privacy@brewos.coffee</a>.</p>
+            </div>
+
+            <div class="content-section">
+                <h2>7. Offline Operation</h2>
+                <p>BrewOS is designed to work fully offline. You can use all core features of your espresso machine without connecting to the internet or creating an account. Cloud features are entirely optional.</p>
+            </div>
+
+            <div class="content-section">
+                <h2>8. Children's Privacy</h2>
+                <p>Our services are not intended for children under 16 years of age. We do not knowingly collect personal information from children.</p>
+            </div>
+
+            <div class="content-section">
+                <h2>9. International Data Transfers</h2>
+                <p>Your data may be transferred to and processed in countries other than your country of residence. We ensure appropriate safeguards are in place to protect your data in accordance with this privacy policy.</p>
+            </div>
+
+            <div class="content-section">
+                <h2>10. Changes to This Policy</h2>
+                <p>We may update this privacy policy from time to time. We will notify you of any material changes by posting the new policy on this page and updating the "Last updated" date. We encourage you to review this policy periodically.</p>
+            </div>
+
+            <div class="content-section">
+                <h2>11. Contact Us</h2>
+                <p>If you have any questions about this privacy policy or our data practices, please contact us:</p>
+                <ul>
+                    <li>Email: <a href="mailto:privacy@brewos.coffee">privacy@brewos.coffee</a></li>
+                    <li>GitHub: <a href="https://github.com/mizrachiran/brewos/issues" target="_blank">Open an Issue</a></li>
+                </ul>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <div class="footer-content">
+            <p>© 2025 BrewOS — Apache 2.0 + Commons Clause</p>
+            <div class="footer-links">
+                <a href="/">Home</a>
+                <a href="/privacy.html">Privacy Policy</a>
+                <a href="/terms.html">Terms of Service</a>
+                <a href="https://github.com/mizrachiran/brewos" target="_blank">GitHub</a>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
+
