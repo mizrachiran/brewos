@@ -18,6 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PICO_DIR="$SRC_DIR/pico"
 ESP32_DIR="$SRC_DIR/esp32"
+WEB_DIR="$SRC_DIR/web"
 
 # Functions
 print_header() {
@@ -121,9 +122,46 @@ build_pico() {
     fi
 }
 
+# Build Web UI for ESP32
+build_web() {
+    print_header "Building Web UI for ESP32"
+    
+    cd "$WEB_DIR"
+    
+    # Check if npm is available
+    if ! command -v npm &> /dev/null; then
+        print_error "npm not found"
+        echo "Please install Node.js: https://nodejs.org/"
+        exit 1
+    fi
+    
+    # Install dependencies if needed
+    if [ ! -d "node_modules" ]; then
+        print_info "Installing dependencies..."
+        npm ci || npm install || {
+            print_error "npm install failed"
+            exit 1
+        }
+    fi
+    
+    # Build for ESP32
+    print_info "Building web UI..."
+    npm run build:esp32 || {
+        print_error "Web build failed"
+        exit 1
+    }
+    
+    print_success "Web UI built successfully"
+    du -sh "$ESP32_DIR/data" | awk '{print "  Size: " $1}'
+}
+
 # Build ESP32 firmware
 build_esp32() {
     print_header "Building BrewOS ESP32 Firmware"
+    
+    # Build web UI first
+    build_web
+    echo ""
     
     cd "$ESP32_DIR"
     
@@ -141,13 +179,23 @@ build_esp32() {
         exit 1
     }
     
+    # Build LittleFS image
+    print_info "Building LittleFS image..."
+    pio run -t buildfs || {
+        print_error "LittleFS build failed"
+        exit 1
+    }
+    
     # Generate compile_commands.json for IDE
     print_info "Generating compile database for IDE..."
     pio run --target compiledb 2>/dev/null || true
     
     print_success "ESP32 firmware built successfully"
     if [ -f ".pio/build/esp32s3/firmware.bin" ]; then
-        ls -lh .pio/build/esp32s3/firmware.bin | awk '{print "  Binary: " $9 " (" $5 ")"}'
+        ls -lh .pio/build/esp32s3/firmware.bin | awk '{print "  Firmware: " $9 " (" $5 ")"}'
+    fi
+    if [ -f ".pio/build/esp32s3/littlefs.bin" ]; then
+        ls -lh .pio/build/esp32s3/littlefs.bin | awk '{print "  LittleFS: " $9 " (" $5 ")"}'
     fi
 }
 

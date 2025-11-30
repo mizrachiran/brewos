@@ -7,12 +7,16 @@ on:
     paths:
       - 'src/pico/**'
       - 'src/esp32/**'
+      - 'src/web/**'
+      - 'src/shared/**'
       - '.github/workflows/build_firmware.yml'
   pull_request:
     branches: ["main"]
     paths:
       - 'src/pico/**'
       - 'src/esp32/**'
+      - 'src/web/**'
+      - 'src/shared/**'
   workflow_dispatch:
 
 jobs:
@@ -86,6 +90,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: src/web/package-lock.json
+
+      - name: Build Web UI for ESP32
+        run: |
+          cd src/web
+          npm ci
+          npm run build:esp32
+          echo "=== Web UI Built ==="
+          ls -lah ../esp32/data/
+          du -sh ../esp32/data/
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -99,12 +119,19 @@ jobs:
           cd src/esp32
           pio run -e esp32s3
 
+      - name: Build LittleFS Image
+        run: |
+          cd src/esp32
+          pio run -e esp32s3 -t buildfs
+
       - name: Verify Build Output
         run: |
           echo "=== Built Firmware Files ==="
           ls -lh src/esp32/.pio/build/esp32s3/firmware.*
+          ls -lh src/esp32/.pio/build/esp32s3/littlefs.bin || true
           echo ""
           test -f src/esp32/.pio/build/esp32s3/firmware.bin && echo "✓ ESP32 firmware.bin built successfully!"
+          test -f src/esp32/.pio/build/esp32s3/littlefs.bin && echo "✓ LittleFS image built successfully!"
 
       - name: Upload ESP32 Artifacts
         uses: actions/upload-artifact@v4
@@ -112,4 +139,5 @@ jobs:
           name: esp32-firmware
           path: |
             src/esp32/.pio/build/esp32s3/firmware.bin
+            src/esp32/.pio/build/esp32s3/littlefs.bin
           retention-days: 30
