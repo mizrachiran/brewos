@@ -1,0 +1,18 @@
+services:
+  brewos-cloud:
+    build: .
+    ports:
+      - "3001:3001"
+    volumes:
+      - brewos-data:/data
+      - ../web/dist:/app/web:ro
+    environment:
+      - PORT=3001
+      - DATA_DIR=/data
+      - WEB_DIST_PATH=/app/web
+      - SUPABASE_URL=${SUPABASE_URL}
+    restart: unless-stopped
+
+volumes:
+  brewos-data:
+

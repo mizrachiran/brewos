@@ -49,6 +49,9 @@ yarn-error.log*
 *.db-wal
 *.db-shm
 
+# SSH keys
+.keys/
+
 # IDE
 .vscode/
 .idea/
