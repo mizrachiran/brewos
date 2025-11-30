@@ -428,27 +428,27 @@ function ScheduleForm({ data, onChange, onSave, onCancel, toggleDay, setPresetDa
           <label className="block text-xs font-semibold uppercase tracking-wider text-coffee-500 mb-1.5">
             Action
           </label>
-          <div className="flex gap-2">
+          <div className="flex gap-2 h-[50px]">
             <button
               onClick={() => onChange({ ...data, action: 'on' })}
-              className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-all ${
+              className={`flex-1 px-3 rounded-xl border-2 text-sm font-medium transition-all flex items-center justify-center ${
                 data.action === 'on'
-                  ? 'bg-emerald-100 border-emerald-300 text-emerald-700'
-                  : 'bg-cream-50 border-cream-200 text-coffee-600 hover:border-cream-300'
+                  ? 'bg-emerald-100 border-emerald-400 text-emerald-700'
+                  : 'bg-cream-100 border-cream-300 text-coffee-600 hover:border-coffee-300'
               }`}
             >
-              <Power className="w-4 h-4 inline mr-2" />
+              <Power className="w-4 h-4 mr-2" />
               Turn On
             </button>
             <button
               onClick={() => onChange({ ...data, action: 'off' })}
-              className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-all ${
+              className={`flex-1 px-3 rounded-xl border-2 text-sm font-medium transition-all flex items-center justify-center ${
                 data.action === 'off'
-                  ? 'bg-orange-100 border-orange-300 text-orange-700'
-                  : 'bg-cream-50 border-cream-200 text-coffee-600 hover:border-cream-300'
+                  ? 'bg-orange-100 border-orange-400 text-orange-700'
+                  : 'bg-cream-100 border-cream-300 text-coffee-600 hover:border-coffee-300'
               }`}
             >
-              <PowerOff className="w-4 h-4 inline mr-2" />
+              <PowerOff className="w-4 h-4 mr-2" />
               Turn Off
             </button>
           </div>
@@ -458,16 +458,16 @@ function ScheduleForm({ data, onChange, onSave, onCancel, toggleDay, setPresetDa
           <label className="block text-xs font-semibold uppercase tracking-wider text-coffee-500 mb-1.5">
             Time
           </label>
-          <div className="flex gap-2">
+          <div className="flex gap-2 h-[50px]">
             <input
               type="number"
               min={0}
               max={23}
               value={data.hour}
               onChange={(e) => onChange({ ...data, hour: parseInt(e.target.value) || 0 })}
-              className="input w-20 text-center"
+              className="w-20 text-center px-3 bg-cream-100 border-2 border-cream-300 rounded-xl text-coffee-900 outline-none transition-colors focus:border-accent focus:bg-white"
             />
-            <span className="self-center text-coffee-400">:</span>
+            <span className="self-center text-coffee-400 font-bold">:</span>
             <input
               type="number"
               min={0}
@@ -475,7 +475,7 @@ function ScheduleForm({ data, onChange, onSave, onCancel, toggleDay, setPresetDa
               step={5}
               value={data.minute.toString().padStart(2, '0')}
               onChange={(e) => onChange({ ...data, minute: parseInt(e.target.value) || 0 })}
-              className="input w-20 text-center"
+              className="w-20 text-center px-3 bg-cream-100 border-2 border-cream-300 rounded-xl text-coffee-900 outline-none transition-colors focus:border-accent focus:bg-white"
             />
           </div>
         </div>
@@ -485,15 +485,15 @@ function ScheduleForm({ data, onChange, onSave, onCancel, toggleDay, setPresetDa
         <label className="block text-xs font-semibold uppercase tracking-wider text-coffee-500 mb-1.5">
           Days
         </label>
-        <div className="flex gap-1 mb-2">
+        <div className="flex gap-1.5 mb-2">
           {orderedDays.map(day => (
             <button
               key={day.value}
               onClick={() => toggleDay(day.value)}
-              className={`w-9 h-9 rounded-lg text-xs font-semibold transition-all ${
+              className={`w-9 h-9 rounded-lg text-xs font-bold transition-all border-2 ${
                 data.days & day.value
-                  ? 'bg-accent text-white'
-                  : 'bg-cream-100 text-coffee-500 hover:bg-cream-200'
+                  ? 'bg-accent text-white border-accent'
+                  : 'bg-cream-100 text-coffee-500 border-cream-300 hover:border-coffee-300'
               }`}
             >
               {day.short}
@@ -532,7 +532,7 @@ function ScheduleForm({ data, onChange, onSave, onCancel, toggleDay, setPresetDa
           <select
             value={data.strategy}
             onChange={(e) => onChange({ ...data, strategy: parseInt(e.target.value) })}
-            className="input"
+            className="w-full h-[50px] px-4 bg-cream-100 border-2 border-cream-300 rounded-xl text-coffee-900 outline-none transition-colors focus:border-accent focus:bg-white"
           >
             {STRATEGIES.map(s => (
               <option key={s.value} value={s.value}>
