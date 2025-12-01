@@ -60,14 +60,14 @@ jobs:
           du -sh src/esp32/data/*
 
       - name: Upload Cloud Build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: web-cloud-build
           path: src/web/dist/
           retention-days: 30
 
       - name: Upload ESP32 Web Files
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: web-esp32-build
           path: src/esp32/data/
@@ -106,7 +106,7 @@ jobs:
           ls -lh src/cloud/dist/
           
       - name: Upload Cloud Service
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: cloud-service-build
           path: src/cloud/dist/
