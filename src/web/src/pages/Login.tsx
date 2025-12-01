@@ -96,9 +96,9 @@ export function Login() {
         </div>
       </Card>
 
-      {/* Install App prompt for mobile users */}
+      {/* Install App prompt for mobile users only */}
       <div className="mt-4 w-full max-w-md">
-        <InstallPrompt variant="card" className="bg-white/10 backdrop-blur border-white/20" />
+        <InstallPrompt variant="card" />
       </div>
     </div>
   );

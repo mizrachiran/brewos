@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { Button } from './Button';
 import { Card } from './Card';
+import { Logo } from './Logo';
 import { 
   Download, 
   X, 
   Share, 
   PlusSquare, 
-  Smartphone,
   Check,
 } from 'lucide-react';
 
@@ -15,15 +15,34 @@ interface InstallPromptProps {
   variant?: 'button' | 'banner' | 'card';
   className?: string;
   onInstalled?: () => void;
+  onDismiss?: () => void;
+  /** Force show even on desktop (for testing) */
+  forceShow?: boolean;
 }
 
-export function InstallPrompt({ variant = 'button', className = '', onInstalled }: InstallPromptProps) {
-  const { isInstallable, isInstalled, isIOS, promptInstall, isMobile } = usePWAInstall();
+export function InstallPrompt({ 
+  variant = 'button', 
+  className = '', 
+  onInstalled,
+  onDismiss,
+  forceShow = false,
+}: InstallPromptProps) {
+  const { isInstallable, isInstalled, isIOS, promptInstall, isMobile, dismiss } = usePWAInstall();
   const [showIOSModal, setShowIOSModal] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [isDismissed, setIsDismissed] = useState(false);
 
-  // Don't show if already installed or not installable
-  if (isInstalled || !isInstallable) return null;
+  // Don't show if already installed, not installable, dismissed, or on desktop (unless forced)
+  if (isInstalled || !isInstallable || isDismissed) return null;
+  
+  // Only show on mobile unless forceShow is true
+  if (!isMobile && !forceShow) return null;
+
+  const handleDismiss = () => {
+    setIsDismissed(true);
+    dismiss();
+    onDismiss?.();
+  };
 
   const handleInstall = async () => {
     if (isIOS) {
@@ -64,26 +83,33 @@ export function InstallPrompt({ variant = 'button', className = '', onInstalled 
   if (variant === 'banner') {
     return (
       <>
-        <div className={`bg-accent/10 border border-accent/20 rounded-xl p-4 flex items-center justify-between ${className}`}>
+        <div className={`bg-theme-card border border-theme rounded-xl p-4 flex items-center justify-between ${className}`}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-accent/20 rounded-lg flex items-center justify-center">
-              <Smartphone className="w-5 h-5 text-accent" />
-            </div>
+            <Logo size="sm" />
             <div>
-              <p className="font-medium text-theme text-sm">Install BrewOS App</p>
+              <p className="font-medium text-theme text-sm">Install BrewOS</p>
               <p className="text-xs text-theme-muted">
-                {isMobile ? 'Add to your home screen' : 'Install for quick access'}
+                Add to your home screen
               </p>
             </div>
           </div>
-          <Button
-            size="sm"
-            onClick={handleInstall}
-            loading={installing}
-          >
-            <Download className="w-4 h-4" />
-            Install
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={handleInstall}
+              loading={installing}
+            >
+              <Download className="w-4 h-4" />
+              Install
+            </Button>
+            <button 
+              onClick={handleDismiss}
+              className="p-2 hover:bg-theme rounded-lg transition-colors"
+              aria-label="Dismiss"
+            >
+              <X className="w-4 h-4 text-theme-muted" />
+            </button>
+          </div>
         </div>
 
         {showIOSModal && (
@@ -96,18 +122,25 @@ export function InstallPrompt({ variant = 'button', className = '', onInstalled 
   // Card variant
   return (
     <>
-      <Card className={className}>
+      <Card className={`relative ${className}`}>
+        {/* Dismiss button */}
+        <button 
+          onClick={handleDismiss}
+          className="absolute top-3 right-3 p-1.5 hover:bg-theme rounded-lg transition-colors"
+          aria-label="Dismiss"
+        >
+          <X className="w-4 h-4 text-theme-muted" />
+        </button>
+        
         <div className="text-center py-4">
-          <div className="w-14 h-14 bg-accent/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Smartphone className="w-7 h-7 text-accent" />
+          <div className="flex justify-center mb-4">
+            <Logo size="md" />
           </div>
           <h3 className="text-lg font-semibold text-theme mb-1">
             Install BrewOS
           </h3>
           <p className="text-sm text-theme-muted mb-4 max-w-xs mx-auto">
-            {isMobile 
-              ? 'Add BrewOS to your home screen for quick access and push notifications.'
-              : 'Install BrewOS on your computer for a native app experience.'}
+            Add BrewOS to your home screen for quick access and push notifications.
           </p>
           <Button
             onClick={handleInstall}

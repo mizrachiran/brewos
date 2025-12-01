@@ -15,6 +15,8 @@ interface NavigatorWithRelatedApps extends Navigator {
   getInstalledRelatedApps?: () => Promise<RelatedApplication[]>;
 }
 
+const DISMISSED_KEY = 'pwa-install-dismissed';
+
 interface PWAInstallState {
   isInstallable: boolean;
   isInstalled: boolean;
@@ -22,11 +24,16 @@ interface PWAInstallState {
   isAndroid: boolean;
   isMobile: boolean;
   promptInstall: () => Promise<boolean>;
+  dismiss: () => void;
 }
 
 export function usePWAInstall(): PWAInstallState {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
+  const [isDismissed, setIsDismissed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(DISMISSED_KEY) === 'true';
+  });
 
   // Detect platform
   const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : '';
@@ -114,13 +121,20 @@ export function usePWAInstall(): PWAInstallState {
     return false;
   }, [deferredPrompt]);
 
+  // Dismiss the install prompt (user doesn't want to be asked again)
+  const dismiss = useCallback(() => {
+    setIsDismissed(true);
+    localStorage.setItem(DISMISSED_KEY, 'true');
+  }, []);
+
   return {
-    isInstallable: !isInstalled && (!!deferredPrompt || isIOS),
+    isInstallable: !isInstalled && !isDismissed && (!!deferredPrompt || isIOS),
     isInstalled,
     isIOS,
     isAndroid,
     isMobile,
     promptInstall,
+    dismiss,
   };
 }
 
