@@ -649,10 +649,26 @@ void WebServer::setupRoutes() {
         }
     );
     
+    // Cloud status endpoint
+    _server.on("/api/cloud/status", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        auto& cloudSettings = State.settings().cloud;
+        
+        JsonDocument doc;
+        doc["enabled"] = cloudSettings.enabled;
+        doc["connected"] = false;  // TODO: Track actual connection status if needed
+        doc["serverUrl"] = cloudSettings.serverUrl;
+        
+        String response;
+        serializeJson(doc, response);
+        request->send(200, "application/json", response);
+    });
+    
     // Pairing API endpoints
     _server.on("/api/pairing/qr", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        if (!_pairingManager) {
-            request->send(503, "application/json", "{\"error\":\"Pairing not available\"}");
+        // Check if cloud is enabled
+        auto& cloudSettings = State.settings().cloud;
+        if (!cloudSettings.enabled || !_pairingManager) {
+            request->send(503, "application/json", "{\"error\":\"Cloud integration not enabled\"}");
             return;
         }
         
@@ -673,8 +689,10 @@ void WebServer::setupRoutes() {
     });
     
     _server.on("/api/pairing/refresh", HTTP_POST, [this](AsyncWebServerRequest* request) {
-        if (!_pairingManager) {
-            request->send(503, "application/json", "{\"error\":\"Pairing not available\"}");
+        // Check if cloud is enabled
+        auto& cloudSettings = State.settings().cloud;
+        if (!cloudSettings.enabled || !_pairingManager) {
+            request->send(503, "application/json", "{\"error\":\"Cloud integration not enabled\"}");
             return;
         }
         
@@ -1131,6 +1149,40 @@ void WebServer::handleWsMessage(AsyncWebSocketClient* client, uint8_t* data, siz
             if (_mqttClient.setConfig(config)) {
                 broadcastLog("MQTT configuration updated", "info");
             }
+        }
+        else if (cmd == "set_cloud_config") {
+            // Update cloud config
+            auto& cloudSettings = State.settings().cloud;
+            bool wasEnabled = cloudSettings.enabled;
+            
+            if (!doc["enabled"].isNull()) {
+                cloudSettings.enabled = doc["enabled"].as<bool>();
+            }
+            if (!doc["serverUrl"].isNull()) {
+                const char* url = doc["serverUrl"].as<const char*>();
+                if (url) {
+                    strncpy(cloudSettings.serverUrl, url, sizeof(cloudSettings.serverUrl) - 1);
+                    cloudSettings.serverUrl[sizeof(cloudSettings.serverUrl) - 1] = '\0';
+                }
+            }
+            
+            // Save settings to NVS
+            State.saveCloudSettings();
+            
+            // Update pairing manager based on enabled state
+            if (_pairingManager) {
+                if (cloudSettings.enabled && strlen(cloudSettings.serverUrl) > 0) {
+                    // Initialize or update with new URL
+                    _pairingManager->begin(String(cloudSettings.serverUrl));
+                    broadcastLog("Cloud enabled: " + String(cloudSettings.serverUrl), "info");
+                } else if (!cloudSettings.enabled && wasEnabled) {
+                    // Cloud was disabled - clear pairing manager
+                    _pairingManager->begin("");  // Clear cloud URL
+                    broadcastLog("Cloud disabled", "info");
+                }
+            }
+            
+            broadcastLog("Cloud configuration updated: " + String(cloudSettings.enabled ? "enabled" : "disabled"), "info");
         }
         else if (cmd == "add_schedule") {
             // Add a new schedule

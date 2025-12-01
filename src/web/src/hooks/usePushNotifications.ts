@@ -6,7 +6,6 @@ import {
   getPushSubscription,
   registerPushSubscription,
   unregisterPushSubscription,
-  type PushSubscriptionData,
 } from '@/lib/push-notifications';
 import { useAppStore } from '@/lib/mode';
 

@@ -1,4 +1,3 @@
-import React from 'react';
 import { useStore } from '@/lib/store';
 import { getConnection } from '@/lib/connection';
 import { Card, CardHeader, CardTitle } from '@/components/Card';

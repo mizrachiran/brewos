@@ -4,7 +4,7 @@ import { Layout } from '@/components/Layout';
 import { Dashboard } from '@/pages/Dashboard';
 import { Brewing } from '@/pages/Brewing';
 import { Stats } from '@/pages/Stats';
-import { Settings } from '@/pages/Settings';
+import { Settings } from '@/pages/settings';
 import { Schedules } from '@/pages/Schedules';
 import { Setup } from '@/pages/Setup';
 import { Login } from '@/pages/Login';

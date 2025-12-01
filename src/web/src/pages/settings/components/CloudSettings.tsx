@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { getConnection } from '@/lib/connection';
 import { Card } from '@/components/Card';
 import { Input } from '@/components/Input';

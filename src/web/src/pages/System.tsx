@@ -232,12 +232,12 @@ export function System() {
           <StatBox label="Today" value={stats.shotsToday} />
           <StatBox 
             label="Since Cleaning" 
-            value={stats.shotsSinceCleaning}
-            warning={stats.shotsSinceCleaning > 100}
+            value={stats.shotsSinceGroupClean}
+            warning={stats.shotsSinceGroupClean > 100}
           />
           <StatBox 
             label="Last Cleaning" 
-            value={stats.lastCleaning ? new Date(stats.lastCleaning).toLocaleDateString() : 'Never'} 
+            value={stats.lastGroupCleanTimestamp ? new Date(stats.lastGroupCleanTimestamp * 1000).toLocaleDateString() : 'Never'} 
           />
         </div>
       </Card>

@@ -44,3 +44,13 @@ export function CardTitle({ children, icon }: CardTitleProps) {
     </div>
   );
 }
+
+interface CardDescriptionProps {
+  children: ReactNode;
+}
+
+export function CardDescription({ children }: CardDescriptionProps) {
+  return (
+    <p className="text-sm text-coffee-500 mt-1">{children}</p>
+  );
+}

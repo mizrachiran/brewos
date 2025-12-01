@@ -1,14 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useAppStore } from '@/lib/mode';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/Card';
 import { Button } from '@/components/Button';
-import { Toggle } from '@/components/Toggle';
 import { Badge } from '@/components/Badge';
 import { Bell, BellOff, Check, X, AlertCircle } from 'lucide-react';
 
 export function PushNotificationSettings() {
-  const { mode, user } = useAppStore();
+  const { mode } = useAppStore();
   const {
     isSupported,
     isRegistered,
@@ -168,7 +167,7 @@ export function PushNotificationSettings() {
             <Button
               onClick={handleUnsubscribe}
               loading={isLoading}
-              variant="outline"
+              variant="secondary"
               className="w-full"
             >
               <BellOff className="w-4 h-4 mr-2" />

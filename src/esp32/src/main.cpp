@@ -44,11 +44,15 @@
 #include "notifications/notification_manager.h"
 #include "notifications/cloud_notifier.h"
 
+// Pairing
+#include "pairing_manager.h"
+
 // Global instances
 WiFiManager wifiManager;
 PicoUART picoUart(Serial1);
 MQTTClient mqttClient;
-WebServer webServer(wifiManager, picoUart, mqttClient);
+PairingManager pairingManager;
+WebServer webServer(wifiManager, picoUart, mqttClient, &pairingManager);
 
 // Scale state
 static bool scaleEnabled = true;  // Can be disabled to save power
@@ -435,6 +439,13 @@ void setup() {
     // Initialize State Manager (schedules, settings persistence)
     LOG_I("Initializing State Manager...");
     State.begin();
+    
+    // Initialize Pairing Manager if cloud is enabled
+    auto& cloudSettings = State.settings().cloud;
+    if (cloudSettings.enabled && strlen(cloudSettings.serverUrl) > 0) {
+        LOG_I("Initializing Pairing Manager...");
+        pairingManager.begin(String(cloudSettings.serverUrl));
+    }
     
     // Initialize Notification Manager
     LOG_I("Initializing Notification Manager...");
