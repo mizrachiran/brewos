@@ -33,11 +33,11 @@ export function Gauge({
     <div className="card">
       <div className="flex items-center gap-2 mb-4">
         {icon && <span className="text-accent">{icon}</span>}
-        <span className="font-semibold text-theme-secondary">{label}</span>
+        <span className="font-semibold text-theme">{label}</span>
       </div>
       
       <div className="flex items-baseline gap-1 mb-3">
-        <span className="text-4xl font-bold text-theme tabular-nums">
+        <span className="text-4xl font-bold text-accent tabular-nums">
           {value.toFixed(1)}
         </span>
         <span className="text-xl text-theme-muted">{unit}</span>
