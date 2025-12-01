@@ -452,14 +452,15 @@ void setup() {
     notificationManager.begin();
     
     // Set up cloud notification callback
-    notificationManager.onCloud([&State](const Notification& notif) {
+    notificationManager.onCloud([](const Notification& notif) {
         // Check if cloud integration is enabled
-        if (!State.settings().cloud.enabled) {
+        auto& cloudSettings = State.settings().cloud;
+        if (!cloudSettings.enabled) {
             return;
         }
         
-        String cloudUrl = String(State.settings().cloud.serverUrl);
-        String deviceId = String(State.settings().cloud.deviceId);
+        String cloudUrl = String(cloudSettings.serverUrl);
+        String deviceId = String(cloudSettings.deviceId);
         
         if (!cloudUrl.isEmpty() && !deviceId.isEmpty()) {
             sendNotificationToCloud(cloudUrl, deviceId, notif);
