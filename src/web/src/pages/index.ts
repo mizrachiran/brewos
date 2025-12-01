@@ -1,7 +1,7 @@
 export { Dashboard } from './Dashboard';
 export { Brewing } from './Brewing';
 export { Stats } from './Stats';
-export { Settings } from './Settings';
+export { Settings } from './settings';
 export { Schedules } from './Schedules';
 export { Setup } from './Setup';
 export { Login } from './Login';
