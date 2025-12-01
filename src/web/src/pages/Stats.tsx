@@ -4,6 +4,7 @@ import { getConnection } from '@/lib/connection';
 import { Card, CardHeader, CardTitle } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Badge } from '@/components/Badge';
+import { PageHeader } from '@/components/PageHeader';
 import { formatDate } from '@/lib/date';
 import { 
   BarChart3, 
@@ -96,16 +97,16 @@ export function Stats() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-theme">Statistics</h1>
-          <p className="text-theme-muted mt-1">Track your brewing journey</p>
-        </div>
-        <Button variant="secondary" onClick={fetchExtendedStats} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
-      </div>
+      <PageHeader
+        title="Statistics"
+        subtitle="Track your brewing journey"
+        action={
+          <Button variant="secondary" onClick={fetchExtendedStats} disabled={loading}>
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        }
+      />
 
       {/* Key Metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/lib/mode';
+import { PageHeader } from '@/components/PageHeader';
 import { getSettingsTabs, SettingsTab } from './constants/tabs';
 import {
   SettingsNav,
@@ -35,6 +36,12 @@ export function Settings() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
+      <PageHeader
+        title="Settings"
+        subtitle="Configure your machine preferences"
+      />
+
       {/* Tab Navigation */}
       <SettingsNav
         tabs={SETTINGS_TABS}

@@ -6,6 +6,7 @@ import { Input } from '@/components/Input';
 import { Button } from '@/components/Button';
 import { Toggle } from '@/components/Toggle';
 import { Badge } from '@/components/Badge';
+import { PageHeader } from '@/components/PageHeader';
 import { Coffee, Scale, Timer, Droplet } from 'lucide-react';
 import { formatDuration } from '@/lib/utils';
 
@@ -48,6 +49,12 @@ export function Brewing() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
+      <PageHeader
+        title="Brewing"
+        subtitle="Configure brew-by-weight settings"
+      />
+
       {/* Active Shot */}
       {shot.active && (
         <Card className="bg-gradient-to-br from-accent/10 to-accent/5 border-accent/30">

@@ -3,6 +3,7 @@ import { getConnection } from '@/lib/connection';
 import { Card, CardHeader, CardTitle } from '@/components/Card';
 import { Gauge } from '@/components/Gauge';
 import { Badge } from '@/components/Badge';
+import { PageHeader } from '@/components/PageHeader';
 import { 
   Flame, 
   Wind, 
@@ -32,6 +33,12 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
+      <PageHeader
+        title="Dashboard"
+        subtitle="Monitor your machine status"
+      />
+
       {/* Machine Status */}
       <Card>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

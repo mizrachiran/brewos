@@ -259,21 +259,21 @@ export function System() {
           <CardTitle icon={<Terminal className="w-5 h-5" />}>System Logs</CardTitle>
         </CardHeader>
 
-        <div className="max-h-64 overflow-y-auto bg-coffee-900 rounded-xl p-4 font-mono text-xs">
+        <div className="max-h-64 overflow-y-auto bg-theme-secondary rounded-xl p-4 font-mono text-xs">
           {logs.length > 0 ? (
             logs.map((log) => (
-              <div key={log.id} className="py-1 border-b border-coffee-800 last:border-0">
-                <span className="text-coffee-500">
+              <div key={log.id} className="py-1 border-b border-theme last:border-0">
+                <span className="text-theme-muted">
                   {formatTime(log.time)}
                 </span>
                 <span className={`ml-2 ${getLogColor(log.level)}`}>
                   [{log.level.toUpperCase()}]
                 </span>
-                <span className="text-cream-200 ml-2">{log.message}</span>
+                <span className="text-theme ml-2">{log.message}</span>
               </div>
             ))
           ) : (
-            <p className="text-coffee-500 text-center py-4">No logs yet</p>
+            <p className="text-theme-muted text-center py-4">No logs yet</p>
           )}
         </div>
       </Card>
@@ -355,8 +355,8 @@ function getLogColor(level: string): string {
     case 'warn': 
     case 'warning': return 'text-amber-400';
     case 'info': return 'text-blue-400';
-    case 'debug': return 'text-gray-400';
-    default: return 'text-cream-400';
+    case 'debug': return 'text-theme-muted';
+    default: return 'text-theme-secondary';
   }
 }
 

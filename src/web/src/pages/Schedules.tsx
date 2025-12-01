@@ -4,6 +4,7 @@ import { Card, CardHeader, CardTitle } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Toggle } from '@/components/Toggle';
+import { PageHeader } from '@/components/PageHeader';
 import { 
   Clock, 
   Plus, 
@@ -247,6 +248,12 @@ export function Schedules() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
+      <PageHeader
+        title="Schedules"
+        subtitle="Automate your machine power cycles"
+      />
+
       {/* Schedule List */}
       <Card>
         <CardHeader
