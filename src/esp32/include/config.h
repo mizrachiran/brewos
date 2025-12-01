@@ -12,10 +12,16 @@
 // -----------------------------------------------------------------------------
 // Version
 // -----------------------------------------------------------------------------
-#define ESP32_VERSION_MAJOR     0
-#define ESP32_VERSION_MINOR     2
+#define ESP32_VERSION_MAJOR     1
+#define ESP32_VERSION_MINOR     0
 #define ESP32_VERSION_PATCH     0
-#define ESP32_VERSION           "0.2.0"
+#define ESP32_VERSION_PRERELEASE "beta.1"  // Empty string "" for stable releases
+#define ESP32_VERSION           "1.0.0-beta.1"
+
+// Update channel: "stable" or "beta"
+// Users on "stable" only get released versions (no pre-release suffix)
+// Users on "beta" get all versions including pre-releases
+#define ESP32_DEFAULT_CHANNEL   "beta"
 
 // -----------------------------------------------------------------------------
 // Display Configuration (included from display/display_config.h)

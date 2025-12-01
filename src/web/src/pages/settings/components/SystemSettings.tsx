@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { getConnection } from '@/lib/connection';
 import { Card, CardHeader, CardTitle } from '@/components/Card';
@@ -14,8 +14,21 @@ import {
   AlertTriangle,
   RefreshCw,
   Check,
+  FlaskConical,
+  Shield,
+  ExternalLink,
+  Info,
 } from 'lucide-react';
 import { StatusRow } from './StatusRow';
+import {
+  checkForUpdates,
+  getUpdateChannel,
+  setUpdateChannel,
+  getVersionDisplay,
+  formatReleaseDate,
+  type UpdateChannel,
+  type UpdateCheckResult,
+} from '@/lib/updates';
 
 export function SystemSettings() {
   const esp32 = useStore((s) => s.esp32);
@@ -24,22 +37,58 @@ export function SystemSettings() {
   const clearLogs = useStore((s) => s.clearLogs);
 
   const [checkingUpdate, setCheckingUpdate] = useState(false);
-  const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
+  const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null);
+  const [channel, setChannel] = useState<UpdateChannel>(() => getUpdateChannel());
+  const [showBetaWarning, setShowBetaWarning] = useState(false);
 
-  const checkForUpdates = async () => {
+  // Check for updates on mount or when channel changes
+  useEffect(() => {
+    if (esp32.version) {
+      handleCheckForUpdates();
+    }
+  }, [esp32.version, channel]);
+
+  const handleCheckForUpdates = async () => {
+    if (!esp32.version) return;
+    
     setCheckingUpdate(true);
-    getConnection()?.sendCommand('check_update');
-    setTimeout(() => {
+    try {
+      const result = await checkForUpdates(esp32.version);
+      setUpdateResult(result);
+    } catch (error) {
+      console.error('Failed to check for updates:', error);
+    } finally {
       setCheckingUpdate(false);
-      setUpdateAvailable(null);
-    }, 2000);
-  };
-
-  const startOTA = () => {
-    if (confirm('Start firmware update? The device will restart after update.')) {
-      getConnection()?.sendCommand('ota_start');
     }
   };
+
+  const handleChannelChange = (newChannel: UpdateChannel) => {
+    if (newChannel === 'beta' && channel === 'stable') {
+      setShowBetaWarning(true);
+    } else {
+      setChannel(newChannel);
+      setUpdateChannel(newChannel);
+    }
+  };
+
+  const confirmBetaChannel = () => {
+    setChannel('beta');
+    setUpdateChannel('beta');
+    setShowBetaWarning(false);
+  };
+
+  const startOTA = (version: string) => {
+    const isBeta = version.includes('-');
+    const warningText = isBeta 
+      ? `Install BETA version ${version}? This is a pre-release version for testing. The device will restart after update.`
+      : `Install version ${version}? The device will restart after update.`;
+    
+    if (confirm(warningText)) {
+      getConnection()?.sendCommand('ota_start', { version });
+    }
+  };
+
+  const currentVersionDisplay = getVersionDisplay(esp32.version || '0.0.0');
 
   const restartDevice = () => {
     if (confirm('Restart the device?')) {
@@ -92,34 +141,236 @@ export function SystemSettings() {
           <CardTitle icon={<Download className="w-5 h-5" />}>Firmware Update</CardTitle>
         </CardHeader>
 
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <p className="text-sm text-coffee-700 mb-1">
-              Current version: <span className="font-mono font-semibold">{esp32.version || 'Unknown'}</span>
-            </p>
-            {updateAvailable ? (
-              <p className="text-sm text-emerald-600">
-                <Check className="w-4 h-4 inline mr-1" />
-                Update available: {updateAvailable}
-              </p>
-            ) : (
-              <p className="text-sm text-coffee-500">Check for the latest firmware updates.</p>
-            )}
+        {/* Current Version */}
+        <div className="flex items-center gap-3 mb-6 p-4 bg-theme rounded-xl">
+          <div className="flex-1">
+            <p className="text-xs text-theme-muted uppercase tracking-wider mb-1">Installed Version</p>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-lg font-bold text-theme">{esp32.version || 'Unknown'}</span>
+              {currentVersionDisplay.badge && (
+                <Badge variant={currentVersionDisplay.badge === 'stable' ? 'success' : 'warning'}>
+                  {currentVersionDisplay.badge === 'stable' ? (
+                    <><Shield className="w-3 h-3" /> Official</>
+                  ) : (
+                    <><FlaskConical className="w-3 h-3" /> {currentVersionDisplay.badge.toUpperCase()}</>
+                  )}
+                </Badge>
+              )}
+            </div>
           </div>
-          <div className="flex gap-3">
-            <Button variant="secondary" onClick={checkForUpdates} loading={checkingUpdate}>
-              <RefreshCw className="w-4 h-4" />
-              Check for Updates
-            </Button>
-            {updateAvailable && (
-              <Button onClick={startOTA}>
-                <Download className="w-4 h-4" />
-                Install Update
-              </Button>
-            )}
+          <Button variant="secondary" size="sm" onClick={handleCheckForUpdates} loading={checkingUpdate}>
+            <RefreshCw className="w-4 h-4" />
+            Check
+          </Button>
+        </div>
+
+        {/* Update Channel Selection */}
+        <div className="mb-6">
+          <label className="text-sm font-medium text-theme mb-3 block">Update Channel</label>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => handleChannelChange('stable')}
+              className={`p-4 rounded-xl border-2 transition-all text-left ${
+                channel === 'stable'
+                  ? 'border-emerald-500 bg-emerald-500/10'
+                  : 'border-theme hover:border-theme-light'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <Shield className={`w-5 h-5 ${channel === 'stable' ? 'text-emerald-500' : 'text-theme-muted'}`} />
+                <span className={`font-semibold ${channel === 'stable' ? 'text-emerald-600' : 'text-theme'}`}>
+                  Stable
+                </span>
+              </div>
+              <p className="text-xs text-theme-muted">
+                Recommended for most users. Tested and reliable.
+              </p>
+            </button>
+
+            <button
+              onClick={() => handleChannelChange('beta')}
+              className={`p-4 rounded-xl border-2 transition-all text-left ${
+                channel === 'beta'
+                  ? 'border-amber-500 bg-amber-500/10'
+                  : 'border-theme hover:border-theme-light'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <FlaskConical className={`w-5 h-5 ${channel === 'beta' ? 'text-amber-500' : 'text-theme-muted'}`} />
+                <span className={`font-semibold ${channel === 'beta' ? 'text-amber-600' : 'text-theme'}`}>
+                  Beta
+                </span>
+              </div>
+              <p className="text-xs text-theme-muted">
+                Get new features early. May contain bugs.
+              </p>
+            </button>
           </div>
         </div>
+
+        {/* Available Updates */}
+        {updateResult && (
+          <div className="space-y-4">
+            {/* Stable Update */}
+            {updateResult.stable && (
+              <div className={`p-4 rounded-xl border ${
+                updateResult.hasStableUpdate 
+                  ? 'border-emerald-200 bg-emerald-50' 
+                  : 'border-theme bg-theme'
+              }`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Shield className="w-4 h-4 text-emerald-500" />
+                      <span className="font-semibold text-theme">Official Release</span>
+                      <Badge variant="success">
+                        v{updateResult.stable.version}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-theme-muted mb-2">
+                      Released {formatReleaseDate(updateResult.stable.releaseDate)}
+                    </p>
+                    {updateResult.hasStableUpdate ? (
+                      <p className="text-sm text-emerald-600 flex items-center gap-1">
+                        <Check className="w-4 h-4" />
+                        Update available
+                      </p>
+                    ) : (
+                      <p className="text-sm text-theme-muted">
+                        You're on the latest stable version
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {updateResult.hasStableUpdate && (
+                      <Button size="sm" onClick={() => startOTA(updateResult.stable!.version)}>
+                        <Download className="w-4 h-4" />
+                        Install
+                      </Button>
+                    )}
+                    {updateResult.stable.downloadUrl && (
+                      <a
+                        href={updateResult.stable.downloadUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-accent hover:underline flex items-center gap-1"
+                      >
+                        Release Notes <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Beta Update - only show if user is on beta channel */}
+            {channel === 'beta' && updateResult.beta && (
+              <div className={`p-4 rounded-xl border ${
+                updateResult.hasBetaUpdate 
+                  ? 'border-amber-200 bg-amber-50' 
+                  : 'border-theme bg-theme'
+              }`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <FlaskConical className="w-4 h-4 text-amber-500" />
+                      <span className="font-semibold text-theme">Beta Release</span>
+                      <Badge variant="warning">
+                        v{updateResult.beta.version}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-theme-muted mb-2">
+                      Released {formatReleaseDate(updateResult.beta.releaseDate)}
+                    </p>
+                    {updateResult.hasBetaUpdate ? (
+                      <p className="text-sm text-amber-600 flex items-center gap-1">
+                        <Check className="w-4 h-4" />
+                        New beta available
+                      </p>
+                    ) : (
+                      <p className="text-sm text-theme-muted">
+                        You're on the latest beta version
+                      </p>
+                    )}
+                    
+                    {/* Beta Warning */}
+                    <div className="mt-3 p-2 bg-amber-100 rounded-lg flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-amber-700">
+                        Beta versions are for testing. They may contain bugs or incomplete features.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {updateResult.hasBetaUpdate && (
+                      <Button size="sm" variant="secondary" onClick={() => startOTA(updateResult.beta!.version)}>
+                        <Download className="w-4 h-4" />
+                        Install Beta
+                      </Button>
+                    )}
+                    {updateResult.beta.downloadUrl && (
+                      <a
+                        href={updateResult.beta.downloadUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-accent hover:underline flex items-center gap-1"
+                      >
+                        Release Notes <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* No updates available message */}
+            {!updateResult.hasStableUpdate && (channel !== 'beta' || !updateResult.hasBetaUpdate) && (
+              <div className="text-center py-4 text-theme-muted">
+                <Check className="w-8 h-8 mx-auto mb-2 text-emerald-500" />
+                <p className="text-sm">You're running the latest version!</p>
+              </div>
+            )}
+          </div>
+        )}
       </Card>
+
+      {/* Beta Warning Modal */}
+      {showBetaWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <Card className="w-full max-w-md">
+            <div className="text-center p-6">
+              <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FlaskConical className="w-8 h-8 text-amber-600" />
+              </div>
+              <h3 className="text-xl font-bold text-theme mb-2">Enable Beta Updates?</h3>
+              <p className="text-sm text-theme-muted mb-4">
+                Beta versions include new features before they're officially released. 
+                They may contain bugs or incomplete features.
+              </p>
+              <div className="p-3 bg-amber-50 rounded-lg mb-6 text-left">
+                <h4 className="font-semibold text-amber-800 text-sm mb-2 flex items-center gap-2">
+                  <Info className="w-4 h-4" /> What to expect:
+                </h4>
+                <ul className="text-xs text-amber-700 space-y-1">
+                  <li>• Early access to new features</li>
+                  <li>• Potential bugs or stability issues</li>
+                  <li>• More frequent updates</li>
+                  <li>• You can switch back to stable anytime</li>
+                </ul>
+              </div>
+              <div className="flex gap-3">
+                <Button variant="secondary" className="flex-1" onClick={() => setShowBetaWarning(false)}>
+                  Cancel
+                </Button>
+                <Button className="flex-1" onClick={confirmBetaChannel}>
+                  <FlaskConical className="w-4 h-4" />
+                  Enable Beta
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* Logs */}
       <Card>

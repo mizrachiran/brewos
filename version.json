@@ -1,0 +1,11 @@
+{
+  "version": "1.0.0-beta.1",
+  "channel": "beta",
+  "buildDate": "2024-12-01",
+  "components": {
+    "esp32": "1.0.0-beta.1",
+    "web": "1.0.0-beta.1",
+    "cloud": "1.0.0-beta.1"
+  }
+}
+
