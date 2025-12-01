@@ -4,7 +4,7 @@ import { useStore } from '@/lib/store';
 import { useAppStore } from '@/lib/mode';
 import { DeviceSelector } from './DeviceSelector';
 import { Logo } from './Logo';
-import { InstallPrompt } from './InstallPrompt';
+import { InstallPrompt, usePWAInstall } from './InstallPrompt';
 import { 
   LayoutGrid, 
   Coffee, 
@@ -41,6 +41,7 @@ export function Layout() {
   const connectionState = useStore((s) => s.connectionState);
   const deviceName = useStore((s) => s.device.deviceName);
   const { mode, user, signOut, getSelectedDevice } = useAppStore();
+  const { isMobile } = usePWAInstall();
   const [showInstallBanner, setShowInstallBanner] = useState(() => {
     // Check if user previously dismissed the banner
     return localStorage.getItem('brewos-install-dismissed') !== 'true';
@@ -142,8 +143,8 @@ export function Layout() {
         </div>
       </header>
 
-      {/* Install App Banner - shown to mobile users */}
-      {showInstallBanner && (
+      {/* Install App Banner - shown to mobile users only */}
+      {showInstallBanner && isMobile && (
         <div className="bg-accent/10 border-b border-accent/20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
             <div className="flex items-center justify-between gap-4">
