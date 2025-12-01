@@ -16,7 +16,6 @@ import {
   Cloud,
   LogOut,
   Home,
-  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -145,23 +144,12 @@ export function Layout() {
 
       {/* Install App Banner - shown to mobile users only */}
       {showInstallBanner && isMobile && (
-        <div className="bg-accent/10 border-b border-accent/20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
-            <div className="flex items-center justify-between gap-4">
-              <InstallPrompt 
-                variant="banner" 
-                className="flex-1 border-0 p-0 bg-transparent"
-                onInstalled={dismissInstallBanner}
-              />
-              <button
-                onClick={dismissInstallBanner}
-                className="p-1 hover:bg-accent/10 rounded-lg transition-colors text-theme-muted"
-                aria-label="Dismiss"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+          <InstallPrompt 
+            variant="banner" 
+            onInstalled={dismissInstallBanner}
+            onDismiss={dismissInstallBanner}
+          />
         </div>
       )}
 
