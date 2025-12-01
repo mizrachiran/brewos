@@ -67,11 +67,26 @@ export async function initDatabase(): Promise<SqlJsDatabase> {
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
+
+    -- Push notification subscriptions
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      device_id TEXT,
+      endpoint TEXT NOT NULL,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
+    );
   `);
 
   // Create indexes
   db.run(`CREATE INDEX IF NOT EXISTS idx_devices_owner ON devices(owner_id)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_claim_tokens_expires ON device_claim_tokens(expires_at)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_push_subscriptions_device ON push_subscriptions(device_id)`);
 
   // Migrations for existing databases
   // Add machine_brand and machine_model columns if they don't exist
@@ -149,6 +164,17 @@ export interface Profile {
   email: string | null;
   display_name: string | null;
   avatar_url: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PushSubscription {
+  id: string;
+  user_id: string;
+  device_id: string | null;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
   created_at: string;
   updated_at: string;
 }

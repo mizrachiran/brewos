@@ -10,6 +10,8 @@ The BrewOS web interface is a modern React application that provides a dashboard
 - **Settings** - Temperature, WiFi, MQTT, and machine configuration
 - **System** - Firmware updates, logs, and diagnostics
 - **About** - Device information and resources
+- **Progressive Web App (PWA)** - Install on any device, works offline
+- **Push Notifications** - Receive alerts when your machine needs attention
 
 ## Tech Stack
 
@@ -173,6 +175,22 @@ function handleSetTemp() {
   });
 }
 ```
+
+## Progressive Web App
+
+The web interface is a fully functional PWA. See [PWA Documentation](./PWA.md) for:
+- Installation instructions
+- Offline support
+- Service worker details
+- Troubleshooting
+
+## Push Notifications
+
+Receive real-time notifications when your machine needs attention. See [Push Notifications Documentation](./Push_Notifications.md) for:
+- Setup instructions
+- Supported notification types
+- API reference
+- Troubleshooting
 
 ## WebSocket Protocol
 

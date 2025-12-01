@@ -40,6 +40,10 @@
 // State Manager
 #include "state/state_manager.h"
 
+// Notifications
+#include "notifications/notification_manager.h"
+#include "notifications/cloud_notifier.h"
+
 // Global instances
 WiFiManager wifiManager;
 PicoUART picoUart(Serial1);
@@ -431,6 +435,25 @@ void setup() {
     // Initialize State Manager (schedules, settings persistence)
     LOG_I("Initializing State Manager...");
     State.begin();
+    
+    // Initialize Notification Manager
+    LOG_I("Initializing Notification Manager...");
+    notificationManager.begin();
+    
+    // Set up cloud notification callback
+    notificationManager.onCloud([&State](const Notification& notif) {
+        // Check if cloud integration is enabled
+        if (!State.settings().cloud.enabled) {
+            return;
+        }
+        
+        String cloudUrl = String(State.settings().cloud.serverUrl);
+        String deviceId = String(State.settings().cloud.deviceId);
+        
+        if (!cloudUrl.isEmpty() && !deviceId.isEmpty()) {
+            sendNotificationToCloud(cloudUrl, deviceId, notif);
+        }
+    });
     
     // Set up schedule callback
     State.onScheduleTriggered([](const BrewOS::ScheduleEntry& schedule) {

@@ -34,6 +34,7 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    publicDir: 'public',
     server: {
       port: 3000,
       proxy: {

@@ -1,4 +1,3 @@
-import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/lib/mode';
 import { getSettingsTabs, SettingsTab } from './constants/tabs';
@@ -14,6 +13,7 @@ import {
   RegionalSettings,
   ThemeSettings,
   SystemSettings,
+  PushNotificationSettings,
   AboutSection,
 } from './components';
 
@@ -72,7 +72,12 @@ export function Settings() {
       {activeTab === 'appearance' && <ThemeSettings />}
 
       {/* System Settings */}
-      {activeTab === 'system' && <SystemSettings />}
+      {activeTab === 'system' && (
+        <>
+          <SystemSettings />
+          {isCloud && <PushNotificationSettings />}
+        </>
+      )}
 
       {/* About */}
       {activeTab === 'about' && <AboutSection />}

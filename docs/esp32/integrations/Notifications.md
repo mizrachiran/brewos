@@ -231,17 +231,42 @@ void checkMaintenanceReminders() {
 
 ## Cloud Push (Future)
 
-When cloud is implemented:
+## Cloud Integration (Implemented)
 
-1. ESP32 sends notification to cloud server
-2. Cloud looks up user's push tokens (FCM/APNS)
-3. Cloud sends push notification to mobile devices
+The ESP32 sends notifications to the cloud server for push notification delivery:
+
+1. ESP32 sends notification to cloud server via HTTP POST
+2. Cloud looks up user's push subscriptions
+3. Cloud sends push notification to all subscribed browsers
 
 ```
-ESP32 --> Cloud Server --> FCM/APNS --> Mobile App
+ESP32 --> Cloud Server --> Web Push API --> Browser
 ```
 
-The ESP32 just needs to POST to the cloud endpoint. Push token management happens server-side.
+### Implementation
+
+The cloud notification callback is set up in `main.cpp`:
+
+```cpp
+notificationManager.onCloud([&State](const Notification& notif) {
+    String cloudUrl = String(State.settings().cloud.serverUrl);
+    String deviceId = String(State.settings().cloud.deviceId);
+    
+    if (!cloudUrl.isEmpty() && !deviceId.isEmpty()) {
+        sendNotificationToCloud(cloudUrl, deviceId, notif);
+    }
+});
+```
+
+### Cloud Notifier
+
+The `cloud_notifier.cpp` module handles sending notifications to the cloud:
+
+- **Endpoint:** `POST /api/push/notify`
+- **Authentication:** Device ID (no user auth required)
+- **Payload:** Notification type, message, timestamp, alert flag
+
+See [Cloud Push Notifications Documentation](../../cloud/Push_Notifications.md) for API details.
 
 ## Summary
 

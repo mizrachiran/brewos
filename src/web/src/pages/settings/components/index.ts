@@ -10,5 +10,6 @@ export { CloudSettings } from './CloudSettings';
 export { TimeSettings, RegionalSettings } from './TimeSettings';
 export { ThemeSettings } from './ThemeSettings';
 export { SystemSettings } from './SystemSettings';
+export { PushNotificationSettings } from './PushNotificationSettings';
 export { AboutSection } from './AboutSection';
 

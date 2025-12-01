@@ -1,0 +1,50 @@
+{
+  "name": "BrewOS - Smart Espresso Machine Controller",
+  "short_name": "BrewOS",
+  "description": "Open Source Espresso Machine Firmware",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#391f12",
+  "theme_color": "#391f12",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/logo-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["utilities", "lifestyle"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "View machine status",
+      "url": "/",
+      "icons": [{ "src": "/logo-icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Brewing",
+      "short_name": "Brew",
+      "description": "Start brewing",
+      "url": "/brewing",
+      "icons": [{ "src": "/logo-icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Settings",
+      "short_name": "Settings",
+      "description": "Configure machine",
+      "url": "/settings",
+      "icons": [{ "src": "/logo-icon.svg", "sizes": "any" }]
+    }
+  ]
+}
+

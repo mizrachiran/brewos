@@ -54,6 +54,8 @@ BrewOS is an open-source control system designed to replace factory controllers 
 - Web-based dashboard for monitoring and control
 - Real-time WebSocket updates
 - REST API for integration
+- **Progressive Web App (PWA)** - Install on any device, works offline
+- **Push Notifications** - Receive alerts when your machine needs attention
 
 ### Safety
 - Hardware watchdog timer (2-second timeout)
@@ -189,6 +191,7 @@ See [SETUP.md](SETUP.md) for detailed instructions.
 | [BLE Scales](docs/esp32/integrations/BLE_Scales.md) | Bluetooth scale integration |
 | **Web & Cloud** | |
 | [Web Interface](docs/web/README.md) | React dashboard development |
+| [PWA & Push Notifications](docs/web/QUICK_START_PWA.md) | Quick start for PWA and push notifications |
 | [Cloud Service](docs/cloud/README.md) | Remote access architecture |
 | [WebSocket Protocol](docs/web/WebSocket_Protocol.md) | Message format reference |
 | **Shared** | |

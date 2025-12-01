@@ -7,8 +7,10 @@ import { WebSocketServer } from 'ws';
 import { DeviceRelay } from './device-relay.js';
 import { ClientProxy } from './client-proxy.js';
 import devicesRouter from './routes/devices.js';
+import pushRouter from './routes/push.js';
 import { initDatabase } from './lib/database.js';
 import { cleanupExpiredTokens } from './services/device.js';
+import { initializePushNotifications } from './services/push.js';
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -47,6 +49,7 @@ app.get('/api/health', (_req, res) => {
 
 // API routes
 app.use('/api/devices', devicesRouter);
+app.use('/api/push', pushRouter);
 
 // SPA fallback
 app.get('*', (_req, res) => {
@@ -77,6 +80,9 @@ async function start() {
   try {
     // Initialize SQLite database
     await initDatabase();
+
+    // Initialize push notifications
+    initializePushNotifications();
 
     // Cleanup expired tokens every 5 minutes
     setInterval(() => {

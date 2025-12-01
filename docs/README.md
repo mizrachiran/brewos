@@ -52,8 +52,11 @@ docs/
 
 ### Web & Cloud
 - [Web Interface](web/README.md) - React dashboard development
+- [Progressive Web App (PWA)](web/PWA.md) - PWA features and offline support
+- [Push Notifications](web/Push_Notifications.md) - Push notification setup and usage
 - [WebSocket Protocol](web/WebSocket_Protocol.md) - Message format reference
 - [Cloud Service](cloud/README.md) - Remote access architecture
+- [Cloud Push Notifications](cloud/Push_Notifications.md) - Cloud push notification implementation
 - [Cloud Deployment](cloud/Deployment.md) - Deployment guides
 - [ESP32 Cloud Integration](cloud/ESP32_Integration.md) - Connect ESP32 to cloud
 

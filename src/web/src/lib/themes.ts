@@ -579,6 +579,14 @@ export function applyTheme(theme: Theme) {
     metaThemeColor.setAttribute('content', colors.bg);
   }
   
+  // Update Apple status bar style based on theme
+  const metaStatusBar = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+  if (metaStatusBar) {
+    // black-translucent = light content (for dark backgrounds)
+    // default = dark content (for light backgrounds)
+    metaStatusBar.setAttribute('content', theme.isDark ? 'black-translucent' : 'default');
+  }
+  
   // Store preference
   localStorage.setItem('brewos-theme', theme.id);
 }
