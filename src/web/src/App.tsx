@@ -3,18 +3,15 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { Dashboard } from '@/pages/Dashboard';
 import { Brewing } from '@/pages/Brewing';
-import { Scale } from '@/pages/Scale';
+import { Stats } from '@/pages/Stats';
 import { Settings } from '@/pages/Settings';
 import { Schedules } from '@/pages/Schedules';
-import { System } from '@/pages/System';
-import { About } from '@/pages/About';
 import { Setup } from '@/pages/Setup';
 import { Login } from '@/pages/Login';
 import { Devices } from '@/pages/Devices';
 import { AuthCallback } from '@/pages/AuthCallback';
 import { Pair } from '@/pages/Pair';
 import { Onboarding } from '@/pages/Onboarding';
-import { Cloud } from '@/pages/Cloud';
 import { FirstRunWizard } from '@/pages/FirstRunWizard';
 import { initConnection, getConnection } from '@/lib/connection';
 import { initializeStore } from '@/lib/store';
@@ -120,12 +117,9 @@ function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="brewing" element={<Brewing />} />
-          <Route path="scale" element={<Scale />} />
-          <Route path="settings" element={<Settings />} />
+          <Route path="stats" element={<Stats />} />
           <Route path="schedules" element={<Schedules />} />
-          <Route path="system" element={<System />} />
-          <Route path="cloud" element={<Cloud />} />
-          <Route path="about" element={<About />} />
+          <Route path="settings" element={<Settings />} />
           <Route path="setup" element={<Setup />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
@@ -177,11 +171,9 @@ function App() {
       <Route path="/device/:deviceId" element={<Layout />}>
         <Route index element={<Dashboard />} />
         <Route path="brewing" element={<Brewing />} />
-        <Route path="scale" element={<Scale />} />
-        <Route path="settings" element={<Settings />} />
+        <Route path="stats" element={<Stats />} />
         <Route path="schedules" element={<Schedules />} />
-        <Route path="system" element={<System />} />
-        <Route path="about" element={<About />} />
+        <Route path="settings" element={<Settings />} />
       </Route>
       
       {/* Root: redirect to selected device or first device */}

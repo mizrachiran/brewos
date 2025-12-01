@@ -5,11 +5,9 @@ import { DeviceSelector } from './DeviceSelector';
 import { 
   LayoutGrid, 
   Coffee, 
-  Scale, 
   Settings,
   Calendar,
-  Server, 
-  Info,
+  BarChart3,
   Wifi,
   WifiOff,
   Cloud,
@@ -25,21 +23,10 @@ const getNavigation = (isCloud: boolean, deviceId?: string) => {
   const items = [
     { name: 'Dashboard', href: basePath || '/', icon: LayoutGrid },
     { name: 'Brewing', href: `${basePath}/brewing`, icon: Coffee },
-    { name: 'Scale', href: `${basePath}/scale`, icon: Scale },
+    { name: 'Stats', href: `${basePath}/stats`, icon: BarChart3 },
     { name: 'Schedules', href: `${basePath}/schedules`, icon: Calendar },
-  ];
-  
-  // In local mode, add Cloud tab for pairing/management
-  if (!isCloud) {
-    items.push({ name: 'Cloud', href: '/cloud', icon: Cloud });
-  }
-  
-  // Settings, System, and About are always last
-  items.push(
     { name: 'Settings', href: `${basePath}/settings`, icon: Settings },
-    { name: 'System', href: `${basePath}/system`, icon: Server },
-    { name: 'About', href: `${basePath}/about`, icon: Info }
-  );
+  ];
   
   return items;
 };
