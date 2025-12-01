@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
-import { useStore } from '@/lib/store';
-import { getConnection } from '@/lib/connection';
-import { Card, CardHeader, CardTitle } from '@/components/Card';
-import { Button } from '@/components/Button';
-import { Badge } from '@/components/Badge';
-import { formatUptime, formatBytes } from '@/lib/utils';
-import { formatTime } from '@/lib/date';
+import { useState, useEffect } from "react";
+import { useStore } from "@/lib/store";
+import { getConnection } from "@/lib/connection";
+import { Card, CardHeader, CardTitle } from "@/components/Card";
+import { Button } from "@/components/Button";
+import { Badge } from "@/components/Badge";
+import { LogViewer } from "@/components/LogViewer";
+import { formatUptime, formatBytes } from "@/lib/utils";
 import {
   Cpu,
   HardDrive,
@@ -19,8 +19,8 @@ import {
   Shield,
   ExternalLink,
   Info,
-} from 'lucide-react';
-import { StatusRow } from './StatusRow';
+} from "lucide-react";
+import { StatusRow } from "./StatusRow";
 import {
   checkForUpdates,
   getUpdateChannel,
@@ -29,17 +29,20 @@ import {
   formatReleaseDate,
   type UpdateChannel,
   type UpdateCheckResult,
-} from '@/lib/updates';
+} from "@/lib/updates";
 
 export function SystemSettings() {
   const esp32 = useStore((s) => s.esp32);
   const pico = useStore((s) => s.pico);
-  const logs = useStore((s) => s.logs);
   const clearLogs = useStore((s) => s.clearLogs);
 
   const [checkingUpdate, setCheckingUpdate] = useState(false);
-  const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null);
-  const [channel, setChannel] = useState<UpdateChannel>(() => getUpdateChannel());
+  const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(
+    null
+  );
+  const [channel, setChannel] = useState<UpdateChannel>(() =>
+    getUpdateChannel()
+  );
   const [showBetaWarning, setShowBetaWarning] = useState(false);
 
   // Check for updates on mount or when channel changes
@@ -51,20 +54,20 @@ export function SystemSettings() {
 
   const handleCheckForUpdates = async () => {
     if (!esp32.version) return;
-    
+
     setCheckingUpdate(true);
     try {
       const result = await checkForUpdates(esp32.version);
       setUpdateResult(result);
     } catch (error) {
-      console.error('Failed to check for updates:', error);
+      console.error("Failed to check for updates:", error);
     } finally {
       setCheckingUpdate(false);
     }
   };
 
   const handleChannelChange = (newChannel: UpdateChannel) => {
-    if (newChannel === 'beta' && channel === 'stable') {
+    if (newChannel === "beta" && channel === "stable") {
       setShowBetaWarning(true);
     } else {
       setChannel(newChannel);
@@ -73,34 +76,34 @@ export function SystemSettings() {
   };
 
   const confirmBetaChannel = () => {
-    setChannel('beta');
-    setUpdateChannel('beta');
+    setChannel("beta");
+    setUpdateChannel("beta");
     setShowBetaWarning(false);
   };
 
   const startOTA = (version: string) => {
-    const isBeta = version.includes('-');
-    const warningText = isBeta 
+    const isBeta = version.includes("-");
+    const warningText = isBeta
       ? `Install BETA version ${version}? This is a pre-release version for testing. The device will restart after update.`
       : `Install version ${version}? The device will restart after update.`;
-    
+
     if (confirm(warningText)) {
-      getConnection()?.sendCommand('ota_start', { version });
+      getConnection()?.sendCommand("ota_start", { version });
     }
   };
 
-  const currentVersionDisplay = getVersionDisplay(esp32.version || '0.0.0');
+  const currentVersionDisplay = getVersionDisplay(esp32.version || "0.0.0");
 
   const restartDevice = () => {
-    if (confirm('Restart the device?')) {
-      getConnection()?.sendCommand('restart');
+    if (confirm("Restart the device?")) {
+      getConnection()?.sendCommand("restart");
     }
   };
 
   const factoryReset = () => {
-    if (confirm('This will erase all settings. Are you sure?')) {
-      if (confirm('Really? This cannot be undone!')) {
-        getConnection()?.sendCommand('factory_reset');
+    if (confirm("This will erase all settings. Are you sure?")) {
+      if (confirm("Really? This cannot be undone!")) {
+        getConnection()?.sendCommand("factory_reset");
       }
     }
   };
@@ -115,7 +118,11 @@ export function SystemSettings() {
             <Badge variant="success">Online</Badge>
           </CardHeader>
           <div className="space-y-3">
-            <StatusRow label="Firmware" value={esp32.version || 'Unknown'} mono />
+            <StatusRow
+              label="Firmware"
+              value={esp32.version || "Unknown"}
+              mono
+            />
             <StatusRow label="Uptime" value={formatUptime(esp32.uptime)} />
             <StatusRow label="Free Heap" value={formatBytes(esp32.freeHeap)} />
           </div>
@@ -123,15 +130,24 @@ export function SystemSettings() {
 
         <Card>
           <CardHeader>
-            <CardTitle icon={<HardDrive className="w-5 h-5" />}>Raspberry Pi Pico</CardTitle>
-            <Badge variant={pico.connected ? 'success' : 'error'}>
-              {pico.connected ? 'Connected' : 'Disconnected'}
+            <CardTitle icon={<HardDrive className="w-5 h-5" />}>
+              Raspberry Pi Pico
+            </CardTitle>
+            <Badge variant={pico.connected ? "success" : "error"}>
+              {pico.connected ? "Connected" : "Disconnected"}
             </Badge>
           </CardHeader>
           <div className="space-y-3">
-            <StatusRow label="Firmware" value={pico.version || 'Unknown'} mono />
+            <StatusRow
+              label="Firmware"
+              value={pico.version || "Unknown"}
+              mono
+            />
             <StatusRow label="Uptime" value={formatUptime(pico.uptime)} />
-            <StatusRow label="Status" value={pico.connected ? 'Communicating' : 'No response'} />
+            <StatusRow
+              label="Status"
+              value={pico.connected ? "Communicating" : "No response"}
+            />
           </div>
         </Card>
       </div>
@@ -139,27 +155,49 @@ export function SystemSettings() {
       {/* Firmware Update */}
       <Card>
         <CardHeader>
-          <CardTitle icon={<Download className="w-5 h-5" />}>Firmware Update</CardTitle>
+          <CardTitle icon={<Download className="w-5 h-5" />}>
+            Firmware Update
+          </CardTitle>
         </CardHeader>
 
         {/* Current Version */}
         <div className="flex items-center gap-3 mb-6 p-4 bg-theme rounded-xl">
           <div className="flex-1">
-            <p className="text-xs text-theme-muted uppercase tracking-wider mb-1">Installed Version</p>
+            <p className="text-xs text-theme-muted uppercase tracking-wider mb-1">
+              Installed Version
+            </p>
             <div className="flex items-center gap-2">
-              <span className="font-mono text-lg font-bold text-theme">{esp32.version || 'Unknown'}</span>
+              <span className="font-mono text-lg font-bold text-theme">
+                {esp32.version || "Unknown"}
+              </span>
               {currentVersionDisplay.badge && (
-                <Badge variant={currentVersionDisplay.badge === 'stable' ? 'success' : 'warning'}>
-                  {currentVersionDisplay.badge === 'stable' ? (
-                    <><Shield className="w-3 h-3" /> Official</>
+                <Badge
+                  variant={
+                    currentVersionDisplay.badge === "stable"
+                      ? "success"
+                      : "warning"
+                  }
+                >
+                  {currentVersionDisplay.badge === "stable" ? (
+                    <>
+                      <Shield className="w-3 h-3" /> Official
+                    </>
                   ) : (
-                    <><FlaskConical className="w-3 h-3" /> {currentVersionDisplay.badge.toUpperCase()}</>
+                    <>
+                      <FlaskConical className="w-3 h-3" />{" "}
+                      {currentVersionDisplay.badge.toUpperCase()}
+                    </>
                   )}
                 </Badge>
               )}
             </div>
           </div>
-          <Button variant="secondary" size="sm" onClick={handleCheckForUpdates} loading={checkingUpdate}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleCheckForUpdates}
+            loading={checkingUpdate}
+          >
             <RefreshCw className="w-4 h-4" />
             Check
           </Button>
@@ -167,19 +205,31 @@ export function SystemSettings() {
 
         {/* Update Channel Selection */}
         <div className="mb-6">
-          <label className="text-sm font-medium text-theme mb-3 block">Update Channel</label>
+          <label className="text-sm font-medium text-theme mb-3 block">
+            Update Channel
+          </label>
           <div className="grid grid-cols-2 gap-3">
             <button
-              onClick={() => handleChannelChange('stable')}
+              onClick={() => handleChannelChange("stable")}
               className={`p-4 rounded-xl border-2 transition-all text-left ${
-                channel === 'stable'
-                  ? 'border-emerald-500 bg-emerald-500/10'
-                  : 'border-theme hover:border-theme-light'
+                channel === "stable"
+                  ? "border-emerald-500 bg-emerald-500/10"
+                  : "border-theme hover:border-theme-light"
               }`}
             >
               <div className="flex items-center gap-2 mb-1">
-                <Shield className={`w-5 h-5 ${channel === 'stable' ? 'text-emerald-500' : 'text-theme-muted'}`} />
-                <span className={`font-semibold ${channel === 'stable' ? 'text-emerald-600' : 'text-theme'}`}>
+                <Shield
+                  className={`w-5 h-5 ${
+                    channel === "stable"
+                      ? "text-emerald-500"
+                      : "text-theme-muted"
+                  }`}
+                />
+                <span
+                  className={`font-semibold ${
+                    channel === "stable" ? "text-emerald-600" : "text-theme"
+                  }`}
+                >
                   Stable
                 </span>
               </div>
@@ -189,16 +239,24 @@ export function SystemSettings() {
             </button>
 
             <button
-              onClick={() => handleChannelChange('beta')}
+              onClick={() => handleChannelChange("beta")}
               className={`p-4 rounded-xl border-2 transition-all text-left ${
-                channel === 'beta'
-                  ? 'border-amber-500 bg-amber-500/10'
-                  : 'border-theme hover:border-theme-light'
+                channel === "beta"
+                  ? "border-amber-500 bg-amber-500/10"
+                  : "border-theme hover:border-theme-light"
               }`}
             >
               <div className="flex items-center gap-2 mb-1">
-                <FlaskConical className={`w-5 h-5 ${channel === 'beta' ? 'text-amber-500' : 'text-theme-muted'}`} />
-                <span className={`font-semibold ${channel === 'beta' ? 'text-amber-600' : 'text-theme'}`}>
+                <FlaskConical
+                  className={`w-5 h-5 ${
+                    channel === "beta" ? "text-amber-500" : "text-theme-muted"
+                  }`}
+                />
+                <span
+                  className={`font-semibold ${
+                    channel === "beta" ? "text-amber-600" : "text-theme"
+                  }`}
+                >
                   Beta
                 </span>
               </div>
@@ -214,22 +272,27 @@ export function SystemSettings() {
           <div className="space-y-4">
             {/* Stable Update */}
             {updateResult.stable && (
-              <div className={`p-4 rounded-xl border ${
-                updateResult.hasStableUpdate 
-                  ? 'border-emerald-200 bg-emerald-50' 
-                  : 'border-theme bg-theme'
-              }`}>
+              <div
+                className={`p-4 rounded-xl border ${
+                  updateResult.hasStableUpdate
+                    ? "border-emerald-200 bg-emerald-50"
+                    : "border-theme bg-theme"
+                }`}
+              >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <Shield className="w-4 h-4 text-emerald-500" />
-                      <span className="font-semibold text-theme">Official Release</span>
+                      <span className="font-semibold text-theme">
+                        Official Release
+                      </span>
                       <Badge variant="success">
                         v{updateResult.stable.version}
                       </Badge>
                     </div>
                     <p className="text-xs text-theme-muted mb-2">
-                      Released {formatReleaseDate(updateResult.stable.releaseDate)}
+                      Released{" "}
+                      {formatReleaseDate(updateResult.stable.releaseDate)}
                     </p>
                     {updateResult.hasStableUpdate ? (
                       <p className="text-sm text-emerald-600 flex items-center gap-1">
@@ -244,7 +307,10 @@ export function SystemSettings() {
                   </div>
                   <div className="flex flex-col gap-2">
                     {updateResult.hasStableUpdate && (
-                      <Button size="sm" onClick={() => startOTA(updateResult.stable!.version)}>
+                      <Button
+                        size="sm"
+                        onClick={() => startOTA(updateResult.stable!.version)}
+                      >
                         <Download className="w-4 h-4" />
                         Install
                       </Button>
@@ -265,23 +331,28 @@ export function SystemSettings() {
             )}
 
             {/* Beta Update - only show if user is on beta channel */}
-            {channel === 'beta' && updateResult.beta && (
-              <div className={`p-4 rounded-xl border ${
-                updateResult.hasBetaUpdate 
-                  ? 'border-amber-200 bg-amber-50' 
-                  : 'border-theme bg-theme'
-              }`}>
+            {channel === "beta" && updateResult.beta && (
+              <div
+                className={`p-4 rounded-xl border ${
+                  updateResult.hasBetaUpdate
+                    ? "border-amber-200 bg-amber-50"
+                    : "border-theme bg-theme"
+                }`}
+              >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <FlaskConical className="w-4 h-4 text-amber-500" />
-                      <span className="font-semibold text-theme">Beta Release</span>
+                      <span className="font-semibold text-theme">
+                        Beta Release
+                      </span>
                       <Badge variant="warning">
                         v{updateResult.beta.version}
                       </Badge>
                     </div>
                     <p className="text-xs text-theme-muted mb-2">
-                      Released {formatReleaseDate(updateResult.beta.releaseDate)}
+                      Released{" "}
+                      {formatReleaseDate(updateResult.beta.releaseDate)}
                     </p>
                     {updateResult.hasBetaUpdate ? (
                       <p className="text-sm text-amber-600 flex items-center gap-1">
@@ -293,18 +364,23 @@ export function SystemSettings() {
                         You're on the latest beta version
                       </p>
                     )}
-                    
+
                     {/* Beta Warning */}
                     <div className="mt-3 p-2 bg-amber-100 rounded-lg flex items-start gap-2">
                       <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                       <p className="text-xs text-amber-700">
-                        Beta versions are for testing. They may contain bugs or incomplete features.
+                        Beta versions are for testing. They may contain bugs or
+                        incomplete features.
                       </p>
                     </div>
                   </div>
                   <div className="flex flex-col gap-2">
                     {updateResult.hasBetaUpdate && (
-                      <Button size="sm" variant="secondary" onClick={() => startOTA(updateResult.beta!.version)}>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => startOTA(updateResult.beta!.version)}
+                      >
                         <Download className="w-4 h-4" />
                         Install Beta
                       </Button>
@@ -325,12 +401,13 @@ export function SystemSettings() {
             )}
 
             {/* No updates available message */}
-            {!updateResult.hasStableUpdate && (channel !== 'beta' || !updateResult.hasBetaUpdate) && (
-              <div className="text-center py-4 text-theme-muted">
-                <Check className="w-8 h-8 mx-auto mb-2 text-emerald-500" />
-                <p className="text-sm">You're running the latest version!</p>
-              </div>
-            )}
+            {!updateResult.hasStableUpdate &&
+              (channel !== "beta" || !updateResult.hasBetaUpdate) && (
+                <div className="text-center py-4 text-theme-muted">
+                  <Check className="w-8 h-8 mx-auto mb-2 text-emerald-500" />
+                  <p className="text-sm">You're running the latest version!</p>
+                </div>
+              )}
           </div>
         )}
       </Card>
@@ -343,10 +420,12 @@ export function SystemSettings() {
               <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <FlaskConical className="w-8 h-8 text-amber-600" />
               </div>
-              <h3 className="text-xl font-bold text-theme mb-2">Enable Beta Updates?</h3>
+              <h3 className="text-xl font-bold text-theme mb-2">
+                Enable Beta Updates?
+              </h3>
               <p className="text-sm text-theme-muted mb-4">
-                Beta versions include new features before they're officially released. 
-                They may contain bugs or incomplete features.
+                Beta versions include new features before they're officially
+                released. They may contain bugs or incomplete features.
               </p>
               <div className="p-3 bg-amber-50 rounded-lg mb-6 text-left">
                 <h4 className="font-semibold text-amber-800 text-sm mb-2 flex items-center gap-2">
@@ -360,7 +439,11 @@ export function SystemSettings() {
                 </ul>
               </div>
               <div className="flex gap-3">
-                <Button variant="secondary" className="flex-1" onClick={() => setShowBetaWarning(false)}>
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => setShowBetaWarning(false)}
+                >
                   Cancel
                 </Button>
                 <Button className="flex-1" onClick={confirmBetaChannel}>
@@ -383,22 +466,12 @@ export function SystemSettings() {
             </Button>
           }
         >
-          <CardTitle icon={<Terminal className="w-5 h-5" />}>System Logs</CardTitle>
+          <CardTitle icon={<Terminal className="w-5 h-5" />}>
+            System Logs
+          </CardTitle>
         </CardHeader>
 
-        <div className="max-h-64 overflow-y-auto bg-gray-900 rounded-xl p-4 font-mono text-xs">
-          {logs.length > 0 ? (
-            logs.map((log) => (
-              <div key={log.id} className="py-1 border-b border-gray-800 last:border-0">
-                <span className="text-gray-500">{formatTime(log.time)}</span>
-                <span className={`ml-2 ${getLogColor(log.level)}`}>[{log.level.toUpperCase()}]</span>
-                <span className="text-gray-200 ml-2">{log.message}</span>
-              </div>
-            ))
-          ) : (
-            <p className="text-gray-500 text-center py-4">No logs yet</p>
-          )}
-        </div>
+        <LogViewer />
       </Card>
 
       {/* Danger Zone */}
@@ -412,7 +485,9 @@ export function SystemSettings() {
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
             <h4 className="font-semibold text-theme mb-1">Restart Device</h4>
-            <p className="text-sm text-theme-muted">Reboot the ESP32. Settings will be preserved.</p>
+            <p className="text-sm text-theme-muted">
+              Reboot the ESP32. Settings will be preserved.
+            </p>
           </div>
           <Button variant="secondary" onClick={restartDevice}>
             <RefreshCw className="w-4 h-4" />
@@ -425,7 +500,10 @@ export function SystemSettings() {
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
             <h4 className="font-semibold text-red-600 mb-1">Factory Reset</h4>
-            <p className="text-sm text-theme-muted">Erase all settings and return to factory defaults. This cannot be undone.</p>
+            <p className="text-sm text-theme-muted">
+              Erase all settings and return to factory defaults. This cannot be
+              undone.
+            </p>
           </div>
           <Button variant="danger" onClick={factoryReset}>
             <Trash2 className="w-4 h-4" />
@@ -436,15 +514,3 @@ export function SystemSettings() {
     </div>
   );
 }
-
-function getLogColor(level: string): string {
-  switch (level.toLowerCase()) {
-    case 'error': return 'text-red-400';
-    case 'warn':
-    case 'warning': return 'text-amber-400';
-    case 'info': return 'text-blue-400';
-    case 'debug': return 'text-gray-500';
-    default: return 'text-gray-400';
-  }
-}
-
