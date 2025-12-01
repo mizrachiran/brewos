@@ -1111,6 +1111,17 @@ void WebServer::handleWsMessage(AsyncWebSocketClient* client, uint8_t* data, siz
             String mode = doc["mode"] | "";
             uint8_t modeCmd = 0;
             
+            // Check for optional heating strategy parameter
+            if (doc.containsKey("strategy") && mode == "on") {
+                uint8_t strategy = doc["strategy"].as<uint8_t>();
+                if (strategy <= 3) {  // Valid strategy range: 0-3
+                    // Set heating strategy first
+                    uint8_t strategyPayload[2] = {0x01, strategy};  // CONFIG_HEATING_STRATEGY = 0x01
+                    _picoUart.sendCommand(MSG_CMD_CONFIG, strategyPayload, 2);
+                    broadcastLog("Heating strategy set to: " + String(strategy), "info");
+                }
+            }
+            
             if (mode == "on" || mode == "ready" || mode == "brew") {
                 modeCmd = 0x01;  // MODE_BREW
             } else if (mode == "steam") {

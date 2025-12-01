@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { useStore } from '@/lib/store';
 import { getConnection } from '@/lib/connection';
 import { Card, CardHeader, CardTitle } from '@/components/Card';
 import { Gauge } from '@/components/Gauge';
 import { Badge } from '@/components/Badge';
 import { PageHeader } from '@/components/PageHeader';
+import { HeatingStrategyModal } from '@/components/HeatingStrategyModal';
 import { 
   Flame, 
   Wind, 
@@ -27,8 +29,30 @@ export function Dashboard() {
   const stats = useStore((s) => s.stats);
   const esp32 = useStore((s) => s.esp32);
 
-  const setMode = (mode: string) => {
-    getConnection()?.sendCommand('set_mode', { mode });
+  const [showStrategyModal, setShowStrategyModal] = useState(false);
+
+  const setMode = (mode: string, strategy?: number) => {
+    if (mode === 'on' && strategy !== undefined) {
+      // Send mode and strategy together
+      getConnection()?.sendCommand('set_mode', { mode, strategy });
+    } else {
+      getConnection()?.sendCommand('set_mode', { mode });
+    }
+  };
+
+  const handleOnClick = () => {
+    // If machine is already on, just turn it on without modal
+    if (machine.mode === 'on') {
+      setMode('on');
+    } else {
+      // Show strategy selection modal when turning on from standby/eco
+      setShowStrategyModal(true);
+    }
+  };
+
+  const handleStrategySelect = (strategy: number) => {
+    setMode('on', strategy);
+    setShowStrategyModal(false);
   };
 
   return (
@@ -50,22 +74,43 @@ export function Dashboard() {
           </div>
           
           <div className="flex gap-2">
-            {['standby', 'on', 'eco'].map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setMode(mode)}
-                className={`
-                  px-4 py-2 rounded-xl text-sm font-semibold transition-all
-                  ${machine.mode === mode
-                    ? 'nav-active'
-                    : 'bg-theme-secondary text-theme-secondary hover:bg-theme-tertiary'
-                  }
-                `}
-              >
-                {mode === 'standby' && <Power className="w-4 h-4 inline mr-1.5" />}
-                {mode.charAt(0).toUpperCase() + mode.slice(1)}
-              </button>
-            ))}
+            <button
+              onClick={() => setMode('standby')}
+              className={`
+                px-4 py-2 rounded-xl text-sm font-semibold transition-all
+                ${machine.mode === 'standby'
+                  ? 'nav-active'
+                  : 'bg-theme-secondary text-theme-secondary hover:bg-theme-tertiary'
+                }
+              `}
+            >
+              <Power className="w-4 h-4 inline mr-1.5" />
+              Standby
+            </button>
+            <button
+              onClick={handleOnClick}
+              className={`
+                px-4 py-2 rounded-xl text-sm font-semibold transition-all
+                ${machine.mode === 'on'
+                  ? 'nav-active'
+                  : 'bg-theme-secondary text-theme-secondary hover:bg-theme-tertiary'
+                }
+              `}
+            >
+              On
+            </button>
+            <button
+              onClick={() => setMode('eco')}
+              className={`
+                px-4 py-2 rounded-xl text-sm font-semibold transition-all
+                ${machine.mode === 'eco'
+                  ? 'nav-active'
+                  : 'bg-theme-secondary text-theme-secondary hover:bg-theme-tertiary'
+                }
+              `}
+            >
+              Eco
+            </button>
           </div>
         </div>
       </Card>
@@ -168,6 +213,13 @@ export function Dashboard() {
           status={scale.connected ? 'success' : undefined}
         />
       </div>
+
+      {/* Heating Strategy Modal */}
+      <HeatingStrategyModal
+        isOpen={showStrategyModal}
+        onClose={() => setShowStrategyModal(false)}
+        onSelect={handleStrategySelect}
+      />
     </div>
   );
 }

@@ -1,0 +1,212 @@
+import { useState, useEffect } from 'react';
+import { X, Flame, Wind, Zap, Brain, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+export interface HeatingStrategy {
+  value: number;
+  label: string;
+  desc: string;
+  icon: React.ReactNode;
+  detail: string;
+}
+
+export const HEATING_STRATEGIES: HeatingStrategy[] = [
+  {
+    value: 0,
+    label: 'Brew Only',
+    desc: 'Heat only brew boiler',
+    icon: <Flame className="w-5 h-5 sm:w-6 sm:h-6" />,
+    detail: 'Fastest for espresso. Ideal when you only need coffee.',
+  },
+  {
+    value: 1,
+    label: 'Sequential',
+    desc: 'Brew first, then steam',
+    icon: <Wind className="w-5 h-5 sm:w-6 sm:h-6" />,
+    detail: 'Brew boiler heats first, then steam. Balanced and efficient.',
+  },
+  {
+    value: 2,
+    label: 'Parallel',
+    desc: 'Heat both simultaneously',
+    icon: <Zap className="w-5 h-5 sm:w-6 sm:h-6" />,
+    detail: 'Fastest overall. Both boilers heat at the same time.',
+  },
+  {
+    value: 3,
+    label: 'Smart Stagger',
+    desc: 'Power-aware heating',
+    icon: <Brain className="w-5 h-5 sm:w-6 sm:h-6" />,
+    detail: 'Intelligently manages power to avoid overload. Recommended for most setups.',
+  },
+];
+
+interface HeatingStrategyModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSelect: (strategy: number) => void;
+  defaultStrategy?: number;
+}
+
+const STORAGE_KEY = 'brewos-last-heating-strategy';
+
+export function HeatingStrategyModal({
+  isOpen,
+  onClose,
+  onSelect,
+  defaultStrategy,
+}: HeatingStrategyModalProps) {
+  const [selectedStrategy, setSelectedStrategy] = useState<number>(() => {
+    // Get from localStorage or use default
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored !== null) {
+      const parsed = parseInt(stored, 10);
+      if (!isNaN(parsed) && parsed >= 0 && parsed <= 3) {
+        return parsed;
+      }
+    }
+    return defaultStrategy ?? 1; // Default to Sequential
+  });
+
+  // Update selected when default changes
+  useEffect(() => {
+    if (defaultStrategy !== undefined) {
+      setSelectedStrategy(defaultStrategy);
+    }
+  }, [defaultStrategy]);
+
+  // Handle keyboard navigation
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      } else if (e.key.startsWith('Arrow')) {
+        e.preventDefault();
+        const currentIndex = HEATING_STRATEGIES.findIndex(
+          (s) => s.value === selectedStrategy
+        );
+        let newIndex = currentIndex;
+
+        if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+          newIndex = (currentIndex + 1) % HEATING_STRATEGIES.length;
+        } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+          newIndex =
+            (currentIndex - 1 + HEATING_STRATEGIES.length) %
+            HEATING_STRATEGIES.length;
+        }
+
+        setSelectedStrategy(HEATING_STRATEGIES[newIndex].value);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        // Confirm with currently selected strategy
+        localStorage.setItem(STORAGE_KEY, selectedStrategy.toString());
+        onSelect(selectedStrategy);
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, selectedStrategy, onClose, onSelect]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
+      onClick={onClose}
+    >
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+
+      {/* Modal */}
+      <div
+        className="relative w-full max-w-2xl max-h-[90vh] bg-theme-card rounded-xl sm:rounded-2xl shadow-2xl border border-theme overflow-hidden transform transition-all flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-theme flex-shrink-0">
+          <div className="flex-1 min-w-0 pr-2">
+            <h2 className="text-xl sm:text-2xl font-bold text-theme">Select Heating Strategy</h2>
+            <p className="text-xs sm:text-sm text-theme-muted mt-1">
+              Choose how the machine should heat up
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-theme-secondary text-theme-muted hover:text-theme transition-colors flex-shrink-0"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Strategy Grid - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+            {HEATING_STRATEGIES.map((strategy) => {
+              const isSelected = selectedStrategy === strategy.value;
+              return (
+                <button
+                  key={strategy.value}
+                  onClick={() => {
+                    setSelectedStrategy(strategy.value);
+                    // Immediately confirm selection
+                    localStorage.setItem(STORAGE_KEY, strategy.value.toString());
+                    onSelect(strategy.value);
+                    onClose();
+                  }}
+                  className={cn(
+                    'relative p-4 sm:p-5 rounded-xl border-2 transition-all text-left group',
+                    'hover:scale-[1.02] hover:shadow-lg cursor-pointer active:scale-[0.98]',
+                    isSelected
+                      ? 'border-accent bg-accent/10 shadow-md'
+                      : 'border-theme bg-theme-secondary hover:border-theme-tertiary'
+                  )}
+                >
+                  {/* Selection indicator */}
+                  {isSelected && (
+                    <div className="absolute top-2 right-2 sm:top-3 sm:right-3 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-accent flex items-center justify-center">
+                      <Check className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
+                    </div>
+                  )}
+
+                  {/* Icon */}
+                  <div
+                    className={cn(
+                      'w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center mb-2 sm:mb-3 transition-colors flex-shrink-0',
+                      isSelected
+                        ? 'bg-accent/20 text-accent'
+                        : 'bg-theme-tertiary text-theme-muted group-hover:text-accent'
+                    )}
+                  >
+                    {strategy.icon}
+                  </div>
+
+                  {/* Label */}
+                  <h3
+                    className={cn(
+                      'text-base sm:text-lg font-semibold mb-1',
+                      isSelected ? 'text-theme' : 'text-theme-secondary'
+                    )}
+                  >
+                    {strategy.label}
+                  </h3>
+
+                  {/* Description */}
+                  <p className="text-xs sm:text-sm text-theme-muted mb-1.5 sm:mb-2">{strategy.desc}</p>
+
+                  {/* Detail */}
+                  <p className="text-xs text-theme-muted leading-relaxed">{strategy.detail}</p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
