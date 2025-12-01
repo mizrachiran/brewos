@@ -84,10 +84,9 @@ export function InstallPrompt({
     return (
       <>
         <div className={`bg-theme-card border border-theme rounded-xl p-4 flex items-center justify-between ${className}`}>
-          <div className="flex items-center gap-3">
+          <div className="flex gap-3 flex-col items-left">
             <Logo size="sm" />
             <div>
-              <p className="font-medium text-theme text-sm">Install BrewOS</p>
               <p className="text-xs text-theme-muted">
                 Add to your home screen
               </p>
