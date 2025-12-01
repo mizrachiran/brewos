@@ -8,6 +8,15 @@
     <meta name="keywords" content="espresso, coffee, PID, firmware, raspberry pi pico, esp32, open source, temperature control">
     <meta name="theme-color" content="#391f12">
     
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YMSSDYE742"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-YMSSDYE742');
+    </script>
+    
     <!-- Open Graph -->
     <meta property="og:title" content="BrewOS - Professional Espresso Machine Control">
     <meta property="og:description" content="Transform your espresso machine with precise PID temperature control, WiFi monitoring, and OTA updates.">
@@ -1416,6 +1425,77 @@
             el.style.transform = 'translateY(20px)';
             el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
             observer.observe(el);
+        });
+
+        // Google Analytics Event Tracking
+        function trackEvent(category, action, label) {
+            if (typeof gtag === 'function') {
+                gtag('event', action, {
+                    'event_category': category,
+                    'event_label': label
+                });
+            }
+        }
+
+        // Track CTA button clicks
+        document.querySelectorAll('.btn-primary, .btn-cta-primary').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const label = btn.textContent.trim();
+                trackEvent('CTA', 'click', label);
+            });
+        });
+
+        document.querySelectorAll('.btn-secondary, .btn-cta-secondary').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const label = btn.textContent.trim();
+                trackEvent('CTA', 'click_secondary', label);
+            });
+        });
+
+        // Track navigation clicks
+        document.querySelectorAll('.nav-links a, .mobile-menu a').forEach(link => {
+            link.addEventListener('click', () => {
+                const label = link.textContent.trim();
+                const isExternal = link.hasAttribute('target');
+                trackEvent('Navigation', isExternal ? 'external_click' : 'internal_click', label);
+            });
+        });
+
+        // Track Sign In clicks
+        document.querySelectorAll('.nav-signin').forEach(btn => {
+            btn.addEventListener('click', () => {
+                trackEvent('Auth', 'sign_in_click', 'Header Sign In');
+            });
+        });
+
+        // Track section views
+        const sectionObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const sectionId = entry.target.id || entry.target.className.split(' ')[0];
+                    trackEvent('Section', 'view', sectionId);
+                    sectionObserver.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.3 });
+
+        document.querySelectorAll('section[id]').forEach(section => {
+            sectionObserver.observe(section);
+        });
+
+        // Track footer link clicks
+        document.querySelectorAll('footer a').forEach(link => {
+            link.addEventListener('click', () => {
+                const label = link.textContent.trim();
+                trackEvent('Footer', 'click', label);
+            });
+        });
+
+        // Track GitHub star CTA specifically
+        document.querySelectorAll('a[href*="github.com/mizrachiran/brewos"]').forEach(link => {
+            link.addEventListener('click', () => {
+                trackEvent('GitHub', 'click', link.closest('.cta-section') ? 'CTA Section' : 'General');
+            });
         });
     </script>
 </body>
