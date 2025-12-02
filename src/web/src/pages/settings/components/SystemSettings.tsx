@@ -35,7 +35,7 @@ export function SystemSettings() {
   const esp32 = useStore((s) => s.esp32);
   const pico = useStore((s) => s.pico);
   const clearLogs = useStore((s) => s.clearLogs);
-  const { sendCommand, sendCommandWithConfirm } = useCommand();
+  const { sendCommandWithConfirm } = useCommand();
 
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(

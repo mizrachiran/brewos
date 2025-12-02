@@ -1,116 +1,47 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useStore } from '@/lib/store';
-import { Card, CardHeader, CardTitle } from '@/components/Card';
-import { Button } from '@/components/Button';
-import { Input } from '@/components/Input';
-import { Toggle } from '@/components/Toggle';
-import { PageHeader } from '@/components/PageHeader';
-import { useToast } from '@/components/Toast';
-import { 
-  Clock, 
-  Plus, 
-  Trash2, 
-  Power, 
-  PowerOff,
-  Moon,
-  Calendar,
-  Flame,
-  Save,
-  X,
-} from 'lucide-react';
-
-// Days of week - starting from Sunday (standard ISO)
-const ALL_DAYS = [
-  { value: 0x01, label: 'Sun', short: 'S', index: 0 },
-  { value: 0x02, label: 'Mon', short: 'M', index: 1 },
-  { value: 0x04, label: 'Tue', short: 'T', index: 2 },
-  { value: 0x08, label: 'Wed', short: 'W', index: 3 },
-  { value: 0x10, label: 'Thu', short: 'T', index: 4 },
-  { value: 0x20, label: 'Fri', short: 'F', index: 5 },
-  { value: 0x40, label: 'Sat', short: 'S', index: 6 },
-];
-
-const WEEKDAYS = 0x3E; // Mon-Fri
-const WEEKENDS = 0x41; // Sat-Sun
-const EVERY_DAY = 0x7F;
-
-// Helper to reorder days based on first day of week
-const getOrderedDays = (firstDay: 'sunday' | 'monday') => {
-  if (firstDay === 'monday') {
-    // Mon, Tue, Wed, Thu, Fri, Sat, Sun
-    return [...ALL_DAYS.slice(1), ALL_DAYS[0]];
-  }
-  return ALL_DAYS;
-};
-
-// Heating strategies
-const STRATEGIES = [
-  { value: 0, label: 'Brew Only', desc: 'Heat only brew boiler' },
-  { value: 1, label: 'Sequential', desc: 'Brew first, then steam' },
-  { value: 2, label: 'Parallel', desc: 'Heat both simultaneously' },
-  { value: 3, label: 'Smart Stagger', desc: 'Power-aware heating' },
-];
-
-interface Schedule {
-  id: number;
-  enabled: boolean;
-  days: number;
-  hour: number;
-  minute: number;
-  action: 'on' | 'off';
-  strategy: number;
-  name: string;
-}
-
-interface ScheduleFormData {
-  enabled: boolean;
-  days: number;
-  hour: number;
-  minute: number;
-  action: 'on' | 'off';
-  strategy: number;
-  name: string;
-}
-
-const defaultSchedule: ScheduleFormData = {
-  enabled: true,
-  days: WEEKDAYS,
-  hour: 7,
-  minute: 0,
-  action: 'on',
-  strategy: 1,
-  name: '',
-};
+import { useState, useEffect, useMemo } from "react";
+import { useStore } from "@/lib/store";
+import { Card, CardHeader, CardTitle } from "@/components/Card";
+import { Button } from "@/components/Button";
+import { Input } from "@/components/Input";
+import { Toggle } from "@/components/Toggle";
+import { PageHeader } from "@/components/PageHeader";
+import { useToast } from "@/components/Toast";
+import {
+  ScheduleForm,
+  ScheduleItem,
+  type Schedule,
+  type ScheduleFormData,
+  DEFAULT_SCHEDULE,
+  getOrderedDays,
+} from "@/components/schedules";
+import { Clock, Plus, Moon, Calendar, Save } from "lucide-react";
 
 export function Schedules() {
   const preferences = useStore((s) => s.preferences);
   const device = useStore((s) => s.device);
   const { success, error } = useToast();
+
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [autoPowerOff, setAutoPowerOff] = useState({ enabled: false, minutes: 60 });
   const [isEditing, setIsEditing] = useState<number | null>(null);
   const [isAdding, setIsAdding] = useState(false);
-  const [formData, setFormData] = useState<ScheduleFormData>(defaultSchedule);
+  const [formData, setFormData] = useState<ScheduleFormData>(DEFAULT_SCHEDULE);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Heating strategies only apply to dual boiler machines
-  const isDualBoiler = device.machineType === 'dual_boiler';
-
-  // Get ordered days based on user preference
-  const orderedDays = useMemo(() => 
-    getOrderedDays(preferences.firstDayOfWeek), 
+  const isDualBoiler = device.machineType === "dual_boiler";
+  const orderedDays = useMemo(
+    () => getOrderedDays(preferences.firstDayOfWeek),
     [preferences.firstDayOfWeek]
   );
 
-  // Fetch schedules on mount
   useEffect(() => {
     fetchSchedules();
   }, []);
 
   const fetchSchedules = async () => {
     try {
-      const res = await fetch('/api/schedules');
+      const res = await fetch("/api/schedules");
       const data = await res.json();
       setSchedules(data.schedules || []);
       setAutoPowerOff({
@@ -118,7 +49,7 @@ export function Schedules() {
         minutes: data.autoPowerOffMinutes || 60,
       });
     } catch (err) {
-      console.error('Failed to fetch schedules:', err);
+      console.error("Failed to fetch schedules:", err);
     } finally {
       setLoading(false);
     }
@@ -127,75 +58,73 @@ export function Schedules() {
   const saveSchedule = async () => {
     setSaving(true);
     try {
-      const endpoint = isEditing ? '/api/schedules/update' : '/api/schedules';
+      const endpoint = isEditing ? "/api/schedules/update" : "/api/schedules";
       const body = isEditing ? { id: isEditing, ...formData } : formData;
-      
+
       const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      
-      if (!res.ok) throw new Error('Failed to save');
-      
+
+      if (!res.ok) throw new Error("Failed to save");
+
       await fetchSchedules();
-      setIsEditing(null);
-      setIsAdding(false);
-      setFormData(defaultSchedule);
-      success(isEditing ? 'Schedule updated' : 'Schedule created');
+      resetForm();
+      success(isEditing ? "Schedule updated" : "Schedule created");
     } catch (err) {
-      console.error('Failed to save schedule:', err);
-      error('Failed to save schedule. Please try again.');
+      console.error("Failed to save schedule:", err);
+      error("Failed to save schedule. Please try again.");
     } finally {
       setSaving(false);
     }
   };
 
   const deleteSchedule = async (id: number) => {
-    if (!confirm('Delete this schedule?')) return;
+    if (!confirm("Delete this schedule?")) return;
     try {
-      const res = await fetch('/api/schedules/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/schedules/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
       });
-      if (!res.ok) throw new Error('Failed to delete');
+      if (!res.ok) throw new Error("Failed to delete");
       await fetchSchedules();
-      success('Schedule deleted');
+      success("Schedule deleted");
     } catch (err) {
-      console.error('Failed to delete schedule:', err);
-      error('Failed to delete schedule. Please try again.');
+      console.error("Failed to delete schedule:", err);
+      error("Failed to delete schedule. Please try again.");
     }
   };
 
   const toggleSchedule = async (id: number, enabled: boolean) => {
     try {
-      const res = await fetch('/api/schedules/toggle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/schedules/toggle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, enabled }),
       });
-      if (!res.ok) throw new Error('Failed to toggle');
+      if (!res.ok) throw new Error("Failed to toggle");
       await fetchSchedules();
-      success(`Schedule ${enabled ? 'enabled' : 'disabled'}`);
+      success(`Schedule ${enabled ? "enabled" : "disabled"}`);
     } catch (err) {
-      console.error('Failed to toggle schedule:', err);
-      error('Failed to update schedule. Please try again.');
+      console.error("Failed to toggle schedule:", err);
+      error("Failed to update schedule. Please try again.");
     }
   };
 
   const saveAutoPowerOff = async () => {
     try {
-      const res = await fetch('/api/schedules/auto-off', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/schedules/auto-off", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(autoPowerOff),
       });
-      if (!res.ok) throw new Error('Failed to save');
-      success('Auto power-off settings saved');
+      if (!res.ok) throw new Error("Failed to save");
+      success("Auto power-off settings saved");
     } catch (err) {
-      console.error('Failed to save auto power-off:', err);
-      error('Failed to save auto power-off settings.');
+      console.error("Failed to save auto power-off:", err);
+      error("Failed to save auto power-off settings.");
     }
   };
 
@@ -216,62 +145,26 @@ export function Schedules() {
   const startAdding = () => {
     setIsAdding(true);
     setIsEditing(null);
-    setFormData(defaultSchedule);
+    setFormData(DEFAULT_SCHEDULE);
   };
 
-  const cancelEdit = () => {
+  const resetForm = () => {
     setIsEditing(null);
     setIsAdding(false);
-    setFormData(defaultSchedule);
-  };
-
-  const toggleDay = (dayValue: number) => {
-    setFormData(prev => ({
-      ...prev,
-      days: prev.days ^ dayValue,
-    }));
-  };
-
-  const setPresetDays = (preset: 'weekdays' | 'weekends' | 'everyday') => {
-    const days = preset === 'weekdays' ? WEEKDAYS : 
-                 preset === 'weekends' ? WEEKENDS : EVERY_DAY;
-    setFormData(prev => ({ ...prev, days }));
-  };
-
-  const formatTime = (hour: number, minute: number) => {
-    const m = minute.toString().padStart(2, '0');
-    if (preferences.use24HourTime) {
-      return `${hour.toString().padStart(2, '0')}:${m}`;
-    }
-    const h = hour % 12 || 12;
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    return `${h}:${m} ${ampm}`;
-  };
-
-  const getDaysLabel = (days: number) => {
-    if (days === EVERY_DAY) return 'Every day';
-    if (days === WEEKDAYS) return 'Weekdays';
-    if (days === WEEKENDS) return 'Weekends';
-    
-    const dayNames = orderedDays.filter(d => days & d.value).map(d => d.label);
-    return dayNames.join(', ');
+    setFormData(DEFAULT_SCHEDULE);
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent" />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <PageHeader
-        title="Schedules"
-        subtitle="Automate your machine power cycles"
-      />
+      <PageHeader title="Schedules" subtitle="Automate your machine power cycles" />
 
       {/* Schedule List */}
       <Card>
@@ -283,9 +176,7 @@ export function Schedules() {
             </Button>
           }
         >
-          <CardTitle icon={<Calendar className="w-5 h-5" />}>
-            Schedules
-          </CardTitle>
+          <CardTitle icon={<Calendar className="w-5 h-5" />}>Schedules</CardTitle>
         </CardHeader>
 
         <p className="text-sm text-theme-muted mb-4">
@@ -293,75 +184,26 @@ export function Schedules() {
         </p>
 
         {schedules.length === 0 && !isAdding ? (
-          <div className="text-center py-8 text-theme-muted">
-            <Clock className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p>No schedules configured</p>
-            <p className="text-sm">Add a schedule to automate your machine</p>
-          </div>
+          <EmptySchedules />
         ) : (
           <div className="space-y-3">
-            {schedules.map(schedule => (
-              <div
+            {schedules.map((schedule) => (
+              <ScheduleCard
                 key={schedule.id}
-                className={`p-4 rounded-xl border transition-all ${
-                  schedule.enabled 
-                    ? 'bg-theme-secondary border-theme' 
-                    : 'bg-theme-secondary/50 border-theme/50 opacity-60'
-                } ${isEditing === schedule.id ? 'ring-2 ring-accent' : ''}`}
-              >
-                {isEditing === schedule.id ? (
-                  <ScheduleForm
-                    data={formData}
-                    onChange={setFormData}
-                    onSave={saveSchedule}
-                    onCancel={cancelEdit}
-                    toggleDay={toggleDay}
-                    setPresetDays={setPresetDays}
-                    orderedDays={orderedDays}
-                    isDualBoiler={isDualBoiler}
-                    saving={saving}
-                  />
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className={`p-2 rounded-lg ${
-                        schedule.action === 'on' 
-                          ? 'bg-emerald-500/20 text-emerald-500' 
-                          : 'bg-orange-500/20 text-orange-500'
-                      }`}>
-                        {schedule.action === 'on' ? <Power className="w-5 h-5" /> : <PowerOff className="w-5 h-5" />}
-                      </div>
-                      <div>
-                        <div className="font-medium text-theme">
-                          {schedule.name || `${schedule.action === 'on' ? 'Turn On' : 'Turn Off'}`}
-                        </div>
-                        <div className="text-sm text-theme-muted">
-                          {formatTime(schedule.hour, schedule.minute)} • {getDaysLabel(schedule.days)}
-                        </div>
-                        {/* Show heating strategy only for dual boiler machines */}
-                        {schedule.action === 'on' && isDualBoiler && (
-                          <div className="text-xs text-theme-muted mt-1">
-                            <Flame className="w-3 h-3 inline mr-1" />
-                            {STRATEGIES.find(s => s.value === schedule.strategy)?.label || 'Sequential'}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Toggle
-                        checked={schedule.enabled}
-                        onChange={(enabled) => toggleSchedule(schedule.id, enabled)}
-                      />
-                      <Button variant="ghost" size="sm" onClick={() => editSchedule(schedule)}>
-                        Edit
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => deleteSchedule(schedule.id)}>
-                        <Trash2 className="w-4 h-4 text-red-500" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
+                schedule={schedule}
+                isEditing={isEditing === schedule.id}
+                formData={formData}
+                orderedDays={orderedDays}
+                isDualBoiler={isDualBoiler}
+                use24HourTime={preferences.use24HourTime}
+                saving={saving}
+                onFormChange={setFormData}
+                onSave={saveSchedule}
+                onCancel={resetForm}
+                onEdit={() => editSchedule(schedule)}
+                onDelete={() => deleteSchedule(schedule.id)}
+                onToggle={(enabled) => toggleSchedule(schedule.id, enabled)}
+              />
             ))}
 
             {isAdding && (
@@ -370,9 +212,7 @@ export function Schedules() {
                   data={formData}
                   onChange={setFormData}
                   onSave={saveSchedule}
-                  onCancel={cancelEdit}
-                  toggleDay={toggleDay}
-                  setPresetDays={setPresetDays}
+                  onCancel={resetForm}
                   orderedDays={orderedDays}
                   isDualBoiler={isDualBoiler}
                   saving={saving}
@@ -384,209 +224,133 @@ export function Schedules() {
       </Card>
 
       {/* Auto Power-Off */}
-      <Card>
-        <CardHeader
-          action={
-            <Toggle
-              checked={autoPowerOff.enabled}
-              onChange={(enabled) => setAutoPowerOff({ ...autoPowerOff, enabled })}
-            />
-          }
-        >
-          <CardTitle icon={<Moon className="w-5 h-5" />}>
-            Auto Power-Off
-          </CardTitle>
-        </CardHeader>
-
-        <p className="text-sm text-theme-muted mb-4">
-          Automatically turn off the machine after a period of inactivity.
-        </p>
-
-        <div className="flex items-center gap-4 mb-4">
-          <Input
-            label="Idle timeout"
-            type="number"
-            min={5}
-            max={480}
-            step={5}
-            value={autoPowerOff.minutes}
-            onChange={(e) => setAutoPowerOff({ ...autoPowerOff, minutes: parseInt(e.target.value) })}
-            unit="minutes"
-            disabled={!autoPowerOff.enabled}
-          />
-        </div>
-
-        <Button onClick={saveAutoPowerOff}>
-          <Save className="w-4 h-4" />
-          Save Auto Power-Off
-        </Button>
-      </Card>
+      <AutoPowerOffCard
+        autoPowerOff={autoPowerOff}
+        onChange={setAutoPowerOff}
+        onSave={saveAutoPowerOff}
+      />
     </div>
   );
 }
 
-// Schedule Form Component
-interface DayInfo {
-  value: number;
-  label: string;
-  short: string;
-  index: number;
+// Sub-components
+
+function EmptySchedules() {
+  return (
+    <div className="text-center py-8 text-theme-muted">
+      <Clock className="w-12 h-12 mx-auto mb-3 opacity-50" />
+      <p>No schedules configured</p>
+      <p className="text-sm">Add a schedule to automate your machine</p>
+    </div>
+  );
 }
 
-interface ScheduleFormProps {
-  data: ScheduleFormData;
-  onChange: (data: ScheduleFormData) => void;
+interface ScheduleCardProps {
+  schedule: Schedule;
+  isEditing: boolean;
+  formData: ScheduleFormData;
+  orderedDays: ReturnType<typeof getOrderedDays>;
+  isDualBoiler: boolean;
+  use24HourTime: boolean;
+  saving: boolean;
+  onFormChange: (data: ScheduleFormData) => void;
   onSave: () => void;
   onCancel: () => void;
-  toggleDay: (day: number) => void;
-  setPresetDays: (preset: 'weekdays' | 'weekends' | 'everyday') => void;
-  orderedDays: DayInfo[];
-  isDualBoiler: boolean;
-  saving?: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  onToggle: (enabled: boolean) => void;
 }
 
-function ScheduleForm({ data, onChange, onSave, onCancel, toggleDay, setPresetDays, orderedDays, isDualBoiler, saving }: ScheduleFormProps) {
+function ScheduleCard({
+  schedule,
+  isEditing,
+  formData,
+  orderedDays,
+  isDualBoiler,
+  use24HourTime,
+  saving,
+  onFormChange,
+  onSave,
+  onCancel,
+  onEdit,
+  onDelete,
+  onToggle,
+}: ScheduleCardProps) {
   return (
-    <div className="space-y-4">
-      <Input
-        label="Name (optional)"
-        placeholder="Morning brew, Evening shutdown..."
-        value={data.name}
-        onChange={(e) => onChange({ ...data, name: e.target.value })}
-      />
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">
-            Action
-          </label>
-          <div className="flex gap-2 h-[50px]">
-            <button
-              onClick={() => onChange({ ...data, action: 'on' })}
-              className={`flex-1 px-3 rounded-xl border text-sm font-medium transition-all flex items-center justify-center ${
-                data.action === 'on'
-                  ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500'
-                  : 'bg-theme-secondary border-theme text-theme-secondary hover:border-theme-light'
-              }`}
-            >
-              <Power className="w-4 h-4 mr-2" />
-              Turn On
-            </button>
-            <button
-              onClick={() => onChange({ ...data, action: 'off' })}
-              className={`flex-1 px-3 rounded-xl border text-sm font-medium transition-all flex items-center justify-center ${
-                data.action === 'off'
-                  ? 'bg-orange-500/20 border-orange-500 text-orange-500'
-                  : 'bg-theme-secondary border-theme text-theme-secondary hover:border-theme-light'
-              }`}
-            >
-              <PowerOff className="w-4 h-4 mr-2" />
-              Turn Off
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">
-            Time
-          </label>
-          <div className="flex gap-2 h-[50px]">
-            <input
-              type="number"
-              min={0}
-              max={23}
-              value={data.hour}
-              onChange={(e) => onChange({ ...data, hour: parseInt(e.target.value) || 0 })}
-              className="w-20 text-center px-3 bg-theme-secondary border border-theme rounded-xl text-theme outline-none transition-colors focus:border-accent"
-            />
-            <span className="self-center text-theme-muted font-bold">:</span>
-            <input
-              type="number"
-              min={0}
-              max={59}
-              step={5}
-              value={data.minute.toString().padStart(2, '0')}
-              onChange={(e) => onChange({ ...data, minute: parseInt(e.target.value) || 0 })}
-              className="w-20 text-center px-3 bg-theme-secondary border border-theme rounded-xl text-theme outline-none transition-colors focus:border-accent"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">
-          Days
-        </label>
-        <div className="flex gap-1.5 mb-2">
-          {orderedDays.map(day => (
-            <button
-              key={day.value}
-              onClick={() => toggleDay(day.value)}
-              className={`w-9 h-9 rounded-lg text-xs font-bold transition-all border ${
-                data.days & day.value
-                  ? 'bg-accent text-white border-accent'
-                  : 'bg-theme-secondary text-theme-muted border-theme hover:border-theme-light'
-              }`}
-            >
-              {day.short}
-            </button>
-          ))}
-        </div>
-        <div className="flex gap-2 text-xs">
-          <button
-            onClick={() => setPresetDays('weekdays')}
-            className="text-accent hover:underline"
-          >
-            Mon–Fri
-          </button>
-          <span className="text-theme-muted">•</span>
-          <button
-            onClick={() => setPresetDays('weekends')}
-            className="text-accent hover:underline"
-          >
-            Sat–Sun
-          </button>
-          <span className="text-theme-muted">•</span>
-          <button
-            onClick={() => setPresetDays('everyday')}
-            className="text-accent hover:underline"
-          >
-            Every day
-          </button>
-        </div>
-      </div>
-
-      {/* Heating strategy selection - only for dual boiler machines */}
-      {data.action === 'on' && isDualBoiler && (
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">
-            Heating Strategy
-          </label>
-          <select
-            value={data.strategy}
-            onChange={(e) => onChange({ ...data, strategy: parseInt(e.target.value) })}
-            className="w-full h-[50px] px-4 bg-theme-secondary border border-theme rounded-xl text-theme outline-none transition-colors focus:border-accent"
-          >
-            {STRATEGIES.map(s => (
-              <option key={s.value} value={s.value}>
-                {s.label} - {s.desc}
-              </option>
-            ))}
-          </select>
-        </div>
+    <div
+      className={`p-4 rounded-xl border transition-all ${
+        schedule.enabled
+          ? "bg-theme-secondary border-theme"
+          : "bg-theme-secondary/50 border-theme/50 opacity-60"
+      } ${isEditing ? "ring-2 ring-accent" : ""}`}
+    >
+      {isEditing ? (
+        <ScheduleForm
+          data={formData}
+          onChange={onFormChange}
+          onSave={onSave}
+          onCancel={onCancel}
+          orderedDays={orderedDays}
+          isDualBoiler={isDualBoiler}
+          saving={saving}
+        />
+      ) : (
+        <ScheduleItem
+          schedule={schedule}
+          orderedDays={orderedDays}
+          isDualBoiler={isDualBoiler}
+          use24HourTime={use24HourTime}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onToggle={onToggle}
+        />
       )}
-
-      <div className="flex justify-end gap-2 pt-2">
-        <Button variant="ghost" onClick={onCancel}>
-          <X className="w-4 h-4" />
-          Cancel
-        </Button>
-        <Button onClick={onSave} disabled={data.days === 0} loading={saving}>
-          <Save className="w-4 h-4" />
-          Save Schedule
-        </Button>
-      </div>
     </div>
   );
 }
 
+interface AutoPowerOffCardProps {
+  autoPowerOff: { enabled: boolean; minutes: number };
+  onChange: (value: { enabled: boolean; minutes: number }) => void;
+  onSave: () => void;
+}
+
+function AutoPowerOffCard({ autoPowerOff, onChange, onSave }: AutoPowerOffCardProps) {
+  return (
+    <Card>
+      <CardHeader
+        action={
+          <Toggle
+            checked={autoPowerOff.enabled}
+            onChange={(enabled) => onChange({ ...autoPowerOff, enabled })}
+          />
+        }
+      >
+        <CardTitle icon={<Moon className="w-5 h-5" />}>Auto Power-Off</CardTitle>
+      </CardHeader>
+
+      <p className="text-sm text-theme-muted mb-4">
+        Automatically turn off the machine after a period of inactivity.
+      </p>
+
+      <div className="flex items-center gap-4 mb-4">
+        <Input
+          label="Idle timeout"
+          type="number"
+          min={5}
+          max={480}
+          step={5}
+          value={autoPowerOff.minutes}
+          onChange={(e) => onChange({ ...autoPowerOff, minutes: parseInt(e.target.value) })}
+          unit="minutes"
+          disabled={!autoPowerOff.enabled}
+        />
+      </div>
+
+      <Button onClick={onSave}>
+        <Save className="w-4 h-4" />
+        Save Auto Power-Off
+      </Button>
+    </Card>
+  );
+}
