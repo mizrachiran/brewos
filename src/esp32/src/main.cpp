@@ -230,6 +230,8 @@ void setup() {
                 // Parse status and update UI
                 parsePicoStatus(packet.payload, packet.length);
                 machineState.pico_connected = true;
+                // Broadcast parsed status to web clients
+                webServer.broadcastPicoStatus(machineState);
                 break;
             
             case MSG_ALARM: {
@@ -397,6 +399,16 @@ void setup() {
                 machineState.scale_connected = state.connected;
                 machineState.brew_weight = state.weight;
                 machineState.flow_rate = state.flow_rate;
+                
+                // Broadcast scale status to web clients
+                webServer.broadcastScaleStatus(
+                    state.connected,
+                    scaleManager.getScaleName(),
+                    state.weight,
+                    state.flow_rate,
+                    state.stable,
+                    state.battery_percent
+                );
             });
             
             scaleManager.onConnection([](bool connected) {
@@ -405,6 +417,16 @@ void setup() {
                 if (connected) {
                     ui.showNotification("Scale Connected", 2000);
                 }
+                
+                // Broadcast connection status change
+                webServer.broadcastScaleStatus(
+                    connected,
+                    connected ? scaleManager.getScaleName() : "",
+                    0.0f,
+                    0.0f,
+                    false,
+                    -1
+                );
             });
             
             LOG_I("Scale Manager ready");
@@ -639,6 +661,8 @@ void loop() {
  * Offset 18-19: power_watts (uint16)
  * Offset 20-23: uptime_ms (uint32)
  * Offset 24-27: shot_start_timestamp_ms (uint32)
+ * Offset 28:    heating_strategy (uint8)
+ * Offset 29:    reserved (uint8)
  */
 void parsePicoStatus(const uint8_t* payload, uint8_t length) {
     if (length < 18) return;  // Minimum status size (up to water_level)
@@ -673,6 +697,18 @@ void parsePicoStatus(const uint8_t* payload, uint8_t length) {
     machineState.is_heating = (flags & 0x02) != 0;
     machineState.water_low = (flags & 0x08) != 0;
     machineState.alarm_active = (flags & 0x10) != 0;
+    
+    // Parse power watts (offset 18-19, if available)
+    if (length >= 20) {
+        uint16_t power_raw;
+        memcpy(&power_raw, &payload[18], sizeof(uint16_t));
+        machineState.power_watts = power_raw;
+    }
+    
+    // Parse heating strategy (offset 28, if available)
+    if (length >= 30) {
+        machineState.heating_strategy = payload[28];
+    }
     
     // Auto-switch screens is now handled by UI::checkAutoScreenSwitch()
 }

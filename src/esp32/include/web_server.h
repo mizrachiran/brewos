@@ -5,6 +5,7 @@
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
 #include "wifi_manager.h"
+#include "ui/ui.h"
 
 // Forward declarations
 class PicoUART;
@@ -25,6 +26,9 @@ public:
     void broadcastStatus(const String& json);
     void broadcastLog(const String& message, const String& level = "info");
     void broadcastPicoMessage(uint8_t type, const uint8_t* payload, size_t len);
+    void broadcastPicoStatus(const struct ui_state_t& state);
+    void broadcastScaleStatus(bool connected, const char* name, float weight, float flowRate, bool stable, int battery);
+    void broadcastDeviceInfo();
     
     // Get client count
     size_t getClientCount();

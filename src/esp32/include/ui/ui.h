@@ -92,6 +92,9 @@ typedef struct {
     float dose_weight;          // Dose weight (for ratio)
     float flow_rate;            // ml/s
     
+    // Power
+    uint16_t power_watts;       // Current power consumption
+    
     // Connection status
     bool pico_connected;
     bool wifi_connected;

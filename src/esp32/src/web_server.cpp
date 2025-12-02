@@ -1069,6 +1069,8 @@ void WebServer::onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client,
     switch (type) {
         case WS_EVT_CONNECT:
             LOG_I("WebSocket client connected: %u", client->id());
+            // Send device info to newly connected client
+            broadcastDeviceInfo();
             broadcastLog("Client connected", "info");
             break;
             
@@ -1481,6 +1483,170 @@ void WebServer::broadcastPicoMessage(uint8_t type, const uint8_t* payload, size_
     }
     doc["payload"] = hexPayload;
     doc["length"] = len;
+    
+    String json;
+    serializeJson(doc, json);
+    _ws.textAll(json);
+}
+
+void WebServer::broadcastPicoStatus(const ui_state_t& state) {
+    JsonDocument doc;
+    doc["type"] = "pico_status";
+    
+    // Version info
+    doc["version"] = ESP32_VERSION;
+    
+    // Timestamps - track machine on time and last shot
+    static uint32_t machineOnTimestamp = 0;
+    static uint32_t lastShotTimestamp = 0;
+    static bool wasOn = false;
+    
+    bool isOn = state.machine_state >= UI_STATE_HEATING && state.machine_state <= UI_STATE_ECO;
+    
+    // Track when machine turns on
+    if (isOn && !wasOn) {
+        machineOnTimestamp = millis();
+    } else if (!isOn) {
+        machineOnTimestamp = 0;
+    }
+    wasOn = isOn;
+    
+    // Track last shot timestamp
+    static bool wasBrewing = false;
+    if (wasBrewing && !state.is_brewing) {
+        lastShotTimestamp = millis();
+    }
+    wasBrewing = state.is_brewing;
+    
+    // Send timestamps (convert to Unix-like ms for web client compatibility)
+    // Note: These are relative to boot, web client may need to handle this
+    if (machineOnTimestamp > 0) {
+        doc["machineOnTimestamp"] = machineOnTimestamp;
+    } else {
+        doc["machineOnTimestamp"] = (char*)nullptr;  // null
+    }
+    
+    if (lastShotTimestamp > 0) {
+        doc["lastShotTimestamp"] = lastShotTimestamp;
+    } else {
+        doc["lastShotTimestamp"] = (char*)nullptr;  // null
+    }
+    
+    // Temperature data
+    doc["brewTemp"] = state.brew_temp;
+    doc["steamTemp"] = state.steam_temp;
+    doc["groupTemp"] = state.group_temp;
+    doc["brewSetpoint"] = state.brew_setpoint;
+    doc["steamSetpoint"] = state.steam_setpoint;
+    
+    // Pressure
+    doc["pressure"] = state.pressure;
+    
+    // Machine state - convert to string for web client
+    const char* stateStr = "unknown";
+    switch (state.machine_state) {
+        case UI_STATE_INIT: stateStr = "init"; break;
+        case UI_STATE_IDLE: stateStr = "idle"; break;
+        case UI_STATE_HEATING: stateStr = "heating"; break;
+        case UI_STATE_READY: stateStr = "ready"; break;
+        case UI_STATE_BREWING: stateStr = "brewing"; break;
+        case UI_STATE_STEAMING: stateStr = "steaming"; break;
+        case UI_STATE_COOLDOWN: stateStr = "cooldown"; break;
+        case UI_STATE_ECO: stateStr = "eco"; break;
+        case UI_STATE_FAULT: stateStr = "fault"; break;
+    }
+    doc["state"] = stateStr;
+    
+    // Machine mode - derive from state
+    const char* modeStr = "standby";
+    if (state.machine_state >= UI_STATE_HEATING && state.machine_state <= UI_STATE_COOLDOWN) {
+        modeStr = "on";
+    } else if (state.machine_state == UI_STATE_ECO) {
+        modeStr = "eco";
+    }
+    doc["mode"] = modeStr;
+    
+    // Flags
+    doc["isHeating"] = state.is_heating;
+    doc["isBrewing"] = state.is_brewing;
+    
+    // Heating strategy (0-3)
+    doc["heatingStrategy"] = state.heating_strategy;
+    
+    // Machine type
+    doc["machineType"] = state.machine_type;
+    
+    // Power
+    doc["power"] = state.power_watts;
+    doc["voltage"] = 220;  // TODO: Get from config
+    
+    // Water level - convert to string status
+    const char* waterLevel = "ok";
+    if (state.water_low) {
+        waterLevel = "low";
+    }
+    doc["waterLevel"] = waterLevel;
+    
+    // Drip tray status
+    doc["dripTrayFull"] = false;  // TODO: Get from state when available
+    
+    // Pico connection status
+    doc["picoConnected"] = state.pico_connected;
+    
+    String json;
+    serializeJson(doc, json);
+    _ws.textAll(json);
+}
+
+void WebServer::broadcastDeviceInfo() {
+    JsonDocument doc;
+    doc["type"] = "device_info";
+    
+    // Get device info from state manager
+    const auto& networkSettings = State.settings().network;
+    doc["deviceId"] = State.settings().cloud.deviceId;
+    doc["deviceName"] = networkSettings.hostname;
+    doc["machineBrand"] = "";  // TODO: Add to settings when available
+    doc["machineModel"] = "";  // TODO: Add to settings when available
+    
+    // Machine type from Pico boot message or settings
+    // Default to "dual_boiler" for now, should be populated from Pico
+    doc["machineType"] = "dual_boiler";  // TODO: Get from state
+    doc["firmwareVersion"] = ESP32_VERSION;
+    
+    String json;
+    serializeJson(doc, json);
+    _ws.textAll(json);
+}
+
+void WebServer::broadcastScaleStatus(bool connected, const char* name, float weight, float flowRate, bool stable, int battery) {
+    JsonDocument doc;
+    doc["type"] = "scale_status";
+    doc["connected"] = connected;
+    doc["name"] = name ? name : "";
+    
+    // Scale type detection based on name
+    String scaleType = "";
+    if (name && strlen(name) > 0) {
+        String nameStr = String(name);
+        nameStr.toLowerCase();
+        if (nameStr.indexOf("acaia") >= 0 || nameStr.indexOf("lunar") >= 0 || nameStr.indexOf("pearl") >= 0) {
+            scaleType = "acaia";
+        } else if (nameStr.indexOf("felicita") >= 0 || nameStr.indexOf("arc") >= 0) {
+            scaleType = "felicita";
+        } else if (nameStr.indexOf("decent") >= 0) {
+            scaleType = "decent";
+        } else if (nameStr.indexOf("skale") >= 0) {
+            scaleType = "skale";
+        } else {
+            scaleType = "generic";
+        }
+    }
+    doc["scaleType"] = scaleType;
+    doc["weight"] = weight;
+    doc["flowRate"] = flowRate;
+    doc["stable"] = stable;
+    doc["battery"] = battery >= 0 ? battery : 0;
     
     String json;
     serializeJson(doc, json);

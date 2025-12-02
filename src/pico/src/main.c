@@ -720,6 +720,8 @@ int main(void) {
             new_status.power_watts = outputs.power_watts;
             new_status.uptime_ms = now;
             new_status.shot_start_timestamp_ms = state_get_brew_start_timestamp_ms();
+            new_status.heating_strategy = control_get_heating_strategy();
+            new_status.reserved = 0;
             
             // Set flags
             new_status.flags = 0;

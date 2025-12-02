@@ -1,17 +1,35 @@
 import { useState, useEffect, useRef, useMemo, memo } from "react";
 import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
-import { Power, Zap, Leaf, Coffee, Thermometer } from "lucide-react";
+import {
+  Power,
+  Zap,
+  Leaf,
+  Coffee,
+  Thermometer,
+  Flame,
+  Wind,
+  Brain,
+} from "lucide-react";
 import { cn, getMachineStateLabel, getMachineStateColor } from "@/lib/utils";
 import { useStore } from "@/lib/store";
 import { convertFromCelsius, getUnitSymbol } from "@/lib/temperature";
+import type { HeatingStrategy } from "@/lib/types";
 
 type MachineMode = "standby" | "on" | "eco";
+
+const STRATEGY_LABELS: Record<number, { label: string; icon: typeof Flame }> = {
+  0: { label: "Brew Only", icon: Flame },
+  1: { label: "Sequential", icon: Wind },
+  2: { label: "Parallel", icon: Zap },
+  3: { label: "Smart", icon: Brain },
+};
 
 interface MachineStatusCardProps {
   mode: string;
   state: string;
   isDualBoiler: boolean;
+  heatingStrategy?: HeatingStrategy | null;
   onSetMode: (mode: string) => void;
   onPowerOn: () => void;
 }
@@ -19,23 +37,36 @@ interface MachineStatusCardProps {
 export const MachineStatusCard = memo(function MachineStatusCard({
   mode,
   state,
+  isDualBoiler,
+  heatingStrategy,
   onSetMode,
   onPowerOn,
 }: MachineStatusCardProps) {
   // Use specific selectors to avoid re-renders from unrelated store changes
   // Round temperature to 1 decimal to prevent flicker from tiny fluctuations
-  const brewCurrent = useStore((s) => Math.round(s.temps.brew.current * 10) / 10);
+  const brewCurrent = useStore(
+    (s) => Math.round(s.temps.brew.current * 10) / 10
+  );
   const brewSetpoint = useStore((s) => s.temps.brew.setpoint);
   const temperatureUnit = useStore((s) => s.preferences.temperatureUnit);
-  
+
   // Memoize calculated values
-  const { heatingProgress, displayTemp, displaySetpoint, unitSymbol } = useMemo(() => {
-    const progress = Math.min(100, Math.max(0, (brewCurrent / brewSetpoint) * 100));
-    const dispTemp = convertFromCelsius(brewCurrent, temperatureUnit);
-    const dispSetpoint = convertFromCelsius(brewSetpoint, temperatureUnit);
-    const unit = getUnitSymbol(temperatureUnit);
-    return { heatingProgress: progress, displayTemp: dispTemp, displaySetpoint: dispSetpoint, unitSymbol: unit };
-  }, [brewCurrent, brewSetpoint, temperatureUnit]);
+  const { heatingProgress, displayTemp, displaySetpoint, unitSymbol } =
+    useMemo(() => {
+      const progress = Math.min(
+        100,
+        Math.max(0, (brewCurrent / brewSetpoint) * 100)
+      );
+      const dispTemp = convertFromCelsius(brewCurrent, temperatureUnit);
+      const dispSetpoint = convertFromCelsius(brewSetpoint, temperatureUnit);
+      const unit = getUnitSymbol(temperatureUnit);
+      return {
+        heatingProgress: progress,
+        displayTemp: dispTemp,
+        displaySetpoint: dispSetpoint,
+        unitSymbol: unit,
+      };
+    }, [brewCurrent, brewSetpoint, temperatureUnit]);
 
   return (
     <Card className="relative overflow-hidden">
@@ -47,57 +78,107 @@ export const MachineStatusCard = memo(function MachineStatusCard({
           state === "heating" && "bg-amber-500",
           state === "brewing" && "bg-accent",
           state === "steaming" && "bg-blue-500",
-          (state === "idle" || state === "standby" || mode === "standby") && "bg-theme-tertiary"
+          (state === "idle" || state === "standby" || mode === "standby") &&
+            "bg-theme-tertiary"
         )}
       />
-      
+
       <div className="relative space-y-6">
-        <div className="flex items-start justify-between gap-4 sm:gap-6">
+        <div className="flex items-center justify-between gap-4 sm:gap-6">
           {/* Status Ring - round progress to prevent flicker from tiny changes */}
-          <StatusRing mode={mode} state={state} heatingProgress={Math.round(heatingProgress)} />
-          
+          <StatusRing
+            mode={mode}
+            state={state}
+            heatingProgress={Math.round(heatingProgress)}
+          />
+
           {/* Status Info */}
-          <div className="flex-1 min-w-0 pt-1">
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-2">
-              <h2 className="text-xl sm:text-2xl font-bold text-theme">Machine Status</h2>
+              <h2 className="text-xl sm:text-2xl font-bold text-theme">
+                Machine Status
+              </h2>
             </div>
-            <Badge className={cn(getMachineStateColor(state), "text-sm px-4 py-1.5")}>
-              {getMachineStateLabel(state)}
-            </Badge>
-            
-            {/* Temperature display when heating or ready */}
-            {mode !== "standby" && (
-              <div className="mt-4 flex items-center gap-2 text-theme-secondary">
-                <Thermometer className="w-4 h-4 text-accent flex-shrink-0" />
-                <span className="text-lg font-semibold tabular-nums min-w-[4.5rem]">
-                  {displayTemp.toFixed(1)}{unitSymbol}
-                </span>
-                <span className="text-theme-muted text-sm flex-shrink-0">
-                  / {displaySetpoint.toFixed(0)}{unitSymbol}
-                </span>
-              </div>
-            )}
-            
-            {/* Contextual helper text */}
-            <p className="mt-2 text-sm text-theme-muted">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge
+                className={cn(
+                  getMachineStateColor(state),
+                  "text-sm px-4 py-1.5"
+                )}
+              >
+                {getMachineStateLabel(state)}
+              </Badge>
+              {/* Heating strategy - show for dual boiler when machine is on */}
+              {isDualBoiler &&
+                mode !== "standby" &&
+                heatingStrategy !== null &&
+                heatingStrategy !== undefined && (
+                  <span className="inline-flex items-center gap-1.5 text-xs text-theme-muted">
+                    <span className="text-theme-tertiary">•</span>
+                    {(() => {
+                      const strategy = STRATEGY_LABELS[heatingStrategy];
+                      const Icon = strategy?.icon || Flame;
+                      return (
+                        <>
+                          <Icon className="w-3 h-3" />
+                          {strategy?.label || "Unknown"}
+                        </>
+                      );
+                    })()}
+                  </span>
+                )}
+            </div>
+
+            {/* Temperature display - always reserve space to prevent layout shift */}
+            <div
+              className={cn(
+                "mt-4 flex items-center gap-2 text-theme-secondary h-7 transition-opacity duration-300",
+                mode === "standby" ? "opacity-0" : "opacity-100"
+              )}
+            >
+              <Thermometer className="w-4 h-4 text-accent flex-shrink-0" />
+              <span className="text-lg font-semibold tabular-nums min-w-[4.5rem]">
+                {displayTemp.toFixed(1)}
+                {unitSymbol}
+              </span>
+              <span className="text-theme-muted text-sm flex-shrink-0">
+                / {displaySetpoint.toFixed(0)}
+                {unitSymbol}
+              </span>
+            </div>
+
+            {/* Contextual helper text - fixed height to prevent layout shift */}
+            <p className="mt-2 text-sm text-theme-muted min-h-[2.5rem]">
               {getStatusDescription(mode, state, heatingProgress)}
             </p>
           </div>
         </div>
 
         {/* Power Controls */}
-        <PowerControls mode={mode} onSetMode={onSetMode} onPowerOn={onPowerOn} />
+        <PowerControls
+          mode={mode}
+          onSetMode={onSetMode}
+          onPowerOn={onPowerOn}
+        />
       </div>
     </Card>
   );
 });
 
-function getStatusDescription(mode: string, state: string, heatingProgress?: number): string {
-  if (mode === "standby") return "Machine is in standby mode. Turn on to start heating.";
-  if (mode === "eco") return "Eco mode active. Lower temperature to save energy.";
+function getStatusDescription(
+  mode: string,
+  state: string,
+  heatingProgress?: number
+): string {
+  if (mode === "standby")
+    return "Machine is in standby mode. Turn on to start heating.";
+  if (mode === "eco")
+    return "Eco mode active. Lower temperature to save energy.";
   if (state === "heating") {
     if (heatingProgress && heatingProgress > 0) {
-      return `Warming up... ${Math.round(heatingProgress)}% to target temperature.`;
+      return `Warming up... ${Math.round(
+        heatingProgress
+      )}% to target temperature.`;
     }
     return "Warming up... Your machine will be ready soon.";
   }
@@ -114,19 +195,24 @@ interface StatusRingProps {
   heatingProgress: number;
 }
 
-const StatusRing = memo(function StatusRing({ mode, state, heatingProgress }: StatusRingProps) {
+const StatusRing = memo(function StatusRing({
+  mode,
+  state,
+  heatingProgress,
+}: StatusRingProps) {
   const [displayProgress, setDisplayProgress] = useState(0);
   const lastUpdateRef = useRef(0);
-  
+
   // Determine progress based on state - use actual heating progress when heating
-  const targetProgress = state === "heating" ? heatingProgress : getStateProgress(state);
-  
+  const targetProgress =
+    state === "heating" ? heatingProgress : getStateProgress(state);
+
   // Only update display progress when change is significant (>2%) or state changes
   useEffect(() => {
     const now = Date.now();
     const timeSinceLastUpdate = now - lastUpdateRef.current;
     const progressDiff = Math.abs(targetProgress - displayProgress);
-    
+
     // Update if: significant change, enough time passed, or state-based progress
     if (progressDiff > 2 || timeSinceLastUpdate > 2000 || state !== "heating") {
       lastUpdateRef.current = now;
@@ -144,17 +230,13 @@ const StatusRing = memo(function StatusRing({ mode, state, heatingProgress }: St
   const strokeWidth = 8;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (displayProgress / 100) * circumference;
+  const strokeDashoffset =
+    circumference - (displayProgress / 100) * circumference;
 
   return (
     <div className="relative flex-shrink-0">
-      
       {/* SVG Ring */}
-      <svg
-        width={size}
-        height={size}
-        className="transform -rotate-90"
-      >
+      <svg width={size} height={size} className="transform -rotate-90">
         {/* Background ring */}
         <circle
           cx={size / 2}
@@ -164,7 +246,7 @@ const StatusRing = memo(function StatusRing({ mode, state, heatingProgress }: St
           strokeWidth={strokeWidth}
           className="stroke-theme-tertiary"
         />
-        
+
         {/* Progress ring */}
         <circle
           cx={size / 2}
@@ -184,7 +266,7 @@ const StatusRing = memo(function StatusRing({ mode, state, heatingProgress }: St
           )}
         />
       </svg>
-      
+
       {/* Center icon */}
       <div className="absolute inset-0 flex items-center justify-center">
         <div
@@ -238,8 +320,17 @@ interface PowerControlsProps {
   onPowerOn: () => void;
 }
 
-const PowerControls = memo(function PowerControls({ mode, onSetMode, onPowerOn }: PowerControlsProps) {
-  const modes: { id: MachineMode; icon: typeof Power; label: string; description: string }[] = [
+const PowerControls = memo(function PowerControls({
+  mode,
+  onSetMode,
+  onPowerOn,
+}: PowerControlsProps) {
+  const modes: {
+    id: MachineMode;
+    icon: typeof Power;
+    label: string;
+    description: string;
+  }[] = [
     { id: "standby", icon: Power, label: "Standby", description: "Power off" },
     { id: "on", icon: Zap, label: "On", description: "Full power" },
     { id: "eco", icon: Leaf, label: "Eco", description: "Energy saving" },

@@ -83,6 +83,8 @@ const defaultMachine: MachineStatus = {
   isHeating: false,
   isBrewing: false,
   machineOnTimestamp: null,
+  heatingStrategy: null,
+  lastShotTimestamp: null,
 };
 
 const defaultTemps: Temperatures = {
@@ -311,6 +313,14 @@ export const useStore = create<BrewOSState>()(
                 data.machineOnTimestamp !== undefined
                   ? (data.machineOnTimestamp as number | null)
                   : state.machine.machineOnTimestamp,
+              heatingStrategy:
+                data.heatingStrategy !== undefined
+                  ? (data.heatingStrategy as MachineStatus["heatingStrategy"])
+                  : state.machine.heatingStrategy,
+              lastShotTimestamp:
+                data.lastShotTimestamp !== undefined
+                  ? (data.lastShotTimestamp as number | null)
+                  : state.machine.lastShotTimestamp,
             },
             temps: {
               brew: {
@@ -349,7 +359,7 @@ export const useStore = create<BrewOSState>()(
             scale: {
               connected: (data.connected as boolean) ?? state.scale.connected,
               name: (data.name as string) || state.scale.name,
-              type: (data.type as string) || state.scale.type,
+              type: (data.scaleType as string) || state.scale.type,
               weight: (data.weight as number) ?? state.scale.weight,
               flowRate: (data.flowRate as number) ?? state.scale.flowRate,
               stable: (data.stable as boolean) ?? state.scale.stable,
@@ -509,6 +519,10 @@ function handleEvent(
       const state = get();
       set({
         shot: { ...state.shot, active: false },
+        machine: {
+          ...state.machine,
+          lastShotTimestamp: Date.now(),
+        },
         stats: {
           ...state.stats,
           totalShots: state.stats.totalShots + 1,

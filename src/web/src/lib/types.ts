@@ -60,12 +60,16 @@ export type MachineState =
 
 export type MachineMode = 'standby' | 'on' | 'eco';
 
+export type HeatingStrategy = 0 | 1 | 2 | 3; // 0=Brew Only, 1=Sequential, 2=Parallel, 3=Smart Stagger
+
 export interface MachineStatus {
   state: MachineState;
   mode: MachineMode;
   isHeating: boolean;
   isBrewing: boolean;
   machineOnTimestamp: number | null; // Unix timestamp (ms) when machine was turned ON, null if off
+  heatingStrategy: HeatingStrategy | null; // Active heating strategy when machine is on
+  lastShotTimestamp: number | null; // Unix timestamp (ms) of last completed shot
 }
 
 // Temperature

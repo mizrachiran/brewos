@@ -30,6 +30,8 @@ export class DemoConnection implements IConnection {
   private shotsToday = 3;
   private totalShots = 1247;
   private machineOnTimestamp: number | null = null; // When machine was turned ON
+  private heatingStrategy: 0 | 1 | 2 | 3 | null = null; // Active heating strategy
+  private lastShotTimestamp: number | null = Date.now() - 2 * 60 * 60 * 1000; // 2 hours ago for demo
 
   // Scale simulation
   private scaleConnected = true;
@@ -257,13 +259,17 @@ export class DemoConnection implements IConnection {
       // Machine turned ON - start tracking uptime
       this.machineOnTimestamp = Date.now();
       this.isHeating = true;
-      // Log heating strategy if provided
+      // Store and log heating strategy if provided
       if (strategy !== undefined) {
+        this.heatingStrategy = strategy as 0 | 1 | 2 | 3;
         console.log("[Demo] Heating with strategy:", strategy);
+      } else {
+        this.heatingStrategy = 1; // Default to Sequential
       }
     } else if (mode === "standby") {
-      // Machine turned OFF - reset uptime
+      // Machine turned OFF - reset uptime and strategy
       this.machineOnTimestamp = null;
+      this.heatingStrategy = null;
       this.isHeating = false;
       // Gradual cooldown will happen in simulation
     } else if (mode === "eco" && prevMode !== "eco") {
@@ -272,6 +278,7 @@ export class DemoConnection implements IConnection {
         this.machineOnTimestamp = Date.now();
       }
       this.isHeating = this.brewTemp < this.targetBrewTemp - 10;
+      // Keep existing strategy in eco mode
     }
 
     // Emit status immediately on mode change to prevent UI flicker
@@ -297,6 +304,7 @@ export class DemoConnection implements IConnection {
     this.isBrewing = false;
     this.shotsToday++;
     this.totalShots++;
+    this.lastShotTimestamp = Date.now();
 
     this.emit({
       type: "event",
@@ -470,6 +478,8 @@ export class DemoConnection implements IConnection {
       type: "pico_status",
       version: "1.0.0-demo",
       machineOnTimestamp: this.machineOnTimestamp,
+      heatingStrategy: this.heatingStrategy,
+      lastShotTimestamp: this.lastShotTimestamp,
       state,
       isHeating: this.isHeating,
       isBrewing: this.isBrewing,
@@ -495,7 +505,7 @@ export class DemoConnection implements IConnection {
       type: "scale_status",
       connected: this.scaleConnected,
       name: this.scaleConnected ? "Acaia Lunar" : "",
-      // Note: scale type field omitted - store falls back to existing value
+      scaleType: this.scaleConnected ? "acaia" : "",
       weight: Number(this.scaleWeight.toFixed(1)),
       flowRate: Number(this.flowRate.toFixed(1)),
       stable: !this.isBrewing || this.flowRate < 0.5,
@@ -516,9 +526,9 @@ export class DemoConnection implements IConnection {
         apMode: false,
       },
       mqtt: {
-        enabled: false,
-        connected: false,
-        broker: "",
+        enabled: true,
+        connected: true,
+        broker: "demo.brewos.local",
         topic: "brewos",
       },
     });

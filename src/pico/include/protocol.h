@@ -40,6 +40,8 @@ typedef struct __attribute__((packed)) {
     uint16_t power_watts;       // Current power draw
     uint32_t uptime_ms;         // Milliseconds since boot
     uint32_t shot_start_timestamp_ms;  // Brew start timestamp (milliseconds since boot, 0 if not brewing)
+    uint8_t heating_strategy;   // Current heating strategy (see HEAT_STRATEGY_* in protocol_defs.h)
+    uint8_t reserved;           // Reserved for alignment/future use
 } status_payload_t;
 
 // -----------------------------------------------------------------------------

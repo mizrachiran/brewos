@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from "react";
 import { useStore } from "@/lib/store";
 import { useCommand } from "@/lib/useCommand";
 import { PageHeader } from "@/components/PageHeader";
+import { StatusBar } from "@/components/StatusBar";
 import { HeatingStrategyModal } from "@/components/HeatingStrategyModal";
 import {
   MachineStatusCard,
@@ -18,6 +19,7 @@ export function Dashboard() {
   const machineMode = useStore((s) => s.machine.mode);
   const machineState = useStore((s) => s.machine.state);
   const machineType = useStore((s) => s.device.machineType);
+  const heatingStrategy = useStore((s) => s.machine.heatingStrategy);
   
   // Temperature data - individual primitive selectors to prevent unnecessary re-renders
   const brewTempCurrent = useStore((s) => Math.round(s.temps.brew.current * 10) / 10);
@@ -49,6 +51,7 @@ export function Dashboard() {
   const waterTankLevel = useStore((s) => s.water.tankLevel);
   const scaleConnected = useStore((s) => s.scale.connected);
   const scaleWeight = useStore((s) => Math.round(s.scale.weight * 10) / 10);
+  const scaleBattery = useStore((s) => s.scale.battery);
   const shotsToday = useStore((s) => s.stats.shotsToday);
   const machineOnTimestamp = useStore((s) => s.machine.machineOnTimestamp);
   
@@ -105,15 +108,40 @@ export function Dashboard() {
     () => scaleConnected ? `${scaleWeight.toFixed(1)}g` : "Not connected",
     [scaleConnected, scaleWeight]
   );
+  
+  // Determine scale subtext
+  const scaleSubtext = useMemo(() => {
+    if (!scaleConnected) return undefined;
+    if (scaleBattery > 0) return `${scaleBattery}% battery`;
+    return undefined;
+  }, [scaleConnected, scaleBattery]);
+
+  // Water tank status helpers
+  const waterStatus = useMemo(() => {
+    if (waterTankLevel === "ok") return "success" as const;
+    if (waterTankLevel === "low") return "warning" as const;
+    return "error" as const;
+  }, [waterTankLevel]);
+  
+  const waterDisplayValue = useMemo(() => {
+    if (waterTankLevel === "ok") return "OK";
+    if (waterTankLevel === "low") return "Low";
+    return "Empty";
+  }, [waterTankLevel]);
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Dashboard" subtitle="Monitor your machine status" />
+      <PageHeader 
+        title="Dashboard" 
+        subtitle="Monitor your machine status"
+        action={<StatusBar />}
+      />
 
       <MachineStatusCard
         mode={machineMode}
         state={machineState}
         isDualBoiler={isDualBoiler}
+        heatingStrategy={heatingStrategy}
         onSetMode={setMode}
         onPowerOn={handleOnClick}
       />
@@ -134,7 +162,9 @@ export function Dashboard() {
         />
       </div>
 
+      {/* Quick Stats - Improved layout */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* Coffee stats group */}
         <QuickStat
           icon={<Coffee className="w-5 h-5" />}
           label="Shots Today"
@@ -142,26 +172,25 @@ export function Dashboard() {
         />
         <QuickStat
           icon={<Clock className="w-5 h-5" />}
-          label="Uptime"
-          value={formattedUptime}
+          label="Session"
+          value={machineMode !== "standby" ? formattedUptime : "Off"}
         />
+        
+        {/* Machine status group */}
         <QuickStat
           icon={<Droplets className="w-5 h-5" />}
           label="Water Tank"
-          value={waterTankLevel.toUpperCase()}
-          status={
-            waterTankLevel === "ok"
-              ? "success"
-              : waterTankLevel === "low"
-              ? "warning"
-              : "error"
-          }
+          value={waterDisplayValue}
+          status={waterStatus}
+          showPulse={waterTankLevel !== "ok"}
+          subtext={waterTankLevel === "low" ? "Refill soon" : waterTankLevel === "empty" ? "Refill now!" : undefined}
         />
         <QuickStat
           icon={<Scale className="w-5 h-5" />}
           label="Scale"
           value={scaleDisplayValue}
           status={scaleConnected ? "success" : undefined}
+          subtext={scaleSubtext}
         />
       </div>
 
