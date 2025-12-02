@@ -6,7 +6,7 @@ import { DeviceSelector } from './DeviceSelector';
 import { Logo } from './Logo';
 import { InstallPrompt, usePWAInstall } from './InstallPrompt';
 import { ConnectionOverlay } from './ConnectionOverlay';
-import { VersionWarning, VersionBadge } from './VersionWarning';
+import { VersionWarning } from './VersionWarning';
 import { 
   LayoutGrid, 
   Coffee, 
