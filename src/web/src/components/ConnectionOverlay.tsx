@@ -12,7 +12,6 @@ const DEV_BYPASS_KEY = "brewos-dev-bypass-overlay";
 export function ConnectionOverlay() {
   const connectionState = useStore((s) => s.connectionState);
   const [retrying, setRetrying] = useState(false);
-  const [showOverlay, setShowOverlay] = useState(false);
 
   // Check localStorage for dev bypass preference
   const [devBypassed, setDevBypassed] = useState(() => {
@@ -25,24 +24,8 @@ export function ConnectionOverlay() {
     connectionState === "connecting" || connectionState === "reconnecting";
   const isError = connectionState === "error";
 
-  // Determine if overlay should be visible
-  const isOverlayVisible =
-    !isConnected && showOverlay && !(DEV_MODE && devBypassed);
-
-  // Add a small delay before showing overlay to avoid flash on initial load
-  useEffect(() => {
-    if (isConnected) {
-      setShowOverlay(false);
-      return;
-    }
-
-    // If connecting, show overlay after a short delay
-    const timer = setTimeout(() => {
-      setShowOverlay(true);
-    }, 1500); // 1.5 second delay before showing overlay
-
-    return () => clearTimeout(timer);
-  }, [isConnected, connectionState]);
+  // Determine if overlay should be visible - show immediately when not connected
+  const isOverlayVisible = !isConnected && !(DEV_MODE && devBypassed);
 
   // Lock body scroll when overlay is visible
   useEffect(() => {
