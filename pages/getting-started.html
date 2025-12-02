@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Get Started - BrewOS</title>
+    <meta
+      name="description"
+      content="Get started with BrewOS - transform your espresso machine with professional-grade firmware. Check compatibility, order components, and begin your upgrade."
+    />
+    <meta name="theme-color" content="#391f12" />
+
+    <!-- Favicon -->
+    <link
+      rel="icon"
+      type="image/x-icon"
+      href="assets/sizes/favicon/icon/full-color/favicon.ico"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="assets/sizes/favicon/icon/full-color/favicon-32x32.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="assets/sizes/favicon/icon/full-color/apple-touch-icon.png"
+    />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        --coffee-900: #1a0f0a;
+        --coffee-800: #391f12;
+        --coffee-700: #5c3d2e;
+        --coffee-600: #7c5a47;
+        --coffee-500: #9b7a68;
+        --cream-100: #faf8f5;
+        --cream-200: #f5f0e8;
+        --cream-300: #e8e0d5;
+        --cream-400: #d4c8b8;
+        --accent: #c4703c;
+        --accent-light: #e8a066;
+        --accent-glow: rgba(196, 112, 60, 0.25);
+        --success: #2d7a4f;
+        --warning: #d97706;
+        --text-primary: #1a0f0a;
+        --text-secondary: #5c3d2e;
+        --text-muted: #9b7a68;
+        --white: #ffffff;
+        --shadow-sm: 0 1px 2px rgba(26, 15, 10, 0.05);
+        --shadow-md: 0 4px 12px rgba(26, 15, 10, 0.08);
+        --shadow-lg: 0 12px 40px rgba(26, 15, 10, 0.12);
+        --shadow-xl: 0 24px 60px rgba(26, 15, 10, 0.16);
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont,
+          sans-serif;
+        background: var(--cream-100);
+        color: var(--text-primary);
+        line-height: 1.6;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      /* ===== HEADER ===== */
+      header {
+        position: fixed;
+        width: 100%;
+        top: 0;
+        z-index: 1000;
+        background: rgba(250, 248, 245, 0.9);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-bottom: 1px solid rgba(212, 200, 184, 0.5);
+        padding: 10px 0;
+      }
+
+      nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 0;
+      }
+
+      .logo {
+        display: flex;
+        align-items: center;
+        text-decoration: none;
+      }
+
+      .logo img {
+        height: 44px;
+        width: auto;
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        list-style: none;
+      }
+
+      .nav-links a {
+        color: var(--text-secondary);
+        text-decoration: none;
+        font-weight: 500;
+        font-size: 0.95rem;
+        padding: 10px 16px;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+      }
+
+      .nav-links a:hover {
+        color: var(--coffee-800);
+        background: var(--cream-200);
+      }
+
+      .nav-cta {
+        background: var(--coffee-800) !important;
+        color: var(--white) !important;
+        margin-left: 8px;
+      }
+
+      .nav-cta:hover {
+        background: var(--coffee-700) !important;
+      }
+
+      /* ===== HERO ===== */
+      .hero {
+        padding: 140px 0 80px;
+        background: linear-gradient(
+          180deg,
+          var(--cream-100) 0%,
+          var(--cream-200) 100%
+        );
+        text-align: center;
+      }
+
+      .hero h1 {
+        font-size: 3rem;
+        font-weight: 800;
+        color: var(--coffee-800);
+        margin-bottom: 16px;
+        letter-spacing: -0.02em;
+      }
+
+      .hero h1 span {
+        background: linear-gradient(
+          135deg,
+          var(--accent) 0%,
+          var(--accent-light) 100%
+        );
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .hero-description {
+        font-size: 1.2rem;
+        color: var(--text-secondary);
+        max-width: 640px;
+        margin: 0 auto 40px;
+      }
+
+      .hero-cta {
+        display: flex;
+        gap: 16px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 16px 32px;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 1rem;
+        text-decoration: none;
+        transition: all 0.2s ease;
+        cursor: pointer;
+        border: none;
+      }
+
+      .btn-primary {
+        background: var(--coffee-800);
+        color: var(--white);
+        box-shadow: var(--shadow-md);
+      }
+
+      .btn-primary:hover {
+        background: var(--coffee-700);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+      }
+
+      .btn-secondary {
+        background: var(--white);
+        color: var(--coffee-800);
+        border: 2px solid var(--cream-300);
+      }
+
+      .btn-secondary:hover {
+        border-color: var(--coffee-800);
+      }
+
+      .btn-accent {
+        background: var(--accent);
+        color: var(--white);
+        box-shadow: 0 4px 20px var(--accent-glow);
+      }
+
+      .btn-accent:hover {
+        background: var(--accent-light);
+        transform: translateY(-2px);
+      }
+
+      /* ===== SECTION STYLES ===== */
+      section {
+        padding: 100px 0;
+      }
+
+      .section-header {
+        text-align: center;
+        max-width: 640px;
+        margin: 0 auto 64px;
+      }
+
+      .section-label {
+        display: inline-block;
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--accent);
+        margin-bottom: 16px;
+      }
+
+      .section-title {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: var(--coffee-800);
+        margin-bottom: 16px;
+        letter-spacing: -0.02em;
+      }
+
+      .section-description {
+        font-size: 1.1rem;
+        color: var(--text-secondary);
+      }
+
+      /* ===== PROCESS SECTION ===== */
+      .process {
+        background: var(--white);
+      }
+
+      .process-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 32px;
+      }
+
+      .process-card {
+        background: var(--cream-100);
+        border: 1px solid var(--cream-300);
+        border-radius: 20px;
+        padding: 40px;
+        position: relative;
+        transition: all 0.3s ease;
+      }
+
+      .process-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-lg);
+      }
+
+      .process-number {
+        position: absolute;
+        top: -16px;
+        left: 32px;
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        font-weight: 800;
+        color: var(--white);
+        box-shadow: 0 4px 12px var(--accent-glow);
+      }
+
+      .process-card h3 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--coffee-800);
+        margin: 16px 0 12px;
+      }
+
+      .process-card p {
+        color: var(--text-secondary);
+        line-height: 1.7;
+      }
+
+      .process-card ul {
+        margin-top: 16px;
+        padding-left: 20px;
+        color: var(--text-secondary);
+      }
+
+      .process-card li {
+        margin-bottom: 8px;
+      }
+
+      /* ===== COMPATIBILITY SECTION ===== */
+      .compatibility {
+        background: var(--coffee-800);
+        color: var(--white);
+      }
+
+      .compatibility .section-label {
+        color: var(--accent-light);
+      }
+
+      .compatibility .section-title {
+        color: var(--white);
+      }
+
+      .compatibility .section-description {
+        color: var(--cream-400);
+      }
+
+      .compat-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
+      }
+
+      .compat-card {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 32px;
+        text-align: center;
+        transition: all 0.3s ease;
+      }
+
+      .compat-card:hover {
+        background: rgba(255, 255, 255, 0.1);
+        transform: translateY(-4px);
+      }
+
+      .compat-card.coming-soon {
+        opacity: 0.6;
+      }
+
+      .compat-icon {
+        font-size: 3rem;
+        margin-bottom: 16px;
+      }
+
+      .compat-card h3 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+
+      .compat-card p {
+        font-size: 0.9rem;
+        color: var(--cream-400);
+        margin-bottom: 16px;
+      }
+
+      .compat-badge {
+        display: inline-block;
+        padding: 6px 14px;
+        border-radius: 100px;
+        font-size: 0.75rem;
+        font-weight: 600;
+      }
+
+      .compat-badge.supported {
+        background: rgba(45, 122, 79, 0.25);
+        color: #6ee7a0;
+      }
+
+      .compat-badge.coming {
+        background: rgba(255, 255, 255, 0.1);
+        color: var(--cream-400);
+      }
+
+      .machine-examples {
+        font-size: 0.85rem;
+        color: var(--cream-400);
+        margin-top: 12px;
+      }
+
+      /* ===== REQUIREMENTS SECTION ===== */
+      .requirements {
+        background: linear-gradient(180deg, var(--cream-200) 0%, var(--cream-100) 100%);
+      }
+
+      .req-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 32px;
+      }
+
+      .req-card {
+        background: var(--white);
+        border: 1px solid var(--cream-300);
+        border-radius: 20px;
+        padding: 32px;
+        text-align: center;
+        transition: all 0.3s ease;
+      }
+
+      .req-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-lg);
+        border-color: var(--accent);
+      }
+
+      .req-icon {
+        width: 64px;
+        height: 64px;
+        background: linear-gradient(135deg, var(--coffee-800) 0%, var(--coffee-700) 100%);
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 20px;
+      }
+
+      .req-icon svg {
+        width: 32px;
+        height: 32px;
+        color: var(--cream-100);
+      }
+
+      .req-card h3 {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--coffee-800);
+        margin-bottom: 8px;
+      }
+
+      .req-card p {
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+      }
+
+      /* ===== ORDER SECTION ===== */
+      .order {
+        background: var(--white);
+      }
+
+      .order-content {
+        background: linear-gradient(135deg, var(--cream-100) 0%, var(--cream-200) 100%);
+        border: 2px solid var(--cream-300);
+        border-radius: 24px;
+        padding: 60px;
+        text-align: center;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+
+      .order-content h2 {
+        font-size: 2rem;
+        font-weight: 800;
+        color: var(--coffee-800);
+        margin-bottom: 16px;
+      }
+
+      .order-content p {
+        color: var(--text-secondary);
+        font-size: 1.1rem;
+        margin-bottom: 32px;
+        max-width: 500px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .order-coming {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 24px;
+        background: var(--accent);
+        color: var(--white);
+        border-radius: 100px;
+        font-weight: 600;
+        font-size: 0.95rem;
+      }
+
+      .order-coming svg {
+        width: 20px;
+        height: 20px;
+      }
+
+      .order-alt {
+        margin-top: 24px;
+        font-size: 0.9rem;
+        color: var(--text-muted);
+      }
+
+      .order-alt a {
+        color: var(--accent);
+        text-decoration: none;
+        font-weight: 500;
+      }
+
+      .order-alt a:hover {
+        text-decoration: underline;
+      }
+
+      /* ===== CTA SECTION ===== */
+      .cta-section {
+        padding: 100px 0;
+        background: linear-gradient(135deg, var(--coffee-800) 0%, var(--coffee-900) 100%);
+        text-align: center;
+      }
+
+      .cta-section h2 {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: var(--white);
+        margin-bottom: 16px;
+      }
+
+      .cta-section p {
+        font-size: 1.1rem;
+        color: var(--cream-400);
+        margin-bottom: 32px;
+        max-width: 500px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .cta-buttons {
+        display: flex;
+        gap: 16px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      /* ===== FOOTER ===== */
+      footer {
+        padding: 40px 0;
+        background: var(--coffee-900);
+        text-align: center;
+      }
+
+      footer p {
+        color: var(--cream-400);
+        font-size: 0.9rem;
+      }
+
+      footer a {
+        color: var(--accent-light);
+        text-decoration: none;
+      }
+
+      footer a:hover {
+        text-decoration: underline;
+      }
+
+      /* ===== RESPONSIVE ===== */
+      @media (max-width: 1024px) {
+        .process-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .compat-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .req-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .hero h1 {
+          font-size: 2rem;
+        }
+
+        .section-title {
+          font-size: 1.75rem;
+        }
+
+        .order-content {
+          padding: 40px 24px;
+        }
+
+        .nav-links {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <nav class="container">
+        <a href="/" class="logo">
+          <img
+            src="assets/1080/horizontal/full-color/Brewos-1080.png"
+            alt="BrewOS"
+          />
+        </a>
+        <ul class="nav-links">
+          <li><a href="/">Home</a></li>
+          <li><a href="/#features">Features</a></li>
+          <li><a href="/#compatibility">Compatibility</a></li>
+          <li>
+            <a href="https://github.com/mizrachiran/brewos" target="_blank">GitHub</a>
+          </li>
+          <li>
+            <a href="https://cloud.brewos.io?demo=true" class="nav-cta">Try Demo</a>
+          </li>
+        </ul>
+      </nav>
+    </header>
+
+    <main>
+      <!-- Hero -->
+      <section class="hero">
+        <div class="container">
+          <h1>Get Started with <span>BrewOS</span></h1>
+          <p class="hero-description">
+            Transform your espresso machine into a precision brewing powerhouse. 
+            Here's everything you need to know to upgrade your machine with BrewOS.
+          </p>
+          <div class="hero-cta">
+            <a href="https://cloud.brewos.io?demo=true" class="btn btn-accent">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              Try the Demo
+            </a>
+            <a href="#compatibility" class="btn btn-secondary">
+              Check Compatibility
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- Process Section -->
+      <section class="process">
+        <div class="container">
+          <div class="section-header">
+            <span class="section-label">The Process</span>
+            <h2 class="section-title">How to Upgrade Your Machine</h2>
+            <p class="section-description">
+              BrewOS replaces your machine's stock controller with a modern, 
+              smart system. Here's what the journey looks like.
+            </p>
+          </div>
+
+          <div class="process-grid">
+            <div class="process-card">
+              <div class="process-number">1</div>
+              <h3>Check Compatibility</h3>
+              <p>
+                First, make sure your espresso machine is compatible with BrewOS. 
+                We currently support dual boiler, single boiler, and heat exchanger 
+                machines with standard wiring.
+              </p>
+              <ul>
+                <li>E61 group head machines work best</li>
+                <li>Must have accessible temperature sensors or boilers</li>
+                <li>Standard 120V or 220V power configurations</li>
+              </ul>
+            </div>
+
+            <div class="process-card">
+              <div class="process-number">2</div>
+              <h3>Get the Hardware</h3>
+              <p>
+                BrewOS runs on a custom PCB with a Raspberry Pi Pico for real-time 
+                control and an ESP32 for WiFi connectivity. You'll need:
+              </p>
+              <ul>
+                <li>BrewOS Control Board (PCB)</li>
+                <li>Temperature sensors (PT100/PT1000)</li>
+                <li>Solid State Relays (SSR)</li>
+                <li>Optional: Pressure transducer, flow meter</li>
+              </ul>
+            </div>
+
+            <div class="process-card">
+              <div class="process-number">3</div>
+              <h3>Installation</h3>
+              <p>
+                The installation involves replacing your machine's stock controller 
+                with the BrewOS board. This typically takes 2-4 hours depending on 
+                your machine.
+              </p>
+              <ul>
+                <li>Remove stock PID/thermostat</li>
+                <li>Install temperature sensors</li>
+                <li>Wire SSRs to heating elements</li>
+                <li>Connect the BrewOS board</li>
+              </ul>
+            </div>
+
+            <div class="process-card">
+              <div class="process-number">4</div>
+              <h3>Configure & Brew</h3>
+              <p>
+                Once installed, connect to your machine via WiFi and configure 
+                your settings through the beautiful web interface or mobile app.
+              </p>
+              <ul>
+                <li>Set target temperatures</li>
+                <li>Configure PID parameters (or use presets)</li>
+                <li>Set up schedules and automations</li>
+                <li>Connect your Bluetooth scale for BBW</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Compatibility Section -->
+      <section class="compatibility" id="compatibility">
+        <div class="container">
+          <div class="section-header">
+            <span class="section-label">Compatibility</span>
+            <h2 class="section-title">Supported Machine Types</h2>
+            <p class="section-description">
+              BrewOS works with most prosumer espresso machines. 
+              Check if your machine type is supported.
+            </p>
+          </div>
+
+          <div class="compat-grid">
+            <div class="compat-card">
+              <div class="compat-icon">☕</div>
+              <h3>Dual Boiler</h3>
+              <p>Separate brew and steam boilers for ultimate control</p>
+              <span class="compat-badge supported">Fully Supported</span>
+              <p class="machine-examples">
+                ECM Synchronika, Profitec Pro 700, Lelit Bianca
+              </p>
+            </div>
+
+            <div class="compat-card">
+              <div class="compat-icon">🔥</div>
+              <h3>Single Boiler</h3>
+              <p>One boiler for both brewing and steaming</p>
+              <span class="compat-badge supported">Fully Supported</span>
+              <p class="machine-examples">
+                Rancilio Silvia, Gaggia Classic Pro, Lelit Anna
+              </p>
+            </div>
+
+            <div class="compat-card">
+              <div class="compat-icon">💨</div>
+              <h3>Heat Exchanger</h3>
+              <p>Steam boiler with heat exchanger for brew water</p>
+              <span class="compat-badge supported">Fully Supported</span>
+              <p class="machine-examples">
+                ECM Mechanika, Profitec Pro 500, Quick Mill Vetrano
+              </p>
+            </div>
+
+            <div class="compat-card coming-soon">
+              <div class="compat-icon">⚡</div>
+              <h3>Thermoblock</h3>
+              <p>Instant heating systems with rapid response</p>
+              <span class="compat-badge coming">Coming Soon</span>
+              <p class="machine-examples">
+                Breville/Sage, DeLonghi
+              </p>
+            </div>
+
+            <div class="compat-card coming-soon">
+              <div class="compat-icon">🏪</div>
+              <h3>Commercial</h3>
+              <p>Professional multi-group machines</p>
+              <span class="compat-badge coming">Planned</span>
+              <p class="machine-examples">
+                La Marzocco, Nuova Simonelli
+              </p>
+            </div>
+
+            <div class="compat-card">
+              <div class="compat-icon">❓</div>
+              <h3>Not Sure?</h3>
+              <p>Ask the community about your specific machine</p>
+              <a href="https://github.com/mizrachiran/brewos/discussions" target="_blank" class="btn btn-secondary" style="margin-top: 12px; padding: 10px 20px; font-size: 0.9rem;">
+                Ask on GitHub
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Requirements Section -->
+      <section class="requirements">
+        <div class="container">
+          <div class="section-header">
+            <span class="section-label">What You'll Need</span>
+            <h2 class="section-title">Requirements</h2>
+            <p class="section-description">
+              Before you start, make sure you have these basics covered.
+            </p>
+          </div>
+
+          <div class="req-grid">
+            <div class="req-card">
+              <div class="req-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                </svg>
+              </div>
+              <h3>Basic Tools</h3>
+              <p>Screwdrivers, wire strippers, multimeter, and soldering iron for connections</p>
+            </div>
+
+            <div class="req-card">
+              <div class="req-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+                  <rect x="9" y="9" width="6" height="6"></rect>
+                  <line x1="9" y1="1" x2="9" y2="4"></line>
+                  <line x1="15" y1="1" x2="15" y2="4"></line>
+                  <line x1="9" y1="20" x2="9" y2="23"></line>
+                  <line x1="15" y1="20" x2="15" y2="23"></line>
+                  <line x1="20" y1="9" x2="23" y2="9"></line>
+                  <line x1="20" y1="14" x2="23" y2="14"></line>
+                  <line x1="1" y1="9" x2="4" y2="9"></line>
+                  <line x1="1" y1="14" x2="4" y2="14"></line>
+                </svg>
+              </div>
+              <h3>Technical Comfort</h3>
+              <p>Basic understanding of electronics and willingness to work with mains voltage</p>
+            </div>
+
+            <div class="req-card">
+              <div class="req-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                  <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+                  <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+                  <line x1="12" y1="20" x2="12.01" y2="20"></line>
+                </svg>
+              </div>
+              <h3>WiFi Network</h3>
+              <p>2.4GHz WiFi network for the ESP32 to connect and serve the web interface</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Order Section -->
+      <section class="order" id="order">
+        <div class="container">
+          <div class="order-content">
+            <h2>Ready to Order Components?</h2>
+            <p>
+              We're working on a streamlined ordering experience where you can 
+              get all the components you need in one place.
+            </p>
+            <div class="order-coming">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+              Component Store Coming Soon
+            </div>
+            <p class="order-alt">
+              In the meantime, check out the 
+              <a href="https://github.com/mizrachiran/brewos/blob/main/docs/hardware/Specification.md" target="_blank">hardware specification</a> 
+              and 
+              <a href="https://github.com/mizrachiran/brewos/blob/main/docs/hardware/BOM.md" target="_blank">bill of materials</a> 
+              to source components yourself.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- CTA Section -->
+      <section class="cta-section">
+        <div class="container">
+          <h2>Experience BrewOS Today</h2>
+          <p>
+            Try our interactive demo to see exactly what BrewOS can do for your espresso routine.
+          </p>
+          <div class="cta-buttons">
+            <a href="https://cloud.brewos.io?demo=true" class="btn btn-accent">
+              Launch Demo
+            </a>
+            <a href="https://github.com/mizrachiran/brewos" target="_blank" class="btn btn-secondary" style="border-color: rgba(255,255,255,0.3); color: var(--white);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+              </svg>
+              View on GitHub
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="container">
+        <p>
+          © 2025 BrewOS — <a href="/">Home</a> · <a href="https://github.com/mizrachiran/brewos" target="_blank">GitHub</a> · <a href="/privacy.html">Privacy</a>
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>
+
