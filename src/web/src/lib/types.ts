@@ -65,6 +65,7 @@ export interface MachineStatus {
   mode: MachineMode;
   isHeating: boolean;
   isBrewing: boolean;
+  machineOnTimestamp: number | null; // Unix timestamp (ms) when machine was turned ON, null if off
 }
 
 // Temperature
@@ -183,13 +184,11 @@ export interface DeviceInfo {
 export interface ESP32Info {
   version: string;
   freeHeap: number;
-  uptime: number;
 }
 
 export interface PicoInfo {
   connected: boolean;
   version: string;
-  uptime: number;
 }
 
 // Statistics (matches ESP32 state_types.h)

@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Outlet, NavLink, useParams } from "react-router-dom";
+import { Outlet, NavLink, useParams, Link } from "react-router-dom";
 import { useStore } from "@/lib/store";
 import { useAppStore } from "@/lib/mode";
-import { MachineSelector } from "./MachineSelector";
 import { Logo } from "./Logo";
 import { InstallPrompt, usePWAInstall } from "./InstallPrompt";
 import { ConnectionOverlay } from "./ConnectionOverlay";
@@ -19,6 +18,7 @@ import {
   WifiOff,
   Cloud,
   Sparkles,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -77,8 +77,25 @@ export function Layout({ onExitDemo }: LayoutProps) {
             <div className="flex items-center gap-4">
               <Logo size="md" />
 
-              {/* Cloud: Device Selector */}
-              {isCloud && <MachineSelector />}
+              {/* Cloud: Clickable machine indicator */}
+              {isCloud && selectedDevice && (
+                <Link
+                  to="/machines"
+                  className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-theme-tertiary hover:bg-theme-secondary transition-colors group"
+                >
+                  <div
+                    className={`w-2 h-2 rounded-full ${
+                      selectedDevice.isOnline
+                        ? "bg-emerald-500"
+                        : "bg-theme-muted"
+                    }`}
+                  />
+                  <span className="text-sm font-medium text-theme-secondary group-hover:text-theme max-w-[150px] truncate">
+                    {selectedDevice.name}
+                  </span>
+                  <ChevronRight className="w-3.5 h-3.5 text-theme-muted group-hover:text-theme-secondary transition-colors" />
+                </Link>
+              )}
 
               {/* Local: Machine Name */}
               {!isCloud && deviceName && (

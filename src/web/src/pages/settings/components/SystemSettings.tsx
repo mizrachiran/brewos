@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Badge } from "@/components/Badge";
 import { LogViewer } from "@/components/LogViewer";
-import { formatUptime, formatBytes } from "@/lib/utils";
+import { formatBytes } from "@/lib/utils";
 import {
   Cpu,
   HardDrive,
@@ -121,7 +121,6 @@ export function SystemSettings() {
               value={esp32.version || "Unknown"}
               mono
             />
-            <StatusRow label="Uptime" value={formatUptime(esp32.uptime)} />
             <StatusRow label="Free Heap" value={formatBytes(esp32.freeHeap)} />
           </div>
         </Card>
@@ -141,7 +140,6 @@ export function SystemSettings() {
               value={pico.version || "Unknown"}
               mono
             />
-            <StatusRow label="Uptime" value={formatUptime(pico.uptime)} />
             <StatusRow
               label="Status"
               value={pico.connected ? "Communicating" : "No response"}

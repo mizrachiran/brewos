@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Gauge } from "@/components/Gauge";
 import { Flame, Wind } from "lucide-react";
 
@@ -14,7 +15,7 @@ interface TemperatureGaugesProps {
   groupTemp: number;
 }
 
-export function TemperatureGauges({
+export const TemperatureGauges = memo(function TemperatureGauges({
   machineType,
   brewTemp,
   steamTemp,
@@ -101,5 +102,5 @@ export function TemperatureGauges({
       )}
     </div>
   );
-}
+});
 

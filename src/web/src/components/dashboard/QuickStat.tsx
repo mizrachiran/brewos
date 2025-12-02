@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, memo } from "react";
 import { Card } from "@/components/Card";
 
 type StatusType = "success" | "warning" | "error";
@@ -16,7 +16,7 @@ export interface QuickStatProps {
   status?: StatusType;
 }
 
-export function QuickStat({ icon, label, value, status }: QuickStatProps) {
+export const QuickStat = memo(function QuickStat({ icon, label, value, status }: QuickStatProps) {
   return (
     <Card className="flex flex-col items-center justify-between text-center p-4 h-full">
       <span className="text-accent h-6 flex items-center">{icon}</span>
@@ -30,5 +30,5 @@ export function QuickStat({ icon, label, value, status }: QuickStatProps) {
       <span className="text-xs text-theme-muted h-4">{label}</span>
     </Card>
   );
-}
+});
 

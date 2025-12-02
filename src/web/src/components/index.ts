@@ -7,7 +7,6 @@ export { Badge } from './Badge';
 export { Layout } from './Layout';
 export { QRCodeDisplay } from './QRCode';
 export { QRScanner } from './QRScanner';
-export { MachineSelector } from './MachineSelector';
 export { InstallPrompt, usePWAInstall } from './InstallPrompt';
 export { ToastProvider, useToast } from './Toast';
 export { ConnectionOverlay } from './ConnectionOverlay';

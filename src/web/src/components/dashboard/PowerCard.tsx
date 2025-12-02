@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { Zap } from "lucide-react";
 
@@ -7,7 +8,7 @@ interface PowerCardProps {
   voltage: number;
 }
 
-export function PowerCard({ current, todayKwh, voltage }: PowerCardProps) {
+export const PowerCard = memo(function PowerCard({ current, todayKwh, voltage }: PowerCardProps) {
   return (
     <Card>
       <CardHeader>
@@ -33,4 +34,4 @@ export function PowerCard({ current, todayKwh, voltage }: PowerCardProps) {
       </div>
     </Card>
   );
-}
+});

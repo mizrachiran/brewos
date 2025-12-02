@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
-import { useCommand } from '@/lib/useCommand';
-import { Card } from '@/components/Card';
-import { Input } from '@/components/Input';
-import { Button } from '@/components/Button';
-import { Toggle } from '@/components/Toggle';
-import { Badge } from '@/components/Badge';
+import { useState, useEffect } from "react";
+import { useCommand } from "@/lib/useCommand";
+import { Card } from "@/components/Card";
+import { Input } from "@/components/Input";
+import { Button } from "@/components/Button";
+import { Toggle } from "@/components/Toggle";
+import { Badge } from "@/components/Badge";
 import {
   QrCode,
   Copy,
@@ -17,9 +17,9 @@ import {
   Check,
   X,
   Loader2,
-} from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
-import { isDemoMode } from '@/lib/demo-mode';
+} from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+import { isDemoMode } from "@/lib/demo-mode";
 
 interface PairingData {
   deviceId: string;
@@ -37,31 +37,39 @@ interface CloudStatus {
 
 // Demo mode mock data
 const DEMO_PAIRING: PairingData = {
-  deviceId: 'DEMO-ECM-001',
-  token: 'demo-token-abc123',
-  url: 'https://cloud.brewos.io/pair?device=DEMO-ECM-001&token=demo-token-abc123',
+  deviceId: "DEMO-ECM-001",
+  token: "demo-token-abc123",
+  url: "https://cloud.brewos.io/pair?device=DEMO-ECM-001&token=demo-token-abc123",
   expiresIn: 300,
-  manualCode: 'X6ST-AP3G',
+  manualCode: "X6ST-AP3G",
 };
 
 const DEMO_CLOUD_STATUS: CloudStatus = {
   enabled: true,
   connected: true,
-  serverUrl: 'wss://cloud.brewos.io',
+  serverUrl: "wss://cloud.brewos.io",
 };
 
 export function CloudSettings() {
   const isDemo = isDemoMode();
   const { sendCommand } = useCommand();
-  const [cloudConfig, setCloudConfig] = useState<CloudStatus | null>(isDemo ? DEMO_CLOUD_STATUS : null);
-  const [pairing, setPairing] = useState<PairingData | null>(isDemo ? DEMO_PAIRING : null);
+  const [cloudConfig, setCloudConfig] = useState<CloudStatus | null>(
+    isDemo ? DEMO_CLOUD_STATUS : null
+  );
+  const [pairing, setPairing] = useState<PairingData | null>(
+    isDemo ? DEMO_PAIRING : null
+  );
   const [loadingQR, setLoadingQR] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
-  
-  const [cloudEnabled, setCloudEnabled] = useState(isDemo ? true : (cloudConfig?.enabled || false));
-  const [cloudUrl, setCloudUrl] = useState(cloudConfig?.serverUrl || 'wss://cloud.brewos.io');
+
+  const [cloudEnabled, setCloudEnabled] = useState(
+    isDemo ? true : cloudConfig?.enabled || false
+  );
+  const [cloudUrl, setCloudUrl] = useState(
+    cloudConfig?.serverUrl || "wss://cloud.brewos.io"
+  );
   const [saving, setSaving] = useState(false);
 
   const fetchPairingQR = async () => {
@@ -74,12 +82,14 @@ export function CloudSettings() {
     setLoadingQR(true);
     setError(null);
     try {
-      const response = await fetch('/api/pairing/qr');
-      if (!response.ok) throw new Error('Failed to generate pairing code');
+      const response = await fetch("/api/pairing/qr");
+      if (!response.ok) throw new Error("Failed to generate pairing code");
       const data = await response.json();
       setPairing(data);
     } catch {
-      setError('Failed to generate pairing code. Make sure you\'re connected to your machine.');
+      setError(
+        "Failed to generate pairing code. Make sure you're connected to your machine."
+      );
     } finally {
       setLoadingQR(false);
     }
@@ -89,7 +99,7 @@ export function CloudSettings() {
     // Demo mode: simulate refresh with new expiry
     if (isDemo) {
       setLoadingQR(true);
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 500));
       setPairing({ ...DEMO_PAIRING, expiresIn: 300 });
       setLoadingQR(false);
       return;
@@ -98,12 +108,12 @@ export function CloudSettings() {
     setLoadingQR(true);
     setError(null);
     try {
-      const response = await fetch('/api/pairing/refresh', { method: 'POST' });
-      if (!response.ok) throw new Error('Failed to refresh pairing code');
+      const response = await fetch("/api/pairing/refresh", { method: "POST" });
+      if (!response.ok) throw new Error("Failed to refresh pairing code");
       const data = await response.json();
       setPairing(data);
     } catch {
-      setError('Failed to refresh pairing code.');
+      setError("Failed to refresh pairing code.");
     } finally {
       setLoadingQR(false);
     }
@@ -129,7 +139,7 @@ export function CloudSettings() {
   const saveSettings = () => {
     if (saving) return; // Prevent double-click
     setSaving(true);
-    
+
     // Demo mode: just update local state
     if (isDemo) {
       setCloudConfig({
@@ -140,12 +150,16 @@ export function CloudSettings() {
       setTimeout(() => setSaving(false), 600);
       return;
     }
-    
-    const success = sendCommand('set_cloud_config', {
-      enabled: cloudEnabled,
-      serverUrl: cloudUrl,
-    }, { successMessage: 'Cloud settings saved' });
-    
+
+    const success = sendCommand(
+      "set_cloud_config",
+      {
+        enabled: cloudEnabled,
+        serverUrl: cloudUrl,
+      },
+      { successMessage: "Cloud settings saved" }
+    );
+
     if (success) {
       setCloudConfig({
         enabled: cloudEnabled,
@@ -153,7 +167,7 @@ export function CloudSettings() {
         serverUrl: cloudUrl,
       });
     }
-    
+
     // Brief visual feedback for fire-and-forget WebSocket command
     setTimeout(() => setSaving(false), 600);
   };
@@ -168,12 +182,12 @@ export function CloudSettings() {
     }
 
     try {
-      const response = await fetch('/api/cloud/status');
+      const response = await fetch("/api/cloud/status");
       if (response.ok) {
         const data = await response.json();
         setCloudConfig(data);
         setCloudEnabled(data.enabled);
-        setCloudUrl(data.serverUrl || 'wss://cloud.brewos.io');
+        setCloudUrl(data.serverUrl || "wss://cloud.brewos.io");
       }
     } catch {
       // Device might not support cloud status endpoint yet
@@ -183,7 +197,7 @@ export function CloudSettings() {
   useEffect(() => {
     // Skip API calls in demo mode - data already initialized
     if (isDemo) return;
-    
+
     fetchPairingQR();
     fetchCloudStatus();
   }, [isDemo]);
@@ -201,7 +215,9 @@ export function CloudSettings() {
             </div>
             <div>
               <h2 className="font-semibold text-theme">Pair with Cloud</h2>
-              <p className="text-sm text-theme-muted">Scan to add to your account</p>
+              <p className="text-sm text-theme-muted">
+                Scan to add to your account
+              </p>
             </div>
           </div>
 
@@ -214,20 +230,37 @@ export function CloudSettings() {
               <div className="w-48 h-48 flex flex-col items-center justify-center text-center">
                 <X className="w-8 h-8 text-red-500 mb-2" />
                 <p className="text-sm text-theme-muted">{error}</p>
-                <Button variant="secondary" size="sm" onClick={fetchPairingQR} className="mt-3">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={fetchPairingQR}
+                  className="mt-3"
+                >
                   Retry
                 </Button>
               </div>
             ) : pairing ? (
               <>
-                <div className={`p-3 bg-white rounded-xl ${isExpired ? 'opacity-50' : ''}`}>
-                  <QRCodeSVG value={pairing.url} size={180} level="M" includeMargin={false} />
+                <div
+                  className={`p-3 bg-white rounded-xl ${
+                    isExpired ? "opacity-50" : ""
+                  }`}
+                >
+                  <QRCodeSVG
+                    value={pairing.url}
+                    size={180}
+                    level="M"
+                    includeMargin={false}
+                  />
                 </div>
                 {isExpired ? (
-                  <Badge variant="warning" className="mt-3">Code expired</Badge>
+                  <Badge variant="warning" className="mt-3">
+                    Code expired
+                  </Badge>
                 ) : (
                   <p className="text-xs text-theme-muted mt-2">
-                    Expires in {Math.floor(pairing.expiresIn / 60)}m {pairing.expiresIn % 60}s
+                    Expires in {Math.floor(pairing.expiresIn / 60)}m{" "}
+                    {pairing.expiresIn % 60}s
                   </p>
                 )}
               </>
@@ -236,17 +269,32 @@ export function CloudSettings() {
 
           <div className="mt-4 space-y-3">
             <div className="flex gap-2">
-              <Button variant="secondary" className="flex-1" onClick={refreshPairing} disabled={loadingQR}>
-                <RefreshCw className={`w-4 h-4 mr-2 ${loadingQR ? 'animate-spin' : ''}`} />
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={refreshPairing}
+                disabled={loadingQR}
+              >
+                <RefreshCw
+                  className={`w-4 h-4 mr-2 ${loadingQR ? "animate-spin" : ""}`}
+                />
                 New Code
               </Button>
-              <Button variant="secondary" onClick={copyPairingUrl} disabled={!pairing}>
-                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              <Button
+                variant="secondary"
+                onClick={copyPairingUrl}
+                disabled={!pairing}
+              >
+                {copied ? (
+                  <Check className="w-4 h-4" />
+                ) : (
+                  <Copy className="w-4 h-4" />
+                )}
               </Button>
             </div>
-            
+
             {pairing && (
-              <a 
+              <a
                 href={pairing.url}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -260,13 +308,20 @@ export function CloudSettings() {
 
           {pairing && (
             <div className="mt-4 pt-4 border-t border-theme">
-              <h3 className="text-sm font-medium text-theme mb-2">Manual Pairing Code</h3>
+              <h3 className="text-sm font-medium text-theme mb-2">
+                Manual Pairing Code
+              </h3>
               <div className="flex items-center gap-2">
                 <code className="flex-1 bg-theme-secondary px-4 py-3 rounded-lg text-lg font-mono text-theme tracking-wider text-center">
-                  {pairing.manualCode || `${pairing.deviceId}:${pairing.token.substring(0, 8)}...`}
+                  {pairing.manualCode ||
+                    `${pairing.deviceId}:${pairing.token.substring(0, 8)}...`}
                 </code>
                 <Button variant="secondary" size="sm" onClick={copyPairingCode}>
-                  {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {copiedCode ? (
+                    <Check className="w-4 h-4" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
                 </Button>
               </div>
               <p className="text-xs text-theme-muted mt-2">
@@ -285,7 +340,9 @@ export function CloudSettings() {
               </div>
               <div>
                 <h2 className="font-semibold text-theme">Cloud Status</h2>
-                <p className="text-sm text-theme-muted">Connection to BrewOS Cloud</p>
+                <p className="text-sm text-theme-muted">
+                  Connection to BrewOS Cloud
+                </p>
               </div>
             </div>
 
@@ -293,10 +350,12 @@ export function CloudSettings() {
               <div className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-2">
                   <Wifi className="w-4 h-4 text-theme-muted" />
-                  <span className="text-sm text-theme-secondary">Cloud Connection</span>
+                  <span className="text-sm text-theme-secondary">
+                    Cloud Connection
+                  </span>
                 </div>
-                <Badge variant={cloudConfig?.connected ? 'success' : 'default'}>
-                  {cloudConfig?.connected ? 'Connected' : 'Disconnected'}
+                <Badge variant={cloudConfig?.connected ? "success" : "default"}>
+                  {cloudConfig?.connected ? "Connected" : "Disconnected"}
                 </Badge>
               </div>
               <div className="flex items-center justify-between py-2">
@@ -305,16 +364,18 @@ export function CloudSettings() {
                   <span className="text-sm text-theme-secondary">Server</span>
                 </div>
                 <span className="text-sm text-theme-muted font-mono">
-                  {cloudConfig?.serverUrl || 'Not configured'}
+                  {cloudConfig?.serverUrl || "Not configured"}
                 </span>
               </div>
               <div className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-2">
                   <Shield className="w-4 h-4 text-theme-muted" />
-                  <span className="text-sm text-theme-secondary">Device ID</span>
+                  <span className="text-sm text-theme-secondary">
+                    Machine ID
+                  </span>
                 </div>
                 <span className="text-sm text-theme-muted font-mono">
-                  {pairing?.deviceId || '—'}
+                  {pairing?.deviceId || "—"}
                 </span>
               </div>
             </div>
@@ -327,14 +388,22 @@ export function CloudSettings() {
               </div>
               <div>
                 <h2 className="font-semibold text-theme">Cloud Settings</h2>
-                <p className="text-sm text-theme-muted">Configure cloud connection</p>
+                <p className="text-sm text-theme-muted">
+                  Configure cloud connection
+                </p>
               </div>
             </div>
 
             <div className="space-y-4 flex-1 flex flex-col">
               <div>
-                <Toggle label="Enable Cloud Connection" checked={cloudEnabled} onChange={setCloudEnabled} />
-                <p className="text-xs text-theme-muted mt-1 ml-14">Allow remote access via BrewOS Cloud</p>
+                <Toggle
+                  label="Enable Cloud Connection"
+                  checked={cloudEnabled}
+                  onChange={setCloudEnabled}
+                />
+                <p className="text-xs text-theme-muted mt-1 ml-14">
+                  Allow remote access via BrewOS Cloud
+                </p>
               </div>
               <Input
                 label="Cloud Server URL"
@@ -345,7 +414,11 @@ export function CloudSettings() {
               />
               <div className="flex-1" />
               <div className="flex justify-end">
-                <Button onClick={saveSettings} loading={saving} disabled={saving || (!cloudEnabled && !cloudConfig?.enabled)}>
+                <Button
+                  onClick={saveSettings}
+                  loading={saving}
+                  disabled={saving || (!cloudEnabled && !cloudConfig?.enabled)}
+                >
                   Save Settings
                 </Button>
               </div>
@@ -356,4 +429,3 @@ export function CloudSettings() {
     </div>
   );
 }
-

@@ -6,7 +6,6 @@ import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
 import { useToast } from "@/components/Toast";
 import { Coffee, Save, ChevronDown, AlertCircle } from "lucide-react";
-import { StatusRow } from "./StatusRow";
 import {
   SUPPORTED_MACHINES,
   getMachinesGroupedByBrand,

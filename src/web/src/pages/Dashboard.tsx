@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useStore } from "@/lib/store";
 import { useCommand } from "@/lib/useCommand";
 import { PageHeader } from "@/components/PageHeader";
@@ -14,67 +14,123 @@ import { Coffee, Clock, Droplets, Scale } from "lucide-react";
 import { formatUptime } from "@/lib/utils";
 
 export function Dashboard() {
-  const machine = useStore((s) => s.machine);
-  const temps = useStore((s) => s.temps);
-  const pressure = useStore((s) => s.pressure);
-  const power = useStore((s) => s.power);
-  const water = useStore((s) => s.water);
-  const scale = useStore((s) => s.scale);
-  const stats = useStore((s) => s.stats);
-  const esp32 = useStore((s) => s.esp32);
-  const device = useStore((s) => s.device);
+  // Use specific selectors to prevent unnecessary re-renders
+  const machineMode = useStore((s) => s.machine.mode);
+  const machineState = useStore((s) => s.machine.state);
+  const machineType = useStore((s) => s.device.machineType);
+  
+  // Temperature data - individual primitive selectors to prevent unnecessary re-renders
+  const brewTempCurrent = useStore((s) => Math.round(s.temps.brew.current * 10) / 10);
+  const brewTempSetpoint = useStore((s) => s.temps.brew.setpoint);
+  const brewTempMax = useStore((s) => s.temps.brew.max);
+  const steamTempCurrent = useStore((s) => Math.round(s.temps.steam.current * 10) / 10);
+  const steamTempSetpoint = useStore((s) => s.temps.steam.setpoint);
+  const steamTempMax = useStore((s) => s.temps.steam.max);
+  const groupTemp = useStore((s) => Math.round(s.temps.group * 10) / 10);
+  
+  // Memoize temperature objects to prevent child re-renders
+  const brewTemp = useMemo(() => ({
+    current: brewTempCurrent,
+    setpoint: brewTempSetpoint,
+    max: brewTempMax,
+  }), [brewTempCurrent, brewTempSetpoint, brewTempMax]);
+  
+  const steamTemp = useMemo(() => ({
+    current: steamTempCurrent,
+    setpoint: steamTempSetpoint,
+    max: steamTempMax,
+  }), [steamTempCurrent, steamTempSetpoint, steamTempMax]);
+  
+  // Other values - use specific selectors
+  const pressure = useStore((s) => Math.round(s.pressure * 10) / 10);
+  const powerCurrent = useStore((s) => Math.round(s.power.current));
+  const powerTodayKwh = useStore((s) => Math.round(s.power.todayKwh * 10) / 10);
+  const powerVoltage = useStore((s) => s.power.voltage);
+  const waterTankLevel = useStore((s) => s.water.tankLevel);
+  const scaleConnected = useStore((s) => s.scale.connected);
+  const scaleWeight = useStore((s) => Math.round(s.scale.weight * 10) / 10);
+  const shotsToday = useStore((s) => s.stats.shotsToday);
+  const machineOnTimestamp = useStore((s) => s.machine.machineOnTimestamp);
+  
+  // Calculate uptime locally for smooth updates
+  const [uptime, setUptime] = useState(0);
+  
+  useEffect(() => {
+    // Update uptime every second when machine is on
+    const updateUptime = () => {
+      if (machineOnTimestamp) {
+        setUptime(Date.now() - machineOnTimestamp);
+      } else {
+        setUptime(0);
+      }
+    };
+    
+    // Initial update
+    updateUptime();
+    
+    // Update every second
+    const interval = setInterval(updateUptime, 1000);
+    return () => clearInterval(interval);
+  }, [machineOnTimestamp]);
+  
   const { sendCommand } = useCommand();
-
   const [showStrategyModal, setShowStrategyModal] = useState(false);
 
-  const isDualBoiler = device.machineType === "dual_boiler";
+  const isDualBoiler = machineType === "dual_boiler";
 
-  const setMode = (mode: string, strategy?: number) => {
+  const setMode = useCallback((mode: string, strategy?: number) => {
     const payload =
       mode === "on" && strategy !== undefined ? { mode, strategy } : { mode };
     sendCommand("set_mode", payload);
-  };
+  }, [sendCommand]);
 
-  const handleOnClick = () => {
-    if (machine.mode === "on") {
+  const handleOnClick = useCallback(() => {
+    if (machineMode === "on") {
       setMode("on");
     } else if (isDualBoiler) {
       setShowStrategyModal(true);
     } else {
       setMode("on");
     }
-  };
+  }, [machineMode, isDualBoiler, setMode]);
 
-  const handleStrategySelect = (strategy: number) => {
+  const handleStrategySelect = useCallback((strategy: number) => {
     setMode("on", strategy);
     setShowStrategyModal(false);
-  };
+  }, [setMode]);
+  
+  // Memoize formatted values
+  const formattedUptime = useMemo(() => formatUptime(uptime), [uptime]);
+  const scaleDisplayValue = useMemo(
+    () => scaleConnected ? `${scaleWeight.toFixed(1)}g` : "Not connected",
+    [scaleConnected, scaleWeight]
+  );
 
   return (
     <div className="space-y-6">
       <PageHeader title="Dashboard" subtitle="Monitor your machine status" />
 
       <MachineStatusCard
-        mode={machine.mode}
-        state={machine.state}
+        mode={machineMode}
+        state={machineState}
         isDualBoiler={isDualBoiler}
         onSetMode={setMode}
         onPowerOn={handleOnClick}
       />
 
       <TemperatureGauges
-        machineType={device.machineType}
-        brewTemp={temps.brew}
-        steamTemp={temps.steam}
-        groupTemp={temps.group}
+        machineType={machineType}
+        brewTemp={brewTemp}
+        steamTemp={steamTemp}
+        groupTemp={groupTemp}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <PressureCard pressure={pressure} />
         <PowerCard
-          current={power.current}
-          todayKwh={power.todayKwh}
-          voltage={power.voltage}
+          current={powerCurrent}
+          todayKwh={powerTodayKwh}
+          voltage={powerVoltage}
         />
       </div>
 
@@ -82,21 +138,21 @@ export function Dashboard() {
         <QuickStat
           icon={<Coffee className="w-5 h-5" />}
           label="Shots Today"
-          value={stats.shotsToday.toString()}
+          value={shotsToday.toString()}
         />
         <QuickStat
           icon={<Clock className="w-5 h-5" />}
           label="Uptime"
-          value={formatUptime(esp32.uptime)}
+          value={formattedUptime}
         />
         <QuickStat
           icon={<Droplets className="w-5 h-5" />}
           label="Water Tank"
-          value={water.tankLevel.toUpperCase()}
+          value={waterTankLevel.toUpperCase()}
           status={
-            water.tankLevel === "ok"
+            waterTankLevel === "ok"
               ? "success"
-              : water.tankLevel === "low"
+              : waterTankLevel === "low"
               ? "warning"
               : "error"
           }
@@ -104,8 +160,8 @@ export function Dashboard() {
         <QuickStat
           icon={<Scale className="w-5 h-5" />}
           label="Scale"
-          value={scale.connected ? `${scale.weight.toFixed(1)}g` : "Not connected"}
-          status={scale.connected ? "success" : undefined}
+          value={scaleDisplayValue}
+          status={scaleConnected ? "success" : undefined}
         />
       </div>
 

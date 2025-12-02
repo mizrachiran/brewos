@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { googleAuthMiddleware } from '../middleware/auth.js';
+import { sessionAuthMiddleware } from '../middleware/auth.js';
 import {
   subscribeToPush,
   unsubscribeFromPush,
@@ -32,7 +32,7 @@ router.get('/vapid-key', (_req, res) => {
  * POST /api/push/subscribe
  * Subscribe to push notifications (requires auth)
  */
-router.post('/subscribe', googleAuthMiddleware, (req, res) => {
+router.post('/subscribe', sessionAuthMiddleware, (req, res) => {
   try {
     const userId = req.user!.id;
     const { subscription, deviceId } = req.body;
@@ -59,7 +59,7 @@ router.post('/subscribe', googleAuthMiddleware, (req, res) => {
  * POST /api/push/unsubscribe
  * Unsubscribe from push notifications
  */
-router.post('/unsubscribe', googleAuthMiddleware, (req, res) => {
+router.post('/unsubscribe', sessionAuthMiddleware, (req, res) => {
   try {
     const { subscription } = req.body;
 
@@ -80,7 +80,7 @@ router.post('/unsubscribe', googleAuthMiddleware, (req, res) => {
  * GET /api/push/subscriptions
  * Get user's push subscriptions (requires auth)
  */
-router.get('/subscriptions', googleAuthMiddleware, (req, res) => {
+router.get('/subscriptions', sessionAuthMiddleware, (req, res) => {
   try {
     const userId = req.user!.id;
     const subscriptions = getUserPushSubscriptions(userId);
@@ -96,7 +96,7 @@ router.get('/subscriptions', googleAuthMiddleware, (req, res) => {
  * GET /api/push/preferences
  * Get user's notification preferences (requires auth)
  */
-router.get('/preferences', googleAuthMiddleware, (req, res) => {
+router.get('/preferences', sessionAuthMiddleware, (req, res) => {
   try {
     const userId = req.user!.id;
     const preferences = getOrCreateNotificationPreferences(userId);
@@ -125,7 +125,7 @@ router.get('/preferences', googleAuthMiddleware, (req, res) => {
  * PUT /api/push/preferences
  * Update user's notification preferences (requires auth)
  */
-router.put('/preferences', googleAuthMiddleware, (req, res) => {
+router.put('/preferences', sessionAuthMiddleware, (req, res) => {
   try {
     const userId = req.user!.id;
     const { preferences } = req.body;

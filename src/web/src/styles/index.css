@@ -59,16 +59,26 @@
     @apply antialiased;
   }
   
-  /* Theme transition for smooth switching */
-  *, *::before, *::after {
-    transition-property: background-color, border-color, color, fill, stroke, box-shadow;
-    transition-timing-function: ease-out;
-    transition-duration: 200ms;
-  }
+  /* NO global transitions - only add transitions to specific elements that need them */
+  /* This prevents UI flicker from frequent store updates */
   
   /* Disable transitions for specific elements */
   .no-transition, .no-transition * {
     transition: none !important;
+  }
+  
+  /* Smooth transitions only for interactive elements */
+  .transition-colors {
+    transition-property: background-color, border-color, color;
+    transition-timing-function: ease-out;
+    transition-duration: 200ms;
+  }
+  
+  /* Theme transition - only applied when theme changes */
+  .theme-transition, .theme-transition * {
+    transition-property: background-color, border-color, color, fill, stroke;
+    transition-timing-function: ease-out;
+    transition-duration: 200ms;
   }
 }
 
@@ -287,6 +297,17 @@
   }
   .ring-accent {
     --tw-ring-color: var(--accent);
+  }
+  
+  /* SVG stroke utilities for progress rings */
+  .stroke-theme-tertiary {
+    stroke: var(--bg-tertiary);
+  }
+  .stroke-theme-muted {
+    stroke: var(--text-muted);
+  }
+  .stroke-accent {
+    stroke: var(--accent);
   }
 }
 

@@ -99,8 +99,3 @@ export function verifyWebSocketToken(accessToken: string): SessionUser | null {
     return null;
   }
 }
-
-// Legacy exports for backward compatibility during migration
-// TODO: Remove after migration complete
-export { sessionAuthMiddleware as googleAuthMiddleware };
-export { optionalSessionAuthMiddleware as optionalAuthMiddleware };

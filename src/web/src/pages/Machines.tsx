@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
-import { Badge } from "@/components/Badge";
 import { Logo } from "@/components/Logo";
 import { useAppStore } from "@/lib/mode";
 import { isDemoMode, disableDemoMode } from "@/lib/demo-mode";
@@ -17,8 +16,9 @@ import {
   QrCode,
   X,
   Loader2,
-  ChevronRight,
+  ChevronLeft,
   AlertTriangle,
+  Check,
 } from "lucide-react";
 import { UserMenu } from "@/components/UserMenu";
 
@@ -54,11 +54,13 @@ export function Machines() {
     claimDevice,
     removeDevice,
     selectDevice,
+    selectedDeviceId: realSelectedDeviceId,
   } = useAppStore();
 
   const isDemo = isDemoMode();
   const user = isDemo ? DEMO_USER : realUser;
   const devices = isDemo ? DEMO_DEVICES : realDevices;
+  const selectedDeviceId = isDemo ? DEMO_DEVICES[0]?.id : realSelectedDeviceId;
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [claimCode, setClaimCode] = useState("");
@@ -220,7 +222,16 @@ export function Machines() {
       {/* Header */}
       <header className="bg-theme-card border-b border-theme sticky top-0 z-50">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Logo size="md" />
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate("/")}
+              className="p-2 -ml-2 rounded-xl hover:bg-theme-secondary transition-colors text-theme-secondary"
+              aria-label="Back to dashboard"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <Logo size="md" />
+          </div>
           <UserMenu onExitDemo={isDemo ? handleLogout : undefined} />
         </div>
       </header>
@@ -268,54 +279,78 @@ export function Machines() {
             </Button>
           </Card>
         ) : (
-          <div className="space-y-4">
-            {devices.map((device) => (
-              <Card
-                key={device.id}
-                className="flex items-center justify-between"
-              >
-                <div className="flex items-center gap-4">
-                  <div
-                    className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                      device.isOnline
-                        ? "bg-emerald-100 dark:bg-emerald-900/30"
-                        : "bg-theme-secondary"
-                    }`}
-                  >
-                    {device.isOnline ? (
-                      <Wifi className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-                    ) : (
-                      <WifiOff className="w-6 h-6 text-theme-muted" />
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-theme">{device.name}</h3>
-                    <p className="text-sm text-theme-muted">
-                      {device.firmwareVersion && `v${device.firmwareVersion}`}
-                    </p>
-                  </div>
-                </div>
+          <div className="space-y-3">
+            {devices.map((device) => {
+              const isSelected = device.id === selectedDeviceId;
 
-                <div className="flex items-center gap-2">
-                  <Badge variant={device.isOnline ? "success" : "default"}>
-                    {device.isOnline ? "Online" : "Offline"}
-                  </Badge>
-                  {isEditMode ? (
-                    <button
-                      onClick={() => setDisconnectingDevice(device)}
-                      className="w-10 h-10 rounded-xl bg-theme-secondary hover:bg-theme-tertiary flex items-center justify-center text-theme-secondary transition-colors"
+              return (
+                <button
+                  key={device.id}
+                  onClick={() => !isEditMode && handleConnect(device.id)}
+                  disabled={isEditMode}
+                  className={`w-full text-left card flex items-center gap-3 transition-all ${
+                    isEditMode
+                      ? ""
+                      : "cursor-pointer hover:border-theme-secondary hover:shadow-md"
+                  } ${isSelected ? "border-accent/40 bg-accent/5" : ""}`}
+                >
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div
+                      className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex-shrink-0 flex items-center justify-center ${
+                        device.isOnline
+                          ? "bg-emerald-100 dark:bg-emerald-900/30"
+                          : "bg-theme-secondary"
+                      }`}
                     >
-                      <X className="w-6 h-6" />
+                      {device.isOnline ? (
+                        <Wifi className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600 dark:text-emerald-400" />
+                      ) : (
+                        <WifiOff className="w-5 h-5 sm:w-6 sm:h-6 text-theme-muted" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-theme truncate">
+                          {device.name}
+                        </h3>
+                        {isSelected && (
+                          <Check className="w-4 h-4 text-accent flex-shrink-0" />
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-theme-muted">
+                        <span
+                          className={
+                            device.isOnline
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : ""
+                          }
+                        >
+                          {device.isOnline ? "Online" : "Offline"}
+                        </span>
+                        {device.firmwareVersion && (
+                          <>
+                            <span>·</span>
+                            <span>v{device.firmwareVersion}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {isEditMode && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDisconnectingDevice(device);
+                      }}
+                      className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 flex items-center justify-center text-red-600 dark:text-red-400 transition-colors flex-shrink-0"
+                    >
+                      <X className="w-5 h-5" />
                     </button>
-                  ) : (
-                    <Button size="sm" onClick={() => handleConnect(device.id)}>
-                      {isDemo ? "Select" : "Connect"}
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
                   )}
-                </div>
-              </Card>
-            ))}
+                </button>
+              );
+            })}
           </div>
         )}
       </main>

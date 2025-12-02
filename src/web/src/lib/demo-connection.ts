@@ -13,6 +13,7 @@ export class DemoConnection implements IConnection {
   private stateHandlers = new Set<StateHandler>();
   private simulationInterval: ReturnType<typeof setInterval> | null = null;
   private statsInterval: ReturnType<typeof setInterval> | null = null;
+  private isDisconnected = false; // Flag to abort pending connect()
 
   // Simulation state
   private machineMode: "standby" | "on" | "eco" = "standby";
@@ -28,7 +29,7 @@ export class DemoConnection implements IConnection {
   private pressure = 0;
   private shotsToday = 3;
   private totalShots = 1247;
-  private uptime = 0;
+  private machineOnTimestamp: number | null = null; // When machine was turned ON
 
   // Scale simulation
   private scaleConnected = true;
@@ -36,10 +37,16 @@ export class DemoConnection implements IConnection {
   private flowRate = 0;
 
   async connect(): Promise<void> {
+    this.isDisconnected = false;
     this.setState("connecting");
 
     // Simulate connection delay
     await new Promise((r) => setTimeout(r, 800));
+
+    // Check if disconnected while waiting (handles React StrictMode double-mount)
+    if (this.isDisconnected) {
+      return;
+    }
 
     this.setState("connected");
     this.startSimulation();
@@ -56,25 +63,10 @@ export class DemoConnection implements IConnection {
     });
 
     // Send initial ESP32 status
-    this.emit({
-      type: "esp_status",
-      version: "1.0.0-demo",
-      freeHeap: 180000,
-      uptime: this.uptime,
-      wifi: {
-        connected: true,
-        ssid: "Demo Network",
-        ip: "192.168.1.100",
-        rssi: -45,
-        apMode: false,
-      },
-      mqtt: {
-        enabled: false,
-        connected: false,
-        broker: "",
-        topic: "brewos",
-      },
-    });
+    this.emitEspStatus();
+
+    // Send initial machine/pico status immediately
+    this.emitPicoStatus();
 
     // Send initial scale status
     this.emitScaleStatus();
@@ -84,6 +76,7 @@ export class DemoConnection implements IConnection {
   }
 
   disconnect(): void {
+    this.isDisconnected = true; // Abort any pending connect()
     this.stopSimulation();
     this.setState("disconnected");
   }
@@ -260,19 +253,30 @@ export class DemoConnection implements IConnection {
     const prevMode = this.machineMode;
     this.machineMode = mode as "standby" | "on" | "eco";
 
-    if (mode === "on" && prevMode === "standby") {
+    if (mode === "on" && prevMode !== "on") {
+      // Machine turned ON - start tracking uptime
+      this.machineOnTimestamp = Date.now();
       this.isHeating = true;
       // Log heating strategy if provided
       if (strategy !== undefined) {
         console.log("[Demo] Heating with strategy:", strategy);
       }
     } else if (mode === "standby") {
+      // Machine turned OFF - reset uptime
+      this.machineOnTimestamp = null;
       this.isHeating = false;
       // Gradual cooldown will happen in simulation
-    } else if (mode === "eco") {
-      // Eco mode: lower target temps
+    } else if (mode === "eco" && prevMode !== "eco") {
+      // Eco mode also counts as "on" for uptime purposes
+      if (!this.machineOnTimestamp) {
+        this.machineOnTimestamp = Date.now();
+      }
       this.isHeating = this.brewTemp < this.targetBrewTemp - 10;
     }
+
+    // Emit status immediately on mode change to prevent UI flicker
+    this.emitPicoStatus();
+    this.emitEspStatus();
   }
 
   private startBrewing(): void {
@@ -314,10 +318,11 @@ export class DemoConnection implements IConnection {
       this.simulateStep();
     }, 500);
 
-    // Stats update - runs every 5 seconds
+    // Stats and ESP status update - runs every 5 seconds
+    // Note: Uptime is now calculated in UI from machineOnTimestamp, so no need for frequent updates
     this.statsInterval = setInterval(() => {
       this.emitStats();
-      this.uptime += 5;
+      this.emitEspStatus();
     }, 5000);
   }
 
@@ -460,10 +465,11 @@ export class DemoConnection implements IConnection {
   private emitPicoStatus(): void {
     const state = this.getMachineState();
 
+    // Emit pico_status with temperature and sensor data
     this.emit({
       type: "pico_status",
       version: "1.0.0-demo",
-      uptime: this.uptime,
+      machineOnTimestamp: this.machineOnTimestamp,
       state,
       isHeating: this.isHeating,
       isBrewing: this.isBrewing,
@@ -476,20 +482,11 @@ export class DemoConnection implements IConnection {
       power: Math.round(
         this.isHeating ? 1400 + Math.random() * 200 : this.isBrewing ? 50 : 5
       ),
-      voltage: 220, // Stable voltage for demo
+      voltage: 220,
       waterLevel: "ok",
       dripTrayFull: false,
-    });
-
-    // Also update machine mode
-    this.emit({
-      type: "status",
-      machine: {
-        state,
-        mode: this.machineMode,
-        isHeating: this.isHeating,
-        isBrewing: this.isBrewing,
-      },
+      // Include mode in pico_status to avoid separate status message
+      mode: this.machineMode,
     });
   }
 
@@ -506,7 +503,32 @@ export class DemoConnection implements IConnection {
     });
   }
 
+  private emitEspStatus(): void {
+    this.emit({
+      type: "esp_status",
+      version: "1.0.0-demo",
+      freeHeap: 175000 + Math.floor(Math.random() * 10000), // Slight variation
+      wifi: {
+        connected: true,
+        ssid: "Demo Network",
+        ip: "192.168.1.100",
+        rssi: -45 + Math.floor(Math.random() * 5), // Slight RSSI variation
+        apMode: false,
+      },
+      mqtt: {
+        enabled: false,
+        connected: false,
+        broker: "",
+        topic: "brewos",
+      },
+    });
+  }
+
   private emitStats(): void {
+    const sessionUptime = this.machineOnTimestamp
+      ? Date.now() - this.machineOnTimestamp
+      : 0;
+
     this.emit({
       type: "stats",
       totalShots: this.totalShots,
@@ -515,7 +537,7 @@ export class DemoConnection implements IConnection {
       totalOnTimeMinutes: 15420,
       shotsToday: this.shotsToday,
       kwhToday: 0.8 + this.shotsToday * 0.05,
-      onTimeToday: Math.floor(this.uptime / 60),
+      onTimeToday: Math.floor(sessionUptime / 60000), // Convert ms to minutes
       shotsSinceDescale: 145,
       shotsSinceGroupClean: 12,
       shotsSinceBackflush: 45,
@@ -529,7 +551,7 @@ export class DemoConnection implements IConnection {
       weeklyCount: 28,
       monthlyCount: 124,
       sessionShots: this.shotsToday,
-      sessionStartTimestamp: Date.now() - this.uptime * 1000,
+      sessionStartTimestamp: this.machineOnTimestamp || Date.now(),
     });
   }
 
@@ -602,9 +624,12 @@ export class DemoConnection implements IConnection {
 let demoConnection: DemoConnection | null = null;
 
 export function getDemoConnection(): DemoConnection {
-  if (!demoConnection) {
-    demoConnection = new DemoConnection();
+  // Always disconnect any existing connection first to prevent duplicates (handles React StrictMode)
+  if (demoConnection) {
+    demoConnection.disconnect();
+    demoConnection = null;
   }
+  demoConnection = new DemoConnection();
   return demoConnection;
 }
 

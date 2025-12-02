@@ -12,6 +12,12 @@ export function formatTemp(temp: number): string {
 export function formatUptime(ms: number): string {
   const hours = Math.floor(ms / 3600000);
   const mins = Math.floor((ms % 3600000) / 60000);
+  const secs = Math.floor((ms % 60000) / 1000);
+  
+  // Show seconds when under 1 hour for better visibility
+  if (hours === 0) {
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
   return `${hours}:${mins.toString().padStart(2, '0')}`;
 }
 

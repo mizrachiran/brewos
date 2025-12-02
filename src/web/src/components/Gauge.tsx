@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/lib/store';
 import { getUnitSymbol, convertFromCelsius } from '@/lib/temperature';
@@ -14,7 +15,7 @@ interface GaugeProps {
   isTemperature?: boolean; // Set to false for pressure, etc.
 }
 
-export function Gauge({
+export const Gauge = memo(function Gauge({
   value,
   max,
   setpoint,
@@ -80,4 +81,4 @@ export function Gauge({
       )}
     </div>
   );
-}
+});

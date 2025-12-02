@@ -1,5 +1,5 @@
-import { create } from 'zustand';
-import { subscribeWithSelector } from 'zustand/middleware';
+import { create } from "zustand";
+import { subscribeWithSelector } from "zustand/middleware";
 import type {
   ConnectionState,
   MachineStatus,
@@ -21,47 +21,47 @@ import type {
   WebSocketMessage,
   UserPreferences,
   IConnection,
-} from './types';
+} from "./types";
 
 interface BrewOSState {
   // Connection
   connectionState: ConnectionState;
-  
+
   // Device identity
   device: DeviceInfo;
-  
+
   // Machine
   machine: MachineStatus;
   temps: Temperatures;
   pressure: number;
   power: PowerStatus;
   water: WaterStatus;
-  
+
   // Scale
   scale: ScaleStatus;
   scaleScanning: boolean;
   scanResults: ScaleScanResult[];
-  
+
   // Brew-by-weight
   bbw: BBWSettings;
   shot: ShotStatus;
-  
+
   // Network
   wifi: WiFiStatus;
   mqtt: MQTTStatus;
-  
+
   // Device info
   esp32: ESP32Info;
   pico: PicoInfo;
-  
+
   // Stats & logs
   stats: Statistics;
   alerts: Alert[];
   logs: LogEntry[];
-  
+
   // User preferences (localStorage)
   preferences: UserPreferences;
-  
+
   // Actions
   setConnectionState: (state: ConnectionState) => void;
   processMessage: (message: WebSocketMessage) => void;
@@ -70,15 +70,19 @@ interface BrewOSState {
   addScanResult: (result: ScaleScanResult) => void;
   setScaleScanning: (scanning: boolean) => void;
   clearScanResults: () => void;
-  setPreference: <K extends keyof UserPreferences>(key: K, value: UserPreferences[K]) => void;
+  setPreference: <K extends keyof UserPreferences>(
+    key: K,
+    value: UserPreferences[K]
+  ) => void;
 }
 
 // Default state
 const defaultMachine: MachineStatus = {
-  state: 'unknown',
-  mode: 'standby',
+  state: "unknown",
+  mode: "standby",
   isHeating: false,
   isBrewing: false,
+  machineOnTimestamp: null,
 };
 
 const defaultTemps: Temperatures = {
@@ -95,14 +99,14 @@ const defaultPower: PowerStatus = {
 };
 
 const defaultWater: WaterStatus = {
-  tankLevel: 'ok',
+  tankLevel: "ok",
   dripTrayFull: false,
 };
 
 const defaultScale: ScaleStatus = {
   connected: false,
-  name: '',
-  type: '',
+  name: "",
+  type: "",
   weight: 0,
   flowRate: 0,
   stable: false,
@@ -127,8 +131,8 @@ const defaultShot: ShotStatus = {
 
 const defaultWifi: WiFiStatus = {
   connected: false,
-  ssid: '',
-  ip: '',
+  ssid: "",
+  ip: "",
   rssi: 0,
   apMode: false,
 };
@@ -136,20 +140,18 @@ const defaultWifi: WiFiStatus = {
 const defaultMqtt: MQTTStatus = {
   enabled: false,
   connected: false,
-  broker: '',
-  topic: 'brewos',
+  broker: "",
+  topic: "brewos",
 };
 
 const defaultEsp32: ESP32Info = {
-  version: '',
+  version: "",
   freeHeap: 0,
-  uptime: 0,
 };
 
 const defaultPico: PicoInfo = {
   connected: false,
-  version: '',
-  uptime: 0,
+  version: "",
 };
 
 const defaultStats: Statistics = {
@@ -158,12 +160,12 @@ const defaultStats: Statistics = {
   totalSteamCycles: 0,
   totalKwh: 0,
   totalOnTimeMinutes: 0,
-  
+
   // Daily stats
   shotsToday: 0,
   kwhToday: 0,
   onTimeToday: 0,
-  
+
   // Maintenance counters
   shotsSinceDescale: 0,
   shotsSinceGroupClean: 0,
@@ -171,7 +173,7 @@ const defaultStats: Statistics = {
   lastDescaleTimestamp: 0,
   lastGroupCleanTimestamp: 0,
   lastBackflushTimestamp: 0,
-  
+
   // Pico statistics
   avgBrewTimeMs: 0,
   minBrewTimeMs: 0,
@@ -179,52 +181,52 @@ const defaultStats: Statistics = {
   dailyCount: 0,
   weeklyCount: 0,
   monthlyCount: 0,
-  
+
   // Session
   sessionStartTimestamp: 0,
   sessionShots: 0,
 };
 
 const defaultDevice: DeviceInfo = {
-  deviceId: '',
-  deviceName: 'My BrewOS',
-  machineBrand: '',
-  machineModel: '',
-  machineType: '' as DeviceInfo['machineType'],
-  firmwareVersion: '',
+  deviceId: "",
+  deviceName: "My BrewOS",
+  machineBrand: "",
+  machineModel: "",
+  machineType: "" as DeviceInfo["machineType"],
+  firmwareVersion: "",
 };
 
 // Load preferences from localStorage
 const loadPreferences = (): UserPreferences => {
   const defaults: UserPreferences = {
-    firstDayOfWeek: 'sunday',
+    firstDayOfWeek: "sunday",
     use24HourTime: false,
-    temperatureUnit: 'celsius',
+    temperatureUnit: "celsius",
   };
-  
+
   try {
-    const saved = localStorage.getItem('brewos_preferences');
+    const saved = localStorage.getItem("brewos_preferences");
     if (saved) {
       return { ...defaults, ...JSON.parse(saved) };
     }
   } catch (e) {
-    console.warn('Failed to load preferences:', e);
+    console.warn("Failed to load preferences:", e);
   }
   return defaults;
 };
 
 const savePreferences = (prefs: UserPreferences) => {
   try {
-    localStorage.setItem('brewos_preferences', JSON.stringify(prefs));
+    localStorage.setItem("brewos_preferences", JSON.stringify(prefs));
   } catch (e) {
-    console.warn('Failed to save preferences:', e);
+    console.warn("Failed to save preferences:", e);
   }
 };
 
 export const useStore = create<BrewOSState>()(
   subscribeWithSelector((set, get) => ({
     // Initial state
-    connectionState: 'disconnected',
+    connectionState: "disconnected",
     device: defaultDevice,
     machine: defaultMachine,
     temps: defaultTemps,
@@ -250,58 +252,78 @@ export const useStore = create<BrewOSState>()(
 
     processMessage: (message) => {
       const { type, ...data } = message;
-      
+
       switch (type) {
-        case 'status':
+        case "status":
           set((state) => ({
-            machine: { ...state.machine, ...(data.machine as Partial<MachineStatus>) },
-            temps: data.temps ? { ...state.temps, ...(data.temps as Partial<Temperatures>) } : state.temps,
+            machine: {
+              ...state.machine,
+              ...(data.machine as Partial<MachineStatus>),
+            },
+            temps: data.temps
+              ? { ...state.temps, ...(data.temps as Partial<Temperatures>) }
+              : state.temps,
             pressure: (data.pressure as number) ?? state.pressure,
-            power: data.power ? { ...state.power, ...(data.power as Partial<PowerStatus>) } : state.power,
-            scale: data.scale ? { ...state.scale, ...(data.scale as Partial<ScaleStatus>) } : state.scale,
+            power: data.power
+              ? { ...state.power, ...(data.power as Partial<PowerStatus>) }
+              : state.power,
+            scale: data.scale
+              ? { ...state.scale, ...(data.scale as Partial<ScaleStatus>) }
+              : state.scale,
           }));
           break;
 
-        case 'esp_status':
+        case "esp_status":
           set((state) => ({
             esp32: {
               version: (data.version as string) || state.esp32.version,
-              freeHeap: (data.freeHeap as number) || state.esp32.freeHeap,
-              uptime: (data.uptime as number) || state.esp32.uptime,
+              freeHeap: (data.freeHeap as number) ?? state.esp32.freeHeap,
             },
-            wifi: data.wifi ? {
-              ...state.wifi,
-              ...(data.wifi as Partial<WiFiStatus>),
-            } : state.wifi,
-            mqtt: data.mqtt ? {
-              ...state.mqtt,
-              ...(data.mqtt as Partial<MQTTStatus>),
-            } : state.mqtt,
+            wifi: data.wifi
+              ? {
+                  ...state.wifi,
+                  ...(data.wifi as Partial<WiFiStatus>),
+                }
+              : state.wifi,
+            mqtt: data.mqtt
+              ? {
+                  ...state.mqtt,
+                  ...(data.mqtt as Partial<MQTTStatus>),
+                }
+              : state.mqtt,
           }));
           break;
 
-        case 'pico_status':
+        case "pico_status":
           set((state) => ({
             pico: {
               connected: true,
               version: (data.version as string) || state.pico.version,
-              uptime: (data.uptime as number) || state.pico.uptime,
             },
             machine: {
               ...state.machine,
-              state: (data.state as MachineStatus['state']) || state.machine.state,
+              state:
+                (data.state as MachineStatus["state"]) || state.machine.state,
+              mode: (data.mode as MachineStatus["mode"]) || state.machine.mode,
               isHeating: (data.isHeating as boolean) ?? state.machine.isHeating,
               isBrewing: (data.isBrewing as boolean) ?? state.machine.isBrewing,
+              machineOnTimestamp:
+                data.machineOnTimestamp !== undefined
+                  ? (data.machineOnTimestamp as number | null)
+                  : state.machine.machineOnTimestamp,
             },
             temps: {
               brew: {
                 current: (data.brewTemp as number) ?? state.temps.brew.current,
-                setpoint: (data.brewSetpoint as number) ?? state.temps.brew.setpoint,
+                setpoint:
+                  (data.brewSetpoint as number) ?? state.temps.brew.setpoint,
                 max: state.temps.brew.max,
               },
               steam: {
-                current: (data.steamTemp as number) ?? state.temps.steam.current,
-                setpoint: (data.steamSetpoint as number) ?? state.temps.steam.setpoint,
+                current:
+                  (data.steamTemp as number) ?? state.temps.steam.current,
+                setpoint:
+                  (data.steamSetpoint as number) ?? state.temps.steam.setpoint,
                 max: state.temps.steam.max,
               },
               group: (data.groupTemp as number) ?? state.temps.group,
@@ -313,13 +335,16 @@ export const useStore = create<BrewOSState>()(
               voltage: (data.voltage as number) ?? state.power.voltage,
             },
             water: {
-              tankLevel: (data.waterLevel as WaterStatus['tankLevel']) || state.water.tankLevel,
-              dripTrayFull: (data.dripTrayFull as boolean) ?? state.water.dripTrayFull,
+              tankLevel:
+                (data.waterLevel as WaterStatus["tankLevel"]) ||
+                state.water.tankLevel,
+              dripTrayFull:
+                (data.dripTrayFull as boolean) ?? state.water.dripTrayFull,
             },
           }));
           break;
 
-        case 'scale_status':
+        case "scale_status":
           set((state) => ({
             scale: {
               connected: (data.connected as boolean) ?? state.scale.connected,
@@ -333,81 +358,115 @@ export const useStore = create<BrewOSState>()(
           }));
           break;
 
-        case 'stats':
+        case "stats":
           set((state) => ({
             stats: {
               ...state.stats,
               totalShots: (data.totalShots as number) ?? state.stats.totalShots,
-              totalSteamCycles: (data.totalSteamCycles as number) ?? state.stats.totalSteamCycles,
+              totalSteamCycles:
+                (data.totalSteamCycles as number) ??
+                state.stats.totalSteamCycles,
               totalKwh: (data.totalKwh as number) ?? state.stats.totalKwh,
-              totalOnTimeMinutes: (data.totalOnTimeMinutes as number) ?? state.stats.totalOnTimeMinutes,
+              totalOnTimeMinutes:
+                (data.totalOnTimeMinutes as number) ??
+                state.stats.totalOnTimeMinutes,
               shotsToday: (data.shotsToday as number) ?? state.stats.shotsToday,
               kwhToday: (data.kwhToday as number) ?? state.stats.kwhToday,
-              onTimeToday: (data.onTimeToday as number) ?? state.stats.onTimeToday,
-              shotsSinceDescale: (data.shotsSinceDescale as number) ?? state.stats.shotsSinceDescale,
-              shotsSinceGroupClean: (data.shotsSinceGroupClean as number) ?? state.stats.shotsSinceGroupClean,
-              shotsSinceBackflush: (data.shotsSinceBackflush as number) ?? state.stats.shotsSinceBackflush,
-              lastDescaleTimestamp: (data.lastDescaleTimestamp as number) ?? state.stats.lastDescaleTimestamp,
-              lastGroupCleanTimestamp: (data.lastGroupCleanTimestamp as number) ?? state.stats.lastGroupCleanTimestamp,
-              lastBackflushTimestamp: (data.lastBackflushTimestamp as number) ?? state.stats.lastBackflushTimestamp,
-              avgBrewTimeMs: (data.avgBrewTimeMs as number) ?? state.stats.avgBrewTimeMs,
-              minBrewTimeMs: (data.minBrewTimeMs as number) ?? state.stats.minBrewTimeMs,
-              maxBrewTimeMs: (data.maxBrewTimeMs as number) ?? state.stats.maxBrewTimeMs,
+              onTimeToday:
+                (data.onTimeToday as number) ?? state.stats.onTimeToday,
+              shotsSinceDescale:
+                (data.shotsSinceDescale as number) ??
+                state.stats.shotsSinceDescale,
+              shotsSinceGroupClean:
+                (data.shotsSinceGroupClean as number) ??
+                state.stats.shotsSinceGroupClean,
+              shotsSinceBackflush:
+                (data.shotsSinceBackflush as number) ??
+                state.stats.shotsSinceBackflush,
+              lastDescaleTimestamp:
+                (data.lastDescaleTimestamp as number) ??
+                state.stats.lastDescaleTimestamp,
+              lastGroupCleanTimestamp:
+                (data.lastGroupCleanTimestamp as number) ??
+                state.stats.lastGroupCleanTimestamp,
+              lastBackflushTimestamp:
+                (data.lastBackflushTimestamp as number) ??
+                state.stats.lastBackflushTimestamp,
+              avgBrewTimeMs:
+                (data.avgBrewTimeMs as number) ?? state.stats.avgBrewTimeMs,
+              minBrewTimeMs:
+                (data.minBrewTimeMs as number) ?? state.stats.minBrewTimeMs,
+              maxBrewTimeMs:
+                (data.maxBrewTimeMs as number) ?? state.stats.maxBrewTimeMs,
               dailyCount: (data.dailyCount as number) ?? state.stats.dailyCount,
-              weeklyCount: (data.weeklyCount as number) ?? state.stats.weeklyCount,
-              monthlyCount: (data.monthlyCount as number) ?? state.stats.monthlyCount,
-              sessionShots: (data.sessionShots as number) ?? state.stats.sessionShots,
-              sessionStartTimestamp: (data.sessionStartTimestamp as number) ?? state.stats.sessionStartTimestamp,
+              weeklyCount:
+                (data.weeklyCount as number) ?? state.stats.weeklyCount,
+              monthlyCount:
+                (data.monthlyCount as number) ?? state.stats.monthlyCount,
+              sessionShots:
+                (data.sessionShots as number) ?? state.stats.sessionShots,
+              sessionStartTimestamp:
+                (data.sessionStartTimestamp as number) ??
+                state.stats.sessionStartTimestamp,
             },
           }));
           break;
 
-        case 'scan_result':
+        case "scan_result":
           get().addScanResult(data as unknown as ScaleScanResult);
           break;
 
-        case 'scan_complete':
+        case "scan_complete":
           set({ scaleScanning: false });
           break;
 
-        case 'event':
+        case "event":
           handleEvent(data, set, get);
           break;
 
-        case 'log':
+        case "log":
           addLog(data, set, get);
           break;
 
-        case 'error':
-          addAlert('error', data.message as string, set, get);
+        case "error":
+          addAlert("error", data.message as string, set, get);
           break;
 
-        case 'device_info':
+        case "device_info":
           set((state) => ({
             device: {
               deviceId: (data.deviceId as string) || state.device.deviceId,
-              deviceName: (data.deviceName as string) || state.device.deviceName,
-              machineBrand: (data.machineBrand as string) || state.device.machineBrand,
-              machineModel: (data.machineModel as string) || state.device.machineModel,
-              machineType: (data.machineType as DeviceInfo['machineType']) || state.device.machineType,
-              firmwareVersion: (data.firmwareVersion as string) || state.device.firmwareVersion,
+              deviceName:
+                (data.deviceName as string) || state.device.deviceName,
+              machineBrand:
+                (data.machineBrand as string) || state.device.machineBrand,
+              machineModel:
+                (data.machineModel as string) || state.device.machineModel,
+              machineType:
+                (data.machineType as DeviceInfo["machineType"]) ||
+                state.device.machineType,
+              firmwareVersion:
+                (data.firmwareVersion as string) ||
+                state.device.firmwareVersion,
             },
           }));
           break;
       }
     },
 
-    dismissAlert: (id) => set((state) => ({
-      alerts: state.alerts.map(a => 
-        a.id === id ? { ...a, dismissed: true } : a
-      ),
-    })),
+    dismissAlert: (id) =>
+      set((state) => ({
+        alerts: state.alerts.map((a) =>
+          a.id === id ? { ...a, dismissed: true } : a
+        ),
+      })),
 
     clearLogs: () => set({ logs: [] }),
 
-    addScanResult: (result) => set((state) => ({
-      scanResults: [...state.scanResults, result],
-    })),
+    addScanResult: (result) =>
+      set((state) => ({
+        scanResults: [...state.scanResults, result],
+      })),
 
     setScaleScanning: (scanning) => set({ scaleScanning: scanning }),
 
@@ -434,7 +493,7 @@ function handleEvent(
   get: () => BrewOSState
 ) {
   switch (data.event) {
-    case 'shot_start':
+    case "shot_start":
       set({
         shot: {
           active: true,
@@ -446,7 +505,7 @@ function handleEvent(
       });
       break;
 
-    case 'shot_end': {
+    case "shot_end": {
       const state = get();
       set({
         shot: { ...state.shot, active: false },
@@ -463,9 +522,9 @@ function handleEvent(
       break;
     }
 
-    case 'alert':
+    case "alert":
       addAlert(
-        (data.level as Alert['level']) || 'warning',
+        (data.level as Alert["level"]) || "warning",
         data.message as string,
         set,
         get
@@ -482,14 +541,14 @@ function addLog(
   const log: LogEntry = {
     id: Date.now(),
     time: new Date().toISOString(),
-    level: (data.level as string) || 'info',
+    level: (data.level as string) || "info",
     message: data.message as string,
   };
   set({ logs: [log, ...get().logs.slice(0, 99)] });
 }
 
 function addAlert(
-  level: Alert['level'],
+  level: Alert["level"],
   message: string,
   set: SetState,
   get: () => BrewOSState
@@ -514,4 +573,3 @@ export function initializeStore(connection: IConnection) {
     useStore.getState().processMessage(message);
   });
 }
-
