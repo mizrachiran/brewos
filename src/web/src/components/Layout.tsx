@@ -6,6 +6,7 @@ import { DeviceSelector } from './DeviceSelector';
 import { Logo } from './Logo';
 import { InstallPrompt, usePWAInstall } from './InstallPrompt';
 import { ConnectionOverlay } from './ConnectionOverlay';
+import { VersionWarning, VersionBadge } from './VersionWarning';
 import { 
   LayoutGrid, 
   Coffee, 
@@ -153,6 +154,11 @@ export function Layout() {
           />
         </div>
       )}
+
+      {/* Version Compatibility Warning - shown if backend/firmware version mismatch */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <VersionWarning />
+      </div>
 
       {/* Navigation - Desktop: horizontal tabs, Mobile: bottom bar style */}
       <nav className="sticky top-16 z-40 nav-bg border-b border-theme">

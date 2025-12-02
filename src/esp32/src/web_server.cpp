@@ -71,6 +71,67 @@ void WebServer::setupRoutes() {
         request->send(200, "application/json", response);
     });
     
+    // API info endpoint - provides version and feature detection for web UI compatibility
+    // This is the primary endpoint for version negotiation between web UI and backend
+    _server.on("/api/info", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        JsonDocument doc;
+        
+        // API version - increment ONLY for breaking changes to REST/WebSocket APIs
+        // Web UI checks this to determine compatibility
+        doc["apiVersion"] = 1;
+        
+        // Component versions
+        doc["firmwareVersion"] = ESP32_VERSION;
+        doc["webVersion"] = ESP32_VERSION;  // Web UI bundled with this firmware
+        doc["protocolVersion"] = ECM_PROTOCOL_VERSION;
+        
+        // Pico version (if connected)
+        if (_picoUart.isConnected()) {
+            doc["picoConnected"] = true;
+            // Note: Pico version is sent via MSG_BOOT, access via state manager
+            // doc["picoVersion"] = State.getPicoVersion();  // TODO: Add this to state
+        } else {
+            doc["picoConnected"] = false;
+        }
+        
+        // Mode detection
+        doc["mode"] = "local";
+        doc["apMode"] = _wifiManager.isAPMode();
+        
+        // Feature flags - granular capability detection
+        // Web UI uses these to conditionally show/hide features
+        JsonArray features = doc["features"].to<JsonArray>();
+        
+        // Core features (always available)
+        features.add("temperature_control");
+        features.add("pressure_monitoring");
+        features.add("power_monitoring");
+        
+        // Advanced features
+        features.add("bbw");              // Brew-by-weight
+        features.add("scale");            // BLE scale support
+        features.add("mqtt");             // MQTT integration
+        features.add("eco_mode");         // Eco mode
+        features.add("statistics");       // Statistics tracking
+        features.add("schedules");        // Schedule management
+        
+        // OTA features
+        features.add("pico_ota");         // Pico firmware updates
+        features.add("esp32_ota");        // ESP32 firmware updates
+        
+        // Debug features
+        features.add("debug_console");    // Debug console
+        features.add("protocol_debug");   // Protocol debugging
+        
+        // Device info
+        doc["deviceId"] = WiFi.macAddress();
+        doc["hostname"] = WiFi.getHostname();
+        
+        String response;
+        serializeJson(doc, response);
+        request->send(200, "application/json", response);
+    });
+    
     _server.on("/api/status", HTTP_GET, [this](AsyncWebServerRequest* request) {
         handleGetStatus(request);
     });

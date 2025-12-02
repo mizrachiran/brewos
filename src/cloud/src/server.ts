@@ -62,6 +62,63 @@ app.get('/api/mode', (_req, res) => {
   res.json({ mode: 'cloud' });
 });
 
+// API info endpoint - provides version and feature detection for web UI compatibility
+// This is the primary endpoint for version negotiation between web UI and backend
+app.get('/api/info', (_req, res) => {
+  // API version - increment ONLY for breaking changes to REST/WebSocket APIs
+  // Web UI checks this to determine compatibility
+  const API_VERSION = 1;
+  
+  // Read version from package.json or environment
+  const serverVersion = process.env.npm_package_version || '0.2.0';
+  
+  res.json({
+    // API version for breaking change detection
+    apiVersion: API_VERSION,
+    
+    // Component versions
+    firmwareVersion: serverVersion,      // Cloud server version
+    webVersion: serverVersion,           // Web UI version (deployed with cloud)
+    
+    // Mode detection
+    mode: 'cloud',
+    
+    // Feature flags - granular capability detection
+    // Cloud has all local features plus cloud-specific ones
+    features: [
+      // Core features
+      'temperature_control',
+      'pressure_monitoring',
+      'power_monitoring',
+      
+      // Advanced features
+      'bbw',              // Brew-by-weight (proxied to device)
+      'scale',            // BLE scale support (proxied to device)
+      'mqtt',             // MQTT integration (proxied to device)
+      'eco_mode',         // Eco mode (proxied to device)
+      'statistics',       // Statistics tracking
+      'schedules',        // Schedule management
+      
+      // OTA features
+      'pico_ota',         // Pico firmware updates (proxied to device)
+      'esp32_ota',        // ESP32 firmware updates (proxied to device)
+      
+      // Cloud-only features
+      'push_notifications',  // Push notifications via cloud
+      'remote_access',       // Remote access capability
+      'multi_device',        // Multiple device management
+      
+      // Debug features
+      'debug_console',    // Debug console
+      'protocol_debug',   // Protocol debugging
+    ],
+    
+    // Cloud stats
+    connectedDevices: deviceRelay.getConnectedDeviceCount(),
+    connectedClients: clientProxy.getConnectedClientCount(),
+  });
+});
+
 // API routes
 app.use('/api/auth', authRouter);
 app.use('/api/devices', devicesRouter);

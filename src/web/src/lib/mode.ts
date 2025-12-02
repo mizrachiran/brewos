@@ -11,14 +11,34 @@ import {
   type User,
   type AuthSession,
 } from "./auth";
+import { useBackendInfo } from "./backend-info";
+import type { BackendInfo } from "./api-version";
 
 /**
  * Fetch mode from server - the server knows if it's ESP32 (local) or cloud
+ * Now uses /api/info as primary endpoint with fallback to /api/mode
  */
 async function fetchModeFromServer(): Promise<{
   mode: ConnectionMode;
   apMode?: boolean;
+  backendInfo?: BackendInfo;
 }> {
+  // Try /api/info first (new endpoint with full capabilities)
+  try {
+    const infoResponse = await fetch("/api/info");
+    if (infoResponse.ok) {
+      const info = await infoResponse.json() as BackendInfo;
+      return {
+        mode: info.mode === "cloud" ? "cloud" : "local",
+        apMode: (info as { apMode?: boolean }).apMode,
+        backendInfo: info,
+      };
+    }
+  } catch {
+    // /api/info not available, try fallback
+  }
+  
+  // Fallback to /api/mode (for backward compatibility with older firmware)
   try {
     const response = await fetch("/api/mode");
     if (response.ok) {
@@ -137,9 +157,28 @@ export const useAppStore = create<AppState>()(
       devicesLoading: false,
 
       initialize: async () => {
-        // Fetch mode from server
-        const { mode, apMode } = await fetchModeFromServer();
+        // Fetch mode and backend info from server
+        const { mode, apMode, backendInfo } = await fetchModeFromServer();
         set({ mode, apMode: apMode ?? false });
+        
+        // Update backend info store (for feature detection)
+        if (backendInfo) {
+          // Directly set info instead of fetching again
+          const { compatible, warnings, errors } = await import("./api-version").then(
+            (m) => m.checkCompatibility(backendInfo)
+          );
+          useBackendInfo.setState({
+            info: backendInfo,
+            loading: false,
+            error: null,
+            compatible,
+            warnings,
+            errors,
+          });
+        } else {
+          // Fallback: fetch backend info separately
+          useBackendInfo.getState().fetchInfo();
+        }
 
         if (mode === "local") {
           set({ initialized: true, authLoading: false });
