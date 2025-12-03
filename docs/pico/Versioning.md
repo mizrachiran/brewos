@@ -44,14 +44,14 @@ PROTOCOL_VERSION=1
 
 ## Version Management Script
 
-Use `scripts/version.py` to manage versions:
+Use `src/scripts/version.js` to manage versions:
 
 ### Show Current Version
 
 ```bash
-python scripts/version.py
+node src/scripts/version.js
 # or
-python scripts/version.py --show
+node src/scripts/version.js --show
 ```
 
 Output:
@@ -69,32 +69,32 @@ Current version definitions:
 
 ```bash
 # Bump patch version (0.1.0 → 0.1.1)
-python scripts/version.py --bump patch
+node src/scripts/version.js --bump patch
 
 # Bump minor version (0.1.0 → 0.2.0)
-python scripts/version.py --bump minor
+node src/scripts/version.js --bump minor
 
 # Bump major version (0.1.0 → 1.0.0)
-python scripts/version.py --bump major
+node src/scripts/version.js --bump major
 ```
 
 ### Set Specific Version
 
 ```bash
-python scripts/version.py --set 1.2.3
+node src/scripts/version.js --set 1.2.3
 ```
 
 ### Update Protocol Version
 
 ```bash
-python scripts/version.py --protocol 2
+node src/scripts/version.js --protocol 2
 ```
 
 ### Combined Operations
 
 ```bash
 # Bump minor version and update protocol
-python scripts/version.py --bump minor --protocol 2
+node src/scripts/version.js --bump minor --protocol 2
 ```
 
 ## Automatic Version Injection
@@ -123,9 +123,9 @@ The `.github/workflows/release.yml` workflow automatically:
 
 1. **Triggers on version tags**: `v1.2.3`
 2. **Extracts version** from tag
-3. **Updates all version files** using the version script
-4. **Builds both firmwares** (Pico and ESP32)
-5. **Creates GitHub release** with firmware artifacts
+3. **Builds all firmwares** (Pico variants and ESP32)
+4. **Generates changelog** from conventional commits using git-cliff
+5. **Creates GitHub release** with firmware artifacts and release notes
 
 ### Creating a Release
 
@@ -133,15 +133,15 @@ The `.github/workflows/release.yml` workflow automatically:
 
 ```bash
 # 1. Update version
-python scripts/version.py --bump minor
+node src/scripts/version.js --bump minor
 
 # 2. Commit version changes
 git add VERSION src/pico/include/config.h src/esp32/include/config.h src/shared/protocol_defs.h
-git commit -m "Bump version to 0.2.0"
+git commit -m "chore(release): bump version to 0.2.0"
 
 # 3. Create and push tag
 git tag -a v0.2.0 -m "Release v0.2.0"
-git push origin v0.2.0
+git push origin main --tags
 ```
 
 The GitHub workflow will automatically:
@@ -158,9 +158,11 @@ The GitHub workflow will automatically:
 ### Artifacts
 
 Each release includes:
-- `ecm_pico.uf2` - Pico firmware (USB flash format)
-- `ecm_pico.hex` - Pico firmware (alternative format)
-- `firmware.bin` - ESP32 firmware (OTA format)
+- `brewos_dual_boiler.uf2` - Pico firmware for dual boiler machines
+- `brewos_single_boiler.uf2` - Pico firmware for single boiler machines
+- `brewos_heat_exchanger.uf2` - Pico firmware for heat exchanger machines
+- `brewos_esp32.bin` - ESP32 firmware (OTA format)
+- `SHA256SUMS.txt` - Checksums for verification
 
 ## Versioning Workflow
 
@@ -168,14 +170,14 @@ Each release includes:
 
 ```bash
 # 1. Fix bug, commit
-git commit -m "Fix temperature reading issue"
+git commit -m "fix: temperature reading issue"
 
 # 2. Bump patch version
-python scripts/version.py --bump patch
+node src/scripts/version.js --bump patch
 
 # 3. Commit version change
 git add VERSION src/*/include/config.h src/shared/protocol_defs.h
-git commit -m "Bump version to 0.1.1"
+git commit -m "chore(release): bump version to 0.1.1"
 
 # 4. Tag and push
 git tag v0.1.1 -m "Release v0.1.1"
@@ -186,14 +188,14 @@ git push origin main --tags
 
 ```bash
 # 1. Add feature, commit
-git commit -m "Add pre-infusion support"
+git commit -m "feat: add pre-infusion support"
 
 # 2. Bump minor version
-python scripts/version.py --bump minor
+node src/scripts/version.js --bump minor
 
 # 3. Commit and tag
 git add VERSION src/*/include/config.h
-git commit -m "Bump version to 0.2.0"
+git commit -m "chore(release): bump version to 0.2.0"
 git tag v0.2.0 -m "Release v0.2.0"
 git push origin main --tags
 ```
@@ -202,26 +204,50 @@ git push origin main --tags
 
 ```bash
 # 1. Make breaking changes, update protocol version
-python scripts/version.py --protocol 2
+node src/scripts/version.js --protocol 2
 
 # 2. Bump major version
-python scripts/version.py --bump major
+node src/scripts/version.js --bump major
 
 # 3. Commit and tag
 git add VERSION src/*/include/config.h src/shared/protocol_defs.h
-git commit -m "Breaking: Protocol v2, bump to v1.0.0"
+git commit -m "feat!: protocol v2, bump to v1.0.0"
 git tag v1.0.0 -m "Release v1.0.0 - Protocol v2"
 git push origin main --tags
+```
+
+## Conventional Commits
+
+Use conventional commit prefixes to auto-generate release notes:
+
+| Prefix | Category | Example |
+|--------|----------|---------|
+| `feat:` | 🚀 Features | `feat: add brew-by-weight support` |
+| `fix:` | 🐛 Bug Fixes | `fix: temperature display flickering` |
+| `perf:` | ⚡ Performance | `perf: optimize PID loop` |
+| `docs:` | 📖 Documentation | `docs: update setup guide` |
+| `refactor:` | ♻️ Refactor | `refactor: simplify state management` |
+| `chore:` | 🔧 Maintenance | `chore: update dependencies` |
+| `ci:` | 👷 CI/CD | `ci: add build caching` |
+
+You can also add a **scope** for more context:
+```
+feat(esp32): add OTA update support
+fix(pico): correct temperature offset
+```
+
+Breaking changes use `!` or `BREAKING CHANGE:`:
+```
+feat!: new protocol version
 ```
 
 ## Best Practices
 
 1. **Always use the version script** - Don't manually edit version files
-2. **Commit version changes** with the feature/bug fix
+2. **Use conventional commits** - Enables auto-generated release notes
 3. **Tag releases** using semantic versioning (`vMAJOR.MINOR.PATCH`)
 4. **Update protocol version** when making breaking protocol changes
 5. **Test builds** after version changes
-6. **Document breaking changes** in release notes
 
 ## Version in Firmware
 
@@ -254,10 +280,10 @@ If versions get out of sync:
 
 ```bash
 # Read current version from VERSION file
-python scripts/version.py --show
+node src/scripts/version.js --show
 
-# Force update all files
-python scripts/version.py --set $(python scripts/version.py --show | grep "Firmware Version" | cut -d: -f2 | xargs)
+# Force update all files to match VERSION file
+node src/scripts/version.js --set 1.0.0  # Replace with actual version
 ```
 
 ### Missing VERSION File
@@ -265,7 +291,7 @@ python scripts/version.py --set $(python scripts/version.py --show | grep "Firmw
 If `VERSION` file is missing, the script will create a default:
 
 ```bash
-python scripts/version.py --show
+node src/scripts/version.js --show
 # Creates VERSION with 0.1.0 / 1
 ```
 

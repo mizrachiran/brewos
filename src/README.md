@@ -31,7 +31,7 @@ src/
 └── scripts/        # Build and utility scripts
     ├── build_firmware.sh
     ├── build_web.sh
-    └── version.py
+    └── version.js
 ```
 
 ## Quick Start
@@ -172,20 +172,20 @@ See `docs/shared/Communication_Protocol.md` for details.
 
 ## Version Management
 
-Versions are managed centrally using `src/scripts/version.py`:
+Versions are managed centrally using `src/scripts/version.js`:
 
 ```bash
 # Show current version
-python src/scripts/version.py
+node src/scripts/version.js
 
 # Bump patch version (0.1.0 → 0.1.1)
-python src/scripts/version.py --bump patch
+node src/scripts/version.js --bump patch
 
 # Bump minor version (0.1.0 → 0.2.0)
-python src/scripts/version.py --bump minor
+node src/scripts/version.js --bump minor
 
 # Set specific version
-python src/scripts/version.py --set 1.2.3
+node src/scripts/version.js --set 1.2.3
 ```
 
 See `docs/pico/Versioning.md` for complete versioning guide.
