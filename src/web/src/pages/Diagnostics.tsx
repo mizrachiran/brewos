@@ -23,25 +23,31 @@ import {
   RefreshCw,
   Cable,
   ArrowLeft,
+  HelpCircle,
 } from "lucide-react";
-import type { DiagnosticResult, DiagnosticStatus } from "@/lib/types";
+import type {
+  DiagnosticResult,
+  DiagnosticStatus,
+  MachineType,
+} from "@/lib/types";
+import { DIAGNOSTIC_TESTS, getTestsForMachineType } from "@/lib/types";
 
 // Map test IDs to icons
 function getTestIcon(testId: number) {
   const icons: Record<number, React.ReactNode> = {
-    0x01: <Thermometer className="w-5 h-5" />,
-    0x02: <Thermometer className="w-5 h-5" />,
-    0x03: <Thermometer className="w-5 h-5" />,
-    0x04: <Gauge className="w-5 h-5" />,
-    0x05: <Droplets className="w-5 h-5" />,
-    0x06: <Zap className="w-5 h-5" />,
-    0x07: <Zap className="w-5 h-5" />,
-    0x08: <Activity className="w-5 h-5" />,
-    0x09: <Activity className="w-5 h-5" />,
-    0x0a: <Cable className="w-5 h-5" />,
-    0x0b: <Wifi className="w-5 h-5" />,
-    0x0c: <Speaker className="w-5 h-5" />,
-    0x0d: <Lightbulb className="w-5 h-5" />,
+    0x01: <Thermometer className="w-5 h-5" />, // Brew Boiler NTC
+    0x02: <Thermometer className="w-5 h-5" />, // Steam Boiler NTC
+    0x03: <Thermometer className="w-5 h-5" />, // Group Head Thermocouple
+    0x04: <Gauge className="w-5 h-5" />, // Pressure Sensor
+    0x05: <Droplets className="w-5 h-5" />, // Water Level
+    0x06: <Zap className="w-5 h-5" />, // Brew Heater SSR
+    0x07: <Zap className="w-5 h-5" />, // Steam Heater SSR
+    0x08: <Droplets className="w-5 h-5" />, // Water Pump Relay
+    0x09: <Activity className="w-5 h-5" />, // Brew Solenoid Relay
+    0x0a: <Cable className="w-5 h-5" />, // Power Meter (PZEM)
+    0x0b: <Wifi className="w-5 h-5" />, // ESP32 Communication
+    0x0c: <Speaker className="w-5 h-5" />, // Buzzer
+    0x0d: <Lightbulb className="w-5 h-5" />, // Status LED
   };
   return icons[testId] || <Activity className="w-5 h-5" />;
 }
@@ -91,28 +97,46 @@ function getStatusInfo(status: DiagnosticStatus) {
   }
 }
 
+function TroubleshootItem({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex gap-3">
+      <div className="w-1 rounded-full bg-theme-tertiary flex-shrink-0" />
+      <div>
+        <h4 className="font-medium text-theme">{title}</h4>
+        <p className="text-theme-muted">{description}</p>
+      </div>
+    </div>
+  );
+}
+
 function DiagnosticResultRow({ result }: { result: DiagnosticResult }) {
   const statusInfo = getStatusInfo(result.status);
+  const testMeta = DIAGNOSTIC_TESTS.find((t) => t.id === result.testId);
+  const isOptional = testMeta?.optional ?? false;
 
   return (
-    <div
-      className={`flex items-center gap-4 p-4 rounded-xl border ${statusInfo.bgColor} ${statusInfo.borderColor}`}
-    >
-      <div className={`flex-shrink-0 ${statusInfo.color}`}>
+    <div className="flex items-center gap-4 p-4 rounded-xl bg-theme-secondary border border-theme">
+      <div className="flex-shrink-0 text-theme-muted">
         {getTestIcon(result.testId)}
       </div>
 
       <div className="flex-1 min-w-0">
-        <h4 className="font-medium text-theme truncate">{result.name}</h4>
+        <div className="flex items-center gap-2">
+          <h4 className="font-medium text-theme truncate">{result.name}</h4>
+          {isOptional && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-theme-tertiary text-theme-muted uppercase">
+              Optional
+            </span>
+          )}
+        </div>
         <p className="text-sm text-theme-muted truncate">{result.message}</p>
       </div>
-
-      {result.rawValue !== 0 && (
-        <div className="hidden sm:block text-right">
-          <p className="text-xs text-theme-muted">Raw Value</p>
-          <p className="font-mono text-sm text-theme">{result.rawValue}</p>
-        </div>
-      )}
 
       <div className={`flex items-center gap-1.5 ${statusInfo.color}`}>
         {statusInfo.icon}
@@ -130,7 +154,14 @@ export function Diagnostics() {
   const setDiagnosticsRunning = useStore((s) => s.setDiagnosticsRunning);
   const resetDiagnostics = useStore((s) => s.resetDiagnostics);
   const pico = useStore((s) => s.pico);
+  const device = useStore((s) => s.device);
   const { sendCommand } = useCommand();
+
+  // Get tests applicable to this machine type
+  const machineType = (device.machineType || "dual_boiler") as MachineType;
+  const applicableTests = getTestsForMachineType(machineType);
+  const requiredTests = applicableTests.filter((t) => !t.optional);
+  const optionalTests = applicableTests.filter((t) => t.optional);
 
   const runDiagnostics = () => {
     setDiagnosticsRunning(true);
@@ -143,12 +174,12 @@ export function Diagnostics() {
   const overallStatus: DiagnosticStatus = isRunning
     ? "running"
     : header.failCount > 0
-      ? "fail"
-      : header.warnCount > 0
-        ? "warn"
-        : header.passCount > 0
-          ? "pass"
-          : "skip";
+    ? "fail"
+    : header.warnCount > 0
+    ? "warn"
+    : header.passCount > 0
+    ? "pass"
+    : "skip";
 
   const overallInfo = getStatusInfo(overallStatus);
 
@@ -157,8 +188,16 @@ export function Diagnostics() {
       <PageHeader
         title="Hardware Diagnostics"
         subtitle="Test hardware wiring and component functionality"
-        backPath="/settings#machine"
-        backLabel="Back to Settings"
+        action={
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate("/settings")}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Settings
+          </Button>
+        }
       />
 
       {/* Info Card */}
@@ -169,11 +208,29 @@ export function Diagnostics() {
           </CardTitle>
         </CardHeader>
 
-        <p className="text-theme-muted mb-6">
+        <p className="text-theme-muted mb-4">
           Run self-tests to verify hardware wiring and component functionality.
-          The tests will briefly activate outputs (SSRs, relays, buzzer, LED) to
-          verify they're working correctly.
+          Tests are tailored to your{" "}
+          <span className="text-theme font-medium">
+            {machineType.replace("_", " ")}
+          </span>{" "}
+          machine configuration.
         </p>
+
+        <div className="flex flex-wrap gap-4 text-sm mb-6">
+          <div>
+            <span className="text-theme-muted">Required tests:</span>{" "}
+            <span className="font-medium text-theme">
+              {requiredTests.length}
+            </span>
+          </div>
+          <div>
+            <span className="text-theme-muted">Optional tests:</span>{" "}
+            <span className="font-medium text-theme">
+              {optionalTests.length}
+            </span>
+          </div>
+        </div>
 
         {/* Warning */}
         <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl mb-6">
@@ -241,10 +298,10 @@ export function Diagnostics() {
                 {isRunning
                   ? "Running Tests..."
                   : header.failCount > 0
-                    ? "Issues Detected"
-                    : header.warnCount > 0
-                      ? "Completed with Warnings"
-                      : "All Tests Passed"}
+                  ? "Issues Detected"
+                  : header.warnCount > 0
+                  ? "Completed with Warnings"
+                  : "All Tests Passed"}
               </span>
             </CardTitle>
             {!isRunning && header.durationMs > 0 && (
@@ -255,34 +312,36 @@ export function Diagnostics() {
           </CardHeader>
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
-            <div className="p-3 bg-theme rounded-xl text-center">
-              <p className="text-2xl font-bold text-theme">{header.testCount}</p>
+          <div className="grid grid-cols-5 gap-2 mb-6">
+            <div className="p-3 text-center">
+              <p className="text-2xl font-bold text-theme">
+                {header.testCount}
+              </p>
               <p className="text-xs text-theme-muted">Total</p>
             </div>
-            <div className="p-3 bg-emerald-500/10 rounded-xl text-center">
+            <div className="p-3 text-center">
               <p className="text-2xl font-bold text-emerald-500">
                 {header.passCount}
               </p>
-              <p className="text-xs text-emerald-500/70">Passed</p>
+              <p className="text-xs text-theme-muted">Passed</p>
             </div>
-            <div className="p-3 bg-red-500/10 rounded-xl text-center">
+            <div className="p-3 text-center">
               <p className="text-2xl font-bold text-red-500">
                 {header.failCount}
               </p>
-              <p className="text-xs text-red-500/70">Failed</p>
+              <p className="text-xs text-theme-muted">Failed</p>
             </div>
-            <div className="p-3 bg-amber-500/10 rounded-xl text-center">
+            <div className="p-3 text-center">
               <p className="text-2xl font-bold text-amber-500">
                 {header.warnCount}
               </p>
-              <p className="text-xs text-amber-500/70">Warnings</p>
+              <p className="text-xs text-theme-muted">Warnings</p>
             </div>
-            <div className="p-3 bg-slate-500/10 rounded-xl text-center">
-              <p className="text-2xl font-bold text-slate-400">
+            <div className="p-3 text-center">
+              <p className="text-2xl font-bold text-theme-muted">
                 {header.skipCount}
               </p>
-              <p className="text-xs text-slate-400/70">Skipped</p>
+              <p className="text-xs text-theme-muted">Skipped</p>
             </div>
           </div>
 
@@ -313,60 +372,38 @@ export function Diagnostics() {
       {/* Help Section */}
       <Card>
         <CardHeader>
-          <CardTitle icon={<AlertTriangle className="w-5 h-5" />}>
+          <CardTitle icon={<HelpCircle className="w-5 h-5" />}>
             Troubleshooting
           </CardTitle>
         </CardHeader>
 
-        <div className="space-y-4 text-sm text-theme-muted">
-          <div>
-            <h4 className="font-medium text-theme mb-1">NTC Sensor Failures</h4>
-            <p>
-              Check wiring connections to the ADC pins. Ensure thermistors are
-              properly connected with correct polarity and pull-up resistors.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="font-medium text-theme mb-1">
-              Thermocouple Failures
-            </h4>
-            <p>
-              Verify SPI connections (MISO, SCK, CS) to the MAX31855. Check for
-              open circuit errors which indicate disconnected thermocouple
-              wires.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="font-medium text-theme mb-1">SSR/Relay Failures</h4>
-            <p>
-              Test signals are sent to verify GPIO functionality. If machine
-              components don't activate, check relay/SSR wiring and power
-              supply.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="font-medium text-theme mb-1">
-              Water Level Warnings
-            </h4>
-            <p>
-              Fill the water reservoir before testing. Low water warnings during
-              diagnostics indicate the level sensors are working correctly.
-            </p>
-          </div>
+        <div className="space-y-4 text-sm">
+          <TroubleshootItem
+            title="Temperature Sensors (NTC)"
+            description="Check wiring to ADC pins. Ensure correct polarity and 10kΩ pull-up resistor. Reading 0 or max = disconnected wire. Dual boiler machines test both brew and steam NTCs."
+          />
+          <TroubleshootItem
+            title="Group Head Thermocouple (Optional)"
+            description="K-type thermocouple with MAX31855. Verify SPI connections (MISO, SCK, CS). 'Open circuit' = disconnected. Skip if not installed."
+          />
+          <TroubleshootItem
+            title="Heaters (SSR)"
+            description="Test briefly activates SSR control signal. Dual boiler = 2 SSRs, Single/HX = 1 SSR. If test passes but heaters don't work, check AC wiring."
+          />
+          <TroubleshootItem
+            title="Pump & Solenoid"
+            description="Relays click but nothing happens? Check load wiring. No click? Relay or control signal issue. These tests run on all machine types."
+          />
+          <TroubleshootItem
+            title="Pressure Sensor (Optional)"
+            description="Transducer monitors pump pressure. Skip if not installed. Fill reservoir before testing to get valid readings."
+          />
+          <TroubleshootItem
+            title="Power Meter & Communication"
+            description="PZEM is optional - skip if not installed. ESP32 communication tests UART link between boards."
+          />
         </div>
       </Card>
-
-      {/* Back button */}
-      <div className="flex justify-center">
-        <Button variant="ghost" onClick={() => navigate("/settings#machine")}>
-          <ArrowLeft className="w-4 h-4" />
-          Back to Settings
-        </Button>
-      </div>
     </div>
   );
 }
-

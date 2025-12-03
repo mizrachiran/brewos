@@ -38,6 +38,9 @@ export class DemoConnection implements IConnection {
   private scaleWeight = 0;
   private flowRate = 0;
 
+  // Machine type (for diagnostics)
+  private machineType: "dual_boiler" | "single_boiler" | "heat_exchanger" = "dual_boiler";
+
   async connect(): Promise<void> {
     this.isDisconnected = false;
     this.setState("connecting");
@@ -142,6 +145,10 @@ export class DemoConnection implements IConnection {
         console.log("[Demo] BBW settings received:", data);
         break;
       case "set_machine_info":
+        // Update machine type for diagnostics
+        if (data.machineType) {
+          this.machineType = data.machineType as "dual_boiler" | "single_boiler" | "heat_exchanger";
+        }
         // Update device info
         this.emit({
           type: "device_info",
@@ -168,6 +175,9 @@ export class DemoConnection implements IConnection {
       case "record_maintenance":
         // Record maintenance event
         this.handleMaintenanceRecord(data.type as string);
+        break;
+      case "run_diagnostics":
+        this.simulateDiagnostics();
         break;
       case "set_power":
       case "set_eco":
@@ -214,6 +224,138 @@ export class DemoConnection implements IConnection {
     setTimeout(() => {
       this.emit({ type: "scan_complete" });
     }, 3000);
+  }
+
+  private simulateDiagnostics(): void {
+    // Get current machine type from the last emitted device info
+    const machineType = this.machineType;
+
+    // Define all possible test results with realistic values
+    const allTests: Record<number, { status: number; rawValue: number; min: number; max: number; message: string }> = {
+      0x01: { status: 0, rawValue: 2450, min: 2000, max: 3000, message: "25.2°C - Sensor OK" },
+      0x02: { status: 0, rawValue: 2380, min: 2000, max: 3000, message: "26.1°C - Sensor OK" },
+      0x03: { status: 3, rawValue: 0, min: 0, max: 10000, message: "Not installed" }, // Skipped - optional
+      0x04: { status: 0, rawValue: 102, min: 50, max: 500, message: "0.0 bar - Sensor OK" },
+      0x05: { status: 2, rawValue: 1, min: 0, max: 1, message: "Low level - Fill reservoir" },
+      0x06: { status: 0, rawValue: 1, min: 0, max: 1, message: "SSR activated successfully" },
+      0x07: { status: 0, rawValue: 1, min: 0, max: 1, message: "SSR activated successfully" },
+      0x08: { status: 0, rawValue: 1, min: 0, max: 1, message: "Relay click detected" },
+      0x09: { status: 0, rawValue: 1, min: 0, max: 1, message: "Relay click detected" },
+      0x0a: { status: 3, rawValue: 0, min: 0, max: 0, message: "Not installed" }, // Skipped - optional
+      0x0b: { status: 0, rawValue: 1, min: 0, max: 1, message: "UART link OK" },
+      0x0c: { status: 0, rawValue: 1, min: 0, max: 1, message: "Beep confirmed" },
+      0x0d: { status: 0, rawValue: 1, min: 0, max: 1, message: "LED blink confirmed" },
+    };
+
+    // Determine which tests to run based on machine type
+    const testsToRun: number[] = [];
+
+    // Always run these core tests
+    testsToRun.push(0x05); // Water level
+    testsToRun.push(0x08); // Pump relay
+    testsToRun.push(0x09); // Solenoid relay
+    testsToRun.push(0x0b); // ESP32 comm
+    testsToRun.push(0x0c); // Buzzer
+    testsToRun.push(0x0d); // LED
+
+    // Machine-type specific tests
+    if (machineType === "dual_boiler") {
+      testsToRun.push(0x01); // Brew NTC
+      testsToRun.push(0x02); // Steam NTC
+      testsToRun.push(0x06); // Brew SSR
+      testsToRun.push(0x07); // Steam SSR
+    } else if (machineType === "single_boiler") {
+      testsToRun.push(0x01); // Brew NTC (single boiler uses brew NTC)
+      testsToRun.push(0x06); // Brew SSR
+    } else if (machineType === "heat_exchanger") {
+      testsToRun.push(0x02); // Steam NTC (HX has steam boiler)
+      testsToRun.push(0x07); // Steam SSR
+    }
+
+    // Optional tests (show as skipped if not "installed")
+    testsToRun.push(0x03); // Thermocouple - optional
+    testsToRun.push(0x04); // Pressure sensor - let's say this user has it
+    testsToRun.push(0x0a); // PZEM - optional
+
+    // Make pressure sensor pass (user has it installed)
+    allTests[0x04] = { status: 0, rawValue: 102, min: 50, max: 500, message: "0.0 bar - Sensor OK" };
+
+    // Sort tests by ID for consistent order
+    testsToRun.sort((a, b) => a - b);
+
+    // Build final test list
+    const tests = testsToRun.map(testId => ({
+      testId,
+      ...allTests[testId],
+    }));
+
+    // Count results
+    let passCount = 0;
+    let failCount = 0;
+    let warnCount = 0;
+    let skipCount = 0;
+    tests.forEach(t => {
+      if (t.status === 0) passCount++;
+      else if (t.status === 1) failCount++;
+      else if (t.status === 2) warnCount++;
+      else if (t.status === 3) skipCount++;
+    });
+
+    // Emit header first (tests starting)
+    this.emit({
+      type: "diagnostics_header",
+      testCount: tests.length,
+      passCount: 0,
+      failCount: 0,
+      warnCount: 0,
+      skipCount: 0,
+      isComplete: false,
+      durationMs: 0,
+    });
+
+    // Emit each test result with realistic delays
+    const startTime = Date.now();
+    let currentPass = 0;
+    let currentFail = 0;
+    let currentWarn = 0;
+    let currentSkip = 0;
+
+    tests.forEach((test, index) => {
+      setTimeout(() => {
+        // Update counts
+        if (test.status === 0) currentPass++;
+        else if (test.status === 1) currentFail++;
+        else if (test.status === 2) currentWarn++;
+        else if (test.status === 3) currentSkip++;
+
+        // Emit result
+        this.emit({
+          type: "diagnostics_result",
+          testId: test.testId,
+          status: test.status,
+          rawValue: test.rawValue,
+          expectedMin: test.min,
+          expectedMax: test.max,
+          message: test.message,
+        });
+
+        // If last test, emit final header with complete stats
+        if (index === tests.length - 1) {
+          setTimeout(() => {
+            this.emit({
+              type: "diagnostics_header",
+              testCount: tests.length,
+              passCount: currentPass,
+              failCount: currentFail,
+              warnCount: currentWarn,
+              skipCount: currentSkip,
+              isComplete: true,
+              durationMs: Date.now() - startTime,
+            });
+          }, 100);
+        }
+      }, (index + 1) * 250); // 250ms between each test
+    });
   }
 
   private handleMaintenanceRecord(maintenanceType: string): void {

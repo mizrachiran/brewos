@@ -416,26 +416,149 @@ export interface DiagnosticReport {
 }
 
 /**
+ * Diagnostic test metadata with machine type compatibility
+ */
+export interface DiagnosticTestMeta {
+  id: number;
+  name: string;
+  description: string;
+  /** Machine types this test applies to (empty = all types) */
+  machineTypes: MachineType[];
+  /** Whether this test is optional (user can skip/disable) */
+  optional: boolean;
+  /** Category for grouping in UI */
+  category: 'sensors' | 'outputs' | 'communication' | 'peripheral';
+}
+
+/**
+ * All diagnostic tests with metadata
+ */
+export const DIAGNOSTIC_TESTS: DiagnosticTestMeta[] = [
+  // Sensors
+  {
+    id: 0x01,
+    name: 'Brew Boiler Temperature Sensor (NTC)',
+    description: 'Thermistor for brew boiler temperature control',
+    machineTypes: ['dual_boiler', 'single_boiler'],
+    optional: false,
+    category: 'sensors',
+  },
+  {
+    id: 0x02,
+    name: 'Steam Boiler Temperature Sensor (NTC)',
+    description: 'Thermistor for steam boiler temperature control',
+    machineTypes: ['dual_boiler', 'heat_exchanger'],
+    optional: false,
+    category: 'sensors',
+  },
+  {
+    id: 0x03,
+    name: 'Group Head Thermocouple (MAX31855)',
+    description: 'K-type thermocouple for group head temperature',
+    machineTypes: [], // All machine types
+    optional: true,   // Not everyone installs this
+    category: 'sensors',
+  },
+  {
+    id: 0x04,
+    name: 'Pump Pressure Sensor',
+    description: 'Transducer for pump pressure monitoring',
+    machineTypes: [], // All machine types
+    optional: true,   // Some users don't install pressure sensor
+    category: 'sensors',
+  },
+  {
+    id: 0x05,
+    name: 'Water Reservoir Level Sensors',
+    description: 'Float switches for water tank level',
+    machineTypes: [], // All machine types
+    optional: false,
+    category: 'sensors',
+  },
+  // Outputs
+  {
+    id: 0x06,
+    name: 'Brew Heater (SSR)',
+    description: 'Solid-state relay for brew boiler heating element',
+    machineTypes: ['dual_boiler', 'single_boiler'],
+    optional: false,
+    category: 'outputs',
+  },
+  {
+    id: 0x07,
+    name: 'Steam Heater (SSR)',
+    description: 'Solid-state relay for steam boiler heating element',
+    machineTypes: ['dual_boiler', 'heat_exchanger'],
+    optional: false,
+    category: 'outputs',
+  },
+  {
+    id: 0x08,
+    name: 'Water Pump Relay',
+    description: 'Relay controlling the water pump',
+    machineTypes: [], // All machine types
+    optional: false,
+    category: 'outputs',
+  },
+  {
+    id: 0x09,
+    name: 'Brew Solenoid Valve Relay',
+    description: 'Relay controlling the 3-way solenoid valve',
+    machineTypes: [], // All machine types
+    optional: false,
+    category: 'outputs',
+  },
+  // Peripheral
+  {
+    id: 0x0A,
+    name: 'Power Meter (PZEM)',
+    description: 'PZEM power monitoring module',
+    machineTypes: [], // All machine types
+    optional: true,   // Optional add-on
+    category: 'peripheral',
+  },
+  {
+    id: 0x0C,
+    name: 'Buzzer / Piezo Speaker',
+    description: 'Audio feedback device',
+    machineTypes: [], // All machine types
+    optional: false,
+    category: 'peripheral',
+  },
+  {
+    id: 0x0D,
+    name: 'Status LED',
+    description: 'Visual status indicator',
+    machineTypes: [], // All machine types
+    optional: false,
+    category: 'peripheral',
+  },
+  // Communication
+  {
+    id: 0x0B,
+    name: 'ESP32 Communication',
+    description: 'UART link between Pico and ESP32',
+    machineTypes: [], // All machine types
+    optional: false,
+    category: 'communication',
+  },
+];
+
+/**
+ * Get tests applicable to a specific machine type
+ */
+export function getTestsForMachineType(machineType: MachineType): DiagnosticTestMeta[] {
+  return DIAGNOSTIC_TESTS.filter(test => 
+    test.machineTypes.length === 0 || test.machineTypes.includes(machineType)
+  );
+}
+
+/**
  * Get human-readable name for a diagnostic test
  */
 export function getDiagnosticTestName(testId: number): string {
-  const names: Record<number, string> = {
-    0x00: 'All Tests',
-    0x01: 'Brew Boiler NTC',
-    0x02: 'Steam Boiler NTC',
-    0x03: 'Group Thermocouple',
-    0x04: 'Pressure Sensor',
-    0x05: 'Water Level Sensors',
-    0x06: 'Brew SSR Output',
-    0x07: 'Steam SSR Output',
-    0x08: 'Pump Relay',
-    0x09: 'Brew Solenoid Relay',
-    0x0A: 'PZEM Power Meter',
-    0x0B: 'ESP32 Communication',
-    0x0C: 'Buzzer',
-    0x0D: 'Status LED',
-  };
-  return names[testId] || `Unknown Test (${testId})`;
+  const test = DIAGNOSTIC_TESTS.find(t => t.id === testId);
+  return test?.name || `Unknown Test (${testId})`;
 }
 
 // Alerts & Logs
