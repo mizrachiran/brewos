@@ -23,24 +23,19 @@ const features = [
     icon: 'scale'
   },
   {
-    title: 'Safety First',
-    description: 'Hardware watchdog, temperature limits, water interlocks, and fail-safe design. Your machine is protected at every level.',
-    icon: 'shield'
-  },
-  {
-    title: 'Shot Analytics',
-    description: 'Track your shots, temperatures, and power consumption. Get cleaning reminders and maintenance insights automatically.',
-    icon: 'chart'
+    title: 'Profiling & Analytics',
+    description: 'Create custom pressure and flow profiles with pre-infusion and ramps. Track every shot with detailed analytics and insights.',
+    icon: 'pulse'
   },
   {
     title: 'Smart Schedules',
     description: 'Wake up to a pre-heated machine. Set daily schedules, auto-sleep timers, and energy-saving modes tailored to your routine.',
     icon: 'clock'
   },
-  {
-    title: 'Shot Profiling',
-    description: 'Create and save custom pressure and flow profiles. Experiment with pre-infusion, ramps, and blooming for the perfect extraction.',
-    icon: 'pulse'
+    {
+    title: 'Safety First',
+    description: 'Hardware watchdog, temperature limits, water interlocks, and fail-safe design. Your machine is protected at every level.',
+    icon: 'shield'
   },
   {
     title: 'Faster Heat-Up',
@@ -50,33 +45,12 @@ const features = [
 ];
 
 const steps = [
-  { title: 'Get the Hardware', description: 'Order the custom PCB and components from our BOM list' },
-  { title: 'Flash Firmware', description: 'Download and flash BrewOS to your Pico & ESP32' },
+  { title: 'Get the Hardware', description: 'Order the BrewOS controller kit from our store' },
+  { title: 'Flash Firmware', description: 'Download and flash BrewOS to your controller' },
   { title: 'Install & Wire', description: 'Replace the stock controller and connect sensors' },
   { title: 'Configure & Brew', description: 'Set your preferences and start pulling perfect shots' }
 ];
 
-const machines = [
-  { icon: '☕', title: 'Dual Boiler', description: 'ECM Synchronika, Profitec Pro 700', status: 'supported' },
-  { icon: '🔥', title: 'Single Boiler', description: 'Rancilio Silvia, Gaggia Classic Pro', status: 'supported' },
-  { icon: '💨', title: 'Heat Exchanger', description: 'E61 HX machines with steam priority', status: 'supported' },
-  { icon: '⚡', title: 'Thermoblock', description: 'Breville, DeLonghi style machines', status: 'planned' }
-];
-
-const integrations = [
-  { name: 'Home Assistant', logo: 'ha', featured: true, badge: 'Native', description: 'Full native integration via MQTT auto-discovery. Control your machine, monitor temperatures, and automate your coffee routine from your smart home dashboard.', features: ['Auto-discovery', 'Real-time sensors', 'Automations', 'Lovelace cards'] },
-  { name: 'MQTT', logo: 'mqtt', description: 'Lightweight pub/sub messaging for any IoT platform.' },
-  { name: 'REST API', logo: 'api', description: 'Full HTTP API for custom integrations and apps.' },
-  { name: 'Webhooks', logo: 'webhook', description: 'Trigger external services on brew events.' },
-  { name: 'BT Scales', logo: 'api', description: 'Acaia, Felicita, Decent for brew-by-weight.' }
-];
-
-const partners = [
-  { title: 'White-Label Firmware', description: 'Custom branding, UI themes, and feature sets tailored to your product line.', icon: 'layers' },
-  { title: 'Hardware Design', description: 'PCB customization, component selection, and integration support for your machines.', icon: 'cpu' },
-  { title: 'Cloud Integration', description: 'Connect to your existing platform with our flexible API, or use our cloud infrastructure.', icon: 'cloud' },
-  { title: 'Dedicated Support', description: 'Priority engineering assistance, custom development, and ongoing maintenance.', icon: 'users' }
-];
 ---
 
 <BaseLayout title="BrewOS - Open Source Espresso Machine Firmware" currentPath="/">
@@ -133,126 +107,130 @@ const partners = [
   <!-- Features Section -->
   <section class="features" id="features">
     <div class="container">
-      <div class="section-header">
-        <span class="section-label">Features</span>
-        <h2 class="section-title">Everything You Need for Perfect Espresso</h2>
-        <p class="section-description">
-          From precise temperature control to remote monitoring, BrewOS gives you complete command over your espresso machine.
-        </p>
-      </div>
-      <div class="feature-grid">
-        {features.map(feature => (
-          <div class="feature-card">
-            <div class="feature-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                {feature.icon === 'target' && <><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></>}
-                {feature.icon === 'cloud' && <><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" /><polyline points="8 16 10 14 12 16 16 12" /></>}
-                {feature.icon === 'refresh' && <><path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" /></>}
-                {feature.icon === 'scale' && <><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 0 1-8 0" /><line x1="12" y1="2" x2="12" y2="6" /></>}
-                {feature.icon === 'shield' && <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="M9 12l2 2 4-4" /></>}
-                {feature.icon === 'chart' && <><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /><line x1="2" y1="20" x2="22" y2="20" /></>}
-                {feature.icon === 'clock' && <><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>}
-                {feature.icon === 'pulse' && <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></>}
-                {feature.icon === 'bolt' && <><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></>}
-              </svg>
+      <div class="features-layout">
+        <div class="features-header">
+          <span class="section-label">Features</span>
+          <h2>Everything You Need for Perfect Espresso</h2>
+        </div>
+        <div class="features-list">
+          {features.slice(0, 6).map(feature => (
+            <div class="feature-item">
+              <div class="feature-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  {feature.icon === 'target' && <><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></>}
+                  {feature.icon === 'cloud' && <><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" /></>}
+                  {feature.icon === 'refresh' && <><path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" /></>}
+                  {feature.icon === 'scale' && <><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M12 8v8" /><path d="M8 12h8" /></>}
+                  {feature.icon === 'shield' && <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></>}
+                  {feature.icon === 'pulse' && <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></>}
+                  {feature.icon === 'clock' && <><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>}
+                  {feature.icon === 'chart' && <><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></>}
+                </svg>
+              </div>
+              <div class="feature-content">
+                <h3>{feature.title}</h3>
+                <p>{feature.description}</p>
+              </div>
             </div>
-            <h3>{feature.title}</h3>
-            <p>{feature.description}</p>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- Compatibility Section -->
-  <section class="compatibility" id="compatibility">
+  <!-- Integrations Section -->
+  <section class="integrations" id="integrations">
     <div class="container">
-      <div class="section-header">
-        <span class="section-label">Compatibility</span>
-        <h2 class="section-title">Works With Everything You Love</h2>
-        <p class="section-description">
-          From machine types to smart home platforms, BrewOS integrates seamlessly with your setup.
-        </p>
-      </div>
-      <div class="compat-wrapper">
-        <!-- Machine Types -->
-        <div class="compat-section">
-          <div class="compat-section-header">
-            <div class="compat-section-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M18 8h1a4 4 0 0 1 0 8h-1" />
-                <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" />
-                <line x1="6" y1="1" x2="6" y2="4" />
-                <line x1="10" y1="1" x2="10" y2="4" />
-                <line x1="14" y1="1" x2="14" y2="4" />
+      <div class="integrations-layout">
+        <div class="integrations-header">
+          <span class="section-label">Integrations</span>
+          <h2>Open & Connected</h2>
+          <p class="integrations-desc">Control your machine from anywhere. Seamlessly connects with your favorite platforms.</p>
+        </div>
+        
+        <!-- BrewOS Cloud Hero -->
+        <div class="cloud-hero">
+          <div class="cloud-hero-content">
+            <div class="cloud-badge">☁️ Free & Hosted</div>
+            <h3>BrewOS Cloud</h3>
+            <p>Monitor temperatures, track shots, and control your machine from anywhere in the world. No server setup required.</p>
+            <a href="https://cloud.brewos.io/?demo=true" class="cloud-btn" target="_blank">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <polygon points="5 3 19 12 5 21 5 3"/>
               </svg>
-            </div>
-            <div class="compat-section-title">
-              <h3>Machine Types</h3>
-              <p>Automatic configuration for any architecture</p>
-            </div>
+              Try the Demo
+            </a>
           </div>
-          <div class="machine-list">
-            {machines.map(machine => (
-              <div class="machine-item">
-                <div class="machine-item-icon">{machine.icon}</div>
-                <div class="machine-item-content">
-                  <h4>{machine.title}</h4>
-                  <p>{machine.description}</p>
-                </div>
-                <span class={`machine-item-status ${machine.status}`}>
-                  {machine.status === 'supported' ? 'Supported' : 'Coming Soon'}
-                </span>
-              </div>
-            ))}
+          <div class="cloud-hero-features">
+            <div class="cloud-feature">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              <span>Real-time Data</span>
+            </div>
+            <div class="cloud-feature">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+              <span>Shot Analytics</span>
+            </div>
+            <div class="cloud-feature">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <span>Secure Access</span>
+            </div>
+            <div class="cloud-feature">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>OTA Updates</span>
+            </div>
           </div>
         </div>
 
-        <!-- Integrations -->
-        <div class="compat-section">
-          <div class="compat-section-header">
-            <div class="compat-section-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        <!-- Other Integrations Grid -->
+        <div class="other-integrations">
+          <span class="other-label">Works with your favorite platforms</span>
+          <div class="other-grid">
+            <a href="https://www.home-assistant.io/" target="_blank" class="other-card ha">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0L1.5 6v12L12 24l10.5-6V6L12 0zm0 2.25l8.25 4.695v9.39L12 21l-8.25-4.695v-9.39L12 2.25z"/>
               </svg>
-            </div>
-            <div class="compat-section-title">
-              <h3>Smart Home & APIs</h3>
-              <p>Connect to your favorite platforms</p>
-            </div>
-          </div>
-          <div class="integration-grid">
-            {integrations.map(int => (
-              <div class={`integration-card ${int.featured ? 'featured' : ''}`}>
-                <div class="integration-header">
-                  <div class={`integration-logo ${int.logo}`}>
-                    {int.logo === 'ha' && (
-                      <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 0L1.5 6v12L12 24l10.5-6V6L12 0zm0 2.25l8.25 4.695v9.39L12 21l-8.25-4.695v-9.39L12 2.25zm0 3a6.75 6.75 0 1 0 0 13.5 6.75 6.75 0 0 0 0-13.5zm0 2.25a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 1.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
-                      </svg>
-                    )}
-                    {int.logo === 'mqtt' && (
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-                    )}
-                    {int.logo === 'api' && (
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                    )}
-                    {int.logo === 'webhook' && (
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                    )}
-                  </div>
-                  <span class="integration-name">{int.name}</span>
-                  {int.badge && <span class="integration-badge">{int.badge}</span>}
-                </div>
-                <p class="integration-desc">{int.description}</p>
-                {int.features && (
-                  <div class="integration-features">
-                    {int.features.map(f => <span class="integration-feature">{f}</span>)}
-                  </div>
-                )}
+              <div>
+                <strong>Home Assistant</strong>
+                <span>Native MQTT auto-discovery</span>
               </div>
-            ))}
+            </a>
+            <div class="other-card">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+              </svg>
+              <div>
+                <strong>MQTT</strong>
+                <span>Any IoT platform</span>
+              </div>
+            </div>
+            <div class="other-card">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+              </svg>
+              <div>
+                <strong>REST API</strong>
+                <span>Full HTTP control</span>
+              </div>
+            </div>
+            <div class="other-card">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+              </svg>
+              <div>
+                <strong>Webhooks</strong>
+                <span>Trigger external services</span>
+              </div>
+            </div>
+            <div class="other-card">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8"/><path d="M8 12h8"/>
+              </svg>
+              <div>
+                <strong>Bluetooth Scales</strong>
+                <span>Acaia, Felicita, Decent</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -262,59 +240,20 @@ const partners = [
   <!-- How It Works Section -->
   <section class="how-it-works" id="how-it-works">
     <div class="container">
-      <div class="section-header">
-        <span class="section-label">How It Works</span>
-        <h2 class="section-title">Get Started in 4 Simple Steps</h2>
-        <p class="section-description">
-          Transform your espresso machine in an afternoon with our easy installation process.
-        </p>
+      <div class="steps-header">
+        <span class="section-label">Get Started</span>
+        <h2>Up and Running in 4 Steps</h2>
       </div>
-      <div class="steps">
+      <div class="steps-timeline">
         {steps.map((step, index) => (
-          <div class="step">
-            <div class="step-number">{index + 1}</div>
-            <h3>{step.title}</h3>
-            <p>{step.description}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  </section>
-
-  <!-- Partners Section -->
-  <section class="partners" id="partners">
-    <div class="container">
-      <div class="section-header">
-        <span class="section-label">For Business</span>
-        <h2 class="section-title">Partner with BrewOS</h2>
-        <p class="section-description">
-          Bring professional-grade firmware to your espresso machines. White-label solutions for manufacturers and integrators.
-        </p>
-      </div>
-      <div class="partner-grid">
-        {partners.map(partner => (
-          <div class="partner-card">
-            <div class="partner-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                {partner.icon === 'layers' && <><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></>}
-                {partner.icon === 'cpu' && <><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></>}
-                {partner.icon === 'cloud' && <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>}
-                {partner.icon === 'users' && <><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>}
-              </svg>
+          <div class="step-item">
+            <div class="step-marker">{index + 1}</div>
+            <div class="step-content">
+              <h3>{step.title}</h3>
+              <p>{step.description}</p>
             </div>
-            <h3>{partner.title}</h3>
-            <p>{partner.description}</p>
           </div>
         ))}
-      </div>
-      <div class="partner-cta">
-        <a href="/partnerships" class="btn btn-primary">
-          Learn More About Partnerships
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="5" y1="12" x2="19" y2="12"/>
-            <polyline points="12 5 19 12 12 19"/>
-          </svg>
-        </a>
       </div>
     </div>
   </section>
@@ -323,20 +262,17 @@ const partners = [
   <section class="cta-section">
     <div class="container">
       <div class="cta-content">
-        <h2>Ready to Transform Your Machine?</h2>
-        <p>Join the community of coffee enthusiasts building the future of home espresso.</p>
+        <h2>Ready to Get Started?</h2>
+        <p>Join coffee enthusiasts building the future of home espresso.</p>
         <div class="cta-buttons">
-          <a href="/getting-started" class="btn btn-cta-primary">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M5 12h14M12 5l7 7-7 7"/>
-            </svg>
-            Get Started
+          <a href="https://cloud.brewos.io/?demo=true" class="btn btn-cta-primary" target="_blank">
+            Try the Demo
           </a>
           <a href="https://github.com/mizrachiran/brewos" class="btn btn-cta-secondary" target="_blank">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
             </svg>
-            View on GitHub
+            GitHub
           </a>
         </div>
       </div>
@@ -360,7 +296,7 @@ const partners = [
     right: -20%;
     width: 80%;
     height: 150%;
-    background: radial-gradient(ellipse, rgba(196, 112, 60, 0.08) 0%, transparent 70%);
+    background: radial-gradient(ellipse, rgba(212, 112, 58, 0.1) 0%, transparent 70%);
     pointer-events: none;
   }
 
@@ -456,454 +392,402 @@ const partners = [
     animation: float 6s ease-in-out infinite;
   }
 
-  /* Features styles */
+  /* Features styles - Clean list layout */
   .features {
-    padding: 120px 0;
-    background: var(--white);
-  }
-
-  .feature-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 32px;
-  }
-
-  .feature-card {
+    padding: 100px 0;
     background: var(--cream-100);
-    border: 1px solid var(--cream-300);
-    border-radius: 20px;
-    padding: 40px 32px;
-    transition: all 0.3s ease;
-    position: relative;
-    overflow: hidden;
   }
 
-  .feature-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 4px;
-    background: linear-gradient(90deg, var(--accent) 0%, var(--accent-light) 100%);
-    transform: scaleX(0);
-    transition: transform 0.3s ease;
+  .features-layout {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: 80px;
+    align-items: start;
   }
 
-  .feature-card:hover {
-    transform: translateY(-8px);
-    box-shadow: var(--shadow-xl);
-    border-color: transparent;
+  .features-header {
+    position: sticky;
+    top: 120px;
   }
 
-  .feature-card:hover::before {
-    transform: scaleX(1);
+  .features-header h2 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--coffee-800);
+    line-height: 1.2;
+    margin-top: 16px;
+  }
+
+  .features-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .feature-item {
+    display: flex;
+    gap: 20px;
+    padding: 28px 0;
+    border-bottom: 1px solid var(--cream-300);
+    transition: all 0.2s ease;
+  }
+
+  .feature-item:first-child {
+    padding-top: 0;
+  }
+
+  .feature-item:last-child {
+    border-bottom: none;
+  }
+
+  .feature-item:hover {
+    padding-left: 8px;
   }
 
   .feature-icon {
-    width: 72px;
-    height: 72px;
-    background: linear-gradient(135deg, var(--coffee-800) 0%, var(--coffee-700) 100%);
-    border-radius: 18px;
+    width: 48px;
+    height: 48px;
+    background: var(--white);
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 28px;
-    box-shadow: 0 8px 24px rgba(57, 31, 18, 0.2);
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(45, 30, 20, 0.06);
+  }
+
+  .feature-item:hover .feature-icon {
+    background: var(--accent);
   }
 
   .feature-icon svg {
-    width: 36px;
-    height: 36px;
-    color: var(--cream-100);
+    width: 24px;
+    height: 24px;
+    color: var(--coffee-700);
+    transition: all 0.2s ease;
   }
 
-  .feature-card h3 {
-    font-size: 1.25rem;
+  .feature-item:hover .feature-icon svg {
+    color: white;
+  }
+
+  .feature-content h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--coffee-800);
+    margin-bottom: 6px;
+  }
+
+  .feature-content p {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+
+  /* Integrations - Elegant warm section */
+  .integrations {
+    padding: 120px 0;
+    background: var(--cream-200);
+  }
+
+  .integrations-layout {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .integrations-header {
+    text-align: center;
+    margin-bottom: 56px;
+  }
+
+  .integrations-header h2 {
+    font-size: 2.8rem;
     font-weight: 700;
     color: var(--coffee-800);
-    margin-bottom: 12px;
+    margin-top: 16px;
   }
 
-  .feature-card p {
+  .integrations-desc {
     color: var(--text-secondary);
-    font-size: 0.95rem;
-    line-height: 1.7;
+    font-size: 1.15rem;
+    margin-top: 16px;
   }
 
-  /* How it works styles */
-  .how-it-works {
-    padding: 120px 0;
-    background: var(--white);
+  /* Cloud Hero Card */
+  .cloud-hero {
+    background: linear-gradient(135deg, var(--coffee-800) 0%, var(--coffee-900) 100%);
+    border-radius: 28px;
+    padding: 64px;
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 60px;
+    align-items: center;
+    margin-bottom: 48px;
     position: relative;
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(45, 30, 20, 0.25);
   }
 
-  .how-it-works::before {
+  .cloud-hero::before {
     content: '';
     position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, var(--cream-300), transparent);
+    top: -50%;
+    right: -20%;
+    width: 70%;
+    height: 200%;
+    background: radial-gradient(ellipse, rgba(212, 112, 58, 0.25) 0%, transparent 60%);
+    pointer-events: none;
   }
 
-  .steps {
+  .cloud-hero-content {
+    position: relative;
+    z-index: 1;
+  }
+
+  .cloud-badge {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 8px 18px;
+    border-radius: 100px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--cream-300);
+    margin-bottom: 20px;
+  }
+
+  .cloud-hero h3 {
+    font-size: 2.6rem;
+    font-weight: 700;
+    color: var(--white);
+    margin-bottom: 16px;
+    letter-spacing: -0.02em;
+  }
+
+  .cloud-hero-content > p {
+    color: var(--cream-400);
+    font-size: 1.15rem;
+    line-height: 1.7;
+    margin-bottom: 32px;
+  }
+
+  .cloud-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--accent);
+    color: white;
+    padding: 18px 36px;
+    border-radius: 14px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    box-shadow: 0 8px 32px rgba(212, 112, 58, 0.35);
+  }
+
+  .cloud-btn:hover {
+    background: var(--accent-light);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 40px rgba(212, 112, 58, 0.45);
+  }
+
+  .cloud-hero-features {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 32px;
-    margin-top: 64px;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
     position: relative;
+    z-index: 1;
   }
 
-  .step {
+  .cloud-feature {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 20px 24px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    transition: all 0.2s ease;
+  }
+
+  .cloud-feature:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .cloud-feature svg {
+    width: 24px;
+    height: 24px;
+    color: var(--accent-light);
+    flex-shrink: 0;
+  }
+
+  .cloud-feature span {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--cream-200);
+  }
+
+  /* Other Integrations Grid */
+  .other-integrations {
     text-align: center;
-    position: relative;
-    padding: 32px 16px;
-    border-radius: 20px;
-    transition: all 0.3s ease;
   }
 
-  .step:hover {
-    background: var(--cream-100);
+  .other-label {
+    display: block;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-bottom: 24px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+  }
+
+  .other-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
+  }
+
+  .other-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    background: var(--white);
+    border: 1px solid var(--cream-300);
+    padding: 28px 20px;
+    border-radius: 16px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+
+  .other-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 8px 32px rgba(212, 112, 58, 0.12);
     transform: translateY(-4px);
   }
 
-  .step:not(:last-child)::after {
-    content: '';
-    position: absolute;
-    top: 72px;
-    right: -16px;
-    width: calc(100% - 80px);
-    height: 3px;
-    background: linear-gradient(90deg, var(--accent) 0%, var(--cream-300) 100%);
-    border-radius: 2px;
+  .other-card svg {
+    width: 32px;
+    height: 32px;
+    color: var(--coffee-600);
   }
 
-  .step-number {
-    width: 80px;
-    height: 80px;
+  .other-card:hover svg {
+    color: var(--accent);
+  }
+
+  .other-card div {
+    text-align: center;
+  }
+
+  .other-card strong {
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--coffee-800);
+    margin-bottom: 4px;
+  }
+
+  .other-card span {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+
+  .other-card.ha {
+    border-color: rgba(24, 188, 233, 0.3);
+    background: linear-gradient(180deg, rgba(24, 188, 233, 0.06) 0%, var(--white) 100%);
+  }
+
+  .other-card.ha:hover {
+    border-color: #18bce9;
+    box-shadow: 0 8px 32px rgba(24, 188, 233, 0.15);
+  }
+
+  .other-card.ha svg {
+    color: #18bce9;
+  }
+
+  /* How it works - Clean timeline */
+  .how-it-works {
+    padding: 100px 0;
+    background: var(--white);
+  }
+
+  .steps-header {
+    text-align: center;
+    margin-bottom: 60px;
+  }
+
+  .steps-header h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--coffee-800);
+    margin-top: 12px;
+  }
+
+  .steps-timeline {
+    display: flex;
+    justify-content: space-between;
+    max-width: 900px;
+    margin: 0 auto;
+    position: relative;
+  }
+
+  .steps-timeline::before {
+    content: '';
+    position: absolute;
+    top: 20px;
+    left: 40px;
+    right: 40px;
+    height: 2px;
+    background: linear-gradient(90deg, var(--cream-300), var(--accent-glow), var(--cream-300));
+  }
+
+  .step-item {
+    flex: 1;
+    text-align: center;
+    position: relative;
+  }
+
+  .step-marker {
+    width: 40px;
+    height: 40px;
     background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto 24px;
-    font-size: 1.5rem;
-    font-weight: 800;
-    color: var(--white);
+    margin: 0 auto 20px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: white;
     position: relative;
     z-index: 1;
-    box-shadow: 0 8px 24px rgba(196, 112, 60, 0.3);
-    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(212, 112, 58, 0.3);
   }
 
-  .step:hover .step-number {
-    transform: scale(1.1);
-    box-shadow: 0 12px 32px rgba(196, 112, 60, 0.4);
-  }
-
-  .step h3 {
-    font-size: 1.15rem;
-    font-weight: 700;
+  .step-content h3 {
+    font-size: 1rem;
+    font-weight: 600;
     color: var(--coffee-800);
-    margin-bottom: 12px;
+    margin-bottom: 6px;
   }
 
-  .step p {
-    font-size: 0.9rem;
+  .step-content p {
+    font-size: 0.85rem;
     color: var(--text-secondary);
-    line-height: 1.6;
+    max-width: 160px;
+    margin: 0 auto;
+    line-height: 1.5;
   }
 
-  /* Compatibility styles */
-  .compatibility {
-    padding: 120px 0;
-    background: var(--coffee-800);
-    color: var(--white);
-    position: relative;
-    overflow: hidden;
-  }
-
-  .compatibility::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 50%;
-    height: 100%;
-    background: radial-gradient(ellipse at right, rgba(196, 112, 60, 0.1) 0%, transparent 70%);
-    pointer-events: none;
-  }
-
-  .compatibility .section-label { color: var(--accent-light); }
-  .compatibility .section-title { color: var(--white); }
-  .compatibility .section-description { color: var(--cream-400); }
-
-  .compat-wrapper {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 48px;
-    margin-top: 64px;
-    position: relative;
-    z-index: 1;
-  }
-
-  .compat-section {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 24px;
-    padding: 40px;
-  }
-
-  .compat-section-header {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    margin-bottom: 32px;
-    padding-bottom: 24px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
-
-  .compat-section-icon {
-    width: 56px;
-    height: 56px;
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
-    border-radius: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-
-  .compat-section-icon svg {
-    width: 28px;
-    height: 28px;
-    color: var(--white);
-  }
-
-  .compat-section-title h3 {
-    font-size: 1.4rem;
-    font-weight: 700;
-    margin-bottom: 4px;
-  }
-
-  .compat-section-title p {
-    font-size: 0.9rem;
-    color: var(--cream-400);
-  }
-
-  .machine-list {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .machine-item {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 16px 20px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 12px;
-    transition: all 0.2s ease;
-  }
-
-  .machine-item:hover {
-    background: rgba(255, 255, 255, 0.08);
-    transform: translateX(4px);
-  }
-
-  .machine-item-icon {
-    font-size: 1.8rem;
-    width: 48px;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 10px;
-    flex-shrink: 0;
-  }
-
-  .machine-item-content { flex: 1; }
-  .machine-item-content h4 { font-size: 1rem; font-weight: 600; margin-bottom: 2px; }
-  .machine-item-content p { font-size: 0.85rem; color: var(--cream-400); }
-
-  .machine-item-status {
-    padding: 5px 12px;
-    border-radius: 100px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    flex-shrink: 0;
-  }
-
-  .machine-item-status.supported { background: rgba(45, 122, 79, 0.25); color: #6ee7a0; }
-  .machine-item-status.planned { background: rgba(255, 255, 255, 0.1); color: var(--cream-400); }
-
-  .integration-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-  }
-
-  .integration-card {
-    padding: 20px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    transition: all 0.3s ease;
-  }
-
-  .integration-card:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: var(--accent);
-    transform: translateY(-2px);
-  }
-
-  .integration-card.featured {
-    grid-column: span 2;
-    background: linear-gradient(135deg, rgba(24, 188, 233, 0.15) 0%, rgba(24, 188, 233, 0.05) 100%);
-    border-color: rgba(24, 188, 233, 0.3);
-  }
-
-  .integration-card.featured:hover { border-color: #18bce9; }
-
-  .integration-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 12px;
-  }
-
-  .integration-logo {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-
-  .integration-logo.ha { background: linear-gradient(135deg, #18bce9 0%, #0da5d1 100%); }
-  .integration-logo.mqtt { background: linear-gradient(135deg, #660066 0%, #8b008b 100%); }
-  .integration-logo.api { background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%); }
-  .integration-logo.webhook { background: linear-gradient(135deg, #4a5568 0%, #718096 100%); }
-
-  .integration-logo svg { width: 22px; height: 22px; color: white; }
-  .integration-name { font-size: 1rem; font-weight: 600; }
-
-  .integration-badge {
-    margin-left: auto;
-    padding: 4px 10px;
-    background: rgba(45, 122, 79, 0.25);
-    color: #6ee7a0;
-    border-radius: 100px;
-    font-size: 0.7rem;
-    font-weight: 600;
-  }
-
-  .integration-desc { font-size: 0.85rem; color: var(--cream-400); line-height: 1.5; }
-
-  .integration-features {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 12px;
-  }
-
-  .integration-feature {
-    padding: 4px 10px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 6px;
-    font-size: 0.75rem;
-    color: var(--cream-300);
-  }
-
-  /* Partners styles */
-  .partners {
-    padding: 120px 0;
-    background: linear-gradient(180deg, var(--cream-100) 0%, var(--cream-200) 100%);
-    position: relative;
-  }
-
-  .partners::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, var(--cream-300), transparent);
-  }
-
-  .partner-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 24px;
-    margin-bottom: 48px;
-  }
-
-  .partner-card {
-    background: var(--white);
-    border: 1px solid var(--cream-300);
-    border-radius: 20px;
-    padding: 36px 24px;
-    text-align: center;
-    transition: all 0.3s ease;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .partner-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 4px;
-    background: linear-gradient(90deg, var(--accent) 0%, var(--accent-light) 100%);
-    transform: scaleX(0);
-    transition: transform 0.3s ease;
-  }
-
-  .partner-card:hover {
-    transform: translateY(-6px);
-    box-shadow: var(--shadow-xl);
-    border-color: transparent;
-  }
-
-  .partner-card:hover::before {
-    transform: scaleX(1);
-  }
-
-  .partner-icon {
-    width: 64px;
-    height: 64px;
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
-    border-radius: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 24px;
-    box-shadow: 0 6px 20px rgba(196, 112, 60, 0.25);
-    transition: all 0.3s ease;
-  }
-
-  .partner-card:hover .partner-icon {
-    transform: scale(1.1);
-    box-shadow: 0 8px 28px rgba(196, 112, 60, 0.35);
-  }
-
-  .partner-icon svg { width: 32px; height: 32px; color: var(--white); }
-  .partner-card h3 { font-size: 1.15rem; font-weight: 700; color: var(--coffee-800); margin-bottom: 10px; }
-  .partner-card p { font-size: 0.9rem; color: var(--text-secondary); line-height: 1.7; }
-  .partner-cta { text-align: center; margin-top: 24px; }
-
-  /* CTA Section */
+  /* CTA Section - Warm gradient */
   .cta-section {
-    padding: 140px 0;
+    padding: 100px 0;
     background: linear-gradient(135deg, var(--coffee-800) 0%, var(--coffee-900) 100%);
     text-align: center;
     position: relative;
@@ -914,97 +798,74 @@ const partners = [
     content: '';
     position: absolute;
     top: -50%;
-    left: -20%;
-    width: 140%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120%;
     height: 200%;
-    background: radial-gradient(ellipse at 30% 50%, rgba(196, 112, 60, 0.2) 0%, transparent 50%);
-    pointer-events: none;
-  }
-
-  .cta-section::after {
-    content: '';
-    position: absolute;
-    bottom: -30%;
-    right: -10%;
-    width: 60%;
-    height: 100%;
-    background: radial-gradient(ellipse at 70% 80%, rgba(196, 112, 60, 0.15) 0%, transparent 50%);
+    background: radial-gradient(ellipse, rgba(212, 112, 58, 0.15) 0%, transparent 60%);
     pointer-events: none;
   }
 
   .cta-content { 
-    position: relative; 
-    z-index: 1;
-    max-width: 700px;
+    max-width: 500px;
     margin: 0 auto;
+    position: relative;
+    z-index: 1;
   }
   
   .cta-section h2 { 
-    font-size: 3.2rem; 
-    font-weight: 800; 
+    font-size: 2.2rem; 
+    font-weight: 700; 
     color: var(--white); 
-    margin-bottom: 20px; 
-    letter-spacing: -0.02em;
-    line-height: 1.2;
+    margin-bottom: 12px; 
   }
   
   .cta-section p { 
-    font-size: 1.25rem; 
-    color: var(--cream-300); 
-    margin-bottom: 48px; 
-    max-width: 520px; 
-    margin-left: auto; 
-    margin-right: auto;
-    line-height: 1.7;
+    font-size: 1.05rem; 
+    color: var(--cream-400); 
+    margin-bottom: 32px; 
   }
   
   .cta-buttons { 
     display: flex; 
-    gap: 20px; 
+    gap: 12px; 
     justify-content: center; 
-    flex-wrap: wrap; 
   }
 
   .btn-cta-primary {
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+    background: var(--accent);
     color: var(--white);
-    padding: 18px 36px;
-    font-size: 1.1rem;
+    padding: 14px 28px;
+    font-size: 1rem;
     font-weight: 600;
-    border-radius: 14px;
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
+    border-radius: 10px;
     text-decoration: none;
-    transition: all 0.3s ease;
-    box-shadow: 0 8px 24px rgba(196, 112, 60, 0.4);
+    transition: all 0.2s ease;
   }
 
   .btn-cta-primary:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 12px 32px rgba(196, 112, 60, 0.5);
+    background: var(--accent-dark);
+    transform: translateY(-2px);
   }
 
   .btn-cta-secondary {
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
-    color: var(--white);
-    padding: 18px 36px;
-    font-size: 1.1rem;
-    font-weight: 600;
-    border-radius: 14px;
+    background: transparent;
+    color: var(--cream-300);
+    padding: 14px 28px;
+    font-size: 1rem;
+    font-weight: 500;
+    border-radius: 10px;
     border: 1px solid rgba(255, 255, 255, 0.2);
     display: inline-flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     text-decoration: none;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
   }
 
   .btn-cta-secondary:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.1);
     border-color: rgba(255, 255, 255, 0.3);
-    transform: translateY(-3px);
   }
 
   /* Responsive */
@@ -1015,11 +876,14 @@ const partners = [
     .hero-stats { justify-content: center; }
     .hero-visual { order: -1; }
     .hero-image { max-width: 300px; }
-    .feature-grid { grid-template-columns: repeat(2, 1fr); }
-    .steps { grid-template-columns: repeat(2, 1fr); }
-    .step:not(:last-child)::after { display: none; }
-    .compat-wrapper { grid-template-columns: 1fr; gap: 32px; }
-    .partner-grid { grid-template-columns: repeat(2, 1fr); }
+    .features-layout { grid-template-columns: 1fr; gap: 40px; }
+    .features-header { position: static; text-align: center; }
+    .steps-timeline { flex-wrap: wrap; gap: 32px; }
+    .steps-timeline::before { display: none; }
+    .step-item { flex: 0 0 calc(50% - 16px); }
+    .cloud-hero { grid-template-columns: 1fr; gap: 40px; padding: 48px; }
+    .cloud-hero-features { grid-template-columns: repeat(4, 1fr); }
+    .other-grid { grid-template-columns: repeat(3, 1fr); }
   }
 
   @media (max-width: 768px) {
@@ -1027,17 +891,21 @@ const partners = [
     .hero h1 { font-size: 2.5rem; }
     .hero-stats { flex-direction: column; gap: 24px; align-items: center; }
     .stat { text-align: center; }
-    .feature-grid, .steps, .partner-grid { grid-template-columns: 1fr; }
-    .step:not(:last-child)::after { display: none; }
-    .step { padding: 24px 16px; }
-    .step-number { width: 64px; height: 64px; font-size: 1.25rem; }
-    .integration-grid { grid-template-columns: 1fr; }
-    .integration-card.featured { grid-column: span 1; }
-    .compat-section { padding: 24px; }
-    .cta-section { padding: 100px 0; }
-    .cta-section h2 { font-size: 2rem; }
-    .cta-section p { font-size: 1.1rem; }
-    .btn-cta-primary, .btn-cta-secondary { padding: 14px 28px; font-size: 1rem; }
+    .features { padding: 60px 0; }
+    .features-header h2 { font-size: 1.8rem; }
+    .step-item { flex: 0 0 100%; }
+    .integrations { padding: 80px 0; }
+    .integrations-header h2 { font-size: 2rem; }
+    .cloud-hero { padding: 32px; }
+    .cloud-hero h3 { font-size: 1.8rem; }
+    .cloud-hero-features { grid-template-columns: 1fr 1fr; }
+    .other-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+    .other-card { padding: 20px 16px; }
+    .how-it-works { padding: 60px 0; }
+    .cta-section { padding: 60px 0; }
+    .cta-section h2 { font-size: 1.6rem; }
+    .cta-buttons { flex-direction: column; }
+    .btn-cta-primary, .btn-cta-secondary { width: 100%; justify-content: center; }
   }
 </style>
 
