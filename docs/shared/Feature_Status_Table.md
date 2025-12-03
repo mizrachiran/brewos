@@ -156,7 +156,7 @@
 | **Protocol Commands**            | ✅     | `main.c`                              | MSG_CMD_CLEANING_START/STOP/RESET/SET_THRESHOLD        |
 | **Brew Switch Control**          | ✅     | `state.c`                             | Brew switch controls cleaning cycle when active        |
 | **Cleaning Counter Persistence** | ✅     | `cleaning.c` + `config_persistence.c` | Brew count and threshold persist to flash              |
-| **Status Payload Integration**   | ⚠️     | `protocol.c`                          | Brew count/reminder pending in MSG_STATUS              |
+| **Status Payload Integration**   | ✅     | `protocol.c`                          | Brew count/reminder included in MSG_STATUS             |
 
 ---
 

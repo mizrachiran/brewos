@@ -638,7 +638,8 @@ void loop() {
  * Offset 20-23: uptime_ms (uint32)
  * Offset 24-27: shot_start_timestamp_ms (uint32)
  * Offset 28:    heating_strategy (uint8)
- * Offset 29:    reserved (uint8)
+ * Offset 29:    cleaning_reminder (uint8, 0 or 1)
+ * Offset 30-31: brew_count (uint16)
  */
 void parsePicoStatus(const uint8_t* payload, uint8_t length) {
     if (length < 18) return;  // Minimum status size (up to water_level)
@@ -684,6 +685,14 @@ void parsePicoStatus(const uint8_t* payload, uint8_t length) {
     // Parse heating strategy (offset 28, if available)
     if (length >= 30) {
         machineState.heating_strategy = payload[28];
+    }
+    
+    // Parse cleaning status (offsets 29-31, if available)
+    if (length >= 32) {
+        machineState.cleaning_reminder = payload[29] != 0;
+        uint16_t brew_count_raw;
+        memcpy(&brew_count_raw, &payload[30], sizeof(uint16_t));
+        machineState.brew_count = brew_count_raw;
     }
     
     // Auto-switch screens is now handled by UI::checkAutoScreenSwitch()

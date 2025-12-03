@@ -41,7 +41,8 @@ typedef struct __attribute__((packed)) {
     uint32_t uptime_ms;         // Milliseconds since boot
     uint32_t shot_start_timestamp_ms;  // Brew start timestamp (milliseconds since boot, 0 if not brewing)
     uint8_t heating_strategy;   // Current heating strategy (see HEAT_STRATEGY_* in protocol_defs.h)
-    uint8_t reserved;           // Reserved for alignment/future use
+    uint8_t cleaning_reminder;  // 1 if cleaning reminder is due (brew_count >= threshold), 0 otherwise
+    uint16_t brew_count;        // Number of brews since last cleaning (for cleaning reminder)
 } status_payload_t;
 
 // -----------------------------------------------------------------------------

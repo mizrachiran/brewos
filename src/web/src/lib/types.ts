@@ -93,6 +93,12 @@ export interface PowerStatus {
   totalKwh: number;
 }
 
+// Cleaning
+export interface CleaningStatus {
+  brewCount: number;     // Brews since last cleaning
+  reminderDue: boolean;  // True when cleaning is recommended
+}
+
 // Water
 export type WaterLevel = 'ok' | 'low' | 'empty';
 

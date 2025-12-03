@@ -5,6 +5,7 @@ import type {
   MachineStatus,
   Temperatures,
   PowerStatus,
+  CleaningStatus,
   WaterStatus,
   ScaleStatus,
   BBWSettings,
@@ -35,6 +36,7 @@ interface BrewOSState {
   temps: Temperatures;
   pressure: number;
   power: PowerStatus;
+  cleaning: CleaningStatus;
   water: WaterStatus;
 
   // Scale
@@ -98,6 +100,11 @@ const defaultPower: PowerStatus = {
   voltage: 220,
   todayKwh: 0,
   totalKwh: 0,
+};
+
+const defaultCleaning: CleaningStatus = {
+  brewCount: 0,
+  reminderDue: false,
 };
 
 const defaultWater: WaterStatus = {
@@ -234,6 +241,7 @@ export const useStore = create<BrewOSState>()(
     temps: defaultTemps,
     pressure: 0,
     power: defaultPower,
+    cleaning: defaultCleaning,
     water: defaultWater,
     scale: defaultScale,
     scaleScanning: false,
@@ -265,6 +273,7 @@ export const useStore = create<BrewOSState>()(
             | undefined;
           const tempsData = data.temps as Record<string, unknown> | undefined;
           const powerData = data.power as Record<string, unknown> | undefined;
+          const cleaningData = data.cleaning as Record<string, unknown> | undefined;
           const waterData = data.water as Record<string, unknown> | undefined;
           const scaleData = data.scale as Record<string, unknown> | undefined;
           const connectionsData = data.connections as
@@ -337,6 +346,15 @@ export const useStore = create<BrewOSState>()(
                   voltage: (powerData.voltage as number) ?? state.power.voltage,
                 }
               : state.power,
+            // Cleaning
+            cleaning: cleaningData
+              ? {
+                  brewCount:
+                    (cleaningData.brewCount as number) ?? state.cleaning.brewCount,
+                  reminderDue:
+                    (cleaningData.reminderDue as boolean) ?? state.cleaning.reminderDue,
+                }
+              : state.cleaning,
             // Water
             water: waterData
               ? {

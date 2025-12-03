@@ -1584,6 +1584,13 @@ void WebServer::broadcastFullStatus(const ui_state_t& state) {
     power["voltage"] = 220;  // TODO: Get from config
     
     // =========================================================================
+    // Cleaning Section
+    // =========================================================================
+    JsonObject cleaning = doc["cleaning"].to<JsonObject>();
+    cleaning["brewCount"] = state.brew_count;
+    cleaning["reminderDue"] = state.cleaning_reminder;
+    
+    // =========================================================================
     // Water Section
     // =========================================================================
     JsonObject water = doc["water"].to<JsonObject>();

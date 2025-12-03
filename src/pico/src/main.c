@@ -721,7 +721,8 @@ int main(void) {
             new_status.uptime_ms = now;
             new_status.shot_start_timestamp_ms = state_get_brew_start_timestamp_ms();
             new_status.heating_strategy = control_get_heating_strategy();
-            new_status.reserved = 0;
+            new_status.cleaning_reminder = cleaning_is_reminder_due() ? 1 : 0;
+            new_status.brew_count = cleaning_get_brew_count();
             
             // Set flags
             new_status.flags = 0;

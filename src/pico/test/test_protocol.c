@@ -177,9 +177,11 @@ void test_max_packet_size(void) {
 }
 
 void test_status_payload_size(void) {
-    // status_payload_t should be 26 bytes based on protocol.h
+    // status_payload_t should be 32 bytes based on protocol.h:
+    // - 6x int16_t (12) + 6x uint8_t (6) + uint16_t (2) + 2x uint32_t (8)
+    // - + heating_strategy (1) + cleaning_reminder (1) + brew_count (2) = 32 bytes
     // Let's verify the structure fits within max payload
-    TEST_ASSERT_TRUE(26 <= PROTOCOL_MAX_PAYLOAD);
+    TEST_ASSERT_TRUE(32 <= PROTOCOL_MAX_PAYLOAD);
 }
 
 void test_alarm_payload_size(void) {

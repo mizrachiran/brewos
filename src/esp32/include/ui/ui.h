@@ -95,6 +95,10 @@ typedef struct {
     // Power
     uint16_t power_watts;       // Current power consumption
     
+    // Cleaning
+    uint16_t brew_count;        // Brews since last cleaning
+    bool cleaning_reminder;     // true if cleaning reminder is due
+    
     // Connection status
     bool pico_connected;
     bool wifi_connected;

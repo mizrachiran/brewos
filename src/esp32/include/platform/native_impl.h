@@ -8,6 +8,7 @@
 #define NATIVE_IMPL_H
 
 #include <stdint.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <time.h>
@@ -37,7 +38,7 @@ static inline void platform_log(log_level_t level, const char* fmt, ...) {
         default: level_str = "?"; break;
     }
     
-    printf("[%lu][%s] ", platform_millis(), level_str);
+    printf("[%" PRIu32 "][%s] ", platform_millis(), level_str);
     
     va_list args;
     va_start(args, fmt);
