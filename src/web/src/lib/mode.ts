@@ -15,6 +15,27 @@ import { useBackendInfo } from "./backend-info";
 import { checkCompatibility, type BackendInfo } from "./api-version";
 import { isRunningAsPWA } from "./pwa";
 
+/**
+ * Get initial auth state from localStorage synchronously.
+ * This ensures user is populated immediately on cold start,
+ * preventing flash of login screen when session exists.
+ */
+function getInitialAuthState(): {
+  user: User | null;
+  session: AuthSession | null;
+} {
+  const session = getStoredSession();
+  if (session && !isTokenExpired(session)) {
+    return { user: session.user, session };
+  }
+  // Even if token is expired, keep the user info for display
+  // The initialize() function will handle token refresh
+  if (session) {
+    return { user: session.user, session };
+  }
+  return { user: null, session: null };
+}
+
 // Timeout for fetch requests (5 seconds)
 const FETCH_TIMEOUT_MS = 5000;
 
@@ -178,6 +199,9 @@ interface AppState {
   getAccessToken: () => Promise<string | null>;
 }
 
+// Get initial auth state synchronously before store creation
+const initialAuth = getInitialAuthState();
+
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
@@ -187,8 +211,9 @@ export const useAppStore = create<AppState>()(
       mode: __ESP32__ ? "local" : "cloud",
       apMode: false,
       initialized: false,
-      user: null,
-      session: null,
+      // Pre-populate user/session from localStorage to prevent flash of login screen
+      user: initialAuth.user,
+      session: initialAuth.session,
       authLoading: true,
       devices: [],
       selectedDeviceId: null,
