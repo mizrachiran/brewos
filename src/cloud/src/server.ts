@@ -29,6 +29,13 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Security headers that allow Google OAuth popup to work
+// COOP: same-origin-allow-popups allows the Google Sign-In popup to communicate back
+app.use((_req, res, next) => {
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  next();
+});
+
 // Serve static files (the shared web UI)
 const webDistPath = path.resolve(process.env.WEB_DIST_PATH || path.join(process.cwd(), '../web/dist'));
 app.use(express.static(webDistPath));

@@ -1,6 +1,6 @@
 // Service Worker for BrewOS PWA
-// Version: v2 - Optimized for iOS cold start performance
-const CACHE_VERSION = 'v2';
+// Version: v3 - Fixed response clone issue
+const CACHE_VERSION = 'v3';
 const STATIC_CACHE_NAME = `brewos-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE_NAME = `brewos-runtime-${CACHE_VERSION}`;
 
@@ -27,7 +27,7 @@ const NETWORK_FIRST_PATTERNS = [
 
 // Install event - cache app shell
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing v2...');
+  console.log('[SW] Installing v3...');
   event.waitUntil(
     caches.open(STATIC_CACHE_NAME)
       .then((cache) => {
@@ -40,7 +40,7 @@ self.addEventListener('install', (event) => {
 
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating v2...');
+  console.log('[SW] Activating v3...');
   event.waitUntil(
     caches.keys()
       .then((cacheNames) => {
@@ -119,10 +119,12 @@ async function staleWhileRevalidate(request) {
   const cached = await caches.match(request);
   
   const fetchPromise = fetch(request)
-    .then((response) => {
+    .then(async (response) => {
       if (response.ok) {
-        const cache = caches.open(RUNTIME_CACHE_NAME);
-        cache.then(c => c.put(request, response.clone()));
+        // Clone BEFORE returning, as response body can only be used once
+        const responseToCache = response.clone();
+        const cache = await caches.open(RUNTIME_CACHE_NAME);
+        cache.put(request, responseToCache);
       }
       return response;
     })
@@ -130,7 +132,7 @@ async function staleWhileRevalidate(request) {
 
   // Return cached immediately if available
   if (cached) {
-    // Update in background
+    // Update in background (don't await)
     fetchPromise.catch(() => {});
     return cached;
   }
