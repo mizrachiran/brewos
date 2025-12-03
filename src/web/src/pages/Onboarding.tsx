@@ -130,7 +130,7 @@ export function Onboarding() {
                   Scan QR Code
                 </Button>
 
-                <p className="text-sm text-coffee-400">
+                <p className="text-sm text-theme-muted">
                   or{" "}
                   <button
                     className="text-accent hover:underline"
@@ -224,10 +224,10 @@ export function Onboarding() {
         {step === "manual" && (
           <Card>
             <div className="text-center mb-6">
-              <h2 className="text-2xl font-bold text-coffee-900 mb-2">
+              <h2 className="text-2xl font-bold text-theme mb-2">
                 Enter Pairing Code
               </h2>
-              <p className="text-coffee-500">
+              <p className="text-theme-secondary">
                 Find the code on your BrewOS display under System → Cloud
                 Access.
               </p>
@@ -282,13 +282,13 @@ export function Onboarding() {
             <div className="w-16 h-16 bg-success-soft rounded-full flex items-center justify-center mx-auto mb-4">
               <Check className="w-8 h-8 text-success" />
             </div>
-            <h2 className="text-2xl font-bold text-coffee-900 mb-2">
+            <h2 className="text-2xl font-bold text-theme mb-2">
               Machine Added!
             </h2>
-            <p className="text-coffee-500 mb-4">
+            <p className="text-theme-secondary mb-4">
               {deviceName || "Your machine"} is now connected to your account.
             </p>
-            <div className="flex items-center justify-center gap-2 text-sm text-coffee-400">
+            <div className="flex items-center justify-center gap-2 text-sm text-theme-muted">
               <Loader2 className="w-4 h-4 animate-spin" />
               Redirecting to dashboard...
             </div>

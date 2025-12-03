@@ -75,20 +75,20 @@ export function Pair() {
             <div className="w-16 h-16 bg-success-soft rounded-full flex items-center justify-center mx-auto mb-4">
               <Check className="w-8 h-8 text-success" />
             </div>
-            <h2 className="text-xl font-bold text-coffee-900 mb-2">
+            <h2 className="text-xl font-bold text-theme mb-2">
               Device Paired!
             </h2>
-            <p className="text-coffee-500">Redirecting to your devices...</p>
+            <p className="text-theme-secondary">Redirecting to your devices...</p>
           </div>
         ) : status === "error" ? (
           <div className="text-center py-8">
             <div className="w-16 h-16 bg-error-soft rounded-full flex items-center justify-center mx-auto mb-4">
               <X className="w-8 h-8 text-error" />
             </div>
-            <h2 className="text-xl font-bold text-coffee-900 mb-2">
+            <h2 className="text-xl font-bold text-theme mb-2">
               Pairing Failed
             </h2>
-            <p className="text-coffee-500 mb-6">{errorMessage}</p>
+            <p className="text-theme-secondary mb-6">{errorMessage}</p>
             <div className="flex gap-3 justify-center">
               <Button variant="secondary" onClick={() => navigate("/machines")}>
                 Go to Machines
@@ -99,7 +99,7 @@ export function Pair() {
         ) : status === "claiming" ? (
           <div className="text-center py-8">
             <Loader2 className="w-8 h-8 animate-spin text-accent mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-coffee-900 mb-2">
+            <h2 className="text-xl font-bold text-theme mb-2">
               Adding Device...
             </h2>
           </div>
@@ -107,18 +107,18 @@ export function Pair() {
           <>
             <div className="text-center mb-6">
               <Coffee className="w-16 h-16 text-accent mx-auto mb-4" />
-              <h1 className="text-2xl font-bold text-coffee-900">
+              <h1 className="text-2xl font-bold text-theme">
                 Pair Device
               </h1>
-              <p className="text-coffee-500 mt-2">
+              <p className="text-theme-secondary mt-2">
                 Add this BrewOS device to your account
               </p>
             </div>
 
-            <div className="bg-cream-100 rounded-xl p-4 mb-6">
+            <div className="bg-theme-tertiary rounded-xl p-4 mb-6">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-coffee-500">Machine ID</span>
-                <span className="font-mono text-coffee-900">{deviceId}</span>
+                <span className="text-theme-secondary">Machine ID</span>
+                <span className="font-mono text-theme">{deviceId}</span>
               </div>
             </div>
 
@@ -136,7 +136,7 @@ export function Pair() {
               </Button>
             ) : (
               <div className="space-y-4">
-                <p className="text-sm text-coffee-500 text-center">
+                <p className="text-sm text-theme-secondary text-center">
                   Sign in to add this device to your account
                 </p>
                 <div className="flex justify-center">
