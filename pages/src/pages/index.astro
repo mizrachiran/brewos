@@ -161,28 +161,6 @@ const partners = [
     </div>
   </section>
 
-  <!-- How It Works Section -->
-  <section class="how-it-works" id="how-it-works">
-    <div class="container">
-      <div class="section-header">
-        <span class="section-label">How It Works</span>
-        <h2 class="section-title">Get Started in 4 Simple Steps</h2>
-        <p class="section-description">
-          Transform your espresso machine in an afternoon with our easy installation process.
-        </p>
-      </div>
-      <div class="steps">
-        {steps.map((step, index) => (
-          <div class="step">
-            <div class="step-number">{index + 1}</div>
-            <h3>{step.title}</h3>
-            <p>{step.description}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  </section>
-
   <!-- Compatibility Section -->
   <section class="compatibility" id="compatibility">
     <div class="container">
@@ -274,6 +252,28 @@ const partners = [
             ))}
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works Section -->
+  <section class="how-it-works" id="how-it-works">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-label">How It Works</span>
+        <h2 class="section-title">Get Started in 4 Simple Steps</h2>
+        <p class="section-description">
+          Transform your espresso machine in an afternoon with our easy installation process.
+        </p>
+      </div>
+      <div class="steps">
+        {steps.map((step, index) => (
+          <div class="step">
+            <div class="step-number">{index + 1}</div>
+            <h3>{step.title}</h3>
+            <p>{step.description}</p>
+          </div>
+        ))}
       </div>
     </div>
   </section>
@@ -528,7 +528,7 @@ const partners = [
   /* How it works styles */
   .how-it-works {
     padding: 120px 0;
-    background: linear-gradient(180deg, var(--cream-200) 0%, var(--cream-100) 100%);
+    background: var(--white);
   }
 
   .steps {
