@@ -386,10 +386,11 @@ function createRelease(version, dryRun = false) {
   git(`tag -a ${tag} -m "Release ${tag}"`);
   console.log(`✓ Created tag ${tag}`);
 
-  // Push
+  // Push branch and only the new tag (not all tags)
   console.log("Pushing to remote...");
-  git(`push origin ${branch} --tags`);
-  console.log(`✓ Pushed to origin/${branch} with tags`);
+  git(`push origin ${branch}`);
+  git(`push origin ${tag}`);
+  console.log(`✓ Pushed to origin/${branch} with tag ${tag}`);
 
   console.log();
   console.log("═".repeat(50));
