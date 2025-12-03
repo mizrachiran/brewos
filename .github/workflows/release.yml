@@ -84,6 +84,15 @@ jobs:
             echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Generate Changelog
+        id: changelog
+        uses: orhun/git-cliff-action@v3
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          OUTPUT: CHANGELOG.md
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -91,7 +100,6 @@ jobs:
           name: BrewOS ${{ steps.version.outputs.version }}
           draft: false
           prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'rc') }}
-          generate_release_notes: true
           files: |
             release/brewos_dual_boiler.uf2
             release/brewos_single_boiler.uf2
@@ -99,9 +107,13 @@ jobs:
             release/brewos_esp32.bin
             release/SHA256SUMS.txt
           body: |
-            ## BrewOS ${{ steps.version.outputs.version }}
+            ## What's Changed
             
-            ### Downloads
+            ${{ steps.changelog.outputs.content }}
+            
+            ---
+            
+            ## Downloads
             
             | File | Description |
             |------|-------------|
@@ -110,7 +122,7 @@ jobs:
             | `brewos_heat_exchanger.uf2` | Pico firmware for heat exchanger machines |
             | `brewos_esp32.bin` | ESP32 firmware for web interface |
             
-            ### Installation
+            ## Installation
             
             **Pico:** Hold BOOTSEL, connect USB, copy `.uf2` file to the drive.
             
@@ -118,7 +130,7 @@ jobs:
             
             See [SETUP.md](https://github.com/mizrachiran/brewos/blob/main/SETUP.md) for detailed instructions.
             
-            ### Checksums
+            ## Checksums
             
             Verify your download with `sha256sum -c SHA256SUMS.txt`
         env:
