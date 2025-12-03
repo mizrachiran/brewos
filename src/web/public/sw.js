@@ -1,6 +1,6 @@
 // Service Worker for BrewOS PWA
-// Version: v3 - Fixed response clone issue
-const CACHE_VERSION = "v3";
+// Version: v4 - Force cache invalidation for auth fixes
+const CACHE_VERSION = "v4";
 const STATIC_CACHE_NAME = `brewos-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE_NAME = `brewos-runtime-${CACHE_VERSION}`;
 
@@ -24,7 +24,7 @@ const NETWORK_FIRST_PATTERNS = [/\/api\//, /\/ws/];
 
 // Install event - cache app shell
 self.addEventListener("install", (event) => {
-  console.log("[SW] Installing v3...");
+  console.log("[SW] Installing v4...");
   event.waitUntil(
     caches
       .open(STATIC_CACHE_NAME)
@@ -38,7 +38,7 @@ self.addEventListener("install", (event) => {
 
 // Activate event - clean up old caches
 self.addEventListener("activate", (event) => {
-  console.log("[SW] Activating v3...");
+  console.log("[SW] Activating v4...");
   event.waitUntil(
     caches
       .keys()
