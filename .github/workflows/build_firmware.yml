@@ -1,15 +1,8 @@
-# Build firmware on push and PR
+# Build and test firmware on PRs
+# Note: Push to main is handled by dev-release.yml which creates the dev release
 name: Build Firmware
 
 on:
-  push:
-    branches: ["main"]
-    paths:
-      - 'src/pico/**'
-      - 'src/esp32/**'
-      - 'src/web/**'
-      - 'src/shared/**'
-      - '.github/workflows/build_firmware.yml'
   pull_request:
     branches: ["main"]
     paths:

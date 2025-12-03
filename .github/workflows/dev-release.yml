@@ -23,6 +23,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ===== Pico Unit Tests =====
+      - name: Run Pico Unit Tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake
+          cd src/pico/test
+          mkdir -p build && cd build
+          cmake ..
+          make -j$(nproc)
+          ./brewos_tests
+
       # ===== Pico Build =====
       - name: Install ARM GCC Toolchain
         run: |
