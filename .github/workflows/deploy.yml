@@ -109,6 +109,11 @@ jobs:
             for i in 1 2 3 4 5; do
               if curl -sf http://localhost:3001/api/health > /dev/null; then
                 echo "✓ Staging service is healthy!"
+                
+                # Cleanup Docker build cache to free disk space
+                echo "Cleaning up Docker cache..."
+                docker system prune -af --filter "until=1h" || true
+                
                 exit 0
               fi
               echo "Waiting... ($i/5)"

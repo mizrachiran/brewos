@@ -284,6 +284,11 @@ jobs:
               if curl -sf http://localhost:3001/api/health > /dev/null; then
                 echo "✓ Production service is healthy!"
                 echo "  Deployed version: ${RELEASE_VERSION}"
+                
+                # Cleanup Docker build cache to free disk space
+                echo "Cleaning up Docker cache..."
+                docker system prune -af --filter "until=1h" || true
+                
                 exit 0
               fi
               echo "Waiting... ($i/5)"
