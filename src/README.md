@@ -186,6 +186,9 @@ node src/scripts/version.js --bump minor
 
 # Set specific version
 node src/scripts/version.js --set 1.2.3
+
+# Create a release (bump, commit, tag, push)
+node src/scripts/version.js --bump minor --release
 ```
 
 See `docs/pico/Versioning.md` for complete versioning guide.

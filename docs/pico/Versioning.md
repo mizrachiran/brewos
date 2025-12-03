@@ -97,6 +97,24 @@ node src/scripts/version.js --protocol 2
 node src/scripts/version.js --bump minor --protocol 2
 ```
 
+### Create a Release
+
+The `--release` flag will commit, tag, and push in one command:
+
+```bash
+# Bump and release (commit, tag, push)
+node src/scripts/version.js --bump patch --release
+node src/scripts/version.js --bump minor --release
+
+# Set version with protocol change and release
+node src/scripts/version.js --set 2.0.0 --protocol 2 --release
+
+# Preview what would happen without making changes
+node src/scripts/version.js --bump minor --release --dry-run
+```
+
+> **Note:** The script will fail if there are uncommitted changes in your working directory.
+
 ## Automatic Version Injection
 
 The version script automatically updates:
@@ -131,24 +149,23 @@ The `.github/workflows/release.yml` workflow automatically:
 
 ### Creating a Release
 
-#### Method 1: Tag-based Release (Recommended)
+#### Method 1: One-Command Release (Recommended)
 
 ```bash
-# 1. Update version
-node src/scripts/version.js --bump minor
+# Bump version, commit, tag, and push - all in one command
+node src/scripts/version.js --bump minor --release
 
-# 2. Commit version changes
-git add VERSION src/pico/include/config.h src/esp32/include/config.h src/shared/protocol_defs.h
-git commit -m "chore(release): bump version to 0.2.0"
+# Or for a patch release
+node src/scripts/version.js --bump patch --release
 
-# 3. Create and push tag
-git tag -a v0.2.0 -m "Release v0.2.0"
-git push origin main --tags
+# Preview first with --dry-run
+node src/scripts/version.js --bump minor --release --dry-run
 ```
 
 The GitHub workflow will automatically:
 
 - Build both firmwares
+- Generate changelog from conventional commits
 - Create a release with artifacts
 - Attach firmware files to the release
 
@@ -176,16 +193,8 @@ Each release includes:
 # 1. Fix bug, commit
 git commit -m "fix: temperature reading issue"
 
-# 2. Bump patch version
-node src/scripts/version.js --bump patch
-
-# 3. Commit version change
-git add VERSION src/*/include/config.h src/shared/protocol_defs.h
-git commit -m "chore(release): bump version to 0.1.1"
-
-# 4. Tag and push
-git tag v0.1.1 -m "Release v0.1.1"
-git push origin main --tags
+# 2. Bump and release
+node src/scripts/version.js --bump patch --release
 ```
 
 ### For New Features (MINOR)
@@ -194,30 +203,18 @@ git push origin main --tags
 # 1. Add feature, commit
 git commit -m "feat: add pre-infusion support"
 
-# 2. Bump minor version
-node src/scripts/version.js --bump minor
-
-# 3. Commit and tag
-git add VERSION src/*/include/config.h
-git commit -m "chore(release): bump version to 0.2.0"
-git tag v0.2.0 -m "Release v0.2.0"
-git push origin main --tags
+# 2. Bump and release
+node src/scripts/version.js --bump minor --release
 ```
 
 ### For Breaking Changes (MAJOR)
 
 ```bash
-# 1. Make breaking changes, update protocol version
-node src/scripts/version.js --protocol 2
+# 1. Make breaking changes, commit
+git commit -m "feat!: new protocol version"
 
-# 2. Bump major version
-node src/scripts/version.js --bump major
-
-# 3. Commit and tag
-git add VERSION src/*/include/config.h src/shared/protocol_defs.h
-git commit -m "feat!: protocol v2, bump to v1.0.0"
-git tag v1.0.0 -m "Release v1.0.0 - Protocol v2"
-git push origin main --tags
+# 2. Bump major version with protocol change and release
+node src/scripts/version.js --bump major --protocol 2 --release
 ```
 
 ## Conventional Commits
