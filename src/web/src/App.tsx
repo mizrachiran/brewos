@@ -26,7 +26,7 @@ import { DemoBanner } from "@/components/DemoBanner";
 import { UpdateNotification } from "@/components/UpdateNotification";
 import { getDemoConnection, clearDemoConnection } from "@/lib/demo-connection";
 import { isDemoMode, disableDemoMode } from "@/lib/demo-mode";
-import { isRunningAsPWA } from "@/lib/pwa";
+import { isRunningAsPWA, isDemoModeAllowed } from "@/lib/pwa";
 
 // Maximum time to wait for initialization before showing error/fallback
 const INIT_TIMEOUT_MS = 10000;
@@ -39,10 +39,11 @@ function App() {
   // Check if running as PWA - PWA mode only supports cloud, not demo/local
   const [isPWA] = useState(() => isRunningAsPWA());
   
-  // Demo mode is only allowed when NOT running as PWA
+  // Demo mode is only allowed for cloud website visitors in browser
+  // NOT allowed when: running as PWA, or running on ESP32 local mode
   const [inDemoMode] = useState(() => {
-    if (isPWA) {
-      // Clear demo mode if it was somehow enabled
+    if (!isDemoModeAllowed()) {
+      // Clear demo mode if it was somehow enabled in a context where it's not allowed
       disableDemoMode();
       return false;
     }

@@ -1,8 +1,10 @@
 /**
- * PWA detection utilities
+ * PWA and mode detection utilities
  * 
- * When the app runs as an installed PWA (standalone mode), 
- * it should only support cloud mode - not local or demo mode.
+ * Demo mode is ONLY for cloud website visitors to preview the app.
+ * It is NOT available when:
+ * - Running as an installed PWA (should use cloud mode)
+ * - Running on ESP32 local mode (real hardware, no need for demo)
  */
 
 /**
@@ -25,11 +27,46 @@ export function isRunningAsPWA(): boolean {
 }
 
 /**
- * Check if demo mode should be allowed
- * Demo mode is NOT allowed when running as a PWA
+ * Check if we're running on ESP32 local mode by checking the hostname.
+ * ESP32 serves the web UI on its own IP address or hostname.
+ * Cloud mode runs on cloud.brewos.io or localhost (dev).
+ */
+export function isRunningOnESP32(): boolean {
+  if (typeof window === 'undefined') return false;
+  
+  const hostname = window.location.hostname;
+  
+  // Cloud domains - NOT ESP32
+  if (hostname === 'cloud.brewos.io' || hostname === 'brewos.io') {
+    return false;
+  }
+  
+  // Development - NOT ESP32
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return false;
+  }
+  
+  // If it's an IP address (e.g., 192.168.x.x) or other hostname, assume ESP32
+  return true;
+}
+
+/**
+ * Check if demo mode should be allowed.
+ * Demo mode is ONLY for cloud website visitors to preview the app.
+ * 
+ * NOT allowed when:
+ * - Running as a PWA (use cloud mode)
+ * - Running on ESP32 (real hardware)
  */
 export function isDemoModeAllowed(): boolean {
-  return !isRunningAsPWA();
+  // PWA users should use cloud mode, not demo
+  if (isRunningAsPWA()) return false;
+  
+  // ESP32 users have real hardware, no need for demo
+  if (isRunningOnESP32()) return false;
+  
+  // Only allow demo mode for cloud website visitors in browser
+  return true;
 }
 
 /**
