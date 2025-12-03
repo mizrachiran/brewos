@@ -102,17 +102,22 @@ router.post("/refresh", (req: Request, res: Response) => {
     const { refreshToken } = req.body;
 
     if (!refreshToken) {
+      console.warn("[Auth] Refresh called without token");
       return res.status(400).json({ error: "Missing refresh token" });
     }
 
+    console.log("[Auth] Refresh attempt with token prefix:", refreshToken?.substring(0, 8) + "...");
+    
     const tokens = refreshSession(refreshToken);
 
     if (!tokens) {
+      console.warn("[Auth] Refresh failed - token not found or expired");
       return res
         .status(401)
         .json({ error: "Invalid or expired refresh token" });
     }
 
+    console.log("[Auth] Refresh successful, new access token issued");
     res.json({
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,

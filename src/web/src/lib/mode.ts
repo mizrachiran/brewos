@@ -25,6 +25,11 @@ function getInitialAuthState(): {
   session: AuthSession | null;
 } {
   const session = getStoredSession();
+  console.log("[Auth] getInitialAuthState called:", {
+    hasSession: !!session,
+    hasUser: !!session?.user,
+    isExpired: session ? isTokenExpired(session) : null,
+  });
   if (session && !isTokenExpired(session)) {
     return { user: session.user, session };
   }
@@ -201,6 +206,10 @@ interface AppState {
 
 // Get initial auth state synchronously before store creation
 const initialAuth = getInitialAuthState();
+console.log("[Auth] Store initializing with:", {
+  hasUser: !!initialAuth.user,
+  userEmail: initialAuth.user?.email,
+});
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -220,6 +229,10 @@ export const useAppStore = create<AppState>()(
       devicesLoading: false,
 
       initialize: async () => {
+        console.log(
+          "[Auth] initialize() called, current user:",
+          get().user?.email
+        );
         const isPWA = isRunningAsPWA();
 
         // Check if we're on actual ESP32 hardware
@@ -264,8 +277,13 @@ export const useAppStore = create<AppState>()(
 
         // Cloud mode: check for stored session
         const session = getStoredSession();
+        console.log("[Auth] initialize() checking session:", {
+          hasSession: !!session,
+          isExpired: session ? isTokenExpired(session) : null,
+        });
 
         if (session && !isTokenExpired(session)) {
+          console.log("[Auth] Valid session found, setting user");
           // Token still valid - use it
           // Set devicesLoading: true here to prevent race condition with App.tsx
           // waiting for initial device fetch
@@ -284,6 +302,7 @@ export const useAppStore = create<AppState>()(
           startTokenRefreshMonitor(get());
         } else if (session) {
           // Session exists but token expired, try to refresh
+          console.log("[Auth] Session expired, attempting refresh");
           const newSession = await refreshSession(session);
 
           if (newSession) {
@@ -328,6 +347,7 @@ export const useAppStore = create<AppState>()(
           }
         } else {
           // No session exists
+          console.log("[Auth] No session found, clearing user");
           set({
             user: null,
             session: null,

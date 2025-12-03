@@ -49,9 +49,14 @@ let refreshPromise: Promise<AuthSession | null> | null = null;
 export function getStoredSession(): AuthSession | null {
   try {
     const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+    console.log('[Auth] getStoredSession:', {
+      hasStored: !!stored,
+      storageKey: AUTH_STORAGE_KEY,
+    });
     if (!stored) return null;
     return JSON.parse(stored) as AuthSession;
-  } catch {
+  } catch (e) {
+    console.error('[Auth] getStoredSession parse error:', e);
     return null;
   }
 }
@@ -60,7 +65,12 @@ export function getStoredSession(): AuthSession | null {
  * Store session in localStorage
  */
 export function storeSession(session: AuthSession): void {
-  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+  try {
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+    console.log("[Auth] Session stored successfully for:", session.user?.email);
+  } catch (error) {
+    console.error("[Auth] Failed to store session:", error);
+  }
 }
 
 /**
@@ -132,11 +142,14 @@ export async function refreshSession(
 ): Promise<AuthSession | null> {
   // Prevent concurrent refresh requests
   if (refreshPromise) {
+    console.log("[Auth] Refresh already in progress, waiting...");
     return refreshPromise;
   }
 
   const MAX_RETRIES = 2;
   const RETRY_DELAY_MS = 1000;
+
+  console.log("[Auth] Starting session refresh, attempt:", retryCount + 1);
 
   refreshPromise = (async () => {
     try {
@@ -155,14 +168,22 @@ export async function refreshSession(
 
       clearTimeout(timeoutId);
 
+      console.log("[Auth] Refresh response status:", response.status);
+
       if (!response.ok) {
         // Only clear session on explicit auth rejection (token invalid/revoked)
         if (response.status === 401 || response.status === 403) {
+          const errorBody = await response.json().catch(() => ({}));
+          console.error("[Auth] Refresh rejected by server:", {
+            status: response.status,
+            error: errorBody,
+          });
           clearSession();
           return null;
         }
 
         // Server error - don't clear session, allow retry later
+        console.warn("[Auth] Refresh server error:", response.status);
         return null;
       }
 
@@ -176,6 +197,7 @@ export async function refreshSession(
       };
 
       storeSession(newSession);
+      console.log("[Auth] Refresh successful, new expiry:", new Date(data.expiresAt).toISOString());
       return newSession;
     } catch (error) {
       // Network error - DON'T clear session!

@@ -67,6 +67,10 @@ export default defineConfig(({ mode }) => {
     publicDir: "public",
     server: {
       port: 3000,
+      headers: {
+        // Allow Google Sign-In popup to communicate back
+        "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
+      },
       proxy: {
         "/ws": {
           // Use localhost:3001 for local cloud dev, brewos.local for ESP32 dev
