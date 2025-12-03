@@ -112,6 +112,7 @@ const defaultTemps: Temperatures = {
 const defaultPower: PowerStatus = {
   current: 0,
   voltage: 220,
+  maxCurrent: 13,  // Default to 13A (UK standard)
   todayKwh: 0,
   totalKwh: 0,
 };
@@ -158,6 +159,11 @@ const defaultWifi: WiFiStatus = {
   ip: "",
   rssi: 0,
   apMode: false,
+  staticIp: false,
+  gateway: "",
+  subnet: "255.255.255.0",
+  dns1: "",
+  dns2: "",
 };
 
 const defaultMqtt: MQTTStatus = {
@@ -346,6 +352,8 @@ export const useStore = create<BrewOSState>()(
           const connectionsData = data.connections as
             | Record<string, unknown>
             | undefined;
+          const wifiData = data.wifi as Record<string, unknown> | undefined;
+          const mqttData = data.mqtt as Record<string, unknown> | undefined;
           const esp32Data = data.esp32 as Record<string, unknown> | undefined;
 
           set((state) => ({
@@ -411,6 +419,7 @@ export const useStore = create<BrewOSState>()(
                   ...state.power,
                   current: (powerData.current as number) ?? state.power.current,
                   voltage: (powerData.voltage as number) ?? state.power.voltage,
+                  maxCurrent: (powerData.maxCurrent as number) ?? state.power.maxCurrent,
                 }
               : state.power,
             // Cleaning
@@ -447,15 +456,25 @@ export const useStore = create<BrewOSState>()(
                   battery: (scaleData.battery as number) ?? state.scale.battery,
                 }
               : state.scale,
-            // Connection status
-            wifi: connectionsData
+            // Connection status and full WiFi/MQTT data
+            wifi: wifiData
+              ? {
+                  ...state.wifi,
+                  ...(wifiData as Partial<WiFiStatus>),
+                }
+              : connectionsData
               ? {
                   ...state.wifi,
                   connected:
                     (connectionsData.wifi as boolean) ?? state.wifi.connected,
                 }
               : state.wifi,
-            mqtt: connectionsData
+            mqtt: mqttData
+              ? {
+                  ...state.mqtt,
+                  ...(mqttData as Partial<MQTTStatus>),
+                }
+              : connectionsData
               ? {
                   ...state.mqtt,
                   connected:

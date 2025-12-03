@@ -91,6 +91,7 @@ export interface Temperatures {
 export interface PowerStatus {
   current: number;
   voltage: number;
+  maxCurrent: number;  // Max current limit (Amps) - from device settings
   todayKwh: number;
   totalKwh: number;
 }
@@ -152,6 +153,12 @@ export interface WiFiStatus {
   ip: string;
   rssi: number;
   apMode: boolean;
+  // Static IP configuration
+  staticIp: boolean;
+  gateway: string;
+  subnet: string;
+  dns1: string;
+  dns2: string;
 }
 
 // MQTT

@@ -1,6 +1,14 @@
-import { useState, useEffect } from 'react';
-import { X, Flame, Wind, Zap, Brain, Check } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { X, Flame, Wind, Zap, Brain, Check, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useStore } from '@/lib/store';
+import { getMachineByBrandModel } from '@/lib/machines';
+import {
+  validateHeatingStrategy,
+  calculateHeaterCurrents,
+  HEATING_STRATEGIES as STRATEGY_VALUES,
+  type HeatingStrategy as HeatingStrategyValue,
+} from '@/lib/powerValidation';
 
 export interface HeatingStrategy {
   value: number;
@@ -56,6 +64,33 @@ export function HeatingStrategyModal({
   onSelect,
   defaultStrategy,
 }: HeatingStrategyModalProps) {
+  // Get power settings and machine info from store
+  const voltage = useStore((s) => s.power.voltage) || 220;
+  const maxCurrent = useStore((s) => s.power.maxCurrent) || 13;
+  const machineBrand = useStore((s) => s.device.machineBrand);
+  const machineModel = useStore((s) => s.device.machineModel);
+
+  // Get machine definition by brand and model
+  const machine = useMemo(() => {
+    if (!machineBrand || !machineModel) return undefined;
+    return getMachineByBrandModel(machineBrand, machineModel);
+  }, [machineBrand, machineModel]);
+
+  // Calculate heater currents and validate strategies
+  const strategyValidations = useMemo(() => {
+    const heaterCurrents = calculateHeaterCurrents(machine, voltage);
+    const powerConfig = { voltage, maxCurrent };
+    
+    return HEATING_STRATEGIES.reduce((acc, strategy) => {
+      acc[strategy.value] = validateHeatingStrategy(
+        strategy.value as HeatingStrategyValue,
+        powerConfig,
+        heaterCurrents
+      );
+      return acc;
+    }, {} as Record<number, ReturnType<typeof validateHeatingStrategy>>);
+  }, [machine, voltage, maxCurrent]);
+
   const [selectedStrategy, setSelectedStrategy] = useState<number>(() => {
     // Get from localStorage or use default
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -148,10 +183,16 @@ export function HeatingStrategyModal({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             {HEATING_STRATEGIES.map((strategy) => {
               const isSelected = selectedStrategy === strategy.value;
+              const validation = strategyValidations[strategy.value];
+              const isUnsafe = validation && !validation.isAllowed;
+              
               return (
                 <button
                   key={strategy.value}
                   onClick={() => {
+                    if (isUnsafe) {
+                      // Still allow selection but user is warned
+                    }
                     setSelectedStrategy(strategy.value);
                     // Immediately confirm selection
                     localStorage.setItem(STORAGE_KEY, strategy.value.toString());
@@ -163,7 +204,9 @@ export function HeatingStrategyModal({
                     'hover:scale-[1.02] hover:shadow-lg cursor-pointer active:scale-[0.98]',
                     isSelected
                       ? 'border-accent bg-accent/10 shadow-md'
-                      : 'border-theme bg-theme-secondary hover:border-theme-tertiary'
+                      : isUnsafe
+                        ? 'border-amber-500/50 bg-amber-500/5 hover:border-amber-500'
+                        : 'border-theme bg-theme-secondary hover:border-theme-tertiary'
                   )}
                 >
                   {/* Selection indicator */}
@@ -173,13 +216,22 @@ export function HeatingStrategyModal({
                     </div>
                   )}
 
+                  {/* Warning indicator for unsafe strategies */}
+                  {isUnsafe && !isSelected && (
+                    <div className="absolute top-2 right-2 sm:top-3 sm:right-3 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-amber-500/20 flex items-center justify-center">
+                      <AlertTriangle className="w-3 h-3 sm:w-4 sm:h-4 text-amber-500" />
+                    </div>
+                  )}
+
                   {/* Icon */}
                   <div
                     className={cn(
                       'w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center mb-2 sm:mb-3 transition-colors flex-shrink-0',
                       isSelected
                         ? 'bg-accent/20 text-accent'
-                        : 'bg-theme-tertiary text-theme-muted group-hover:text-accent'
+                        : isUnsafe
+                          ? 'bg-amber-500/20 text-amber-500'
+                          : 'bg-theme-tertiary text-theme-muted group-hover:text-accent'
                     )}
                   >
                     {strategy.icon}
@@ -189,7 +241,7 @@ export function HeatingStrategyModal({
                   <h3
                     className={cn(
                       'text-base sm:text-lg font-semibold mb-1',
-                      isSelected ? 'text-theme' : 'text-theme-secondary'
+                      isSelected ? 'text-theme' : isUnsafe ? 'text-amber-500' : 'text-theme-secondary'
                     )}
                   >
                     {strategy.label}
@@ -198,12 +250,36 @@ export function HeatingStrategyModal({
                   {/* Description */}
                   <p className="text-xs sm:text-sm text-theme-muted mb-1.5 sm:mb-2">{strategy.desc}</p>
 
-                  {/* Detail */}
-                  <p className="text-xs text-theme-muted leading-relaxed">{strategy.detail}</p>
+                  {/* Detail or Warning */}
+                  {isUnsafe && validation?.reason ? (
+                    <div className="flex items-start gap-1.5 text-xs text-amber-500">
+                      <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                      <span>
+                        May trip breaker: {validation.combinedCurrent?.toFixed(1)}A needed, 
+                        limit {validation.safeLimit?.toFixed(1)}A
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-theme-muted leading-relaxed">{strategy.detail}</p>
+                  )}
                 </button>
               );
             })}
           </div>
+          
+          {/* Power settings info */}
+          {machine && (
+            <div className="mt-4 pt-4 border-t border-theme">
+              <p className="text-xs text-theme-muted text-center">
+                Power settings: {voltage}V / {maxCurrent}A max
+                {machine.specs.brewPowerWatts && machine.specs.steamPowerWatts && (
+                  <span className="block mt-1">
+                    {machine.brand} {machine.model}: {machine.specs.brewPowerWatts}W brew + {machine.specs.steamPowerWatts}W steam
+                  </span>
+                )}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
