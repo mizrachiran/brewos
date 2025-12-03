@@ -5,55 +5,42 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#391f12" />
-    <meta name="description" content="BrewOS - Smart Espresso Machine Controller" />
+    <meta
+      name="description"
+      content="BrewOS - Smart Espresso Machine Controller"
+    />
     <link rel="manifest" href="/manifest.json" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="BrewOS" />
-    
+
     <!-- Preconnect to font servers for faster loading -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!-- Preload critical fonts -->
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" as="style" />
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link
+      rel="preload"
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      as="style"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
     <title>BrewOS - Open Source Espresso Machine Firmware</title>
-    <!-- Inline critical CSS for instant first paint with logo -->
+    <!-- Critical CSS for instant first paint -->
     <style>
-      /* Critical CSS for instant loading screen */
-      :root { --bg: #1a1412; --text: #f5f5f4; --accent: #b38458; }
-      body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; }
-      
-      /* Loading container when React hasn't rendered yet */
-      #root:empty { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-      #root:empty::before {
-        content: '';
-        position: absolute;
-        width: 80px;
-        height: 80px;
-        background-image: url('/logo-icon.svg');
-        background-size: contain;
-        background-repeat: no-repeat;
-        background-position: center;
-        animation: float 2s ease-in-out infinite;
+      :root {
+        --bg: #1a1412;
+        --text: #f5f5f4;
+        --accent: #b38458;
       }
-      #root:empty::after {
-        content: '';
-        position: absolute;
-        margin-top: 140px;
-        width: 24px;
-        height: 24px;
-        border: 2px solid var(--accent);
-        border-top-color: transparent;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-      }
-      
-      @keyframes spin { to { transform: rotate(360deg); } }
-      @keyframes float {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-8px); }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, sans-serif;
       }
     </style>
   </head>
