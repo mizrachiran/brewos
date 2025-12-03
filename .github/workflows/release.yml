@@ -238,8 +238,8 @@ jobs:
             set -e
             cd /root/brewos
             
-            # Fetch the release tag
-            git fetch origin --tags
+            # Fetch the release tag (--force to overwrite any conflicting local tags)
+            git fetch origin --tags --force
             git checkout ${RELEASE_VERSION}
             
             # Create .env for web build with release version
