@@ -83,14 +83,14 @@ export function Pair() {
   const renderContent = () => {
     if (status === "success") {
       return (
-        <div className="text-center py-4 sm:py-8">
-          <div className="w-12 h-12 sm:w-16 sm:h-16 bg-success-soft rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
-            <Check className="w-6 h-6 sm:w-8 sm:h-8 text-success" />
+        <div className="text-center py-4 xs:py-8">
+          <div className="w-12 h-12 xs:w-16 xs:h-16 bg-success-soft rounded-full flex items-center justify-center mx-auto mb-3 xs:mb-4">
+            <Check className="w-6 h-6 xs:w-8 xs:h-8 text-success" />
           </div>
-          <h2 className="text-base sm:text-xl font-bold text-theme mb-1 sm:mb-2">
+          <h2 className="text-base xs:text-xl font-bold text-theme mb-1 xs:mb-2">
             Device Paired!
           </h2>
-          <p className="text-xs sm:text-base text-theme-secondary">
+          <p className="text-xs xs:text-base text-theme-secondary">
             Redirecting to your devices...
           </p>
         </div>
@@ -99,17 +99,17 @@ export function Pair() {
 
     if (status === "error") {
       return (
-        <div className="text-center py-4 sm:py-8">
-          <div className="w-12 h-12 sm:w-16 sm:h-16 bg-error-soft rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
-            <X className="w-6 h-6 sm:w-8 sm:h-8 text-error" />
+        <div className="text-center py-4 xs:py-8">
+          <div className="w-12 h-12 xs:w-16 xs:h-16 bg-error-soft rounded-full flex items-center justify-center mx-auto mb-3 xs:mb-4">
+            <X className="w-6 h-6 xs:w-8 xs:h-8 text-error" />
           </div>
-          <h2 className="text-base sm:text-xl font-bold text-theme mb-1 sm:mb-2">
+          <h2 className="text-base xs:text-xl font-bold text-theme mb-1 xs:mb-2">
             Pairing Failed
           </h2>
-          <p className="text-xs sm:text-base text-theme-secondary mb-4 sm:mb-6">
+          <p className="text-xs xs:text-base text-theme-secondary mb-4 xs:mb-6">
             {errorMessage}
           </p>
-          <div className="flex gap-2 sm:gap-3 justify-center">
+          <div className="flex gap-2 xs:gap-3 justify-center">
             <Button variant="secondary" onClick={() => navigate("/machines")}>
               Go to Machines
             </Button>
@@ -121,9 +121,9 @@ export function Pair() {
 
     if (status === "claiming") {
       return (
-        <div className="text-center py-4 sm:py-8">
-          <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-accent mx-auto mb-3 sm:mb-4" />
-          <h2 className="text-base sm:text-xl font-bold text-theme mb-1 sm:mb-2">
+        <div className="text-center py-4 xs:py-8">
+          <Loader2 className="w-6 h-6 xs:w-8 xs:h-8 animate-spin text-accent mx-auto mb-3 xs:mb-4" />
+          <h2 className="text-base xs:text-xl font-bold text-theme mb-1 xs:mb-2">
             Adding Device...
           </h2>
         </div>
@@ -131,26 +131,26 @@ export function Pair() {
     }
 
     return (
-      <div className="py-2 sm:py-6">
-        <div className="text-center mb-4 sm:mb-6">
-          <div className="flex justify-center mb-3 sm:mb-4">
+      <div className="py-2 xs:py-6">
+        <div className="text-center mb-4 xs:mb-6">
+          <div className="flex justify-center mb-3 xs:mb-4">
             {/* Mobile: force light text for dark background */}
-            <Logo size="md" forceLight className="sm:hidden" />
+            <Logo size="md" forceLight className="xs:hidden" />
             {/* Desktop: use theme colors */}
-            <Logo size="lg" className="hidden sm:flex" />
+            <Logo size="lg" className="hidden xs:flex" />
           </div>
-          <h1 className="text-lg sm:text-2xl font-bold text-theme">
+          <h1 className="text-lg xs:text-2xl font-bold text-theme">
             Pair Device
           </h1>
-          <p className="text-xs sm:text-base text-theme-secondary mt-1 sm:mt-2">
+          <p className="text-xs xs:text-base text-theme-secondary mt-1 xs:mt-2">
             Add this BrewOS device to your account
           </p>
         </div>
 
-        <div className="bg-white/5 sm:bg-theme-tertiary rounded-lg sm:rounded-xl p-2.5 sm:p-4 mb-4 sm:mb-6">
-          <div className="flex items-center justify-between text-xs sm:text-sm">
+        <div className="bg-white/5 xs:bg-theme-tertiary rounded-lg xs:rounded-xl p-2.5 xs:p-4 mb-4 xs:mb-6">
+          <div className="flex items-center justify-between text-xs xs:text-sm">
             <span className="text-theme-secondary">Machine ID</span>
-            <span className="font-mono text-theme text-[10px] sm:text-sm">{deviceId}</span>
+            <span className="font-mono text-theme text-[10px] xs:text-sm">{deviceId}</span>
           </div>
         </div>
 
@@ -159,7 +159,7 @@ export function Pair() {
           placeholder="Kitchen Espresso"
           value={deviceName}
           onChange={(e) => setDeviceName(e.target.value)}
-          className="mb-4 sm:mb-6"
+          className="mb-4 xs:mb-6"
         />
 
         {user ? (
@@ -167,8 +167,8 @@ export function Pair() {
             Add to My Machines
           </Button>
         ) : (
-          <div className="space-y-3 sm:space-y-4">
-            <p className="text-[10px] sm:text-sm text-theme-secondary text-center">
+          <div className="space-y-3 xs:space-y-4">
+            <p className="text-[10px] xs:text-sm text-theme-secondary text-center">
               Sign in to add this device to your account
             </p>
             <div className="flex justify-center">

@@ -164,31 +164,31 @@ export function DeviceClaimFlow({
   return (
     <div className={className}>
       {showTabs && (
-        <div className="flex gap-2 mb-4 sm:mb-6">
+        <div className="flex gap-2 mb-4 xs:mb-6">
           <Button
             variant={step === "scan" ? "primary" : "secondary"}
             size="sm"
-            className="flex-1 text-xs sm:text-sm"
+            className="flex-1 text-xs xs:text-sm"
             onClick={() => {
               setStep("scan");
               setError("");
             }}
           >
             <QrCode className="w-4 h-4" />
-            <span className="hidden sm:inline">Scan QR Code</span>
-            <span className="sm:hidden">Scan</span>
+            <span className="hidden xs:inline">Scan QR Code</span>
+            <span className="xs:hidden">Scan</span>
           </Button>
           <Button
             variant={step === "manual" ? "primary" : "secondary"}
             size="sm"
-            className="flex-1 text-xs sm:text-sm"
+            className="flex-1 text-xs xs:text-sm"
             onClick={() => {
               setStep("manual");
               setError("");
             }}
           >
-            <span className="hidden sm:inline">Enter Code</span>
-            <span className="sm:hidden">Code</span>
+            <span className="hidden xs:inline">Enter Code</span>
+            <span className="xs:hidden">Code</span>
           </Button>
         </div>
       )}

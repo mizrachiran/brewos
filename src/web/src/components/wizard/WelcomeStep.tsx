@@ -21,53 +21,53 @@ export function WelcomeStep() {
   ];
 
   return (
-    <div className="text-center py-4 sm:py-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="text-center py-4 xs:py-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Logo */}
-      <div className="flex justify-center mb-4 sm:mb-8">
+      <div className="flex justify-center mb-4 xs:mb-8">
         <div className="relative">
           <div className="absolute inset-0 bg-accent/20 rounded-full blur-2xl animate-pulse" />
           <div className="relative">
             {/* Mobile: force light text for dark background */}
-            <Logo size="lg" forceLight className="sm:hidden" />
+            <Logo size="lg" forceLight className="xs:hidden" />
             {/* Desktop: use theme colors */}
-            <Logo size="xl" className="hidden sm:flex" />
+            <Logo size="xl" className="hidden xs:flex" />
           </div>
         </div>
       </div>
 
       {/* Welcome heading */}
-      <div className="mb-5 sm:mb-10">
-        <div className="inline-flex items-center gap-2 mb-2 sm:mb-3">
-          <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-accent animate-pulse" />
-          <h1 className="text-2xl sm:text-4xl font-bold text-theme tracking-tight">
+      <div className="mb-5 xs:mb-10">
+        <div className="inline-flex items-center gap-2 mb-2 xs:mb-3">
+          <Sparkles className="w-4 h-4 xs:w-5 xs:h-5 text-accent animate-pulse" />
+          <h1 className="text-2xl xs:text-4xl font-bold text-theme tracking-tight">
             Welcome to BrewOS
           </h1>
         </div>
-        <p className="text-theme-muted text-sm sm:text-lg max-w-md mx-auto leading-relaxed">
+        <p className="text-theme-muted text-sm xs:text-lg max-w-md mx-auto leading-relaxed">
           Let's set up your espresso machine. This will only take a minute.
         </p>
       </div>
 
       {/* Setup steps */}
-      <div className="max-w-md mx-auto space-y-2 sm:space-y-4">
+      <div className="max-w-md mx-auto space-y-2 xs:space-y-4">
         {steps.map((step, index) => {
           const Icon = step.icon;
           return (
             <div
               key={index}
-              className="flex items-start gap-3 sm:gap-4 p-3 sm:p-4 bg-white/5 sm:bg-theme-secondary/50 rounded-xl border border-white/10 sm:border-theme/10 hover:bg-white/10 sm:hover:bg-theme-secondary transition-colors duration-200 animate-in fade-in slide-in-from-left-4"
+              className="flex items-start gap-3 xs:gap-4 p-3 xs:p-4 bg-white/5 xs:bg-theme-secondary/50 rounded-xl border border-white/10 xs:border-theme/10 hover:bg-white/10 xs:hover:bg-theme-secondary transition-colors duration-200 animate-in fade-in slide-in-from-left-4"
               style={{ animationDelay: `${index * 100}ms` }}
             >
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-accent/10 flex items-center justify-center flex-shrink-0 border border-accent/20">
-                <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-accent" />
+              <div className="w-9 h-9 xs:w-10 xs:h-10 rounded-lg xs:rounded-xl bg-accent/10 flex items-center justify-center flex-shrink-0 border border-accent/20">
+                <Icon className="w-4 h-4 xs:w-5 xs:h-5 text-accent" />
               </div>
               <div className="flex-1 text-left">
-                <p className="font-semibold text-sm sm:text-base text-theme mb-0.5">{step.title}</p>
-                <p className="text-xs sm:text-sm text-theme-muted">{step.description}</p>
+                <p className="font-semibold text-sm xs:text-base text-theme mb-0.5">{step.title}</p>
+                <p className="text-xs xs:text-sm text-theme-muted">{step.description}</p>
               </div>
               <div className="flex-shrink-0">
-                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-accent/10 flex items-center justify-center">
-                  <span className="text-[10px] sm:text-xs font-bold text-accent">
+                <div className="w-5 h-5 xs:w-6 xs:h-6 rounded-full bg-accent/10 flex items-center justify-center">
+                  <span className="text-[10px] xs:text-xs font-bold text-accent">
                     {index + 1}
                   </span>
                 </div>
@@ -78,8 +78,8 @@ export function WelcomeStep() {
       </div>
 
       {/* Quick tip */}
-      <div className="mt-4 sm:mt-8 text-center">
-        <p className="text-[10px] sm:text-xs text-theme-muted">
+      <div className="mt-4 xs:mt-8 text-center">
+        <p className="text-[10px] xs:text-xs text-theme-muted">
           💡 All settings can be changed later in Settings
         </p>
       </div>

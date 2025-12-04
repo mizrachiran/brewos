@@ -354,7 +354,7 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
   const isWelcomeStep = STEPS[currentStep].id === "welcome";
 
   const renderNavigation = () => (
-    <div className="flex justify-between pt-3 sm:pt-6 border-t border-white/10 sm:border-theme mt-3 sm:mt-6">
+    <div className="flex justify-between pt-3 card:pt-6 border-t border-white/10 card:border-theme mt-3 card:mt-6">
       {currentStep > 0 && STEPS[currentStep].id !== "done" ? (
         <Button variant="ghost" onClick={prevStep}>
           <ArrowLeft className="w-4 h-4" />
@@ -371,15 +371,19 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
   );
 
   return (
-    <div className="bg-gradient-to-br from-coffee-800 via-coffee-900 to-coffee-950 min-h-screen min-h-[100dvh]">
-      {/* Narrow width (< 640px): Full-screen scrollable */}
-      <div 
-        className="sm:hidden min-h-screen min-h-[100dvh] flex flex-col px-4 py-3 safe-area-inset"
+    <div className="min-h-screen min-h-[100dvh]">
+      {/* Narrow width: Full-screen scrollable with dark gradient */}
+      <div
+        className="xs:hidden bg-gradient-to-br from-coffee-800 via-coffee-900 to-coffee-950 min-h-screen min-h-[100dvh] flex flex-col px-4 py-3 safe-area-inset"
         style={darkBgStyles}
       >
         <ProgressIndicator steps={STEPS} currentStep={currentStep} />
-        
-        <div className={`flex-1 flex flex-col overflow-y-auto ${isWelcomeStep ? 'justify-center' : ''}`}>
+
+        <div
+          className={`flex-1 flex flex-col overflow-y-auto ${
+            isWelcomeStep ? "justify-center" : ""
+          }`}
+        >
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 py-1">
             {renderStepContent()}
             {renderNavigation()}
@@ -387,17 +391,13 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
         </div>
       </div>
 
-      {/* Wide width (>= 640px): Card layout */}
+      {/* Wide width: Card layout with theme background */}
       <div
-        className={`hidden sm:flex min-h-screen p-4 transition-all duration-300 ${
-          isWelcomeStep
-            ? "items-center justify-center"
-            : "justify-center pt-8"
+        className={`hidden xs:flex bg-theme min-h-screen p-4 transition-all duration-300 ${
+          isWelcomeStep ? "items-center justify-center" : "justify-center pt-8"
         }`}
       >
-        <div
-          className={`w-full max-w-xl transition-all duration-300`}
-        >
+        <div className={`w-full max-w-xl transition-all duration-300`}>
           <ProgressIndicator steps={STEPS} currentStep={currentStep} />
 
           <Card

@@ -70,29 +70,29 @@ export function Setup() {
   };
 
   const renderContent = () => (
-    <div className="py-2 sm:py-6">
-      <div className="text-center mb-4 sm:mb-6">
-        <div className="flex justify-center mb-3 sm:mb-4">
+    <div className="py-2 xs:py-6">
+      <div className="text-center mb-4 xs:mb-6">
+        <div className="flex justify-center mb-3 xs:mb-4">
           {/* Mobile: force light text for dark background */}
-          <Logo size="md" forceLight className="sm:hidden" />
+          <Logo size="md" forceLight className="xs:hidden" />
           {/* Desktop: use theme colors */}
-          <Logo size="lg" className="hidden sm:flex" />
+          <Logo size="lg" className="hidden xs:flex" />
         </div>
-        <h1 className="text-lg sm:text-2xl font-bold text-theme">WiFi Setup</h1>
-        <p className="text-xs sm:text-base text-theme-muted mt-1">
+        <h1 className="text-lg xs:text-2xl font-bold text-theme">WiFi Setup</h1>
+        <p className="text-xs xs:text-base text-theme-muted mt-1">
           Connect your BrewOS to WiFi
         </p>
       </div>
 
       {status === "success" ? (
-        <div className="text-center py-4 sm:py-8">
-          <div className="w-12 h-12 sm:w-16 sm:h-16 bg-success-soft rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
-            <Check className="w-6 h-6 sm:w-8 sm:h-8 text-success" />
+        <div className="text-center py-4 xs:py-8">
+          <div className="w-12 h-12 xs:w-16 xs:h-16 bg-success-soft rounded-full flex items-center justify-center mx-auto mb-3 xs:mb-4">
+            <Check className="w-6 h-6 xs:w-8 xs:h-8 text-success" />
           </div>
-          <h2 className="text-base sm:text-xl font-bold text-theme mb-1 sm:mb-2">
+          <h2 className="text-base xs:text-xl font-bold text-theme mb-1 xs:mb-2">
             Connected!
           </h2>
-          <p className="text-xs sm:text-base text-theme-muted mb-3 sm:mb-4">
+          <p className="text-xs xs:text-base text-theme-muted mb-3 xs:mb-4">
             Redirecting to{" "}
             <span className="font-mono text-accent">brewos.local</span>...
           </p>
@@ -100,9 +100,9 @@ export function Setup() {
       ) : (
         <>
           {/* Network List */}
-          <div className="mb-3 sm:mb-4">
-            <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-              <label className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-theme-muted">
+          <div className="mb-3 xs:mb-4">
+            <div className="flex items-center justify-between mb-1.5 xs:mb-2">
+              <label className="text-[10px] xs:text-xs font-semibold uppercase tracking-wider text-theme-muted">
                 Available Networks
               </label>
               <Button
@@ -112,16 +112,16 @@ export function Setup() {
                 disabled={scanning}
               >
                 {scanning ? (
-                  <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 xs:w-4 xs:h-4 animate-spin" />
                 ) : (
-                  <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <RefreshCw className="w-3.5 h-3.5 xs:w-4 xs:h-4" />
                 )}
               </Button>
             </div>
 
-            <div className="max-h-36 sm:max-h-48 overflow-y-auto border border-white/10 sm:border-theme rounded-lg sm:rounded-xl">
+            <div className="max-h-36 xs:max-h-48 overflow-y-auto border border-white/10 xs:border-theme rounded-lg xs:rounded-xl">
               {networks.length === 0 ? (
-                <div className="p-3 sm:p-4 text-center text-theme-muted text-xs sm:text-sm">
+                <div className="p-3 xs:p-4 text-center text-theme-muted text-xs xs:text-sm">
                   {scanning ? "Scanning..." : "No networks found"}
                 </div>
               ) : (
@@ -129,13 +129,13 @@ export function Setup() {
                   <button
                     key={network.ssid}
                     onClick={() => setSelectedSsid(network.ssid)}
-                    className={`w-full flex items-center justify-between p-2.5 sm:p-3 border-b border-white/10 sm:border-theme last:border-0 hover:bg-white/5 sm:hover:bg-theme-secondary transition-colors ${
+                    className={`w-full flex items-center justify-between p-2.5 xs:p-3 border-b border-white/10 xs:border-theme last:border-0 hover:bg-white/5 xs:hover:bg-theme-secondary transition-colors ${
                       selectedSsid === network.ssid ? "bg-accent/10" : ""
                     }`}
                   >
-                    <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="flex items-center gap-2 xs:gap-3">
                       <Wifi
-                        className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${
+                        className={`w-3.5 h-3.5 xs:w-4 xs:h-4 ${
                           network.rssi > -50
                             ? "text-emerald-500"
                             : network.rssi > -70
@@ -143,12 +143,14 @@ export function Setup() {
                             : "text-red-500"
                         }`}
                       />
-                      <span className="font-medium text-xs sm:text-sm text-theme">
+                      <span className="font-medium text-xs xs:text-sm text-theme">
                         {network.ssid}
                       </span>
                     </div>
                     {network.secure && (
-                      <span className="text-[10px] sm:text-xs text-theme-muted">🔒</span>
+                      <span className="text-[10px] xs:text-xs text-theme-muted">
+                        🔒
+                      </span>
                     )}
                   </button>
                 ))
@@ -158,7 +160,7 @@ export function Setup() {
 
           {/* Password */}
           {selectedSsid && (
-            <div className="mb-4 sm:mb-6">
+            <div className="mb-4 xs:mb-6">
               <Input
                 label="Password"
                 type="password"
@@ -171,7 +173,7 @@ export function Setup() {
 
           {/* Error */}
           {status === "error" && (
-            <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 bg-error-soft text-error rounded-lg sm:rounded-xl text-[10px] sm:text-sm">
+            <div className="mb-3 xs:mb-4 p-2.5 xs:p-3 bg-error-soft text-error rounded-lg xs:rounded-xl text-[10px] xs:text-sm">
               {errorMessage}
             </div>
           )}

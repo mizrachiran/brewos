@@ -42,7 +42,39 @@ app.use((_req, res, next) => {
 const webDistPath = path.resolve(
   process.env.WEB_DIST_PATH || path.join(process.cwd(), "../web/dist")
 );
-app.use(express.static(webDistPath));
+
+// Cache control for service worker - MUST never be cached by browsers
+// This ensures new deployments are detected immediately
+app.get("/sw.js", (_req, res) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.sendFile(path.join(webDistPath, "sw.js"));
+});
+
+// Cache control for index.html - should revalidate on each request
+app.get("/index.html", (_req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.sendFile(path.join(webDistPath, "index.html"));
+});
+
+// Static files with proper caching:
+// - Hashed assets (/assets/*) can be cached forever (immutable)
+// - Other files should revalidate
+app.use(
+  "/assets",
+  express.static(path.join(webDistPath, "assets"), {
+    maxAge: "1y",
+    immutable: true,
+  })
+);
+
+app.use(express.static(webDistPath, {
+  // Other static files: cache for 1 hour but always revalidate
+  maxAge: "1h",
+  etag: true,
+  lastModified: true,
+}));
 
 // Create HTTP server
 const server = createServer(app);

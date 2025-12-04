@@ -91,9 +91,10 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigation requests - serve cached index.html immediately, revalidate in background
+  // Navigation requests - use network-first with short timeout
+  // This ensures users get fresh content after deployments, with fallback to cache if offline
   if (request.mode === "navigate") {
-    event.respondWith(staleWhileRevalidate(request));
+    event.respondWith(networkFirstWithTimeout(request, 2000));
     return;
   }
 
@@ -175,6 +176,11 @@ async function networkFirstWithTimeout(request, timeout) {
     const cached = await caches.match(request);
     if (cached) {
       return cached;
+    }
+
+    // For navigation requests, fall back to cached index.html
+    if (request.mode === "navigate") {
+      return caches.match("/index.html");
     }
 
     // Return error response for API calls

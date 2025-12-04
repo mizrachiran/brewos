@@ -18,20 +18,20 @@ export function EnvironmentStep({
   onMaxCurrentChange,
 }: EnvironmentStepProps) {
   return (
-    <div className="py-3 sm:py-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="text-center mb-4 sm:mb-8">
-        <div className="w-12 h-12 sm:w-16 sm:h-16 bg-accent/10 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-2 sm:mb-4 border border-accent/20 shadow-sm">
-          <Zap className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />
+    <div className="py-3 xs:py-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="text-center mb-4 xs:mb-8">
+        <div className="w-12 h-12 xs:w-16 xs:h-16 bg-accent/10 rounded-xl xs:rounded-2xl flex items-center justify-center mx-auto mb-2 xs:mb-4 border border-accent/20 shadow-sm">
+          <Zap className="w-6 h-6 xs:w-8 xs:h-8 text-accent" />
         </div>
-        <h2 className="text-xl sm:text-3xl font-bold text-theme mb-1 sm:mb-2">Power Settings</h2>
-        <p className="text-theme-muted text-xs sm:text-base">
+        <h2 className="text-xl xs:text-3xl font-bold text-theme mb-1 xs:mb-2">Power Settings</h2>
+        <p className="text-theme-muted text-xs xs:text-base">
           Configure your electrical environment for safe operation
         </p>
       </div>
 
-      <div className="space-y-3 sm:space-y-5 max-w-sm mx-auto">
-        <div className="space-y-1.5 sm:space-y-2">
-          <label className="block text-xs sm:text-sm font-medium text-theme">
+      <div className="space-y-3 xs:space-y-5 max-w-sm mx-auto">
+        <div className="space-y-1.5 xs:space-y-2">
+          <label className="block text-xs xs:text-sm font-medium text-theme">
             Mains Voltage <span className="text-red-500">*</span>
           </label>
           <div className="relative">
@@ -39,9 +39,9 @@ export function EnvironmentStep({
               value={voltage}
               onChange={(e) => onVoltageChange(parseInt(e.target.value))}
               className={cn(
-                "w-full px-3 sm:px-4 py-2.5 sm:py-3 pr-10 rounded-lg sm:rounded-xl appearance-none",
-                "bg-white/5 sm:bg-theme-secondary border border-white/10 sm:border-theme",
-                "text-theme text-xs sm:text-sm font-medium",
+                "w-full px-3 xs:px-4 py-2.5 xs:py-3 pr-10 rounded-lg xs:rounded-xl appearance-none",
+                "bg-white/5 xs:bg-theme-secondary border border-white/10 xs:border-theme",
+                "text-theme text-xs xs:text-sm font-medium",
                 "focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent",
                 "transition-all duration-200 hover:border-accent/50",
                 errors.voltage && "border-red-500 focus:ring-red-500"
@@ -51,10 +51,10 @@ export function EnvironmentStep({
               <option value="220">220V (EU/AU/Most of the World)</option>
               <option value="240">240V (UK)</option>
             </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-theme-muted pointer-events-none" />
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 xs:w-5 xs:h-5 text-theme-muted pointer-events-none" />
           </div>
           {errors.voltage && (
-            <p className="text-[10px] sm:text-xs text-red-500 animate-in fade-in slide-in-from-top-2">
+            <p className="text-[10px] xs:text-xs text-red-500 animate-in fade-in slide-in-from-top-2">
               {errors.voltage}
             </p>
           )}
@@ -74,12 +74,12 @@ export function EnvironmentStep({
           required
         />
 
-        <div className="p-3 sm:p-5 rounded-lg sm:rounded-xl bg-accent/5 border border-accent/20 space-y-2 sm:space-y-4 shadow-sm">
+        <div className="p-3 xs:p-5 rounded-lg xs:rounded-xl bg-accent/5 border border-accent/20 space-y-2 xs:space-y-4 shadow-sm">
           <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-accent" />
-            <span className="font-semibold text-theme text-sm sm:text-base">Common Values</span>
+            <Zap className="w-4 h-4 xs:w-5 xs:h-5 text-accent" />
+            <span className="font-semibold text-theme text-sm xs:text-base">Common Values</span>
           </div>
-          <div className="grid grid-cols-2 gap-1.5 sm:gap-3 text-[10px] sm:text-xs">
+          <div className="grid grid-cols-2 gap-1.5 xs:gap-3 text-[10px] xs:text-xs">
             {[
               { label: "US/CA", value: "110V / 15-20A" },
               { label: "EU", value: "220V / 16A" },
@@ -88,9 +88,9 @@ export function EnvironmentStep({
             ].map((item, index) => (
               <div
                 key={index}
-                className="flex items-center gap-1.5 sm:gap-2 p-1.5 sm:p-2 rounded-md sm:rounded-lg bg-white/5 sm:bg-theme-secondary/50 hover:bg-white/10 sm:hover:bg-theme-secondary transition-colors"
+                className="flex items-center gap-1.5 xs:gap-2 p-1.5 xs:p-2 rounded-md xs:rounded-lg bg-white/5 xs:bg-theme-secondary/50 hover:bg-white/10 xs:hover:bg-theme-secondary transition-colors"
               >
-                <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-accent flex-shrink-0" />
+                <span className="w-1.5 h-1.5 xs:w-2 xs:h-2 rounded-full bg-accent flex-shrink-0" />
                 <div>
                   <span className="font-medium text-theme">{item.label}:</span>{" "}
                   <span className="text-theme-muted">{item.value}</span>
@@ -98,7 +98,7 @@ export function EnvironmentStep({
               </div>
             ))}
           </div>
-          <p className="text-[10px] sm:text-xs text-theme-muted leading-relaxed pt-2 border-t border-white/10 sm:border-theme/10">
+          <p className="text-[10px] xs:text-xs text-theme-muted leading-relaxed pt-2 border-t border-white/10 xs:border-theme/10">
             These settings ensure the machine heats safely within your
             electrical system's limits.
           </p>
