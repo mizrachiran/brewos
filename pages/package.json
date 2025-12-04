@@ -10,6 +10,6 @@
     "serve": "npm run build && npm run preview"
   },
   "dependencies": {
-    "astro": "^4.16.0"
+    "astro": "^5.15.9"
   }
 }
