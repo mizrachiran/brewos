@@ -25,13 +25,12 @@ export function ScanStep({
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header */}
       <div className="text-center mb-6">
-        <div className="w-16 h-16 bg-accent/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <QrCode className="w-8 h-8 text-accent" />
+        <div className="w-12 h-12 sm:w-16 sm:h-16 bg-accent/10 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4">
+          <QrCode className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />
         </div>
-        <h2 className="text-3xl font-bold text-theme mb-2">Scan QR Code</h2>
-        <p className="text-theme-muted text-base">
-          Point your camera at the QR code on your BrewOS display or web
-          interface
+        <h2 className="text-2xl sm:text-3xl font-bold text-theme mb-2">Scan QR Code</h2>
+        <p className="text-theme-muted text-sm sm:text-base">
+          Point your camera at the QR code on your BrewOS display
         </p>
       </div>
 
@@ -40,16 +39,18 @@ export function ScanStep({
         {onScan ? (
           <QRScanner onScan={onScan} onError={onScanError || (() => {})} />
         ) : (
-          <div className="aspect-square max-w-xs mx-auto bg-gradient-to-br from-theme-secondary to-theme-tertiary rounded-2xl flex items-center justify-center border-2 border-dashed border-accent/30 relative overflow-hidden">
-            <div className="absolute inset-0 bg-accent/5 animate-pulse" />
-            <div className="relative text-center text-theme-muted z-10">
-              <QrCode className="w-20 h-20 mx-auto mb-3 opacity-40" />
-              <p className="text-sm font-medium">
-                Camera view will appear here
-              </p>
-              <p className="text-xs mt-1 opacity-70">
-                Allow camera access when prompted
-              </p>
+          <div className="max-w-xs mx-auto">
+            <div className="aspect-square w-full bg-gradient-to-br from-theme-secondary to-theme-tertiary rounded-xl flex items-center justify-center border-2 border-dashed border-accent/30 relative overflow-hidden">
+              <div className="absolute inset-0 bg-accent/5 animate-pulse" />
+              <div className="relative text-center text-theme-muted z-10 px-4">
+                <QrCode className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3 opacity-40" />
+                <p className="text-sm font-medium">
+                  Camera view will appear here
+                </p>
+                <p className="text-xs mt-1 opacity-70">
+                  Allow camera access when prompted
+                </p>
+              </div>
             </div>
           </div>
         )}

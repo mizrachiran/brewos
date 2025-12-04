@@ -125,7 +125,7 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
       const scanningBox = scanRegion.querySelector<HTMLElement>(
         'div[style*="position"][style*="absolute"]'
       );
-      
+
       if (scanningBox) {
         // Apply our custom styling
         scanningBox.style.border = "2px dashed var(--accent)";
@@ -136,7 +136,8 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
       }
 
       // Also style SVG elements if present
-      const svgElements = scanRegion.querySelectorAll<SVGElement>("svg rect, svg path");
+      const svgElements =
+        scanRegion.querySelectorAll<SVGElement>("svg rect, svg path");
       svgElements.forEach((el) => {
         el.style.stroke = "var(--accent)";
         el.style.strokeWidth = "2";
@@ -164,13 +165,11 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
   }, [isScanning]);
 
   return (
-    <div className="w-full" ref={containerRef}>
-      {/* Scanner container */}
-      <div
-        id="qr-reader"
-        className="w-full rounded-xl overflow-hidden bg-black"
-        style={{ minHeight: "280px" }}
-      />
+    <div className="w-full max-w-xs mx-auto" ref={containerRef}>
+      {/* Scanner container - fixed aspect ratio to prevent size changes */}
+      <div className="aspect-square w-full rounded-xl overflow-hidden bg-black relative">
+        <div id="qr-reader" className="absolute inset-0 w-full h-full" />
+      </div>
 
       {/* Error state - compact */}
       {error && (
@@ -180,7 +179,12 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
               <CameraOff className="w-4 h-4 text-error flex-shrink-0" />
               <p className="text-xs sm:text-sm text-error truncate">{error}</p>
             </div>
-            <Button variant="secondary" size="sm" onClick={startScanner} className="flex-shrink-0">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={startScanner}
+              className="flex-shrink-0"
+            >
               <RefreshCw className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Retry</span>
             </Button>
