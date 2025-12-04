@@ -20,29 +20,39 @@ export function Dashboard() {
   const machineState = useStore((s) => s.machine.state);
   const machineType = useStore((s) => s.device.machineType);
   const heatingStrategy = useStore((s) => s.machine.heatingStrategy);
-  
+
   // Temperature data - individual primitive selectors to prevent unnecessary re-renders
-  const brewTempCurrent = useStore((s) => Math.round(s.temps.brew.current * 10) / 10);
+  const brewTempCurrent = useStore(
+    (s) => Math.round(s.temps.brew.current * 10) / 10
+  );
   const brewTempSetpoint = useStore((s) => s.temps.brew.setpoint);
   const brewTempMax = useStore((s) => s.temps.brew.max);
-  const steamTempCurrent = useStore((s) => Math.round(s.temps.steam.current * 10) / 10);
+  const steamTempCurrent = useStore(
+    (s) => Math.round(s.temps.steam.current * 10) / 10
+  );
   const steamTempSetpoint = useStore((s) => s.temps.steam.setpoint);
   const steamTempMax = useStore((s) => s.temps.steam.max);
   const groupTemp = useStore((s) => Math.round(s.temps.group * 10) / 10);
-  
+
   // Memoize temperature objects to prevent child re-renders
-  const brewTemp = useMemo(() => ({
-    current: brewTempCurrent,
-    setpoint: brewTempSetpoint,
-    max: brewTempMax,
-  }), [brewTempCurrent, brewTempSetpoint, brewTempMax]);
-  
-  const steamTemp = useMemo(() => ({
-    current: steamTempCurrent,
-    setpoint: steamTempSetpoint,
-    max: steamTempMax,
-  }), [steamTempCurrent, steamTempSetpoint, steamTempMax]);
-  
+  const brewTemp = useMemo(
+    () => ({
+      current: brewTempCurrent,
+      setpoint: brewTempSetpoint,
+      max: brewTempMax,
+    }),
+    [brewTempCurrent, brewTempSetpoint, brewTempMax]
+  );
+
+  const steamTemp = useMemo(
+    () => ({
+      current: steamTempCurrent,
+      setpoint: steamTempSetpoint,
+      max: steamTempMax,
+    }),
+    [steamTempCurrent, steamTempSetpoint, steamTempMax]
+  );
+
   // Other values - use specific selectors
   const pressure = useStore((s) => Math.round(s.pressure * 10) / 10);
   const powerCurrent = useStore((s) => Math.round(s.power.current));
@@ -54,10 +64,10 @@ export function Dashboard() {
   const scaleBattery = useStore((s) => s.scale.battery);
   const shotsToday = useStore((s) => s.stats.shotsToday);
   const machineOnTimestamp = useStore((s) => s.machine.machineOnTimestamp);
-  
+
   // Calculate uptime locally for smooth updates
   const [uptime, setUptime] = useState(0);
-  
+
   useEffect(() => {
     // Update uptime every second when machine is on
     const updateUptime = () => {
@@ -67,48 +77,53 @@ export function Dashboard() {
         setUptime(0);
       }
     };
-    
+
     // Initial update
     updateUptime();
-    
+
     // Update every second
     const interval = setInterval(updateUptime, 1000);
     return () => clearInterval(interval);
   }, [machineOnTimestamp]);
-  
+
   const { sendCommand } = useCommand();
   const [showStrategyModal, setShowStrategyModal] = useState(false);
 
   const isDualBoiler = machineType === "dual_boiler";
 
-  const setMode = useCallback((mode: string, strategy?: number) => {
-    const payload =
-      mode === "on" && strategy !== undefined ? { mode, strategy } : { mode };
-    sendCommand("set_mode", payload);
-  }, [sendCommand]);
+  const setMode = useCallback(
+    (mode: string, strategy?: number) => {
+      const payload =
+        mode === "on" && strategy !== undefined ? { mode, strategy } : { mode };
+      sendCommand("set_mode", payload);
+    },
+    [sendCommand]
+  );
 
   const handleOnClick = useCallback(() => {
-    if (machineMode === "on") {
-      setMode("on");
-    } else if (isDualBoiler) {
+    if (isDualBoiler) {
+      // For dual boiler, always show strategy modal (allows switching while on)
       setShowStrategyModal(true);
     } else {
       setMode("on");
     }
-  }, [machineMode, isDualBoiler, setMode]);
+  }, [isDualBoiler, setMode]);
 
-  const handleStrategySelect = useCallback((strategy: number) => {
-    setMode("on", strategy);
-    setShowStrategyModal(false);
-  }, [setMode]);
-  
+  const handleStrategySelect = useCallback(
+    (strategy: number) => {
+      setMode("on", strategy);
+      setShowStrategyModal(false);
+    },
+    [setMode]
+  );
+
   // Memoize formatted values
   const formattedUptime = useMemo(() => formatUptime(uptime), [uptime]);
   const scaleDisplayValue = useMemo(
-    () => scaleConnected ? `${scaleWeight.toFixed(1)}g` : "Not connected",
+    () => (scaleConnected ? `${scaleWeight.toFixed(1)}g` : "Not connected"),
     [scaleConnected, scaleWeight]
   );
-  
+
   // Determine scale subtext
   const scaleSubtext = useMemo(() => {
     if (!scaleConnected) return undefined;
@@ -122,7 +137,7 @@ export function Dashboard() {
     if (waterTankLevel === "low") return "warning" as const;
     return "error" as const;
   }, [waterTankLevel]);
-  
+
   const waterDisplayValue = useMemo(() => {
     if (waterTankLevel === "ok") return "OK";
     if (waterTankLevel === "low") return "Low";
@@ -131,8 +146,8 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <PageHeader 
-        title="Dashboard" 
+      <PageHeader
+        title="Dashboard"
         subtitle="Monitor your machine status"
         action={<StatusBar />}
       />
@@ -175,7 +190,7 @@ export function Dashboard() {
           label="Session"
           value={machineMode !== "standby" ? formattedUptime : "Off"}
         />
-        
+
         {/* Machine status group */}
         <QuickStat
           icon={<Droplets className="w-5 h-5" />}
@@ -183,7 +198,13 @@ export function Dashboard() {
           value={waterDisplayValue}
           status={waterStatus}
           showPulse={waterTankLevel !== "ok"}
-          subtext={waterTankLevel === "low" ? "Refill soon" : waterTankLevel === "empty" ? "Refill now!" : undefined}
+          subtext={
+            waterTankLevel === "low"
+              ? "Refill soon"
+              : waterTankLevel === "empty"
+              ? "Refill now!"
+              : undefined
+          }
         />
         <QuickStat
           icon={<Scale className="w-5 h-5" />}
