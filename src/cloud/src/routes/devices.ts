@@ -18,60 +18,53 @@ import {
 
 const router = Router();
 
-// Rate limiters with different strictness levels
+// ============================================================================
+// Rate Limiters
+// ============================================================================
 
-// IP-based limiter for unauthenticated routes (ESP32 device registration)
-// 5 requests per minute per IP
-const ipStrictLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many requests, please try again later" },
-});
-
-// User-based limiter for authenticated write operations
-// Uses user ID after authentication, falls back to IP
-// 30 requests per 15 minutes per user
-const userWriteLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many requests, please try again later" },
-  keyGenerator: (req: Request) => req.user?.id || req.ip || "unknown",
-});
-
-// User-based limiter for authenticated read operations
-// Uses user ID after authentication, falls back to IP
-// 100 requests per 15 minutes per user
-const userReadLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+// General rate limiter applied to ALL routes in this router
+// 100 requests per 15 minutes per IP (first line of defense)
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests, please try again later" },
-  keyGenerator: (req: Request) => req.user?.id || req.ip || "unknown",
 });
 
-// Strict user-based limiter for sensitive operations (claiming)
-// 5 requests per minute per user
-const userStrictLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
+// Strict limiter for sensitive operations (claiming, ESP32 registration)
+// 5 requests per minute per IP
+const strictLimiter = rateLimit({
+  windowMs: 60 * 1000,
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests, please try again later" },
-  keyGenerator: (req: Request) => req.user?.id || req.ip || "unknown",
 });
+
+// Write limiter for mutations (30 requests per 15 minutes)
+const writeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+
+// Apply general rate limiting to ALL routes in this router
+router.use(generalLimiter);
+
+// ============================================================================
+// Routes
+// ============================================================================
 
 /**
  * POST /api/devices/register-claim
  * Called by ESP32 to register a claim token
  * No auth required (the token itself is the auth)
- * Rate limited by IP to prevent abuse
+ * Extra strict rate limiting
  */
-router.post("/register-claim", ipStrictLimiter, (req, res) => {
+router.post("/register-claim", strictLimiter, (req, res) => {
   try {
     const { deviceId, token } = req.body;
 
@@ -96,9 +89,9 @@ router.post("/register-claim", ipStrictLimiter, (req, res) => {
 /**
  * POST /api/devices/claim
  * Claim a device using QR code token
- * Rate limited by user to prevent brute-force attacks
+ * Extra strict rate limiting to prevent brute-force
  */
-router.post("/claim", sessionAuthMiddleware, userStrictLimiter, (req, res) => {
+router.post("/claim", strictLimiter, sessionAuthMiddleware, (req, res) => {
   try {
     const { deviceId, token, name } = req.body;
     const userId = req.user!.id;
@@ -139,22 +132,22 @@ router.post("/claim", sessionAuthMiddleware, userStrictLimiter, (req, res) => {
  * GET /api/devices
  * List user's devices
  */
-router.get("/", sessionAuthMiddleware, userReadLimiter, (req, res) => {
+router.get("/", sessionAuthMiddleware, (req, res) => {
   try {
     const devices = getUserDevices(req.user!.id);
 
     res.json({
       devices: devices.map((d) => ({
         id: d.id,
-        name: d.user_name, // Use per-user name
+        name: d.user_name,
         machineBrand: d.machine_brand,
         machineModel: d.machine_model,
         isOnline: !!d.is_online,
         lastSeen: d.last_seen_at,
         firmwareVersion: d.firmware_version,
         machineType: d.machine_type,
-        claimedAt: d.user_claimed_at, // Use per-user claimed_at
-        userCount: getDeviceUserCount(d.id), // Number of users with access
+        claimedAt: d.user_claimed_at,
+        userCount: getDeviceUserCount(d.id),
       })),
     });
   } catch (error) {
@@ -166,29 +159,26 @@ router.get("/", sessionAuthMiddleware, userReadLimiter, (req, res) => {
  * GET /api/devices/:id
  * Get a specific device
  */
-router.get("/:id", sessionAuthMiddleware, userReadLimiter, (req, res) => {
+router.get("/:id", sessionAuthMiddleware, (req, res) => {
   try {
     const { id } = req.params;
 
-    // Check ownership
     if (!userOwnsDevice(req.user!.id, id)) {
       return res.status(404).json({ error: "Device not found" });
     }
 
-    // Get device with user-specific name
     const device = getDevice(id, req.user!.id);
     if (!device) {
       return res.status(404).json({ error: "Device not found" });
     }
 
-    // Get user-specific claimed_at from user_devices
     const userDevices = getUserDevices(req.user!.id);
     const userDevice = userDevices.find((d) => d.id === id);
 
     res.json({
       device: {
         id: device.id,
-        name: (device as any).user_name || device.name, // Use per-user name if available
+        name: (device as any).user_name || device.name,
         machineBrand: device.machine_brand,
         machineModel: device.machine_model,
         isOnline: !!device.is_online,
@@ -207,12 +197,11 @@ router.get("/:id", sessionAuthMiddleware, userReadLimiter, (req, res) => {
  * PATCH /api/devices/:id
  * Update device (name, brand, model)
  */
-router.patch("/:id", sessionAuthMiddleware, userWriteLimiter, (req, res) => {
+router.patch("/:id", writeLimiter, sessionAuthMiddleware, (req, res) => {
   try {
     const { id } = req.params;
     const { name, brand, model } = req.body;
 
-    // At least one field must be provided
     if (!name && !brand && !model) {
       return res.status(400).json({ error: "Missing name, brand, or model" });
     }
@@ -229,11 +218,10 @@ router.patch("/:id", sessionAuthMiddleware, userWriteLimiter, (req, res) => {
  * GET /api/devices/:id/users
  * Get all users who have access to a device
  */
-router.get("/:id/users", sessionAuthMiddleware, userReadLimiter, (req, res) => {
+router.get("/:id/users", sessionAuthMiddleware, (req, res) => {
   try {
     const { id } = req.params;
 
-    // Verify the requesting user has access to the device
     if (!userOwnsDevice(req.user!.id, id)) {
       return res.status(404).json({ error: "Device not found" });
     }
@@ -260,8 +248,8 @@ router.get("/:id/users", sessionAuthMiddleware, userReadLimiter, (req, res) => {
  */
 router.delete(
   "/:id/users/:userId",
+  writeLimiter,
   sessionAuthMiddleware,
-  userWriteLimiter,
   (req, res) => {
     try {
       const { id, userId } = req.params;
@@ -287,7 +275,7 @@ router.delete(
  * DELETE /api/devices/:id
  * Remove device from account
  */
-router.delete("/:id", sessionAuthMiddleware, userWriteLimiter, (req, res) => {
+router.delete("/:id", writeLimiter, sessionAuthMiddleware, (req, res) => {
   try {
     const { id } = req.params;
 

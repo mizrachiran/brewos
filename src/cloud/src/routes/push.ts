@@ -1,4 +1,4 @@
-import { Router, Request } from "express";
+import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { sessionAuthMiddleware } from "../middleware/auth.js";
 import {
@@ -16,56 +16,52 @@ import type { NotificationType } from "../lib/database.js";
 
 const router = Router();
 
-// Rate limiters
+// ============================================================================
+// Rate Limiters
+// ============================================================================
 
-// IP-based limiter for public endpoints
+// General rate limiter applied to ALL routes in this router
 // 100 requests per 15 minutes per IP
-const ipReadLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests, please try again later" },
 });
 
-// User-based limiter for authenticated read operations
-// 100 requests per 15 minutes per user
-const userReadLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many requests, please try again later" },
-  keyGenerator: (req: Request) => req.user?.id || req.ip || "unknown",
-});
-
-// User-based limiter for subscription operations
-// 20 requests per 15 minutes per user
-const userWriteLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+// Write limiter for subscription management
+// 20 requests per 15 minutes per IP
+const writeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests, please try again later" },
-  keyGenerator: (req: Request) => req.user?.id || req.ip || "unknown",
 });
 
-// IP-based limiter for device notifications (called by ESP32)
-// 60 requests per minute per IP (to allow bursts of notifications)
+// Notify limiter for device notifications (called by ESP32)
+// 60 requests per minute per IP
 const notifyLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
+  windowMs: 60 * 1000,
   max: 60,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many notification requests, please try again later" },
 });
 
+// Apply general rate limiting to ALL routes in this router
+router.use(generalLimiter);
+
+// ============================================================================
+// Routes
+// ============================================================================
+
 /**
  * GET /api/push/vapid-key
  * Get VAPID public key for client subscription
- * Rate limited by IP (public endpoint)
  */
-router.get("/vapid-key", ipReadLimiter, (_req, res) => {
+router.get("/vapid-key", (_req, res) => {
   try {
     const publicKey = getVAPIDPublicKey();
     res.json({ publicKey });
@@ -78,196 +74,162 @@ router.get("/vapid-key", ipReadLimiter, (_req, res) => {
 /**
  * POST /api/push/subscribe
  * Subscribe to push notifications (requires auth)
- * Rate limited by user
  */
-router.post(
-  "/subscribe",
-  sessionAuthMiddleware,
-  userWriteLimiter,
-  (req, res) => {
-    try {
-      const userId = req.user!.id;
-      const { subscription, deviceId } = req.body;
+router.post("/subscribe", writeLimiter, sessionAuthMiddleware, (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const { subscription, deviceId } = req.body;
 
-      if (!subscription || !subscription.endpoint || !subscription.keys) {
-        return res.status(400).json({ error: "Invalid subscription data" });
-      }
-
-      // Verify device ownership if deviceId is provided
-      if (deviceId && !userOwnsDevice(userId, deviceId)) {
-        return res.status(403).json({ error: "Device not owned by user" });
-      }
-
-      const pushSubscription = subscribeToPush(
-        userId,
-        deviceId || null,
-        subscription
-      );
-
-      res.json({ success: true, subscription: pushSubscription });
-    } catch (error) {
-      console.error("Failed to subscribe to push:", error);
-      res
-        .status(500)
-        .json({ error: "Failed to subscribe to push notifications" });
+    if (!subscription || !subscription.endpoint || !subscription.keys) {
+      return res.status(400).json({ error: "Invalid subscription data" });
     }
+
+    if (deviceId && !userOwnsDevice(userId, deviceId)) {
+      return res.status(403).json({ error: "Device not owned by user" });
+    }
+
+    const pushSubscription = subscribeToPush(
+      userId,
+      deviceId || null,
+      subscription
+    );
+
+    res.json({ success: true, subscription: pushSubscription });
+  } catch (error) {
+    console.error("Failed to subscribe to push:", error);
+    res
+      .status(500)
+      .json({ error: "Failed to subscribe to push notifications" });
   }
-);
+});
 
 /**
  * POST /api/push/unsubscribe
  * Unsubscribe from push notifications
- * Rate limited by user
  */
-router.post(
-  "/unsubscribe",
-  sessionAuthMiddleware,
-  userWriteLimiter,
-  (req, res) => {
-    try {
-      const { subscription } = req.body;
+router.post("/unsubscribe", writeLimiter, sessionAuthMiddleware, (req, res) => {
+  try {
+    const { subscription } = req.body;
 
-      if (!subscription || !subscription.endpoint) {
-        return res.status(400).json({ error: "Invalid subscription data" });
-      }
-
-      const success = unsubscribeFromPush(subscription);
-
-      res.json({ success });
-    } catch (error) {
-      console.error("Failed to unsubscribe from push:", error);
-      res
-        .status(500)
-        .json({ error: "Failed to unsubscribe from push notifications" });
+    if (!subscription || !subscription.endpoint) {
+      return res.status(400).json({ error: "Invalid subscription data" });
     }
+
+    const success = unsubscribeFromPush(subscription);
+
+    res.json({ success });
+  } catch (error) {
+    console.error("Failed to unsubscribe from push:", error);
+    res
+      .status(500)
+      .json({ error: "Failed to unsubscribe from push notifications" });
   }
-);
+});
 
 /**
  * GET /api/push/subscriptions
  * Get user's push subscriptions (requires auth)
- * Rate limited by user
  */
-router.get(
-  "/subscriptions",
-  sessionAuthMiddleware,
-  userReadLimiter,
-  (req, res) => {
-    try {
-      const userId = req.user!.id;
-      const subscriptions = getUserPushSubscriptions(userId);
+router.get("/subscriptions", sessionAuthMiddleware, (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const subscriptions = getUserPushSubscriptions(userId);
 
-      res.json({ subscriptions });
-    } catch (error) {
-      console.error("Failed to get push subscriptions:", error);
-      res.status(500).json({ error: "Failed to get push subscriptions" });
-    }
+    res.json({ subscriptions });
+  } catch (error) {
+    console.error("Failed to get push subscriptions:", error);
+    res.status(500).json({ error: "Failed to get push subscriptions" });
   }
-);
+});
 
 /**
  * GET /api/push/preferences
  * Get user's notification preferences (requires auth)
- * Rate limited by user
  */
-router.get(
-  "/preferences",
-  sessionAuthMiddleware,
-  userReadLimiter,
-  (req, res) => {
-    try {
-      const userId = req.user!.id;
-      const preferences = getOrCreateNotificationPreferences(userId);
+router.get("/preferences", sessionAuthMiddleware, (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const preferences = getOrCreateNotificationPreferences(userId);
 
-      // Convert numeric booleans to actual booleans for cleaner API
-      res.json({
-        preferences: {
-          machineReady: !!preferences.machine_ready,
-          waterEmpty: !!preferences.water_empty,
-          descaleDue: !!preferences.descale_due,
-          serviceDue: !!preferences.service_due,
-          backflushDue: !!preferences.backflush_due,
-          machineError: !!preferences.machine_error,
-          picoOffline: !!preferences.pico_offline,
-          scheduleTriggered: !!preferences.schedule_triggered,
-          brewComplete: !!preferences.brew_complete,
-        },
-      });
-    } catch (error) {
-      console.error("Failed to get notification preferences:", error);
-      res.status(500).json({ error: "Failed to get notification preferences" });
-    }
+    res.json({
+      preferences: {
+        machineReady: !!preferences.machine_ready,
+        waterEmpty: !!preferences.water_empty,
+        descaleDue: !!preferences.descale_due,
+        serviceDue: !!preferences.service_due,
+        backflushDue: !!preferences.backflush_due,
+        machineError: !!preferences.machine_error,
+        picoOffline: !!preferences.pico_offline,
+        scheduleTriggered: !!preferences.schedule_triggered,
+        brewComplete: !!preferences.brew_complete,
+      },
+    });
+  } catch (error) {
+    console.error("Failed to get notification preferences:", error);
+    res.status(500).json({ error: "Failed to get notification preferences" });
   }
-);
+});
 
 /**
  * PUT /api/push/preferences
  * Update user's notification preferences (requires auth)
- * Rate limited by user
  */
-router.put(
-  "/preferences",
-  sessionAuthMiddleware,
-  userWriteLimiter,
-  (req, res) => {
-    try {
-      const userId = req.user!.id;
-      const { preferences } = req.body;
+router.put("/preferences", writeLimiter, sessionAuthMiddleware, (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const { preferences } = req.body;
 
-      if (!preferences || typeof preferences !== "object") {
-        return res.status(400).json({ error: "Invalid preferences data" });
-      }
-
-      // Map camelCase to snake_case
-      const dbPreferences: Record<string, boolean> = {};
-      if ("machineReady" in preferences)
-        dbPreferences.machine_ready = preferences.machineReady;
-      if ("waterEmpty" in preferences)
-        dbPreferences.water_empty = preferences.waterEmpty;
-      if ("descaleDue" in preferences)
-        dbPreferences.descale_due = preferences.descaleDue;
-      if ("serviceDue" in preferences)
-        dbPreferences.service_due = preferences.serviceDue;
-      if ("backflushDue" in preferences)
-        dbPreferences.backflush_due = preferences.backflushDue;
-      if ("machineError" in preferences)
-        dbPreferences.machine_error = preferences.machineError;
-      if ("picoOffline" in preferences)
-        dbPreferences.pico_offline = preferences.picoOffline;
-      if ("scheduleTriggered" in preferences)
-        dbPreferences.schedule_triggered = preferences.scheduleTriggered;
-      if ("brewComplete" in preferences)
-        dbPreferences.brew_complete = preferences.brewComplete;
-
-      const updated = updateNotificationPreferences(userId, dbPreferences);
-
-      res.json({
-        success: true,
-        preferences: {
-          machineReady: !!updated.machine_ready,
-          waterEmpty: !!updated.water_empty,
-          descaleDue: !!updated.descale_due,
-          serviceDue: !!updated.service_due,
-          backflushDue: !!updated.backflush_due,
-          machineError: !!updated.machine_error,
-          picoOffline: !!updated.pico_offline,
-          scheduleTriggered: !!updated.schedule_triggered,
-          brewComplete: !!updated.brew_complete,
-        },
-      });
-    } catch (error) {
-      console.error("Failed to update notification preferences:", error);
-      res
-        .status(500)
-        .json({ error: "Failed to update notification preferences" });
+    if (!preferences || typeof preferences !== "object") {
+      return res.status(400).json({ error: "Invalid preferences data" });
     }
+
+    const dbPreferences: Record<string, boolean> = {};
+    if ("machineReady" in preferences)
+      dbPreferences.machine_ready = preferences.machineReady;
+    if ("waterEmpty" in preferences)
+      dbPreferences.water_empty = preferences.waterEmpty;
+    if ("descaleDue" in preferences)
+      dbPreferences.descale_due = preferences.descaleDue;
+    if ("serviceDue" in preferences)
+      dbPreferences.service_due = preferences.serviceDue;
+    if ("backflushDue" in preferences)
+      dbPreferences.backflush_due = preferences.backflushDue;
+    if ("machineError" in preferences)
+      dbPreferences.machine_error = preferences.machineError;
+    if ("picoOffline" in preferences)
+      dbPreferences.pico_offline = preferences.picoOffline;
+    if ("scheduleTriggered" in preferences)
+      dbPreferences.schedule_triggered = preferences.scheduleTriggered;
+    if ("brewComplete" in preferences)
+      dbPreferences.brew_complete = preferences.brewComplete;
+
+    const updated = updateNotificationPreferences(userId, dbPreferences);
+
+    res.json({
+      success: true,
+      preferences: {
+        machineReady: !!updated.machine_ready,
+        waterEmpty: !!updated.water_empty,
+        descaleDue: !!updated.descale_due,
+        serviceDue: !!updated.service_due,
+        backflushDue: !!updated.backflush_due,
+        machineError: !!updated.machine_error,
+        picoOffline: !!updated.pico_offline,
+        scheduleTriggered: !!updated.schedule_triggered,
+        brewComplete: !!updated.brew_complete,
+      },
+    });
+  } catch (error) {
+    console.error("Failed to update notification preferences:", error);
+    res
+      .status(500)
+      .json({ error: "Failed to update notification preferences" });
   }
-);
+});
 
 /**
  * POST /api/push/notify
  * Send push notification from ESP32 device (no auth - device ID is the auth)
- * Rate limited by IP (device-initiated)
  */
 router.post("/notify", notifyLimiter, async (req, res) => {
   try {
@@ -279,18 +241,15 @@ router.post("/notify", notifyLimiter, async (req, res) => {
         .json({ error: "Missing deviceId or notification" });
     }
 
-    // Validate device ID format
     if (!deviceId.match(/^BRW-[A-F0-9]{8}$/)) {
       return res.status(400).json({ error: "Invalid device ID format" });
     }
 
-    // Verify device exists and is claimed by at least one user
     const device = getDevice(deviceId);
     if (!device) {
       return res.status(404).json({ error: "Device not found" });
     }
 
-    // Check if device has any users (is claimed)
     const db = getDb();
     const userCheck = db.exec(
       `SELECT COUNT(*) as count FROM user_devices WHERE device_id = ?`,
@@ -305,7 +264,6 @@ router.post("/notify", notifyLimiter, async (req, res) => {
       return res.status(404).json({ error: "Device not claimed" });
     }
 
-    // Map notification type to title/body
     const notificationType = (notification.type || "info") as NotificationType;
     let title = "BrewOS";
     let body = notification.message || "You have a new notification";
@@ -363,8 +321,6 @@ router.post("/notify", notifyLimiter, async (req, res) => {
         break;
     }
 
-    // Send push notification to all subscriptions for this device
-    // Pass notification type to respect user preferences
     const sentCount = await sendPushNotificationToDevice(
       deviceId,
       {

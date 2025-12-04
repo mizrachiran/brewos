@@ -21,39 +21,36 @@ import { sessionAuthMiddleware } from "../middleware/auth.js";
 
 const router = Router();
 
-// Rate limiters
+// ============================================================================
+// Rate Limiters
+// ============================================================================
 
-// IP-based limiter for login - prevents brute force before we know the user
+// General rate limiter applied to ALL routes in this router
+// 60 requests per 15 minutes per IP
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+
+// Strict limiter for login/refresh - prevents brute force
 // 5 requests per minute per IP
-const loginLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
+const authStrictLimiter = rateLimit({
+  windowMs: 60 * 1000,
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many login attempts, please try again later" },
 });
 
-// IP-based limiter for refresh - slightly more lenient
-// 10 requests per minute per IP
-const refreshLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many requests, please try again later" },
-});
+// Apply general rate limiting to ALL routes in this router
+router.use(generalLimiter);
 
-// User-based limiter for authenticated operations
-// Uses user ID after authentication, falls back to IP
-// 30 requests per 15 minutes per user
-const userAuthLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many requests, please try again later" },
-  keyGenerator: (req: Request) => req.user?.id || req.ip || "unknown",
-});
+// ============================================================================
+// Routes
+// ============================================================================
 
 // Google OAuth client
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
@@ -64,77 +61,76 @@ const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
  *
  * Exchange Google ID token for our session tokens.
  * This is the ONLY time we verify with Google.
- * Rate limited by IP (we don't know the user yet)
+ * Extra strict rate limiting to prevent abuse
  */
-router.post("/google", loginLimiter, async (req: Request, res: Response) => {
-  try {
-    const { credential } = req.body;
-
-    if (!credential) {
-      return res.status(400).json({ error: "Missing credential" });
-    }
-
-    if (!GOOGLE_CLIENT_ID) {
-      console.error("[Auth] GOOGLE_CLIENT_ID not configured");
-      return res.status(500).json({ error: "Auth not configured" });
-    }
-
-    // Verify Google ID token (ONE TIME)
-    let payload;
+router.post(
+  "/google",
+  authStrictLimiter,
+  async (req: Request, res: Response) => {
     try {
-      const ticket = await googleClient.verifyIdToken({
-        idToken: credential,
-        audience: GOOGLE_CLIENT_ID,
+      const { credential } = req.body;
+
+      if (!credential) {
+        return res.status(400).json({ error: "Missing credential" });
+      }
+
+      if (!GOOGLE_CLIENT_ID) {
+        console.error("[Auth] GOOGLE_CLIENT_ID not configured");
+        return res.status(500).json({ error: "Auth not configured" });
+      }
+
+      let payload;
+      try {
+        const ticket = await googleClient.verifyIdToken({
+          idToken: credential,
+          audience: GOOGLE_CLIENT_ID,
+        });
+        payload = ticket.getPayload();
+      } catch (error) {
+        console.error("[Auth] Google token verification failed:", error);
+        return res.status(401).json({ error: "Invalid Google credential" });
+      }
+
+      if (!payload?.sub || !payload?.email) {
+        return res.status(401).json({ error: "Invalid token payload" });
+      }
+
+      ensureProfile(payload.sub, payload.email, payload.name, payload.picture);
+
+      const metadata = {
+        userAgent: req.headers["user-agent"],
+        ipAddress: req.ip || req.socket.remoteAddress,
+      };
+
+      const tokens = createSession(payload.sub, metadata);
+
+      console.log(`[Auth] User ${payload.email} logged in via Google`);
+
+      res.json({
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        expiresAt: tokens.accessExpiresAt,
+        user: {
+          id: payload.sub,
+          email: payload.email,
+          name: payload.name || null,
+          picture: payload.picture || null,
+        },
       });
-      payload = ticket.getPayload();
     } catch (error) {
-      console.error("[Auth] Google token verification failed:", error);
-      return res.status(401).json({ error: "Invalid Google credential" });
+      console.error("[Auth] Login error:", error);
+      res.status(500).json({ error: "Authentication failed" });
     }
-
-    if (!payload?.sub || !payload?.email) {
-      return res.status(401).json({ error: "Invalid token payload" });
-    }
-
-    // Create or update user profile in our database
-    ensureProfile(payload.sub, payload.email, payload.name, payload.picture);
-
-    // Create our own session
-    const metadata = {
-      userAgent: req.headers["user-agent"],
-      ipAddress: req.ip || req.socket.remoteAddress,
-    };
-
-    const tokens = createSession(payload.sub, metadata);
-
-    console.log(`[Auth] User ${payload.email} logged in via Google`);
-
-    // Return our tokens and user info
-    res.json({
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      expiresAt: tokens.accessExpiresAt,
-      user: {
-        id: payload.sub,
-        email: payload.email,
-        name: payload.name || null,
-        picture: payload.picture || null,
-      },
-    });
-  } catch (error) {
-    console.error("[Auth] Login error:", error);
-    res.status(500).json({ error: "Authentication failed" });
   }
-});
+);
 
 /**
  * POST /api/auth/refresh
  *
  * Refresh session using refresh token.
  * Implements refresh token rotation for security.
- * Rate limited by IP (token-based, not session-based)
  */
-router.post("/refresh", refreshLimiter, (req: Request, res: Response) => {
+router.post("/refresh", authStrictLimiter, (req: Request, res: Response) => {
   try {
     const { refreshToken } = req.body;
 
@@ -173,38 +169,30 @@ router.post("/refresh", refreshLimiter, (req: Request, res: Response) => {
  * POST /api/auth/logout
  *
  * Revoke current session.
- * Rate limited by user
  */
-router.post(
-  "/logout",
-  sessionAuthMiddleware,
-  userAuthLimiter,
-  (req: Request, res: Response) => {
-    try {
-      const sessionId = req.session?.id;
+router.post("/logout", sessionAuthMiddleware, (req: Request, res: Response) => {
+  try {
+    const sessionId = req.session?.id;
 
-      if (sessionId) {
-        revokeSession(sessionId);
-      }
-
-      res.json({ success: true });
-    } catch (error) {
-      console.error("[Auth] Logout error:", error);
-      res.status(500).json({ error: "Failed to logout" });
+    if (sessionId) {
+      revokeSession(sessionId);
     }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("[Auth] Logout error:", error);
+    res.status(500).json({ error: "Failed to logout" });
   }
-);
+});
 
 /**
  * POST /api/auth/logout-all
  *
  * Revoke all sessions for the current user.
- * Rate limited by user
  */
 router.post(
   "/logout-all",
   sessionAuthMiddleware,
-  userAuthLimiter,
   (req: Request, res: Response) => {
     try {
       const userId = req.user?.id;
@@ -226,13 +214,10 @@ router.post(
  * GET /api/auth/sessions
  *
  * Get all active sessions for current user.
- * Useful for "manage sessions" UI.
- * Rate limited by user
  */
 router.get(
   "/sessions",
   sessionAuthMiddleware,
-  userAuthLimiter,
   (req: Request, res: Response) => {
     try {
       const userId = req.user?.id;
@@ -265,12 +250,10 @@ router.get(
  * DELETE /api/auth/sessions/:id
  *
  * Revoke a specific session.
- * Rate limited by user
  */
 router.delete(
   "/sessions/:id",
   sessionAuthMiddleware,
-  userAuthLimiter,
   (req: Request, res: Response) => {
     try {
       const { id } = req.params;
@@ -280,7 +263,6 @@ router.delete(
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      // Verify the session belongs to the user
       const sessions = getUserSessions(userId);
       const sessionToRevoke = sessions.find((s) => s.id === id);
 
@@ -301,33 +283,27 @@ router.delete(
  * GET /api/auth/me
  *
  * Get current user info.
- * Rate limited by user
  */
-router.get(
-  "/me",
-  sessionAuthMiddleware,
-  userAuthLimiter,
-  (req: Request, res: Response) => {
-    try {
-      const user = req.user;
+router.get("/me", sessionAuthMiddleware, (req: Request, res: Response) => {
+  try {
+    const user = req.user;
 
-      if (!user) {
-        return res.status(401).json({ error: "Not authenticated" });
-      }
-
-      res.json({
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.displayName,
-          picture: user.avatarUrl,
-        },
-      });
-    } catch (error) {
-      console.error("[Auth] Get user error:", error);
-      res.status(500).json({ error: "Failed to get user" });
+    if (!user) {
+      return res.status(401).json({ error: "Not authenticated" });
     }
+
+    res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.displayName,
+        picture: user.avatarUrl,
+      },
+    });
+  } catch (error) {
+    console.error("[Auth] Get user error:", error);
+    res.status(500).json({ error: "Failed to get user" });
   }
-);
+});
 
 export default router;
