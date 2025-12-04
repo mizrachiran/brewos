@@ -7,6 +7,7 @@
  */
 
 import { Router, Request, Response } from "express";
+import rateLimit from "express-rate-limit";
 import { OAuth2Client } from "google-auth-library";
 import {
   createSession,
@@ -20,6 +21,37 @@ import { sessionAuthMiddleware } from "../middleware/auth.js";
 
 const router = Router();
 
+// ============================================================================
+// Rate Limiters
+// ============================================================================
+
+// General rate limiter applied to ALL routes in this router
+// 60 requests per 15 minutes per IP
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+
+// Strict limiter for login/refresh - prevents brute force
+// 5 requests per minute per IP
+const authStrictLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many login attempts, please try again later" },
+});
+
+// Apply general rate limiting to ALL routes in this router
+router.use(generalLimiter);
+
+// ============================================================================
+// Routes
+// ============================================================================
+
 // Google OAuth client
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
@@ -29,67 +61,68 @@ const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
  *
  * Exchange Google ID token for our session tokens.
  * This is the ONLY time we verify with Google.
+ * Extra strict rate limiting to prevent abuse
  */
-router.post("/google", async (req: Request, res: Response) => {
-  try {
-    const { credential } = req.body;
-
-    if (!credential) {
-      return res.status(400).json({ error: "Missing credential" });
-    }
-
-    if (!GOOGLE_CLIENT_ID) {
-      console.error("[Auth] GOOGLE_CLIENT_ID not configured");
-      return res.status(500).json({ error: "Auth not configured" });
-    }
-
-    // Verify Google ID token (ONE TIME)
-    let payload;
+router.post(
+  "/google",
+  authStrictLimiter,
+  async (req: Request, res: Response) => {
     try {
-      const ticket = await googleClient.verifyIdToken({
-        idToken: credential,
-        audience: GOOGLE_CLIENT_ID,
+      const { credential } = req.body;
+
+      if (!credential) {
+        return res.status(400).json({ error: "Missing credential" });
+      }
+
+      if (!GOOGLE_CLIENT_ID) {
+        console.error("[Auth] GOOGLE_CLIENT_ID not configured");
+        return res.status(500).json({ error: "Auth not configured" });
+      }
+
+      let payload;
+      try {
+        const ticket = await googleClient.verifyIdToken({
+          idToken: credential,
+          audience: GOOGLE_CLIENT_ID,
+        });
+        payload = ticket.getPayload();
+      } catch (error) {
+        console.error("[Auth] Google token verification failed:", error);
+        return res.status(401).json({ error: "Invalid Google credential" });
+      }
+
+      if (!payload?.sub || !payload?.email) {
+        return res.status(401).json({ error: "Invalid token payload" });
+      }
+
+      ensureProfile(payload.sub, payload.email, payload.name, payload.picture);
+
+      const metadata = {
+        userAgent: req.headers["user-agent"],
+        ipAddress: req.ip || req.socket.remoteAddress,
+      };
+
+      const tokens = createSession(payload.sub, metadata);
+
+      console.log(`[Auth] User ${payload.email} logged in via Google`);
+
+      res.json({
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        expiresAt: tokens.accessExpiresAt,
+        user: {
+          id: payload.sub,
+          email: payload.email,
+          name: payload.name || null,
+          picture: payload.picture || null,
+        },
       });
-      payload = ticket.getPayload();
     } catch (error) {
-      console.error("[Auth] Google token verification failed:", error);
-      return res.status(401).json({ error: "Invalid Google credential" });
+      console.error("[Auth] Login error:", error);
+      res.status(500).json({ error: "Authentication failed" });
     }
-
-    if (!payload?.sub || !payload?.email) {
-      return res.status(401).json({ error: "Invalid token payload" });
-    }
-
-    // Create or update user profile in our database
-    ensureProfile(payload.sub, payload.email, payload.name, payload.picture);
-
-    // Create our own session
-    const metadata = {
-      userAgent: req.headers["user-agent"],
-      ipAddress: req.ip || req.socket.remoteAddress,
-    };
-
-    const tokens = createSession(payload.sub, metadata);
-
-    console.log(`[Auth] User ${payload.email} logged in via Google`);
-
-    // Return our tokens and user info
-    res.json({
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      expiresAt: tokens.accessExpiresAt,
-      user: {
-        id: payload.sub,
-        email: payload.email,
-        name: payload.name || null,
-        picture: payload.picture || null,
-      },
-    });
-  } catch (error) {
-    console.error("[Auth] Login error:", error);
-    res.status(500).json({ error: "Authentication failed" });
   }
-});
+);
 
 /**
  * POST /api/auth/refresh
@@ -97,7 +130,7 @@ router.post("/google", async (req: Request, res: Response) => {
  * Refresh session using refresh token.
  * Implements refresh token rotation for security.
  */
-router.post("/refresh", (req: Request, res: Response) => {
+router.post("/refresh", authStrictLimiter, (req: Request, res: Response) => {
   try {
     const { refreshToken } = req.body;
 
@@ -106,8 +139,11 @@ router.post("/refresh", (req: Request, res: Response) => {
       return res.status(400).json({ error: "Missing refresh token" });
     }
 
-    console.log("[Auth] Refresh attempt with token prefix:", refreshToken?.substring(0, 8) + "...");
-    
+    console.log(
+      "[Auth] Refresh attempt with token prefix:",
+      refreshToken?.substring(0, 8) + "..."
+    );
+
     const tokens = refreshSession(refreshToken);
 
     if (!tokens) {
@@ -178,7 +214,6 @@ router.post(
  * GET /api/auth/sessions
  *
  * Get all active sessions for current user.
- * Useful for "manage sessions" UI.
  */
 router.get(
   "/sessions",
@@ -228,7 +263,6 @@ router.delete(
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      // Verify the session belongs to the user
       const sessions = getUserSessions(userId);
       const sessionToRevoke = sessions.find((s) => s.id === id);
 

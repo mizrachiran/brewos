@@ -1,5 +1,5 @@
 import { createHash, randomUUID, timingSafeEqual } from 'crypto';
-import { getDb, saveDatabase, Device, Profile, resultToObjects } from '../lib/database.js';
+import { getDb, saveDatabase, Device, UserDevice, Profile, resultToObjects } from '../lib/database.js';
 import { nowUTC, futureUTC, isExpired } from '../lib/date.js';
 
 /**
@@ -69,6 +69,7 @@ export function verifyClaimToken(deviceId: string, token: string): boolean {
 
 /**
  * Claim a device for a user
+ * Allows multiple users to claim the same device with per-user names
  */
 export function claimDevice(
   deviceId: string,
@@ -77,38 +78,40 @@ export function claimDevice(
 ): Device {
   const db = getDb();
 
-  // Check if device exists and is already claimed
-  const existingResult = db.exec(
-    `SELECT id, owner_id FROM devices WHERE id = ?`,
-    [deviceId]
+  // Check if user already has this device
+  const existingUserDevice = db.exec(
+    `SELECT user_id FROM user_devices WHERE user_id = ? AND device_id = ?`,
+    [userId, deviceId]
   );
 
-  if (existingResult.length > 0 && existingResult[0].values.length > 0) {
-    const ownerId = existingResult[0].values[0][1];
-    if (ownerId) {
-      throw new Error('Device is already claimed');
-    }
+  if (existingUserDevice.length > 0 && existingUserDevice[0].values.length > 0) {
+    throw new Error('Device is already claimed by this user');
   }
 
   const now = nowUTC();
   const deviceName = name || 'My BrewOS';
 
-  // Check if device exists
-  if (existingResult.length > 0 && existingResult[0].values.length > 0) {
-    // Update existing device
+  // Check if device exists in devices table
+  const existingDevice = db.exec(
+    `SELECT id FROM devices WHERE id = ?`,
+    [deviceId]
+  );
+
+  if (existingDevice.length === 0 || existingDevice[0].values.length === 0) {
+    // Insert new device (without owner_id/name - those are in user_devices now)
     db.run(
-      `UPDATE devices SET owner_id = ?, name = ?, claimed_at = ?, updated_at = ? WHERE id = ?`,
-      [userId, deviceName, now, now, deviceId]
-    );
-  } else {
-    // Insert new device
-    db.run(
-      `INSERT INTO devices (id, owner_id, name, claimed_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
-      [deviceId, userId, deviceName, now, now]
+      `INSERT INTO devices (id, created_at, updated_at) VALUES (?, ?, ?)`,
+      [deviceId, now, now]
     );
   }
 
-  // Delete the claim token
+  // Add user-device association with per-user name
+  db.run(
+    `INSERT INTO user_devices (user_id, device_id, name, claimed_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    [userId, deviceId, deviceName, now, now, now]
+  );
+
+  // Delete the claim token (only after successful claim)
   db.run(`DELETE FROM device_claim_tokens WHERE device_id = ?`, [deviceId]);
 
   saveDatabase();
@@ -119,12 +122,20 @@ export function claimDevice(
 }
 
 /**
- * Get devices for a user
+ * Get devices for a user with per-user names
+ * Returns devices joined with user_devices to get user-specific names
  */
-export function getUserDevices(userId: string): Device[] {
+export function getUserDevices(userId: string): Array<Device & { user_name: string; user_claimed_at: string }> {
   const db = getDb();
   const result = db.exec(
-    `SELECT * FROM devices WHERE owner_id = ? ORDER BY created_at DESC`,
+    `SELECT 
+      d.*,
+      ud.name as user_name,
+      ud.claimed_at as user_claimed_at
+    FROM devices d
+    INNER JOIN user_devices ud ON d.id = ud.device_id
+    WHERE ud.user_id = ?
+    ORDER BY ud.claimed_at DESC`,
     [userId]
   );
 
@@ -132,21 +143,43 @@ export function getUserDevices(userId: string): Device[] {
     return [];
   }
 
-  return resultToObjects<Device>(result[0]);
+  return resultToObjects<Device & { user_name: string; user_claimed_at: string }>(result[0]);
 }
 
 /**
  * Get a single device by ID
+ * Optionally returns with user-specific name if userId is provided
  */
-export function getDevice(deviceId: string): Device | null {
+export function getDevice(deviceId: string, userId?: string): Device | (Device & { user_name?: string }) | null {
   const db = getDb();
-  const result = db.exec(`SELECT * FROM devices WHERE id = ?`, [deviceId]);
+  
+  if (userId) {
+    // Return device with user-specific name
+    const result = db.exec(
+      `SELECT 
+        d.*,
+        ud.name as user_name
+      FROM devices d
+      LEFT JOIN user_devices ud ON d.id = ud.device_id AND ud.user_id = ?
+      WHERE d.id = ?`,
+      [userId, deviceId]
+    );
 
-  if (result.length === 0 || result[0].values.length === 0) {
-    return null;
+    if (result.length === 0 || result[0].values.length === 0) {
+      return null;
+    }
+
+    return resultToObjects<Device & { user_name?: string }>(result[0])[0];
+  } else {
+    // Return device without user-specific info
+    const result = db.exec(`SELECT * FROM devices WHERE id = ?`, [deviceId]);
+
+    if (result.length === 0 || result[0].values.length === 0) {
+      return null;
+    }
+
+    return resultToObjects<Device>(result[0])[0];
   }
-
-  return resultToObjects<Device>(result[0])[0];
 }
 
 /**
@@ -155,8 +188,8 @@ export function getDevice(deviceId: string): Device | null {
 export function userOwnsDevice(userId: string, deviceId: string): boolean {
   const db = getDb();
   const result = db.exec(
-    `SELECT id FROM devices WHERE id = ? AND owner_id = ?`,
-    [deviceId, userId]
+    `SELECT user_id FROM user_devices WHERE user_id = ? AND device_id = ?`,
+    [userId, deviceId]
   );
 
   return result.length > 0 && result[0].values.length > 0;
@@ -190,25 +223,30 @@ export function updateDeviceStatus(
 
 /**
  * Remove a device from user's account
+ * Only removes the user-device association, not the device itself
  */
 export function removeDevice(deviceId: string, userId: string): void {
   const db = getDb();
-  const now = nowUTC();
 
+  // Remove user-device association
   db.run(
-    `UPDATE devices SET owner_id = NULL, claimed_at = NULL, updated_at = ? WHERE id = ? AND owner_id = ?`,
-    [now, deviceId, userId]
+    `DELETE FROM user_devices WHERE user_id = ? AND device_id = ?`,
+    [userId, deviceId]
   );
 
   if (db.getRowsModified() === 0) {
     throw new Error('Failed to remove device');
   }
 
+  // Optionally: if no users have this device anymore, we could delete the device
+  // For now, we keep the device record for potential future claims
+  // You could add cleanup logic here if needed
+
   saveDatabase();
 }
 
 /**
- * Rename a device
+ * Rename a device (per-user name)
  */
 export function renameDevice(
   deviceId: string,
@@ -218,9 +256,10 @@ export function renameDevice(
   const db = getDb();
   const now = nowUTC();
 
+  // Update per-user device name
   db.run(
-    `UPDATE devices SET name = ?, updated_at = ? WHERE id = ? AND owner_id = ?`,
-    [name, now, deviceId, userId]
+    `UPDATE user_devices SET name = ?, updated_at = ? WHERE user_id = ? AND device_id = ?`,
+    [name, now, userId, deviceId]
   );
 
   if (db.getRowsModified() === 0) {
@@ -232,6 +271,7 @@ export function renameDevice(
 
 /**
  * Update device machine info (brand, model)
+ * Name updates are per-user and go to user_devices table
  */
 export function updateDeviceMachineInfo(
   deviceId: string,
@@ -241,32 +281,139 @@ export function updateDeviceMachineInfo(
   const db = getDb();
   const now = nowUTC();
 
-  // Build update query dynamically based on provided fields
-  const updates: string[] = ['updated_at = ?'];
-  const values: unknown[] = [now];
-
-  if (data.name) {
-    updates.push('name = ?');
-    values.push(data.name);
+  // Check if user owns the device
+  if (!userOwnsDevice(userId, deviceId)) {
+    throw new Error('User does not own this device');
   }
+
+  // Update per-user name if provided
+  if (data.name) {
+    db.run(
+      `UPDATE user_devices SET name = ?, updated_at = ? WHERE user_id = ? AND device_id = ?`,
+      [data.name, now, userId, deviceId]
+    );
+  }
+
+  // Update shared device metadata (brand, model) if provided
+  const deviceUpdates: string[] = ['updated_at = ?'];
+  const deviceValues: unknown[] = [now];
+
   if (data.brand) {
-    updates.push('machine_brand = ?');
-    values.push(data.brand);
+    deviceUpdates.push('machine_brand = ?');
+    deviceValues.push(data.brand);
   }
   if (data.model) {
-    updates.push('machine_model = ?');
-    values.push(data.model);
+    deviceUpdates.push('machine_model = ?');
+    deviceValues.push(data.model);
   }
 
-  values.push(deviceId, userId);
+  if (deviceUpdates.length > 1) {
+    deviceValues.push(deviceId);
+    db.run(
+      `UPDATE devices SET ${deviceUpdates.join(', ')} WHERE id = ?`,
+      deviceValues
+    );
+  }
 
+  saveDatabase();
+}
+
+/**
+ * Get the count of users who have access to a device
+ */
+export function getDeviceUserCount(deviceId: string): number {
+  const db = getDb();
+  const result = db.exec(
+    `SELECT COUNT(*) as count FROM user_devices WHERE device_id = ?`,
+    [deviceId]
+  );
+
+  if (result.length === 0 || result[0].values.length === 0) {
+    return 0;
+  }
+
+  return (result[0].values[0][0] as number) || 0;
+}
+
+/**
+ * Get all users who have access to a device
+ * Returns users with their profile info and claim details
+ */
+export function getDeviceUsers(deviceId: string): Array<{
+  user_id: string;
+  device_id: string;
+  name: string;
+  claimed_at: string;
+  email: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+}> {
+  const db = getDb();
+  const result = db.exec(
+    `SELECT 
+      ud.user_id,
+      ud.device_id,
+      ud.name,
+      ud.claimed_at,
+      p.email,
+      p.display_name,
+      p.avatar_url
+    FROM user_devices ud
+    INNER JOIN profiles p ON ud.user_id = p.id
+    WHERE ud.device_id = ?
+    ORDER BY ud.claimed_at ASC`,
+    [deviceId]
+  );
+
+  if (result.length === 0) {
+    return [];
+  }
+
+  return resultToObjects<{
+    user_id: string;
+    device_id: string;
+    name: string;
+    claimed_at: string;
+    email: string | null;
+    display_name: string | null;
+    avatar_url: string | null;
+  }>(result[0]);
+}
+
+/**
+ * Revoke another user's access to a device (mutual removal)
+ * Any user who has access can remove any other user
+ */
+export function revokeUserAccess(
+  deviceId: string,
+  userIdToRemove: string,
+  userIdRemoving: string
+): void {
+  const db = getDb();
+
+  // Verify the user doing the removal has access to the device
+  if (!userOwnsDevice(userIdRemoving, deviceId)) {
+    throw new Error('You do not have access to this device');
+  }
+
+  // Prevent users from removing themselves (they should use removeDevice instead)
+  if (userIdToRemove === userIdRemoving) {
+    throw new Error('Cannot remove yourself. Use remove device instead.');
+  }
+
+  // Verify the user to remove actually has access
+  if (!userOwnsDevice(userIdToRemove, deviceId)) {
+    throw new Error('User does not have access to this device');
+  }
+
+  // Remove the user-device association
   db.run(
-    `UPDATE devices SET ${updates.join(', ')} WHERE id = ? AND owner_id = ?`,
-    values
+    `DELETE FROM user_devices WHERE user_id = ? AND device_id = ?`,
+    [userIdToRemove, deviceId]
   );
 
   if (db.getRowsModified() === 0) {
-    throw new Error('Failed to update device');
+    throw new Error('Failed to revoke user access');
   }
 
   saveDatabase();

@@ -656,6 +656,7 @@ export interface CloudDevice {
   firmwareVersion: string | null;
   machineType: string | null;
   claimedAt: string;
+  userCount?: number; // Number of users with access to this device
 }
 
 // User preferences (stored in localStorage)
