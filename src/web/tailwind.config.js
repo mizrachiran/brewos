@@ -5,7 +5,7 @@ export default {
   theme: {
     extend: {
       screens: {
-        xs: "400px",
+        xs: "390px",
       },
       colors: {
         // Theme-aware colors using CSS variables
