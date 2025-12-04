@@ -39,8 +39,8 @@ export function MachineStep({
         <div className="w-16 h-16 bg-accent/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
           <Coffee className="w-8 h-8 text-accent" />
         </div>
-        <h2 className="text-2xl font-bold text-coffee-900 mb-2">Select Your Machine</h2>
-        <p className="text-coffee-500">Choose your espresso machine from our supported list</p>
+        <h2 className="text-2xl font-bold text-theme mb-2">Select Your Machine</h2>
+        <p className="text-theme-muted">Choose your espresso machine from our supported list</p>
       </div>
 
       <div className="space-y-4 max-w-sm mx-auto">
@@ -125,7 +125,7 @@ interface MachineInfoProps {
 
 function MachineInfo({ machine, temperatureUnit }: MachineInfoProps) {
   return (
-    <div className="p-4 rounded-xl bg-accent/5 border border-accent/20 space-y-2">
+    <div className="p-4 rounded-xl bg-accent/5 border border-accent/20 space-y-3">
       <div className="flex items-center gap-2">
         <Coffee className="w-5 h-5 text-accent" />
         <span className="font-semibold text-theme">
@@ -133,7 +133,9 @@ function MachineInfo({ machine, temperatureUnit }: MachineInfoProps) {
         </span>
       </div>
       <p className="text-sm text-theme-muted">{machine.description}</p>
-      <div className="flex flex-wrap gap-3 text-xs">
+      
+      {/* Type and Temperatures */}
+      <div className="flex flex-wrap gap-2 text-xs">
         <span className="px-2 py-1 rounded-full bg-theme-secondary text-theme-muted">
           {getMachineTypeLabel(machine.type)}
         </span>
@@ -144,6 +146,27 @@ function MachineInfo({ machine, temperatureUnit }: MachineInfoProps) {
           Steam: {formatTemperatureWithUnit(machine.defaults.steamTemp, temperatureUnit, 0)}
         </span>
       </div>
+
+      {/* Power and Capacity Specs */}
+      {(machine.specs.brewPowerWatts || machine.specs.steamPowerWatts || machine.specs.boilerVolumeMl) && (
+        <div className="flex flex-wrap gap-2 text-xs">
+          {machine.specs.brewPowerWatts && (
+            <span className="px-2 py-1 rounded-full bg-theme-tertiary text-theme-muted">
+              Brew: {machine.specs.brewPowerWatts}W
+            </span>
+          )}
+          {machine.specs.steamPowerWatts && (
+            <span className="px-2 py-1 rounded-full bg-theme-tertiary text-theme-muted">
+              Steam: {machine.specs.steamPowerWatts}W
+            </span>
+          )}
+          {machine.specs.boilerVolumeMl && (
+            <span className="px-2 py-1 rounded-full bg-theme-tertiary text-theme-muted">
+              Boiler: {machine.specs.boilerVolumeMl}ml
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

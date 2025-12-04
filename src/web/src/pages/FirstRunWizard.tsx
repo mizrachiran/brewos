@@ -3,11 +3,20 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useCommand } from "@/lib/useCommand";
 import { useToast } from "@/components/Toast";
-import { Coffee, Settings, Cloud, Check, ArrowRight, ArrowLeft } from "lucide-react";
+import {
+  Coffee,
+  Settings,
+  Cloud,
+  Check,
+  ArrowRight,
+  ArrowLeft,
+  Zap,
+} from "lucide-react";
 import { getMachineById } from "@/lib/machines";
 import {
   WelcomeStep,
   MachineStep,
+  EnvironmentStep,
   CloudStep,
   DoneStep,
   ProgressIndicator,
@@ -18,6 +27,7 @@ import {
 const STEPS: WizardStep[] = [
   { id: "welcome", title: "Welcome", icon: <Coffee className="w-5 h-5" /> },
   { id: "machine", title: "Your Machine", icon: <Settings className="w-5 h-5" /> },
+  { id: "environment", title: "Power", icon: <Zap className="w-5 h-5" /> },
   { id: "cloud", title: "Cloud Access", icon: <Cloud className="w-5 h-5" /> },
   { id: "done", title: "All Set!", icon: <Check className="w-5 h-5" /> },
 ];
@@ -37,10 +47,17 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
   const [machineName, setMachineName] = useState("");
   const [selectedMachineId, setSelectedMachineId] = useState("");
 
+  // Environment settings
+  const [voltage, setVoltage] = useState(220);
+  const [maxCurrent, setMaxCurrent] = useState(13);
+
   // Cloud pairing
   const [pairing, setPairing] = useState<PairingData | null>(null);
   const [loadingQR, setLoadingQR] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [cloudEnabled, setCloudEnabled] = useState(true);
+  const [cloudConnected, setCloudConnected] = useState(false);
+  const [checkingCloudStatus, setCheckingCloudStatus] = useState(false);
 
   // Validation
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -50,12 +67,42 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
     [selectedMachineId]
   );
 
-  // Fetch pairing QR on cloud step
+  // Fetch pairing QR and check cloud status on cloud step
   useEffect(() => {
     if (STEPS[currentStep].id === "cloud") {
-      fetchPairingQR();
+      if (cloudEnabled) {
+        fetchPairingQR();
+        checkCloudStatus();
+        
+        // Poll cloud status every 3 seconds to detect when pairing completes
+        const interval = setInterval(() => {
+          checkCloudStatus();
+        }, 3000);
+        
+        return () => clearInterval(interval);
+      } else {
+        setCloudConnected(false);
+      }
     }
-  }, [currentStep]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, cloudEnabled]);
+
+  const checkCloudStatus = async () => {
+    setCheckingCloudStatus(true);
+    try {
+      const response = await fetch("/api/cloud/status");
+      if (response.ok) {
+        const data = await response.json();
+        setCloudConnected(data.connected || false);
+      } else {
+        setCloudConnected(false);
+      }
+    } catch {
+      // Device might not support cloud status endpoint yet
+      setCloudConnected(false);
+    }
+    setCheckingCloudStatus(false);
+  };
 
   const fetchPairingQR = async () => {
     setLoadingQR(true);
@@ -90,6 +137,33 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const validateEnvironmentStep = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    if (!voltage) {
+      newErrors.voltage = "Please select your mains voltage";
+    }
+    if (!maxCurrent || maxCurrent < 10 || maxCurrent > 20) {
+      newErrors.maxCurrent = "Max current must be between 10A and 20A";
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const validateCloudStep = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    
+    // If cloud is enabled, check if it's connected/paired
+    if (cloudEnabled && !cloudConnected && !checkingCloudStatus) {
+      // Allow continuing but show a warning - pairing can be completed later
+      // This is just informational, not blocking
+      newErrors.cloudNotPaired = "Cloud is enabled but not yet paired. You can complete pairing later in Settings.";
+    }
+    
+    setErrors(newErrors);
+    // Don't block progression - just show warning
+    return true;
   };
 
   const saveMachineInfo = async () => {
@@ -131,6 +205,40 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
     setSaving(false);
   };
 
+  const saveEnvironmentSettings = async () => {
+    setSaving(true);
+    try {
+      sendCommand(
+        "set_power_config",
+        {
+          voltage,
+          maxCurrent,
+        },
+        { successMessage: "Power settings saved" }
+      );
+    } catch (err) {
+      console.error("Failed to save power settings:", err);
+      error("Failed to save power settings. Please try again.");
+    }
+    setSaving(false);
+  };
+
+  const saveCloudSettings = async () => {
+    setSaving(true);
+    try {
+      await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cloudEnabled,
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to save cloud settings:", err);
+    }
+    setSaving(false);
+  };
+
   const completeSetup = async () => {
     setSaving(true);
     try {
@@ -150,6 +258,16 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
       await saveMachineInfo();
     }
 
+    if (stepId === "environment") {
+      if (!validateEnvironmentStep()) return;
+      await saveEnvironmentSettings();
+    }
+
+    if (stepId === "cloud") {
+      validateCloudStep();
+      await saveCloudSettings();
+    }
+
     if (stepId === "done") {
       await completeSetup();
       return;
@@ -163,6 +281,7 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
   };
 
   const skipCloud = () => {
+    setCloudEnabled(false);
     setCurrentStep(STEPS.length - 1);
   };
 
@@ -184,14 +303,30 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
           />
         );
 
+      case "environment":
+        return (
+          <EnvironmentStep
+            voltage={voltage}
+            maxCurrent={maxCurrent}
+            errors={errors}
+            onVoltageChange={setVoltage}
+            onMaxCurrentChange={setMaxCurrent}
+          />
+        );
+
       case "cloud":
         return (
           <CloudStep
             pairing={pairing}
             loading={loadingQR}
             copied={copied}
+            cloudEnabled={cloudEnabled}
+            cloudConnected={cloudConnected}
+            checkingStatus={checkingCloudStatus}
+            error={errors.cloudNotPaired}
             onCopy={copyPairingCode}
             onSkip={skipCloud}
+            onCloudEnabledChange={setCloudEnabled}
           />
         );
 
@@ -219,7 +354,7 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
         <Card>
           {renderStepContent()}
 
-          <div className="flex justify-between pt-6 border-t border-cream-200 mt-6">
+          <div className="flex justify-between pt-6 border-t border-theme mt-6">
             {currentStep > 0 && STEPS[currentStep].id !== "done" ? (
               <Button variant="ghost" onClick={prevStep}>
                 <ArrowLeft className="w-4 h-4" />

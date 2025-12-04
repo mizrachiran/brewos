@@ -55,9 +55,8 @@ export function Logo({
     textFill = '#ffffff';
   } else if (forceDark) {
     textFill = '#361e12'; // Original brand dark brown
-  } else if (theme.isDark) {
-    textFill = '#f5e8d8'; // Warm white for dark themes
   } else {
+    // Use the theme's text color - already light for dark themes, dark for light themes
     textFill = theme.colors.text;
   }
 

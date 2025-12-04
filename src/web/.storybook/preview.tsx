@@ -1,15 +1,19 @@
 import type { Preview, Decorator } from "@storybook/react";
 import { useEffect } from "react";
 import { themes, ThemeId, applyTheme, themeList } from "../src/lib/themes";
+import { useThemeStore } from "../src/lib/themeStore";
 import "../src/styles/index.css";
 
 // Theme decorator that applies the selected theme
 const ThemeDecorator: Decorator = (Story, context) => {
   const selectedTheme = context.globals.theme as ThemeId;
+  const setTheme = useThemeStore((s) => s.setTheme);
 
   useEffect(() => {
     const theme = themes[selectedTheme] || themes.caramel;
     applyTheme(theme);
+    // Also update the theme store so components like Logo can read from it
+    setTheme(selectedTheme || "caramel");
     
     // Override the global overflow:hidden for Storybook
     document.documentElement.style.overflow = "auto";
@@ -24,7 +28,7 @@ const ThemeDecorator: Decorator = (Story, context) => {
       document.documentElement.style.height = "";
       document.body.style.height = "";
     };
-  }, [selectedTheme]);
+  }, [selectedTheme, setTheme]);
 
   return (
     <div className="min-h-full bg-theme p-6 transition-colors duration-300">

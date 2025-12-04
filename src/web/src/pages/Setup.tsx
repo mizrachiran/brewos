@@ -85,9 +85,9 @@ export function Setup() {
             <div className="w-16 h-16 bg-success-soft rounded-full flex items-center justify-center mx-auto mb-4">
               <Check className="w-8 h-8 text-success" />
             </div>
-            <h2 className="text-xl font-bold text-coffee-900 mb-2">Connected!</h2>
-            <p className="text-coffee-500 mb-4">
-              Redirecting to <span className="font-mono">brewos.local</span>...
+            <h2 className="text-xl font-bold text-theme mb-2">Connected!</h2>
+            <p className="text-theme-muted mb-4">
+              Redirecting to <span className="font-mono text-accent">brewos.local</span>...
             </p>
           </div>
         ) : (
@@ -95,7 +95,7 @@ export function Setup() {
             {/* Network List */}
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-coffee-500">
+                <label className="text-xs font-semibold uppercase tracking-wider text-theme-muted">
                   Available Networks
                 </label>
                 <Button
@@ -112,9 +112,9 @@ export function Setup() {
                 </Button>
               </div>
               
-              <div className="max-h-48 overflow-y-auto border border-cream-200 rounded-xl">
+              <div className="max-h-48 overflow-y-auto border border-theme rounded-xl">
                 {networks.length === 0 ? (
-                  <div className="p-4 text-center text-coffee-400">
+                  <div className="p-4 text-center text-theme-muted">
                     {scanning ? 'Scanning...' : 'No networks found'}
                   </div>
                 ) : (
@@ -122,19 +122,19 @@ export function Setup() {
                     <button
                       key={network.ssid}
                       onClick={() => setSelectedSsid(network.ssid)}
-                      className={`w-full flex items-center justify-between p-3 border-b border-cream-200 last:border-0 hover:bg-cream-100 transition-colors ${
+                      className={`w-full flex items-center justify-between p-3 border-b border-theme last:border-0 hover:bg-theme-secondary transition-colors ${
                         selectedSsid === network.ssid ? 'bg-accent/10' : ''
                       }`}
                     >
                       <div className="flex items-center gap-3">
                         <Wifi className={`w-4 h-4 ${
-                          network.rssi > -50 ? 'text-emerald-600' :
-                          network.rssi > -70 ? 'text-amber-600' : 'text-red-600'
+                          network.rssi > -50 ? 'text-emerald-500' :
+                          network.rssi > -70 ? 'text-amber-500' : 'text-red-500'
                         }`} />
-                        <span className="font-medium text-coffee-900">{network.ssid}</span>
+                        <span className="font-medium text-theme">{network.ssid}</span>
                       </div>
                       {network.secure && (
-                        <span className="text-xs text-coffee-400">🔒</span>
+                        <span className="text-xs text-theme-muted">🔒</span>
                       )}
                     </button>
                   ))

@@ -79,7 +79,7 @@ export function PowerSettings() {
     originalVoltageRef.current = voltage;
     originalMaxCurrentRef.current = maxCurrent;
     // Brief visual feedback for fire-and-forget WebSocket command
-        setTimeout(() => {
+    setTimeout(() => {
       setSavingPower(false);
       setShowPowerWarning(false);
       setEditingPower(false);
@@ -105,9 +105,9 @@ export function PowerSettings() {
 
   // Voltage label helper
   const getVoltageLabel = (v: number) => {
-    if (v === 110) return '110V (US)';
-    if (v === 220) return '220V (EU/AU)';
-    if (v === 240) return '240V (UK)';
+    if (v === 110) return "110V (US)";
+    if (v === 220) return "220V (EU/AU)";
+    if (v === 240) return "240V (UK)";
     return `${v}V`;
   };
 
@@ -125,21 +125,29 @@ export function PowerSettings() {
             <div className="flex items-center justify-between py-2 border-b border-theme">
               <span className="text-sm text-theme-muted">Eco Temperature</span>
               <span className="text-sm font-medium text-theme">
-                {formatTemperatureWithUnit(ecoBrewTempCelsius, temperatureUnit, 0)}
+                {formatTemperatureWithUnit(
+                  ecoBrewTempCelsius,
+                  temperatureUnit,
+                  0
+                )}
               </span>
             </div>
             <div className="flex items-center justify-between py-2 border-b border-theme">
               <span className="text-sm text-theme-muted">Auto-Eco After</span>
-              <span className="text-sm font-medium text-theme">{ecoTimeout} min</span>
+              <span className="text-sm font-medium text-theme">
+                {ecoTimeout} min
+              </span>
             </div>
-            
+
             <button
               onClick={() => setEditingEco(true)}
               className="w-full flex items-center justify-between py-2.5 border-t border-theme text-left group transition-colors hover:opacity-80 mt-2"
             >
               <div className="flex items-center gap-3">
                 <Settings className="w-4 h-4 text-theme-muted" />
-                <span className="text-sm font-medium text-theme">Configure Eco Mode</span>
+                <span className="text-sm font-medium text-theme">
+                  Configure Eco Mode
+                </span>
               </div>
               <ChevronRight className="w-4 h-4 text-theme-muted group-hover:text-theme transition-colors" />
             </button>
@@ -148,7 +156,8 @@ export function PowerSettings() {
           /* Edit mode */
           <div className="space-y-4">
             <p className="text-sm text-theme-muted">
-              Reduce power consumption when idle by lowering boiler temperatures.
+              Reduce power consumption when idle by lowering boiler
+              temperatures.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -159,7 +168,9 @@ export function PowerSettings() {
                 max={ecoTempMax}
                 step={step}
                 value={ecoBrewTempDisplay}
-                onChange={(e) => setEcoBrewTempDisplay(parseFloat(e.target.value))}
+                onChange={(e) =>
+                  setEcoBrewTempDisplay(parseFloat(e.target.value))
+                }
                 unit={unitSymbol}
               />
               <Input
@@ -178,12 +189,12 @@ export function PowerSettings() {
               <Button variant="ghost" onClick={() => setEditingEco(false)}>
                 Cancel
               </Button>
-              <Button 
+              <Button
                 onClick={() => {
                   saveEco();
                   setEditingEco(false);
-                }} 
-                loading={savingEco} 
+                }}
+                loading={savingEco}
                 disabled={savingEco}
               >
                 Save
@@ -204,20 +215,26 @@ export function PowerSettings() {
           <div className="space-y-0">
             <div className="flex items-center justify-between py-2 border-b border-theme">
               <span className="text-sm text-theme-muted">Mains Voltage</span>
-              <span className="text-sm font-medium text-theme">{getVoltageLabel(voltage)}</span>
+              <span className="text-sm font-medium text-theme">
+                {getVoltageLabel(voltage)}
+              </span>
             </div>
             <div className="flex items-center justify-between py-2 border-b border-theme">
               <span className="text-sm text-theme-muted">Max Current</span>
-              <span className="text-sm font-medium text-theme">{maxCurrent}A</span>
+              <span className="text-sm font-medium text-theme">
+                {maxCurrent}A
+              </span>
             </div>
-            
+
             <button
               onClick={() => setEditingPower(true)}
               className="w-full flex items-center justify-between py-2.5 border-t border-theme text-left group transition-colors hover:opacity-80 mt-2"
             >
               <div className="flex items-center gap-3">
                 <Settings className="w-4 h-4 text-theme-muted" />
-                <span className="text-sm font-medium text-theme">Configure Power</span>
+                <span className="text-sm font-medium text-theme">
+                  Configure Power
+                </span>
               </div>
               <ChevronRight className="w-4 h-4 text-theme-muted group-hover:text-theme transition-colors" />
             </button>
@@ -235,8 +252,8 @@ export function PowerSettings() {
                   onChange={(e) => setVoltage(parseInt(e.target.value))}
                   className="input"
                 >
-                  <option value="110">110V (US)</option>
-                  <option value="220">220V (EU/AU)</option>
+                  <option value="110">110V (US/Japan)</option>
+                  <option value="220">220V (EU/AU/Most of World)</option>
                   <option value="240">240V (UK)</option>
                 </select>
               </div>
@@ -249,7 +266,7 @@ export function PowerSettings() {
                 value={maxCurrent}
                 onChange={(e) => setMaxCurrent(parseInt(e.target.value) || 10)}
                 unit="A"
-                hint="10A (AU), 13A (UK), 15-20A (US), 16A (EU)"
+                hint="10A (AU), 13A (UK/IE), 15-20A (US/CA), 16A (EU)"
               />
             </div>
 
@@ -257,14 +274,14 @@ export function PowerSettings() {
               <Button variant="ghost" onClick={() => setEditingPower(false)}>
                 Cancel
               </Button>
-              <Button 
+              <Button
                 onClick={() => {
                   handleSavePower();
                   if (!hasPowerSettingsChanged) {
                     setEditingPower(false);
                   }
-                }} 
-                loading={savingPower} 
+                }}
+                loading={savingPower}
                 disabled={savingPower}
               >
                 Save
@@ -292,29 +309,33 @@ export function PowerSettings() {
             <div className="flex gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
               <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="font-semibold text-amber-500">Voltage Change Detected</p>
+                <p className="font-semibold text-amber-500">
+                  Voltage Change Detected
+                </p>
                 <p className="text-theme-muted mt-1">
-                  Changing from <strong>{originalVoltageRef.current}V</strong> to{" "}
-                  <strong>{voltage}V</strong>.
+                  Changing from <strong>{originalVoltageRef.current}V</strong>{" "}
+                  to <strong>{voltage}V</strong>.
                 </p>
                 <p className="text-theme-muted mt-2">
                   {voltage < originalVoltageRef.current ? (
                     <>
-                      Lowering voltage settings when your mains supply is higher can cause{" "}
+                      Lowering voltage settings when your mains supply is higher
+                      can cause{" "}
                       <span className="text-amber-500 font-medium">
                         overheating, equipment damage, or fire hazards
                       </span>
-                      . Only change this if you've physically moved the machine to a location
-                      with different mains voltage.
+                      . Only change this if you've physically moved the machine
+                      to a location with different mains voltage.
                     </>
                   ) : (
                     <>
-                      Setting voltage higher than your actual mains supply will result in{" "}
+                      Setting voltage higher than your actual mains supply will
+                      result in{" "}
                       <span className="text-amber-500 font-medium">
                         insufficient heating power and poor performance
                       </span>
-                      . Only change this if you've physically moved the machine to a location
-                      with different mains voltage.
+                      . Only change this if you've physically moved the machine
+                      to a location with different mains voltage.
                     </>
                   )}
                 </p>
@@ -327,15 +348,19 @@ export function PowerSettings() {
             <div className="flex gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
               <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="font-semibold text-amber-500">Current Limit Change</p>
+                <p className="font-semibold text-amber-500">
+                  Current Limit Change
+                </p>
                 <p className="text-theme-muted mt-1">
-                  Changing from <strong>{originalMaxCurrentRef.current}A</strong> to{" "}
+                  Changing from{" "}
+                  <strong>{originalMaxCurrentRef.current}A</strong> to{" "}
                   <strong>{maxCurrent}A</strong>.
                 </p>
                 <p className="text-theme-muted mt-2">
                   {maxCurrent > originalMaxCurrentRef.current ? (
                     <>
-                      Increasing the current limit beyond your circuit's capacity can{" "}
+                      Increasing the current limit beyond your circuit's
+                      capacity can{" "}
                       <span className="text-amber-500 font-medium">
                         trip breakers, damage wiring, or create fire hazards
                       </span>
@@ -348,8 +373,9 @@ export function PowerSettings() {
                       <span className="text-amber-500 font-medium">
                         breakers to trip during high-power operations
                       </span>
-                      , especially when using <strong>Parallel heating strategy</strong> on
-                      dual boiler machines. The system will try to draw more power than
+                      , especially when using{" "}
+                      <strong>Parallel heating strategy</strong> on dual boiler
+                      machines. The system will try to draw more power than
                       allowed, triggering circuit protection.
                     </>
                   )}
@@ -362,8 +388,9 @@ export function PowerSettings() {
           <p className="text-theme-muted text-xs border-t border-theme pt-3">
             <strong>⚠️ Risk:</strong> Incorrect power settings can{" "}
             <span className="text-amber-500">trip your circuit breaker</span>,
-            cause equipment damage, or create safety hazards. Ensure these values
-            match your electrical installation. If unsure, consult a qualified electrician.
+            cause equipment damage, or create safety hazards. Ensure these
+            values match your electrical installation. If unsure, consult a
+            qualified electrician.
           </p>
         </div>
       </ConfirmDialog>

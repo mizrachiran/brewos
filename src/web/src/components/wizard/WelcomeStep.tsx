@@ -1,5 +1,5 @@
 import { Logo } from "@/components/Logo";
-import { Settings, Cloud } from "lucide-react";
+import { Settings, Zap, Cloud } from "lucide-react";
 
 export function WelcomeStep() {
   return (
@@ -12,12 +12,18 @@ export function WelcomeStep() {
         Let's set up your espresso machine. This will only take a minute.
       </p>
 
-      <div className="flex flex-col items-center gap-4 text-sm text-coffee-400">
+      <div className="flex flex-col gap-4 text-sm text-theme-muted">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center">
             <Settings className="w-4 h-4 text-accent" />
           </div>
-          <span>Name your machine</span>
+          <span>Select your machine</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center">
+            <Zap className="w-4 h-4 text-accent" />
+          </div>
+          <span>Configure power settings</span>
         </div>
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center">
@@ -29,4 +35,3 @@ export function WelcomeStep() {
     </div>
   );
 }
-
