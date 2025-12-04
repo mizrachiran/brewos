@@ -270,7 +270,8 @@ export function CloudSettings() {
     fetchCloudStatus();
   }, [isDemo, fetchPairingQR, fetchCloudStatus]);
 
-  const isExpired = pairing !== null && pairing.expiresIn !== undefined && timeLeft <= 0;
+  const isExpired =
+    pairing !== null && pairing.expiresIn !== undefined && timeLeft <= 0;
 
   return (
     <div className="space-y-6">
