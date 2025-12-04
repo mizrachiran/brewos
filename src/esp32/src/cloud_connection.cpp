@@ -233,9 +233,8 @@ void CloudConnection::send(const String& json) {
         return;
     }
     
-    // WebSocketsClient::sendTXT requires non-const reference, so copy
-    String payload = json;
-    _ws.sendTXT(payload);
+    // Use const char* overload to avoid unnecessary string copy
+    _ws.sendTXT(json.c_str(), json.length());
 }
 
 void CloudConnection::send(const JsonDocument& doc) {

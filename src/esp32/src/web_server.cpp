@@ -1248,6 +1248,13 @@ void WebServer::handleWsMessage(AsyncWebSocketClient* client, uint8_t* data, siz
     processCommand(doc);
 }
 
+/**
+ * Processes a command received in JSON format.
+ * 
+ * This method is called from both handleWsMessage() (for local WebSocket commands)
+ * and from the cloud connection command callback (for cloud-originated commands).
+ * It handles commands from either source in a unified way.
+ */
 void WebServer::processCommand(JsonDocument& doc) {
     String type = doc["type"] | "";
     
