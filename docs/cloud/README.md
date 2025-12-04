@@ -115,6 +115,8 @@ src/cloud/
 
 ### Google OAuth Setup
 
+> **Note for self-hosters:** Each deployment requires its own Google OAuth Client ID. OAuth credentials are per-deployment and should never be shared. For local development only, you just need `http://localhost:5173` as an authorized origin.
+
 1. **Go to Google Cloud Console**
    - Visit [console.cloud.google.com](https://console.cloud.google.com)
    - Create a new project or select existing
@@ -130,7 +132,7 @@ src/cloud/
    - Click "Create Credentials" → "OAuth 2.0 Client ID"
    - Application type: Web application
    - Add authorized JavaScript origins:
-     - `https://cloud.brewos.io`
+     - `https://your-domain.com` (your production URL)
      - `http://localhost:5173` (for development)
    - Copy the **Client ID** (you'll need this for both frontend and backend)
 
@@ -249,7 +251,7 @@ For persistence on cloud platforms, mount a volume to `DATA_DIR`.
 1. **ESP32 generates QR code**
    - Generates random claim token
    - Calls `/api/devices/register-claim` to store token hash
-   - Displays QR code with URL: `https://cloud.brewos.io/pair?id=BRW-XXXXX&token=TOKEN`
+   - Displays QR code with URL: `https://<your-domain>/pair?id=BRW-XXXXX&token=TOKEN`
 
 2. **User scans QR code**
    - Opens pairing URL in browser
