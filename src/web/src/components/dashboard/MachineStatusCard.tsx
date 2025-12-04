@@ -58,7 +58,7 @@ export const MachineStatusCard = memo(function MachineStatusCard({
   // Memoize calculated values including combined heating progress for dual boilers
   const { heatingProgress, displayTemp, displaySetpoint, unitSymbol } =
     useMemo(() => {
-      // Calculate individual boiler progress
+      // Calculate individual boiler progress (capped at 100%)
       const brewProgress = Math.min(
         100,
         Math.max(0, (brewCurrent / brewSetpoint) * 100)
@@ -67,6 +67,9 @@ export const MachineStatusCard = memo(function MachineStatusCard({
         100,
         Math.max(0, (steamCurrent / steamSetpoint) * 100)
       );
+
+      // Consider boiler "at target" when within 1% (handles natural fluctuation)
+      const brewAtTarget = brewProgress >= 99;
 
       // Detect if steam was actually heated (above 50°C means it was heated at some point)
       const steamWasHeated = steamCurrent > 50;
@@ -83,8 +86,8 @@ export const MachineStatusCard = memo(function MachineStatusCard({
         progress = brewProgress;
       } else if (effectiveStrategy === 1) {
         // Sequential: brew heats first (0-50%), then steam (50-100%)
-        // When brew is done, steam starts
-        if (brewProgress < 100) {
+        // Use stable threshold to prevent jumps from temperature fluctuation
+        if (!brewAtTarget) {
           progress = brewProgress * 0.5; // 0-50% while brew heats
         } else {
           progress = 50 + steamProgress * 0.5; // 50-100% while steam heats
@@ -460,7 +463,11 @@ const PowerControls = memo(function PowerControls({
       STRATEGY_LABELS[effectiveStrategy]?.label || "Sequential";
 
     return (
-      <div role="group" aria-label="Power control" className="flex-1 flex rounded-xl overflow-hidden">
+      <div
+        role="group"
+        aria-label="Power control"
+        className="flex-1 flex rounded-xl overflow-hidden"
+      >
         {/* Main button - 70% - Turn On with strategy */}
         <button
           onClick={onQuickOn}

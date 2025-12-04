@@ -640,10 +640,12 @@ export class DemoConnection implements IConnection {
     if (this.machineMode === "on") {
       // Determine heating behavior based on strategy
       const strategy = this.heatingStrategy ?? 1; // Default to Sequential
-      const brewNeedsHeat = this.brewTemp < this.targetBrewTemp - 2;
-      const steamNeedsHeat = this.steamTemp < this.targetSteamTemp - 3;
+
+      // Use consistent thresholds to avoid gaps
       const brewAtTarget = this.brewTemp >= this.targetBrewTemp - 0.5;
       const steamAtTarget = this.steamTemp >= this.targetSteamTemp - 1;
+      const brewNeedsHeat = !brewAtTarget; // Heat until at target
+      const steamNeedsHeat = !steamAtTarget; // Heat until at target
 
       // Determine which boilers should heat based on strategy
       let heatBrew = false;
@@ -686,17 +688,17 @@ export class DemoConnection implements IConnection {
       }
 
       // Brew boiler temperature
-      if (heatBrew && this.brewTemp < this.targetBrewTemp - 0.5) {
+      if (heatBrew) {
         this.brewTemp += heatingRate + noise();
       } else if (this.brewTemp > this.targetBrewTemp + 0.5) {
         this.brewTemp -= coolingRate;
-      } else if (brewAtTarget) {
+      } else {
         // Stable at target with small fluctuation
         this.brewTemp = this.targetBrewTemp + noise();
       }
 
       // Steam boiler temperature
-      if (heatSteam && this.steamTemp < this.targetSteamTemp - 1) {
+      if (heatSteam) {
         this.steamTemp += heatingRate * 1.2 + noise();
       } else if (strategy === 0) {
         // Brew Only: steam cools down or stays ambient
