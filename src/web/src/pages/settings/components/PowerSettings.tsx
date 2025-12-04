@@ -253,7 +253,7 @@ export function PowerSettings() {
                   className="input"
                 >
                   <option value="110">110V (US/Japan)</option>
-                  <option value="220">220V (EU/AU/Most of World)</option>
+                  <option value="220">220V (EU/AU/Most of the World)</option>
                   <option value="240">240V (UK)</option>
                 </select>
               </div>
