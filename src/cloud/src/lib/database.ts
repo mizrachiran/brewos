@@ -184,7 +184,7 @@ export async function initDatabase(): Promise<SqlJsDatabase> {
     const hasUserDevicesTable =
       migrationCheck.length > 0 &&
       migrationCheck[0].values.length > 0 &&
-      migrationCheck[0].values[0][0] > 0;
+      (migrationCheck[0].values[0][0] as number) > 0;
 
     if (hasUserDevicesTable) {
       // Check if migration is needed (devices with owner_id but no user_devices entry)
@@ -201,7 +201,7 @@ export async function initDatabase(): Promise<SqlJsDatabase> {
       if (
         needsMigration.length > 0 &&
         needsMigration[0].values.length > 0 &&
-        needsMigration[0].values[0][0] > 0
+        (needsMigration[0].values[0][0] as number) > 0
       ) {
         console.log("[DB] Migrating existing device ownership to user_devices...");
         // Migrate existing owner_id + name to user_devices
