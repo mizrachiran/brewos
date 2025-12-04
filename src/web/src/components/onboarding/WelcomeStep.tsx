@@ -103,7 +103,7 @@ export function WelcomeStep({ onScanClick, onManualClick }: WelcomeStepProps) {
                   <p className="text-[10px] xs:text-xs font-semibold text-theme mb-0.5 leading-tight">
                     {step.title}
                   </p>
-                  <p className="text-[9px] xs:text-xs text-theme-muted leading-tight hidden xs:block">
+                  <p className="text-xs text-theme-muted leading-tight hidden xs:block">
                     {step.description}
                   </p>
                 </div>

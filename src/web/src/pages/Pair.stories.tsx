@@ -5,7 +5,6 @@ import { Input } from "@/components/Input";
 import { Logo } from "@/components/Logo";
 import { Check, X, Loader2 } from "lucide-react";
 import React from "react";
-import { OnboardingLayout } from "@/components/onboarding";
 
 // Wrapper component for stories
 function PairStoryWrapper({ children }: { children?: React.ReactNode }) {
@@ -24,27 +23,14 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-// Desktop wrapper with Card
-function DesktopWrapper({ children }: { children: React.ReactNode }) {
+// Responsive wrapper - works for both mobile and desktop
+function PairWrapper({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-coffee-800 to-coffee-900 flex justify-center items-center p-4">
       <Card className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-300">
         {children}
       </Card>
     </div>
-  );
-}
-
-// Mobile wrapper - uses shared OnboardingLayout
-function MobileWrapper({ children }: { children: React.ReactNode }) {
-  return (
-    <OnboardingLayout
-      gradient="bg-gradient-to-br from-coffee-800 to-coffee-900"
-      maxWidth="max-w-md"
-      desktopTopPadding="pt-0"
-    >
-      {children}
-    </OnboardingLayout>
   );
 }
 
@@ -62,10 +48,7 @@ function PairIdleContent({
     <div className="py-4 sm:py-6">
       <div className="text-center mb-6">
         <div className="flex justify-center mb-4">
-          {/* Mobile: force light text for dark background */}
-          <Logo size="lg" forceLight className="sm:hidden" />
-          {/* Desktop: use theme colors */}
-          <Logo size="lg" className="hidden sm:flex" />
+          <Logo size="lg" />
         </div>
         <h1 className="text-xl sm:text-2xl font-bold text-theme">Pair Device</h1>
         <p className="text-sm sm:text-base text-theme-secondary mt-2">
@@ -164,112 +147,45 @@ function PairErrorContent({ errorMessage }: { errorMessage: string }) {
   );
 }
 
-// ============ DESKTOP STORIES ============
-
-export const NotLoggedInDesktop: Story = {
-  name: "Not Logged In - Desktop",
+export const NotLoggedIn: Story = {
   render: () => (
-    <DesktopWrapper>
+    <PairWrapper>
       <PairIdleContent deviceId="BREW-ABC123" deviceName="" isLoggedIn={false} />
-    </DesktopWrapper>
+    </PairWrapper>
   ),
 };
 
-export const LoggedInDesktop: Story = {
-  name: "Logged In - Desktop",
+export const LoggedIn: Story = {
   render: () => (
-    <DesktopWrapper>
+    <PairWrapper>
       <PairIdleContent deviceId="BREW-ABC123" deviceName="Kitchen Espresso" isLoggedIn={true} />
-    </DesktopWrapper>
+    </PairWrapper>
   ),
 };
 
-export const ClaimingDesktop: Story = {
-  name: "Claiming - Desktop",
+export const Claiming: Story = {
   render: () => (
-    <DesktopWrapper>
+    <PairWrapper>
       <PairClaimingContent />
-    </DesktopWrapper>
+    </PairWrapper>
   ),
 };
 
-export const SuccessDesktop: Story = {
-  name: "Success - Desktop",
+export const Success: Story = {
   render: () => (
-    <DesktopWrapper>
+    <PairWrapper>
       <PairSuccessContent />
-    </DesktopWrapper>
+    </PairWrapper>
   ),
 };
 
-export const ErrorDesktop: Story = {
-  name: "Error - Desktop",
+export const Error: Story = {
   render: () => (
-    <DesktopWrapper>
+    <PairWrapper>
       <PairErrorContent errorMessage="Failed to pair device. The code may have expired." />
-    </DesktopWrapper>
+    </PairWrapper>
   ),
 };
-
-// ============ MOBILE STORIES ============
-
-export const NotLoggedInMobile: Story = {
-  name: "Not Logged In - Mobile",
-  parameters: {
-    viewport: { defaultViewport: "mobile1" },
-  },
-  render: () => (
-    <MobileWrapper>
-      <PairIdleContent deviceId="BREW-ABC123" deviceName="" isLoggedIn={false} />
-    </MobileWrapper>
-  ),
-};
-
-export const LoggedInMobile: Story = {
-  name: "Logged In - Mobile",
-  parameters: {
-    viewport: { defaultViewport: "mobile1" },
-  },
-  render: () => (
-    <MobileWrapper>
-      <PairIdleContent deviceId="BREW-ABC123" deviceName="Kitchen Espresso" isLoggedIn={true} />
-    </MobileWrapper>
-  ),
-};
-
-export const SuccessMobile: Story = {
-  name: "Success - Mobile",
-  parameters: {
-    viewport: { defaultViewport: "mobile1" },
-  },
-  render: () => (
-    <MobileWrapper>
-      <PairSuccessContent />
-    </MobileWrapper>
-  ),
-};
-
-export const ErrorMobile: Story = {
-  name: "Error - Mobile",
-  parameters: {
-    viewport: { defaultViewport: "mobile1" },
-  },
-  render: () => (
-    <MobileWrapper>
-      <PairErrorContent errorMessage="Failed to pair device. The code may have expired." />
-    </MobileWrapper>
-  ),
-};
-
-// ============ LEGACY ALIASES (for backward compatibility) ============
-
-export const NotLoggedIn = NotLoggedInDesktop;
-export const LoggedIn = LoggedInDesktop;
-export const Claiming = ClaimingDesktop;
-export const Success = SuccessDesktop;
-export const Error = ErrorDesktop;
-
-// ============ ALL STATES ============
 
 export const AllStates: Story = {
   name: "All States",
@@ -279,41 +195,41 @@ export const AllStates: Story = {
         <h3 className="text-cream-200 text-lg font-semibold mb-4 text-center">
           Not Logged In
         </h3>
-        <DesktopWrapper>
+        <PairWrapper>
           <PairIdleContent deviceId="BREW-ABC123" deviceName="" isLoggedIn={false} />
-        </DesktopWrapper>
+        </PairWrapper>
       </div>
       <div>
         <h3 className="text-cream-200 text-lg font-semibold mb-4 text-center">
           Logged In
         </h3>
-        <DesktopWrapper>
+        <PairWrapper>
           <PairIdleContent deviceId="BREW-ABC123" deviceName="Kitchen Espresso" isLoggedIn={true} />
-        </DesktopWrapper>
+        </PairWrapper>
       </div>
       <div>
         <h3 className="text-cream-200 text-lg font-semibold mb-4 text-center">
           Claiming
         </h3>
-        <DesktopWrapper>
+        <PairWrapper>
           <PairClaimingContent />
-        </DesktopWrapper>
+        </PairWrapper>
       </div>
       <div>
         <h3 className="text-cream-200 text-lg font-semibold mb-4 text-center">
           Success
         </h3>
-        <DesktopWrapper>
+        <PairWrapper>
           <PairSuccessContent />
-        </DesktopWrapper>
+        </PairWrapper>
       </div>
       <div>
         <h3 className="text-cream-200 text-lg font-semibold mb-4 text-center">
           Error
         </h3>
-        <DesktopWrapper>
+        <PairWrapper>
           <PairErrorContent errorMessage="Failed to pair device. The code may have expired." />
-        </DesktopWrapper>
+        </PairWrapper>
       </div>
     </div>
   ),

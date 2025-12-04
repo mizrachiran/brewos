@@ -52,7 +52,7 @@ export function WizardStepWrapper({
   const mobileLayout = (
     <div className="min-h-screen bg-gradient-to-br from-coffee-800 via-coffee-900 to-coffee-950">
       <div 
-        className="h-screen flex flex-col px-5 py-4 overflow-hidden"
+        className="min-h-screen min-h-[100dvh] flex flex-col px-5 py-4 overflow-hidden"
         style={darkBgStyles}
       >
         <ProgressIndicator steps={steps} currentStep={currentStep} />

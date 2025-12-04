@@ -354,7 +354,7 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
   const isWelcomeStep = STEPS[currentStep].id === "welcome";
 
   const renderNavigation = () => (
-    <div className="flex justify-between pt-3 card:pt-6 border-t border-white/10 card:border-theme mt-3 card:mt-6">
+    <div className="flex justify-between pt-3 xs:pt-6 border-t border-white/10 xs:border-theme mt-3 xs:mt-6">
       {currentStep > 0 && STEPS[currentStep].id !== "done" ? (
         <Button variant="ghost" onClick={prevStep}>
           <ArrowLeft className="w-4 h-4" />

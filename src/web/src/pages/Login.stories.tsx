@@ -23,11 +23,11 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-// Full desktop login view using shared components
-function LoginDesktopView({ error }: { error?: string }) {
+// Full login view using shared components - responsive to viewport
+function LoginView({ error }: { error?: string }) {
   return (
     <div className="min-h-screen flex overflow-hidden">
-      {/* Left Panel - Hero Section */}
+      {/* Left Panel - Hero Section (hidden on mobile) */}
       <LoginHero animated={false} />
 
       {/* Right Panel - Login Form */}
@@ -35,20 +35,8 @@ function LoginDesktopView({ error }: { error?: string }) {
         <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-accent/5 to-transparent rounded-full blur-3xl" />
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-tr from-accent/5 to-transparent rounded-full blur-3xl" />
 
-        <LoginForm error={error} animated={false} />
+        <LoginForm error={error} animated={false} showMobileLogo />
       </div>
-    </div>
-  );
-}
-
-// Mobile login view using shared components
-function LoginMobileView({ error }: { error?: string }) {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-theme p-6 relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-accent/5 to-transparent rounded-full blur-3xl" />
-      <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-tr from-accent/5 to-transparent rounded-full blur-3xl" />
-
-      <LoginForm error={error} animated={false} showMobileLogo />
     </div>
   );
 }
@@ -99,33 +87,13 @@ function FormOnlyView({ error }: { error?: string }) {
 }
 
 export const Default: Story = {
-  render: () => <LoginDesktopView />,
+  render: () => <LoginView />,
 };
 
 export const WithError: Story = {
   render: () => (
-    <LoginDesktopView error="Authentication failed. Please try again." />
+    <LoginView error="Authentication failed. Please try again." />
   ),
-};
-
-export const MobileView: Story = {
-  render: () => <LoginMobileView />,
-  parameters: {
-    viewport: {
-      defaultViewport: "mobile1",
-    },
-  },
-};
-
-export const MobileViewWithError: Story = {
-  render: () => (
-    <LoginMobileView error="Invalid credentials. Please try again." />
-  ),
-  parameters: {
-    viewport: {
-      defaultViewport: "mobile1",
-    },
-  },
 };
 
 export const CloudNotConfigured: Story = {
