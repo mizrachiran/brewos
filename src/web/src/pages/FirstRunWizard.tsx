@@ -23,7 +23,6 @@ import {
   type WizardStep,
   type PairingData,
 } from "@/components/wizard";
-import React from "react";
 import { darkBgStyles } from "@/lib/darkBgStyles";
 
 const STEPS: WizardStep[] = [
@@ -373,7 +372,7 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
 
   return (
     <div className="full-page-scroll bg-gradient-to-br from-coffee-800 via-coffee-900 to-coffee-950 min-h-screen">
-      {/* Mobile: Full-screen without card */}
+      {/* Narrow width (< 640px): Full-screen without card */}
       <div 
         className="sm:hidden min-h-screen flex flex-col px-5 py-6"
         style={darkBgStyles}
@@ -388,7 +387,7 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
         </div>
       </div>
 
-      {/* Desktop: Card layout with fixed top position */}
+      {/* Wide width (>= 640px): Card layout with fixed top position */}
       <div
         className={`hidden sm:flex min-h-screen p-4 transition-all duration-300 ${
           isWelcomeStep

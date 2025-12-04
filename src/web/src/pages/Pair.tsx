@@ -183,7 +183,7 @@ export function Pair() {
 
   return (
     <div className="full-page-scroll bg-gradient-to-br from-coffee-800 to-coffee-900 min-h-screen">
-      {/* Mobile: Full-screen without card */}
+      {/* Narrow width (< 640px): Full-screen without card */}
       <div
         className="sm:hidden min-h-screen flex flex-col justify-center px-5 py-8"
         style={darkBgStyles}
@@ -193,7 +193,7 @@ export function Pair() {
         </div>
       </div>
 
-      {/* Desktop: Card layout with fixed top position */}
+      {/* Wide width (>= 640px): Card layout */}
       <div className="hidden sm:flex min-h-screen justify-center items-center p-4">
         <Card className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-300">
           {renderContent()}

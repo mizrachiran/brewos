@@ -16,9 +16,9 @@ export function Onboarding() {
   const navigate = useNavigate();
   const { claimDevice, fetchDevices } = useAppStore();
 
-  const [step, setStep] = useState<"welcome" | "scan" | "manual" | "name" | "success">(
-    "welcome"
-  );
+  const [step, setStep] = useState<
+    "welcome" | "scan" | "manual" | "name" | "success"
+  >("welcome");
   const [claimCode, setClaimCode] = useState("");
   const [deviceName, setDeviceName] = useState("");
   const [validating, setValidating] = useState(false);
@@ -178,8 +178,8 @@ export function Onboarding() {
 
   return (
     <div className="full-page-scroll bg-gradient-to-br from-coffee-800 via-coffee-900 to-coffee-950 min-h-screen">
-      {/* Mobile: Full-screen without card */}
-      <div 
+      {/* Narrow width (< 640px): Full-screen without card */}
+      <div
         className="sm:hidden min-h-screen flex flex-col justify-center px-5 py-8"
         style={darkBgStyles}
       >
@@ -188,7 +188,7 @@ export function Onboarding() {
         </div>
       </div>
 
-      {/* Desktop: Card layout with fixed top position */}
+      {/* Wide width (>= 640px): Card layout with fixed top position */}
       <div className="hidden sm:flex min-h-screen justify-center p-4 pt-16">
         <div className="w-full max-w-lg">
           <Card className="animate-in fade-in slide-in-from-bottom-4 duration-300">
