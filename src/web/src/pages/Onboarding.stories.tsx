@@ -8,6 +8,7 @@ import {
   SuccessStep,
 } from "@/components/onboarding";
 import React from "react";
+import { darkBgStyles } from "@/lib/darkBgStyles";
 
 // Wrapper component for stories
 function OnboardingStoryWrapper({ children }: { children?: React.ReactNode }) {
@@ -25,17 +26,6 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
-
-// CSS variables for dark background (mobile full-screen)
-const darkBgStyles = {
-  "--text": "#faf8f5",
-  "--text-secondary": "#e8e0d5",
-  "--text-muted": "#d4c8b8",
-  "--card-bg": "rgba(255,255,255,0.05)",
-  "--bg-secondary": "rgba(255,255,255,0.08)",
-  "--bg-tertiary": "rgba(255,255,255,0.05)",
-  "--border": "rgba(255,255,255,0.12)",
-} as React.CSSProperties;
 
 // Desktop wrapper with Card
 function DesktopWrapper({ children }: { children: React.ReactNode }) {

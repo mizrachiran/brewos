@@ -24,6 +24,7 @@ import {
   type PairingData,
 } from "@/components/wizard";
 import React from "react";
+import { darkBgStyles } from "@/lib/darkBgStyles";
 
 const STEPS: WizardStep[] = [
   { id: "welcome", title: "Welcome", icon: <Coffee className="w-5 h-5" /> },
@@ -36,17 +37,6 @@ const STEPS: WizardStep[] = [
   { id: "cloud", title: "Cloud Access", icon: <Cloud className="w-5 h-5" /> },
   { id: "done", title: "All Set!", icon: <Check className="w-5 h-5" /> },
 ];
-
-// CSS variables for dark background (mobile full-screen)
-const darkBgStyles = {
-  "--text": "#faf8f5",
-  "--text-secondary": "#e8e0d5",
-  "--text-muted": "#d4c8b8",
-  "--card-bg": "rgba(255,255,255,0.05)",
-  "--bg-secondary": "rgba(255,255,255,0.08)",
-  "--bg-tertiary": "rgba(255,255,255,0.05)",
-  "--border": "rgba(255,255,255,0.12)",
-} as React.CSSProperties;
 
 interface FirstRunWizardProps {
   onComplete: () => void;

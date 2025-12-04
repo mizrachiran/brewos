@@ -3,18 +3,7 @@ import { Button } from "@/components/Button";
 import { ProgressIndicator } from "@/components/wizard";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import type { ReactNode } from "react";
-import React from "react";
-
-// CSS variables for dark background (mobile full-screen)
-const darkBgStyles = {
-  "--text": "#faf8f5",
-  "--text-secondary": "#e8e0d5",
-  "--text-muted": "#d4c8b8",
-  "--card-bg": "rgba(255,255,255,0.05)",
-  "--bg-secondary": "rgba(255,255,255,0.08)",
-  "--bg-tertiary": "rgba(255,255,255,0.05)",
-  "--border": "rgba(255,255,255,0.12)",
-} as React.CSSProperties;
+import { darkBgStyles } from "@/lib/darkBgStyles";
 
 interface WizardStepWrapperProps {
   currentStep: number;

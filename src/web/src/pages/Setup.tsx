@@ -4,24 +4,13 @@ import { Input } from '@/components/Input';
 import { Button } from '@/components/Button';
 import { Logo } from '@/components/Logo';
 import { Wifi, Loader2, Check, RefreshCw } from 'lucide-react';
-import React from 'react';
+import { darkBgStyles } from '@/lib/darkBgStyles';
 
 interface Network {
   ssid: string;
   rssi: number;
   secure: boolean;
 }
-
-// CSS variables for dark background (mobile full-screen)
-const darkBgStyles = {
-  "--text": "#faf8f5",
-  "--text-secondary": "#e8e0d5",
-  "--text-muted": "#d4c8b8",
-  "--card-bg": "rgba(255,255,255,0.05)",
-  "--bg-secondary": "rgba(255,255,255,0.08)",
-  "--bg-tertiary": "rgba(255,255,255,0.05)",
-  "--border": "rgba(255,255,255,0.12)",
-} as React.CSSProperties;
 
 export function Setup() {
   const [networks, setNetworks] = useState<Network[]>([]);
