@@ -113,7 +113,7 @@ export function WelcomeStep({ onScanClick, onManualClick }: WelcomeStepProps) {
 
       {/* Quick tip */}
       <div className="mt-4 sm:mt-6 text-center px-4">
-        <p className="text-xs text-theme-muted">
+        <p className="text-[10px] sm:text-xs text-theme-muted">
           💡 Find the QR code on your machine's display
         </p>
       </div>
