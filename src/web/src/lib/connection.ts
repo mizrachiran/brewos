@@ -4,8 +4,23 @@ type MessageHandler = (message: WebSocketMessage) => void;
 type StateHandler = (state: ConnectionState) => void;
 
 /**
+ * Stale connection threshold in milliseconds.
+ * If no message is received within this time, the connection is considered stale.
+ * Status updates are sent every 500ms, so 3 seconds gives ~6 missed updates before marking stale.
+ */
+const STALE_THRESHOLD_MS = 3000;
+
+/**
+ * How often to check for stale connections.
+ */
+const STALE_CHECK_INTERVAL_MS = 1000;
+
+/**
  * WebSocket connection manager
  * Handles both local (ESP32 direct) and cloud connections
+ * 
+ * Connection health is detected by monitoring incoming messages rather than ping/pong.
+ * Since status updates are sent every 500ms, missing several updates indicates a problem.
  */
 export class Connection implements IConnection {
   private ws: WebSocket | null = null;
@@ -16,7 +31,8 @@ export class Connection implements IConnection {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = 1000;
   private maxReconnectDelay = 5000;
-  private pingInterval: ReturnType<typeof setInterval> | null = null;
+  private lastMessageTime = 0;
+  private staleCheckInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(config: ConnectionConfig) {
     this.config = config;
@@ -41,13 +57,14 @@ export class Connection implements IConnection {
           console.log('[BrewOS] Connected');
           this.setState('connected');
           this.reconnectDelay = 1000;
-          this.startPing();
+          this.lastMessageTime = Date.now();
+          this.startStaleCheck();
           resolve();
         };
 
         this.ws.onclose = (event) => {
           console.log(`[BrewOS] Disconnected (code: ${event.code})`);
-          this.stopPing();
+          this.stopStaleCheck();
           this.setState('disconnected');
           if (event.code !== 1000) {
             this.scheduleReconnect();
@@ -61,6 +78,7 @@ export class Connection implements IConnection {
         };
 
         this.ws.onmessage = (event) => {
+          this.lastMessageTime = Date.now();
           try {
             const message = JSON.parse(event.data) as WebSocketMessage;
             this.notifyMessage(message);
@@ -76,7 +94,7 @@ export class Connection implements IConnection {
   }
 
   disconnect(): void {
-    this.stopPing();
+    this.stopStaleCheck();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -170,16 +188,25 @@ export class Connection implements IConnection {
     }, this.reconnectDelay);
   }
 
-  private startPing(): void {
-    this.pingInterval = setInterval(() => {
-      this.send('ping', { timestamp: Date.now() });
-    }, 30000);
+  /**
+   * Start checking for stale connections.
+   * If no message is received within STALE_THRESHOLD_MS, close and reconnect.
+   */
+  private startStaleCheck(): void {
+    this.staleCheckInterval = setInterval(() => {
+      const elapsed = Date.now() - this.lastMessageTime;
+      if (elapsed > STALE_THRESHOLD_MS && this.state === 'connected') {
+        console.warn(`[BrewOS] Connection stale (no messages for ${elapsed}ms), reconnecting...`);
+        // Close the stale connection - onclose will trigger reconnect
+        this.ws?.close(4000, 'Stale connection');
+      }
+    }, STALE_CHECK_INTERVAL_MS);
   }
 
-  private stopPing(): void {
-    if (this.pingInterval) {
-      clearInterval(this.pingInterval);
-      this.pingInterval = null;
+  private stopStaleCheck(): void {
+    if (this.staleCheckInterval) {
+      clearInterval(this.staleCheckInterval);
+      this.staleCheckInterval = null;
     }
   }
 }

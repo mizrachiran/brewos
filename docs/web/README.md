@@ -249,6 +249,7 @@ The UI uses a coffee-themed design system with 10 customizable themes.
 - ☀️ Warm Mocha - Soft mocha with warm accents
 
 **Dark Themes:**
+- 🌙 Cortado - Soft dark with milky warmth (lightest dark theme)
 - 🌙 Cappuccino - Warm caramel on dark espresso
 - 🌙 Roasted - Rich dark coffee atmosphere
 - 🌙 Dark Roast - Deep and intense dark mode

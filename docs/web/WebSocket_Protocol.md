@@ -201,16 +201,24 @@ All commands use the `command` type:
 | `restart` | - | Restart ESP32 |
 | `factory_reset` | - | Factory reset |
 
-### Ping
+## Connection Health
 
-Keep-alive ping (sent automatically every 30s):
+Connection health is detected by monitoring incoming status messages rather than explicit ping/pong.
 
-```json
-{
-  "type": "ping",
-  "timestamp": 1699876543210
-}
-```
+**Status Update Frequency:**
+- ESP32 broadcasts status every **500ms**
+- If no messages received for **3 seconds**, the connection is considered stale
+
+**Stale Connection Handling:**
+1. Client detects no messages for 3+ seconds
+2. Client closes the WebSocket connection
+3. Automatic reconnection is triggered
+4. Reconnection uses exponential backoff (1s → 5s max)
+
+This approach is more efficient than ping/pong since:
+- Status updates already provide a heartbeat signal
+- No additional network traffic required
+- Faster detection of dead connections (3s vs typical 30s ping interval)
 
 ## Cloud-Specific Messages
 
