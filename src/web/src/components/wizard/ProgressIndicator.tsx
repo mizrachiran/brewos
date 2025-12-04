@@ -1,3 +1,4 @@
+import { cloneElement, isValidElement } from "react";
 import { Check } from "lucide-react";
 import type { WizardStep } from "./types";
 
@@ -5,6 +6,8 @@ interface ProgressIndicatorProps {
   steps: WizardStep[];
   currentStep: number;
 }
+
+const iconClassName = "w-3.5 h-3.5 xs:w-5 xs:h-5";
 
 export function ProgressIndicator({ steps, currentStep }: ProgressIndicatorProps) {
   return (
@@ -22,11 +25,11 @@ export function ProgressIndicator({ steps, currentStep }: ProgressIndicatorProps
               }`}
             >
               {index < currentStep ? (
-                <Check className="w-3.5 h-3.5 xs:w-5 xs:h-5" />
+                <Check className={iconClassName} />
+              ) : isValidElement(step.icon) ? (
+                cloneElement(step.icon, { className: iconClassName })
               ) : (
-                <span className="[&>svg]:w-3.5 [&>svg]:h-3.5 xs:[&>svg]:w-5 xs:[&>svg]:h-5">
-                  {step.icon}
-                </span>
+                step.icon
               )}
             </div>
             {index < steps.length - 1 && (
