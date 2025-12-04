@@ -107,6 +107,24 @@ export function CloudSettings() {
     detectEnvironment(cloudConfig?.serverUrl || "wss://cloud.brewos.io")
   );
   const [saving, setSaving] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(pairing?.expiresIn || 0);
+
+  // Countdown timer for pairing expiration
+  useEffect(() => {
+    if (pairing?.expiresIn !== undefined) {
+      setTimeLeft(pairing.expiresIn);
+    }
+  }, [pairing?.expiresIn]);
+
+  useEffect(() => {
+    if (timeLeft <= 0) return;
+
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => Math.max(0, prev - 1));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [timeLeft]);
 
   // Handle environment preset selection
   const handleEnvChange = (env: CloudEnvironment) => {
@@ -249,7 +267,7 @@ export function CloudSettings() {
     fetchCloudStatus();
   }, [isDemo, fetchPairingQR, fetchCloudStatus]);
 
-  const isExpired = pairing?.expiresIn !== undefined && pairing.expiresIn <= 0;
+  const isExpired = pairing !== null && timeLeft <= 0;
 
   return (
     <div className="space-y-6">
@@ -306,8 +324,7 @@ export function CloudSettings() {
                   </Badge>
                 ) : (
                   <p className="text-xs text-theme-muted mt-2">
-                    Expires in {Math.floor(pairing.expiresIn / 60)}m{" "}
-                    {pairing.expiresIn % 60}s
+                    Expires in {Math.floor(timeLeft / 60)}m {timeLeft % 60}s
                   </p>
                 )}
               </>
@@ -494,23 +511,27 @@ export function CloudSettings() {
                 </p>
               </div>
 
-              {/* Custom URL input - only shown when Custom is selected */}
-              {selectedEnv === "custom" && (
-                <Input
-                  label="Custom Server URL"
-                  value={cloudUrl}
-                  onChange={(e) => setCloudUrl(e.target.value)}
-                  placeholder="wss://your-server.com"
-                  disabled={!cloudEnabled}
-                />
-              )}
-
-              {/* Show current URL for non-custom environments */}
-              {selectedEnv !== "custom" && (
-                <div className="text-xs text-theme-muted bg-theme-secondary rounded-lg px-3 py-2">
-                  <span className="font-medium">Server:</span> {cloudUrl}
-                </div>
-              )}
+              {/* Server URL - either editable (custom) or read-only display */}
+              <div>
+                {selectedEnv === "custom" ? (
+                  <Input
+                    label="Custom Server URL"
+                    value={cloudUrl}
+                    onChange={(e) => setCloudUrl(e.target.value)}
+                    placeholder="wss://your-server.com"
+                    disabled={!cloudEnabled}
+                  />
+                ) : (
+                  <>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">
+                      Server URL
+                    </label>
+                    <div className="w-full px-4 py-3 rounded-xl bg-theme-secondary border border-theme text-sm text-theme-muted font-mono">
+                      {cloudUrl}
+                    </div>
+                  </>
+                )}
+              </div>
 
               <div className="flex-1" />
               <div className="flex justify-end">
