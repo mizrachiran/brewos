@@ -104,7 +104,8 @@ export function Dashboard() {
   const handleQuickOn = useCallback(() => {
     if (isDualBoiler) {
       const stored = localStorage.getItem("brewos-last-heating-strategy");
-      const strategy = stored ? parseInt(stored, 10) : 1; // Default to Sequential
+      const parsed = stored !== null ? parseInt(stored, 10) : NaN;
+      const strategy = !isNaN(parsed) ? parsed : 1; // Default to Sequential
       setMode("on", strategy);
     } else {
       setMode("on");
