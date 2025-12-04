@@ -4,6 +4,7 @@ import { Button } from "@/components/Button";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useToast } from "@/components/Toast";
 import { useAppStore } from "@/lib/mode";
+import { isDemoMode } from "@/lib/demo-mode";
 import {
   UserX,
   Loader2,
@@ -22,6 +23,24 @@ interface DeviceUser {
   avatarUrl: string | null;
   claimedAt: string;
 }
+
+// Demo mode mock users
+const DEMO_USERS: DeviceUser[] = [
+  {
+    userId: "demo-user",
+    email: "demo@brewos.io",
+    displayName: "Demo User",
+    avatarUrl: null,
+    claimedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days ago
+  },
+  {
+    userId: "demo-user-2",
+    email: "alex@example.com",
+    displayName: "Alex Chen",
+    avatarUrl: null,
+    claimedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days ago
+  },
+];
 
 interface DeviceUsersProps {
   deviceId: string;
@@ -49,12 +68,25 @@ export function DeviceUsers({
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [leaving, setLeaving] = useState(false);
 
+  const isDemo = isDemoMode();
+
   const fetchUsers = useCallback(
     async (showLoading = true) => {
       if (showLoading) {
         setLoading(true);
         setErrorState(null);
       }
+
+      // In demo mode, return mock users
+      if (isDemo) {
+        // Simulate a small delay for realism
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        setUsers(DEMO_USERS);
+        setErrorState(null);
+        setLoading(false);
+        return;
+      }
+
       try {
         const token = await getAccessToken();
         if (!token) {
@@ -87,7 +119,7 @@ export function DeviceUsers({
         setLoading(false);
       }
     },
-    [deviceId, getAccessToken, error]
+    [deviceId, getAccessToken, error, isDemo]
   );
 
   useEffect(() => {
@@ -109,6 +141,17 @@ export function DeviceUsers({
     if (!confirmRemove || confirmRemove.userId !== userIdToRemove) return;
 
     setRemovingUserId(userIdToRemove);
+
+    // In demo mode, simulate the action
+    if (isDemo) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      setUsers((prev) => prev.filter((u) => u.userId !== userIdToRemove));
+      success("User access revoked successfully");
+      setConfirmRemove(null);
+      setRemovingUserId(null);
+      return;
+    }
+
     try {
       const token = await getAccessToken();
       if (!token) {
@@ -147,6 +190,18 @@ export function DeviceUsers({
     if (!user?.id) return;
 
     setLeaving(true);
+
+    // In demo mode, simulate the action
+    if (isDemo) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      success("You have left this device");
+      setConfirmLeave(false);
+      setLeaving(false);
+      onClose();
+      onLeave?.();
+      return;
+    }
+
     try {
       const token = await getAccessToken();
       if (!token) {
