@@ -100,14 +100,21 @@ export function Dashboard() {
     [sendCommand]
   );
 
-  const handleOnClick = useCallback(() => {
+  // Quick on: use last strategy from localStorage
+  const handleQuickOn = useCallback(() => {
     if (isDualBoiler) {
-      // For dual boiler, always show strategy modal (allows switching while on)
-      setShowStrategyModal(true);
+      const stored = localStorage.getItem("brewos-last-heating-strategy");
+      const strategy = stored ? parseInt(stored, 10) : 1; // Default to Sequential
+      setMode("on", strategy);
     } else {
       setMode("on");
     }
   }, [isDualBoiler, setMode]);
+
+  // Open strategy selector dialog
+  const handleOpenStrategyModal = useCallback(() => {
+    setShowStrategyModal(true);
+  }, []);
 
   const handleStrategySelect = useCallback(
     (strategy: number) => {
@@ -159,7 +166,8 @@ export function Dashboard() {
           isDualBoiler={isDualBoiler}
           heatingStrategy={heatingStrategy}
           onSetMode={setMode}
-          onPowerOn={handleOnClick}
+          onQuickOn={handleQuickOn}
+          onOpenStrategyModal={handleOpenStrategyModal}
         />
 
         <TemperatureGauges

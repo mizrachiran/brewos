@@ -10,13 +10,12 @@ import {
   Flame,
   Wind,
   Brain,
+  ChevronDown,
 } from "lucide-react";
 import { cn, getMachineStateLabel, getMachineStateColor } from "@/lib/utils";
 import { useStore } from "@/lib/store";
 import { convertFromCelsius, getUnitSymbol } from "@/lib/temperature";
 import type { HeatingStrategy } from "@/lib/types";
-
-type MachineMode = "standby" | "on" | "eco";
 
 const STRATEGY_LABELS: Record<number, { label: string; icon: typeof Flame }> = {
   0: { label: "Brew Only", icon: Flame },
@@ -31,7 +30,8 @@ interface MachineStatusCardProps {
   isDualBoiler: boolean;
   heatingStrategy?: HeatingStrategy | null;
   onSetMode: (mode: string) => void;
-  onPowerOn: () => void;
+  onQuickOn: () => void;
+  onOpenStrategyModal: () => void;
 }
 
 export const MachineStatusCard = memo(function MachineStatusCard({
@@ -40,7 +40,8 @@ export const MachineStatusCard = memo(function MachineStatusCard({
   isDualBoiler,
   heatingStrategy,
   onSetMode,
-  onPowerOn,
+  onQuickOn,
+  onOpenStrategyModal,
 }: MachineStatusCardProps) {
   // Use specific selectors to avoid re-renders from unrelated store changes
   // Round temperature to 1 decimal to prevent flicker from tiny fluctuations
@@ -214,7 +215,8 @@ export const MachineStatusCard = memo(function MachineStatusCard({
           heatingStrategy={heatingStrategy}
           isDualBoiler={isDualBoiler}
           onSetMode={onSetMode}
-          onPowerOn={onPowerOn}
+          onQuickOn={onQuickOn}
+          onOpenStrategyModal={onOpenStrategyModal}
         />
       </div>
     </Card>
@@ -385,7 +387,8 @@ interface PowerControlsProps {
   heatingStrategy?: HeatingStrategy | null;
   isDualBoiler?: boolean;
   onSetMode: (mode: string) => void;
-  onPowerOn: () => void;
+  onQuickOn: () => void;
+  onOpenStrategyModal: () => void;
 }
 
 const PowerControls = memo(function PowerControls({
@@ -393,67 +396,158 @@ const PowerControls = memo(function PowerControls({
   heatingStrategy,
   isDualBoiler,
   onSetMode,
-  onPowerOn,
+  onQuickOn,
+  onOpenStrategyModal,
 }: PowerControlsProps) {
-  // Get the "On" button description based on heating strategy
-  const getOnDescription = () => {
-    if (
-      mode !== "on" ||
-      !isDualBoiler ||
-      heatingStrategy === null ||
-      heatingStrategy === undefined
-    ) {
-      return "Full power";
-    }
-    return STRATEGY_LABELS[heatingStrategy]?.label || "Full power";
-  };
+  const isOnActive = mode === "on";
 
-  const modes: {
-    id: MachineMode;
+  // Simple button component for non-split buttons
+  const SimpleButton = ({
+    id,
+    icon: Icon,
+    label,
+    description,
+    isActive,
+    onClick,
+  }: {
+    id: string;
     icon: typeof Power;
     label: string;
     description: string;
-  }[] = [
-    { id: "standby", icon: Power, label: "Standby", description: "Power off" },
-    { id: "on", icon: Zap, label: "On", description: getOnDescription() },
-    { id: "eco", icon: Leaf, label: "Eco", description: "Energy saving" },
-  ];
+    isActive: boolean;
+    onClick: () => void;
+  }) => (
+    <button
+      key={id}
+      onClick={onClick}
+      className={cn(
+        "group flex-1 px-5 py-4 rounded-xl font-semibold transition-colors duration-200",
+        "flex items-center justify-center gap-3",
+        isActive
+          ? "nav-active"
+          : "bg-theme-secondary text-theme-secondary hover:bg-theme-tertiary"
+      )}
+    >
+      <Icon className="w-5 h-5" />
+      <div className="flex flex-col items-start">
+        <span className="text-sm">{label}</span>
+        <span
+          className={cn(
+            "text-[10px] font-normal",
+            isActive ? "opacity-70" : "text-theme-muted"
+          )}
+        >
+          {description}
+        </span>
+      </div>
+    </button>
+  );
+
+  // Split "On" button for dual boiler
+  const SplitOnButton = () => {
+    // Get the strategy that will be used (from state or localStorage)
+    const getEffectiveStrategy = () => {
+      if (heatingStrategy !== null && heatingStrategy !== undefined) {
+        return heatingStrategy;
+      }
+      const stored = localStorage.getItem("brewos-last-heating-strategy");
+      return stored ? parseInt(stored, 10) : 1; // Default to Sequential
+    };
+
+    const effectiveStrategy = getEffectiveStrategy();
+    const StrategyIcon = STRATEGY_LABELS[effectiveStrategy]?.icon || Zap;
+    const strategyLabel =
+      STRATEGY_LABELS[effectiveStrategy]?.label || "Sequential";
+
+    return (
+      <div className="flex-1 flex rounded-xl overflow-hidden">
+        {/* Main button - 70% - Turn On with strategy */}
+        <button
+          onClick={onQuickOn}
+          className={cn(
+            "flex-[7] px-4 py-4 font-semibold transition-colors duration-200",
+            "flex items-center justify-center gap-3",
+            isOnActive
+              ? "nav-active rounded-l-xl"
+              : "bg-theme-secondary text-theme-secondary hover:bg-theme-tertiary"
+          )}
+        >
+          <StrategyIcon className="w-5 h-5" />
+          <div className="flex flex-col items-start">
+            <span className="text-sm">On</span>
+            <span
+              className={cn(
+                "text-[10px] font-normal",
+                isOnActive ? "opacity-70" : "text-theme-muted"
+              )}
+            >
+              {strategyLabel}
+            </span>
+          </div>
+        </button>
+
+        {/* Divider */}
+        <div
+          className={cn(
+            "w-px",
+            isOnActive ? "bg-white/20" : "bg-theme-tertiary"
+          )}
+        />
+
+        {/* Secondary button - 30% - Change Strategy */}
+        <button
+          onClick={onOpenStrategyModal}
+          className={cn(
+            "flex-[3] px-3 py-4 transition-colors duration-200",
+            "flex items-center justify-center",
+            isOnActive
+              ? "nav-active rounded-r-xl"
+              : "bg-theme-secondary text-theme-secondary hover:bg-theme-tertiary"
+          )}
+          title="Change heating strategy"
+        >
+          <ChevronDown className="w-5 h-5" />
+        </button>
+      </div>
+    );
+  };
 
   return (
     <div className="border-t border-theme pt-5">
       <div className="flex flex-col sm:flex-row gap-3">
-        {modes.map((m) => {
-          const Icon = m.icon;
-          const isActive = mode === m.id;
-          const handleClick = m.id === "on" ? onPowerOn : () => onSetMode(m.id);
+        {/* Standby button */}
+        <SimpleButton
+          id="standby"
+          icon={Power}
+          label="Standby"
+          description="Power off"
+          isActive={mode === "standby"}
+          onClick={() => onSetMode("standby")}
+        />
 
-          return (
-            <button
-              key={m.id}
-              onClick={handleClick}
-              className={cn(
-                "group flex-1 px-5 py-4 rounded-xl font-semibold transition-colors duration-200",
-                "flex items-center justify-center gap-3",
-                isActive
-                  ? "nav-active"
-                  : "bg-theme-secondary text-theme-secondary hover:bg-theme-tertiary"
-              )}
-            >
-              <Icon className="w-5 h-5" />
-              <div className="flex flex-col items-start">
-                <span className="text-sm">{m.label}</span>
-                <span
-                  className={cn(
-                    "text-[10px] font-normal",
-                    isActive ? "opacity-70" : "text-theme-muted"
-                  )}
-                >
-                  {m.description}
-                </span>
-              </div>
-            </button>
-          );
-        })}
+        {/* On button - split for dual boiler, simple for others */}
+        {isDualBoiler ? (
+          <SplitOnButton />
+        ) : (
+          <SimpleButton
+            id="on"
+            icon={Zap}
+            label="On"
+            description="Full power"
+            isActive={isOnActive}
+            onClick={onQuickOn}
+          />
+        )}
+
+        {/* Eco button */}
+        <SimpleButton
+          id="eco"
+          icon={Leaf}
+          label="Eco"
+          description="Energy saving"
+          isActive={mode === "eco"}
+          onClick={() => onSetMode("eco")}
+        />
       </div>
     </div>
   );
