@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Download, X, Bell } from "lucide-react";
 import { useStore } from "@/lib/store";
-import { getUpdateChannel, type UpdateChannel } from "@/lib/updates";
+import type { UpdateChannel } from "@/lib/updates";
 import {
   startFirmwareUpdateChecker,
   stopFirmwareUpdateChecker,

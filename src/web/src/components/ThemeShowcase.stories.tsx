@@ -10,9 +10,7 @@ import { useState } from "react";
 import {
   Coffee,
   Thermometer,
-  Power,
   Settings,
-  Wifi,
   Check,
   AlertTriangle,
 } from "lucide-react";

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { MachineStatusCard } from "./MachineStatusCard";
+import type { HeatingStrategy } from "@/lib/types";
 
 // We need to wrap the component since it uses store
 // For storybook, we'll create a mock version
@@ -7,7 +8,7 @@ const MockMachineStatusCard = (props: {
   mode: string;
   state: string;
   isDualBoiler: boolean;
-  heatingStrategy?: number | null;
+  heatingStrategy?: HeatingStrategy | null;
 }) => {
   return (
     <MachineStatusCard
