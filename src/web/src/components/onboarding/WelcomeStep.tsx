@@ -33,8 +33,7 @@ export function WelcomeStep({ onScanClick, onManualClick }: WelcomeStepProps) {
         <div className="relative">
           <div className="absolute inset-0 bg-accent/20 rounded-full blur-2xl animate-pulse" />
           <div className="relative">
-            <Logo size="md" className="sm:hidden" />
-            <Logo size="lg" className="hidden sm:block" />
+            <Logo className="w-16 h-16 sm:w-24 sm:h-24" />
           </div>
         </div>
       </div>
