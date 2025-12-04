@@ -95,12 +95,11 @@ export function Pair() {
           <h2 className="text-lg sm:text-xl font-bold text-theme mb-2">
             Pairing Failed
           </h2>
-          <p className="text-sm sm:text-base text-theme-secondary mb-6">{errorMessage}</p>
+          <p className="text-sm sm:text-base text-theme-secondary mb-6">
+            {errorMessage}
+          </p>
           <div className="flex gap-3 justify-center">
-            <Button
-              variant="secondary"
-              onClick={() => navigate("/machines")}
-            >
+            <Button variant="secondary" onClick={() => navigate("/machines")}>
               Go to Machines
             </Button>
             <Button onClick={() => setStatus("idle")}>Try Again</Button>
@@ -129,7 +128,9 @@ export function Pair() {
             {/* Desktop: use theme colors */}
             <Logo size="lg" className="hidden sm:flex" />
           </div>
-          <h1 className="text-xl sm:text-2xl font-bold text-theme">Pair Device</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-theme">
+            Pair Device
+          </h1>
           <p className="text-sm sm:text-base text-theme-secondary mt-2">
             Add this BrewOS device to your account
           </p>
@@ -183,7 +184,7 @@ export function Pair() {
   return (
     <div className="full-page-scroll bg-gradient-to-br from-coffee-800 to-coffee-900 min-h-screen">
       {/* Mobile: Full-screen without card */}
-      <div 
+      <div
         className="sm:hidden min-h-screen flex flex-col justify-center px-5 py-8"
         style={darkBgStyles}
       >

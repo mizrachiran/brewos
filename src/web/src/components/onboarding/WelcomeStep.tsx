@@ -68,9 +68,7 @@ export function WelcomeStep({ onScanClick, onManualClick }: WelcomeStepProps) {
             <div className="w-full border-t border-theme/20"></div>
           </div>
           <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-theme-card px-3 text-theme-muted">
-              or
-            </span>
+            <span className="bg-theme-card px-3 text-theme-muted">or</span>
           </div>
         </div>
 
