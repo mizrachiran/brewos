@@ -8,7 +8,6 @@ import { Badge } from "@/components/Badge";
 import {
   QrCode,
   Copy,
-  ExternalLink,
   Cloud,
   Wifi,
   Globe,
@@ -315,66 +314,72 @@ export function CloudSettings() {
             ) : null}
           </div>
 
-          <div className="mt-4 space-y-3">
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                className="flex-1"
-                onClick={refreshPairing}
-                disabled={loadingQR}
-              >
-                <RefreshCw
-                  className={`w-4 h-4 mr-2 ${loadingQR ? "animate-spin" : ""}`}
-                />
-                New Code
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={copyPairingUrl}
-                disabled={!pairing}
-              >
-                {copied ? (
-                  <Check className="w-4 h-4" />
-                ) : (
-                  <Copy className="w-4 h-4" />
-                )}
-              </Button>
-            </div>
-
-            {pairing && (
-              <a
-                href={pairing.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 text-sm text-accent hover:underline"
-              >
-                Open pairing link
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            )}
+          <div className="mt-4">
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={refreshPairing}
+              disabled={loadingQR}
+            >
+              <RefreshCw
+                className={`w-4 h-4 mr-2 ${loadingQR ? "animate-spin" : ""}`}
+              />
+              New Code
+            </Button>
           </div>
 
           {pairing && (
-            <div className="mt-4 pt-4 border-t border-theme">
-              <h3 className="text-sm font-medium text-theme mb-2">
-                Manual Pairing Code
-              </h3>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 bg-theme-secondary px-4 py-3 rounded-lg text-lg font-mono text-theme tracking-wider text-center">
-                  {pairing.manualCode ||
-                    `${pairing.deviceId}:${pairing.token.substring(0, 8)}...`}
-                </code>
-                <Button variant="secondary" size="sm" onClick={copyPairingCode}>
-                  {copiedCode ? (
-                    <Check className="w-4 h-4" />
-                  ) : (
-                    <Copy className="w-4 h-4" />
-                  )}
-                </Button>
+            <div className="mt-4 pt-4 border-t border-theme space-y-4">
+              <div>
+                <h3 className="text-sm font-medium text-theme mb-2">
+                  Pairing Link
+                </h3>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-theme-secondary px-3 py-2.5 rounded-lg text-xs font-mono text-theme truncate">
+                    {pairing.url}
+                  </code>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={copyPairingUrl}
+                  >
+                    {copied ? (
+                      <Check className="w-4 h-4" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-theme-muted mt-2">
+                  Share this link to let others add your machine
+                </p>
               </div>
-              <p className="text-xs text-theme-muted mt-2">
-                Enter this code at cloud.brewos.io if you can't scan the QR
-              </p>
+
+              <div>
+                <h3 className="text-sm font-medium text-theme mb-2">
+                  Manual Pairing Code
+                </h3>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-theme-secondary px-4 py-3 rounded-lg text-lg font-mono text-theme tracking-wider text-center">
+                    {pairing.manualCode ||
+                      `${pairing.deviceId}:${pairing.token.substring(0, 8)}...`}
+                  </code>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={copyPairingCode}
+                  >
+                    {copiedCode ? (
+                      <Check className="w-4 h-4" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-theme-muted mt-2">
+                  Enter this code at cloud.brewos.io if you can't scan the QR
+                </p>
+              </div>
             </div>
           )}
         </Card>

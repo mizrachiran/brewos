@@ -6,7 +6,8 @@ import { Input } from "@/components/Input";
 import { Loading } from "@/components/Loading";
 import { Logo } from "@/components/Logo";
 import { useAuth, useDevices } from "@/lib/auth";
-import { Check, X, Loader2 } from "lucide-react";
+import { useAppStore } from "@/lib/mode";
+import { Check, X, Loader2, Share2 } from "lucide-react";
 import { OnboardingLayout } from "@/components/onboarding";
 import { isDemoMode } from "@/lib/demo-mode";
 
@@ -15,7 +16,8 @@ export function Pair() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { user, loading: authLoading, handleGoogleLogin } = useAuth();
-  const { claimDevice } = useDevices();
+  const { claimDevice, fetchDevices } = useDevices();
+  const { getAccessToken } = useAppStore();
 
   // Check if we're in dev/preview mode (dev route or demo mode)
   const isDevRoute = location.pathname.startsWith("/dev/");
@@ -26,6 +28,9 @@ export function Pair() {
   const deviceId = searchParams.get("id") || (isPreviewMode ? "BREW-DEMO123" : "");
   const token = searchParams.get("token") || (isPreviewMode ? "demo-token" : "");
   const defaultName = searchParams.get("name") || "";
+  
+  // Check if this is a share link (user-to-user sharing vs ESP32 QR pairing)
+  const isShareLink = searchParams.get("share") === "true";
 
   const [deviceName, setDeviceName] = useState(defaultName);
   const [status, setStatus] = useState<
@@ -49,11 +54,47 @@ export function Pair() {
     setErrorMessage("");
 
     try {
-      const success = await claimDevice(
-        deviceId,
-        token,
-        deviceName || undefined
-      );
+      let success = false;
+      
+      if (isShareLink) {
+        // Use share-specific endpoint for user-to-user sharing
+        const accessToken = await getAccessToken();
+        if (!accessToken) {
+          setStatus("error");
+          setErrorMessage("Not authenticated. Please sign in again.");
+          return;
+        }
+        
+        const response = await fetch("/api/devices/claim-share", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ 
+            deviceId, 
+            token, 
+            name: deviceName || undefined 
+          }),
+        });
+        
+        if (response.ok) {
+          await fetchDevices();
+          success = true;
+        } else {
+          const data = await response.json();
+          setStatus("error");
+          setErrorMessage(data.error || "Failed to add device. The link may have expired.");
+          return;
+        }
+      } else {
+        // Use standard claim endpoint for ESP32 QR pairing
+        success = await claimDevice(
+          deviceId,
+          token,
+          deviceName || undefined
+        );
+      }
 
       if (success) {
         setStatus("success");
@@ -66,7 +107,7 @@ export function Pair() {
       setStatus("error");
       setErrorMessage("An error occurred while pairing.");
     }
-  }, [user, deviceId, token, deviceName, claimDevice, navigate]);
+  }, [user, deviceId, token, deviceName, claimDevice, navigate, isShareLink, getAccessToken, fetchDevices]);
 
   // Auto-pair after login (skip in preview mode)
   useEffect(() => {
@@ -88,7 +129,7 @@ export function Pair() {
             <Check className="w-6 h-6 xs:w-8 xs:h-8 text-success" />
           </div>
           <h2 className="text-base xs:text-xl font-bold text-theme mb-1 xs:mb-2">
-            Device Paired!
+            {isShareLink ? "Device Added!" : "Device Paired!"}
           </h2>
           <p className="text-xs xs:text-base text-theme-secondary">
             Redirecting to your devices...
@@ -139,11 +180,20 @@ export function Pair() {
             {/* Desktop: use theme colors */}
             <Logo size="lg" className="hidden xs:flex" />
           </div>
+          {isShareLink && (
+            <div className="flex items-center justify-center gap-2 mb-2 xs:mb-3">
+              <Share2 className="w-4 h-4 text-accent" />
+              <span className="text-xs xs:text-sm text-accent font-medium">Shared with you</span>
+            </div>
+          )}
           <h1 className="text-lg xs:text-2xl font-bold text-theme">
-            Pair Device
+            {isShareLink ? "Add Shared Device" : "Pair Device"}
           </h1>
           <p className="text-xs xs:text-base text-theme-secondary mt-1 xs:mt-2">
-            Add this BrewOS device to your account
+            {isShareLink 
+              ? "Someone shared access to their BrewOS machine with you"
+              : "Add this BrewOS device to your account"
+            }
           </p>
         </div>
 

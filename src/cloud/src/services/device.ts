@@ -1,12 +1,19 @@
-import { createHash, randomUUID, timingSafeEqual } from 'crypto';
-import { getDb, saveDatabase, Device, UserDevice, Profile, resultToObjects } from '../lib/database.js';
-import { nowUTC, futureUTC, isExpired } from '../lib/date.js';
+import { createHash, randomUUID, timingSafeEqual } from "crypto";
+import {
+  getDb,
+  saveDatabase,
+  Device,
+  UserDevice,
+  Profile,
+  resultToObjects,
+} from "../lib/database.js";
+import { nowUTC, futureUTC, isExpired } from "../lib/date.js";
 
 /**
  * Generate a hash for token comparison
  */
 function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
+  return createHash("sha256").update(token).digest("hex");
 }
 
 /**
@@ -16,7 +23,7 @@ function hashToken(token: string): string {
 export function createClaimToken(deviceId: string, token: string): void {
   const db = getDb();
   const tokenHash = hashToken(token);
-  const expiresAt = futureUTC(10, 'minutes'); // Expires in 10 minutes (UTC)
+  const expiresAt = futureUTC(10, "minutes"); // Expires in 10 minutes (UTC)
   const id = randomUUID();
 
   // Delete existing token for this device
@@ -59,8 +66,8 @@ export function verifyClaimToken(deviceId: string, token: string): boolean {
   // Constant-time comparison
   try {
     return timingSafeEqual(
-      Buffer.from(tokenHash, 'hex'),
-      Buffer.from(storedHash, 'hex')
+      Buffer.from(tokenHash, "hex"),
+      Buffer.from(storedHash, "hex")
     );
   } catch {
     return false;
@@ -84,18 +91,20 @@ export function claimDevice(
     [userId, deviceId]
   );
 
-  if (existingUserDevice.length > 0 && existingUserDevice[0].values.length > 0) {
-    throw new Error('Device is already claimed by this user');
+  if (
+    existingUserDevice.length > 0 &&
+    existingUserDevice[0].values.length > 0
+  ) {
+    throw new Error("Device is already claimed by this user");
   }
 
   const now = nowUTC();
-  const deviceName = name || 'My BrewOS';
+  const deviceName = name || "My BrewOS";
 
   // Check if device exists in devices table
-  const existingDevice = db.exec(
-    `SELECT id FROM devices WHERE id = ?`,
-    [deviceId]
-  );
+  const existingDevice = db.exec(`SELECT id FROM devices WHERE id = ?`, [
+    deviceId,
+  ]);
 
   if (existingDevice.length === 0 || existingDevice[0].values.length === 0) {
     // Insert new device (without owner_id/name - those are in user_devices now)
@@ -117,7 +126,9 @@ export function claimDevice(
   saveDatabase();
 
   // Return the device
-  const deviceResult = db.exec(`SELECT * FROM devices WHERE id = ?`, [deviceId]);
+  const deviceResult = db.exec(`SELECT * FROM devices WHERE id = ?`, [
+    deviceId,
+  ]);
   return resultToObjects<Device>(deviceResult[0])[0];
 }
 
@@ -125,7 +136,9 @@ export function claimDevice(
  * Get devices for a user with per-user names
  * Returns devices joined with user_devices to get user-specific names
  */
-export function getUserDevices(userId: string): Array<Device & { user_name: string; user_claimed_at: string }> {
+export function getUserDevices(
+  userId: string
+): Array<Device & { user_name: string; user_claimed_at: string }> {
   const db = getDb();
   const result = db.exec(
     `SELECT 
@@ -143,16 +156,21 @@ export function getUserDevices(userId: string): Array<Device & { user_name: stri
     return [];
   }
 
-  return resultToObjects<Device & { user_name: string; user_claimed_at: string }>(result[0]);
+  return resultToObjects<
+    Device & { user_name: string; user_claimed_at: string }
+  >(result[0]);
 }
 
 /**
  * Get a single device by ID
  * Optionally returns with user-specific name if userId is provided
  */
-export function getDevice(deviceId: string, userId?: string): Device | (Device & { user_name?: string }) | null {
+export function getDevice(
+  deviceId: string,
+  userId?: string
+): Device | (Device & { user_name?: string }) | null {
   const db = getDb();
-  
+
   if (userId) {
     // Return device with user-specific name
     const result = db.exec(
@@ -229,13 +247,13 @@ export function removeDevice(deviceId: string, userId: string): void {
   const db = getDb();
 
   // Remove user-device association
-  db.run(
-    `DELETE FROM user_devices WHERE user_id = ? AND device_id = ?`,
-    [userId, deviceId]
-  );
+  db.run(`DELETE FROM user_devices WHERE user_id = ? AND device_id = ?`, [
+    userId,
+    deviceId,
+  ]);
 
   if (db.getRowsModified() === 0) {
-    throw new Error('Failed to remove device');
+    throw new Error("Failed to remove device");
   }
 
   // Optionally: if no users have this device anymore, we could delete the device
@@ -263,7 +281,7 @@ export function renameDevice(
   );
 
   if (db.getRowsModified() === 0) {
-    throw new Error('Failed to rename device');
+    throw new Error("Failed to rename device");
   }
 
   saveDatabase();
@@ -283,7 +301,7 @@ export function updateDeviceMachineInfo(
 
   // Check if user owns the device
   if (!userOwnsDevice(userId, deviceId)) {
-    throw new Error('User does not own this device');
+    throw new Error("User does not own this device");
   }
 
   // Update per-user name if provided
@@ -295,22 +313,22 @@ export function updateDeviceMachineInfo(
   }
 
   // Update shared device metadata (brand, model) if provided
-  const deviceUpdates: string[] = ['updated_at = ?'];
+  const deviceUpdates: string[] = ["updated_at = ?"];
   const deviceValues: unknown[] = [now];
 
   if (data.brand) {
-    deviceUpdates.push('machine_brand = ?');
+    deviceUpdates.push("machine_brand = ?");
     deviceValues.push(data.brand);
   }
   if (data.model) {
-    deviceUpdates.push('machine_model = ?');
+    deviceUpdates.push("machine_model = ?");
     deviceValues.push(data.model);
   }
 
   if (deviceUpdates.length > 1) {
     deviceValues.push(deviceId);
     db.run(
-      `UPDATE devices SET ${deviceUpdates.join(', ')} WHERE id = ?`,
+      `UPDATE devices SET ${deviceUpdates.join(", ")} WHERE id = ?`,
       deviceValues
     );
   }
@@ -393,27 +411,27 @@ export function revokeUserAccess(
 
   // Verify the user doing the removal has access to the device
   if (!userOwnsDevice(userIdRemoving, deviceId)) {
-    throw new Error('You do not have access to this device');
+    throw new Error("You do not have access to this device");
   }
 
   // Prevent users from removing themselves (they should use removeDevice instead)
   if (userIdToRemove === userIdRemoving) {
-    throw new Error('Cannot remove yourself. Use remove device instead.');
+    throw new Error("Cannot remove yourself. Use remove device instead.");
   }
 
   // Verify the user to remove actually has access
   if (!userOwnsDevice(userIdToRemove, deviceId)) {
-    throw new Error('User does not have access to this device');
+    throw new Error("User does not have access to this device");
   }
 
   // Remove the user-device association
-  db.run(
-    `DELETE FROM user_devices WHERE user_id = ? AND device_id = ?`,
-    [userIdToRemove, deviceId]
-  );
+  db.run(`DELETE FROM user_devices WHERE user_id = ? AND device_id = ?`, [
+    userIdToRemove,
+    deviceId,
+  ]);
 
   if (db.getRowsModified() === 0) {
-    throw new Error('Failed to revoke user access');
+    throw new Error("Failed to revoke user access");
   }
 
   saveDatabase();
@@ -425,13 +443,150 @@ export function revokeUserAccess(
 export function cleanupExpiredTokens(): number {
   const db = getDb();
   db.run(`DELETE FROM device_claim_tokens WHERE expires_at < datetime('now')`);
-  const deleted = db.getRowsModified();
-  
+  const claimDeleted = db.getRowsModified();
+
+  // Also cleanup expired share tokens
+  db.run(`DELETE FROM device_share_tokens WHERE expires_at < datetime('now')`);
+  const shareDeleted = db.getRowsModified();
+
+  const deleted = claimDeleted + shareDeleted;
   if (deleted > 0) {
     saveDatabase();
   }
-  
+
   return deleted;
+}
+
+/**
+ * Generate a share token for a device
+ * Used by device owners to share access with others
+ */
+export function createShareToken(
+  deviceId: string,
+  userId: string
+): { token: string; expiresAt: string } {
+  const db = getDb();
+
+  // Verify user has access to the device
+  if (!userOwnsDevice(userId, deviceId)) {
+    throw new Error("You do not have access to this device");
+  }
+
+  // Generate a random token
+  const token = randomUUID().replace(/-/g, "").substring(0, 16).toUpperCase();
+  const tokenHash = hashToken(token);
+  const expiresAt = futureUTC(24, "hours"); // Share links expire in 24 hours
+  const id = randomUUID();
+
+  // Delete any existing share tokens for this device from this user
+  db.run(
+    `DELETE FROM device_share_tokens WHERE device_id = ? AND created_by = ?`,
+    [deviceId, userId]
+  );
+
+  // Insert new share token
+  db.run(
+    `INSERT INTO device_share_tokens (id, device_id, created_by, token_hash, expires_at) VALUES (?, ?, ?, ?, ?)`,
+    [id, deviceId, userId, tokenHash, expiresAt]
+  );
+
+  saveDatabase();
+
+  return { token, expiresAt };
+}
+
+/**
+ * Verify a share token is valid
+ */
+export function verifyShareToken(deviceId: string, token: string): boolean {
+  const db = getDb();
+  const tokenHash = hashToken(token);
+
+  const result = db.exec(
+    `SELECT token_hash, expires_at FROM device_share_tokens WHERE device_id = ?`,
+    [deviceId]
+  );
+
+  if (result.length === 0 || result[0].values.length === 0) {
+    return false;
+  }
+
+  // Check all tokens (there might be multiple from different users)
+  for (const row of result[0].values) {
+    const storedHash = row[0] as string;
+    const expiresAt = row[1] as string;
+
+    // Check expiration
+    if (isExpired(expiresAt)) {
+      continue;
+    }
+
+    // Constant-time comparison
+    try {
+      if (
+        timingSafeEqual(
+          Buffer.from(tokenHash, "hex"),
+          Buffer.from(storedHash, "hex")
+        )
+      ) {
+        return true;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Claim a device using a share token (user-generated sharing link)
+ */
+export function claimDeviceWithShareToken(
+  deviceId: string,
+  token: string,
+  userId: string,
+  name?: string
+): Device {
+  // First verify the share token
+  if (!verifyShareToken(deviceId, token)) {
+    throw new Error("Invalid or expired share link");
+  }
+
+  const db = getDb();
+
+  // Check if user already has this device
+  const existingUserDevice = db.exec(
+    `SELECT user_id FROM user_devices WHERE user_id = ? AND device_id = ?`,
+    [userId, deviceId]
+  );
+
+  if (
+    existingUserDevice.length > 0 &&
+    existingUserDevice[0].values.length > 0
+  ) {
+    throw new Error("Device is already in your account");
+  }
+
+  const now = nowUTC();
+  const deviceName = name || "My BrewOS";
+
+  // Add user-device association
+  db.run(
+    `INSERT INTO user_devices (user_id, device_id, name, claimed_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    [userId, deviceId, deviceName, now, now, now]
+  );
+
+  // Note: We don't delete the share token after use - it can be used by multiple people
+  // until it expires (24 hours)
+
+  saveDatabase();
+
+  // Return the device
+  const deviceResult = db.exec(`SELECT * FROM devices WHERE id = ?`, [
+    deviceId,
+  ]);
+  return resultToObjects<Device>(deviceResult[0])[0];
 }
 
 /**
