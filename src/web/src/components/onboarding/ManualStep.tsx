@@ -24,26 +24,26 @@ export function ManualStep({
   const isValidCode = claimCode && claimCode.length >= 8;
   
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="py-4 sm:py-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header */}
-      <div className="text-center mb-8">
-        <div className="w-16 h-16 bg-accent/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <KeyRound className="w-8 h-8 text-accent" />
+      <div className="text-center mb-6 sm:mb-8">
+        <div className="w-12 h-12 sm:w-14 sm:h-14 bg-accent/10 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4">
+          <KeyRound className="w-6 h-6 sm:w-7 sm:h-7 text-accent" />
         </div>
-        <h2 className="text-3xl font-bold text-theme mb-2">
+        <h2 className="text-2xl sm:text-3xl font-bold text-theme mb-2">
           Enter Pairing Code
         </h2>
-        <p className="text-theme-muted text-base max-w-md mx-auto">
+        <p className="text-theme-muted text-sm sm:text-base max-w-md mx-auto">
           Find the code on your BrewOS display under <span className="font-semibold text-theme">System → Cloud Access</span>
         </p>
       </div>
 
       {/* Info box */}
-      <div className="mb-6 p-4 bg-accent/5 border border-accent/20 rounded-xl">
-        <div className="flex items-start gap-3">
-          <Info className="w-5 h-5 text-accent flex-shrink-0 mt-0.5" />
+      <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-accent/5 border border-accent/20 rounded-xl">
+        <div className="flex items-start gap-2 sm:gap-3">
+          <Info className="w-4 h-4 sm:w-5 sm:h-5 text-accent flex-shrink-0 mt-0.5" />
           <div className="flex-1">
-            <p className="text-sm font-medium text-theme mb-1">Where to find your code</p>
+            <p className="text-xs sm:text-sm font-medium text-theme mb-1">Where to find your code</p>
             <p className="text-xs text-theme-muted leading-relaxed">
               Navigate to your machine's display, go to <span className="font-mono text-accent">System</span> → <span className="font-mono text-accent">Cloud Access</span> to find your 8-character pairing code.
             </p>
@@ -52,7 +52,7 @@ export function ManualStep({
       </div>
 
       {/* Form */}
-      <div className="space-y-5">
+      <div className="space-y-4 sm:space-y-5">
         <div>
           <Input
             label="Pairing Code"
@@ -73,7 +73,7 @@ export function ManualStep({
           )}
         </div>
 
-        {/* Error message - compact */}
+        {/* Error message */}
         {error && (
           <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 animate-in fade-in slide-in-from-top-2">
             <div className="flex items-center gap-2">
@@ -104,4 +104,3 @@ export function ManualStep({
     </div>
   );
 }
-

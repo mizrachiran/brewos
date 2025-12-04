@@ -8,6 +8,18 @@ import { Loading } from "@/components/Loading";
 import { Logo } from "@/components/Logo";
 import { useAuth, useDevices } from "@/lib/auth";
 import { Check, X, Loader2 } from "lucide-react";
+import React from "react";
+
+// CSS variables for dark background (mobile full-screen)
+const darkBgStyles = {
+  "--text": "#faf8f5",
+  "--text-secondary": "#e8e0d5",
+  "--text-muted": "#d4c8b8",
+  "--card-bg": "rgba(255,255,255,0.05)",
+  "--bg-secondary": "rgba(255,255,255,0.08)",
+  "--bg-tertiary": "rgba(255,255,255,0.05)",
+  "--border": "rgba(255,255,255,0.12)",
+} as React.CSSProperties;
 
 export function Pair() {
   const navigate = useNavigate();
@@ -68,103 +80,135 @@ export function Pair() {
     return <Loading />;
   }
 
-  return (
-    <div className="full-page-scroll bg-gradient-to-br from-coffee-800 to-coffee-900 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        {status === "success" ? (
-            <div className="text-center py-8">
-              <div className="w-16 h-16 bg-success-soft rounded-full flex items-center justify-center mx-auto mb-4">
-                <Check className="w-8 h-8 text-success" />
-              </div>
-              <h2 className="text-xl font-bold text-theme mb-2">
-                Device Paired!
-              </h2>
-              <p className="text-theme-secondary">
-                Redirecting to your devices...
-              </p>
-            </div>
-          ) : status === "error" ? (
-            <div className="text-center py-8">
-              <div className="w-16 h-16 bg-error-soft rounded-full flex items-center justify-center mx-auto mb-4">
-                <X className="w-8 h-8 text-error" />
-              </div>
-              <h2 className="text-xl font-bold text-theme mb-2">
-                Pairing Failed
-              </h2>
-              <p className="text-theme-secondary mb-6">{errorMessage}</p>
-              <div className="flex gap-3 justify-center">
-                <Button
-                  variant="secondary"
-                  onClick={() => navigate("/machines")}
-                >
-                  Go to Machines
-                </Button>
-                <Button onClick={() => setStatus("idle")}>Try Again</Button>
-              </div>
-            </div>
-          ) : status === "claiming" ? (
-            <div className="text-center py-8">
-              <Loader2 className="w-8 h-8 animate-spin text-accent mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-theme mb-2">
-                Adding Device...
-              </h2>
-            </div>
-          ) : (
-          <>
-            <div className="text-center mb-6">
-              <div className="flex justify-center mb-4">
-                <Logo size="lg" />
-              </div>
-              <h1 className="text-2xl font-bold text-theme">Pair Device</h1>
-                <p className="text-theme-secondary mt-2">
-                  Add this BrewOS device to your account
-                </p>
-              </div>
+  const renderContent = () => {
+    if (status === "success") {
+      return (
+        <div className="text-center py-6 sm:py-8">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-success-soft rounded-full flex items-center justify-center mx-auto mb-4">
+            <Check className="w-7 h-7 sm:w-8 sm:h-8 text-success" />
+          </div>
+          <h2 className="text-lg sm:text-xl font-bold text-theme mb-2">
+            Device Paired!
+          </h2>
+          <p className="text-sm sm:text-base text-theme-secondary">
+            Redirecting to your devices...
+          </p>
+        </div>
+      );
+    }
 
-              <div className="bg-theme-tertiary rounded-xl p-4 mb-6">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-theme-secondary">Machine ID</span>
-                  <span className="font-mono text-theme">{deviceId}</span>
-                </div>
-              </div>
+    if (status === "error") {
+      return (
+        <div className="text-center py-6 sm:py-8">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-error-soft rounded-full flex items-center justify-center mx-auto mb-4">
+            <X className="w-7 h-7 sm:w-8 sm:h-8 text-error" />
+          </div>
+          <h2 className="text-lg sm:text-xl font-bold text-theme mb-2">
+            Pairing Failed
+          </h2>
+          <p className="text-sm sm:text-base text-theme-secondary mb-6">{errorMessage}</p>
+          <div className="flex gap-3 justify-center">
+            <Button
+              variant="secondary"
+              onClick={() => navigate("/machines")}
+            >
+              Go to Machines
+            </Button>
+            <Button onClick={() => setStatus("idle")}>Try Again</Button>
+          </div>
+        </div>
+      );
+    }
 
-              <Input
-                label="Device Name"
-                placeholder="Kitchen Espresso"
-                value={deviceName}
-                onChange={(e) => setDeviceName(e.target.value)}
-                className="mb-6"
+    if (status === "claiming") {
+      return (
+        <div className="text-center py-6 sm:py-8">
+          <Loader2 className="w-7 h-7 sm:w-8 sm:h-8 animate-spin text-accent mx-auto mb-4" />
+          <h2 className="text-lg sm:text-xl font-bold text-theme mb-2">
+            Adding Device...
+          </h2>
+        </div>
+      );
+    }
+
+    return (
+      <div className="py-4 sm:py-6">
+        <div className="text-center mb-6">
+          <div className="flex justify-center mb-4">
+            {/* Mobile: force light text for dark background */}
+            <Logo size="lg" forceLight className="sm:hidden" />
+            {/* Desktop: use theme colors */}
+            <Logo size="lg" className="hidden sm:flex" />
+          </div>
+          <h1 className="text-xl sm:text-2xl font-bold text-theme">Pair Device</h1>
+          <p className="text-sm sm:text-base text-theme-secondary mt-2">
+            Add this BrewOS device to your account
+          </p>
+        </div>
+
+        <div className="bg-theme-tertiary rounded-xl p-3 sm:p-4 mb-6">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-theme-secondary">Machine ID</span>
+            <span className="font-mono text-theme">{deviceId}</span>
+          </div>
+        </div>
+
+        <Input
+          label="Device Name"
+          placeholder="Kitchen Espresso"
+          value={deviceName}
+          onChange={(e) => setDeviceName(e.target.value)}
+          className="mb-6"
+        />
+
+        {user ? (
+          <Button className="w-full" onClick={handlePair}>
+            Add to My Machines
+          </Button>
+        ) : (
+          <div className="space-y-4">
+            <p className="text-xs sm:text-sm text-theme-secondary text-center">
+              Sign in to add this device to your account
+            </p>
+            <div className="flex justify-center">
+              <GoogleLogin
+                onSuccess={(response: CredentialResponse) => {
+                  if (response.credential) {
+                    handleGoogleLogin(response.credential);
+                  }
+                }}
+                onError={() => {
+                  setErrorMessage("Sign in failed");
+                }}
+                theme="outline"
+                size="large"
+                text="continue_with"
               />
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
-              {user ? (
-                <Button className="w-full" onClick={handlePair}>
-                  Add to My Machines
-                </Button>
-              ) : (
-                <div className="space-y-4">
-                  <p className="text-sm text-theme-secondary text-center">
-                    Sign in to add this device to your account
-                  </p>
-                  <div className="flex justify-center">
-                    <GoogleLogin
-                      onSuccess={(response: CredentialResponse) => {
-                        if (response.credential) {
-                          handleGoogleLogin(response.credential);
-                        }
-                      }}
-                      onError={() => {
-                        setErrorMessage("Sign in failed");
-                      }}
-                      theme="outline"
-                      size="large"
-                      text="continue_with"
-                    />
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-      </Card>
+  return (
+    <div className="full-page-scroll bg-gradient-to-br from-coffee-800 to-coffee-900 min-h-screen">
+      {/* Mobile: Full-screen without card */}
+      <div 
+        className="sm:hidden min-h-screen flex flex-col justify-center px-5 py-8"
+        style={darkBgStyles}
+      >
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {renderContent()}
+        </div>
+      </div>
+
+      {/* Desktop: Card layout with fixed top position */}
+      <div className="hidden sm:flex min-h-screen justify-center items-center p-4">
+        <Card className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-300">
+          {renderContent()}
+        </Card>
+      </div>
     </div>
   );
 }

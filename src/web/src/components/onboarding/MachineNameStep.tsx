@@ -18,20 +18,20 @@ export function MachineNameStep({
   loading = false,
 }: MachineNameStepProps) {
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="py-4 sm:py-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header */}
-      <div className="text-center mb-8">
-        <div className="w-16 h-16 bg-accent/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <Coffee className="w-8 h-8 text-accent" />
+      <div className="text-center mb-6 sm:mb-8">
+        <div className="w-12 h-12 sm:w-14 sm:h-14 bg-accent/10 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4">
+          <Coffee className="w-6 h-6 sm:w-7 sm:h-7 text-accent" />
         </div>
-        <h2 className="text-3xl font-bold text-theme mb-2">Name Your Machine</h2>
-        <p className="text-theme-muted text-base">
+        <h2 className="text-2xl sm:text-3xl font-bold text-theme mb-2">Name Your Machine</h2>
+        <p className="text-theme-muted text-sm sm:text-base max-w-md mx-auto">
           Give your machine a friendly name to easily identify it
         </p>
       </div>
 
       {/* Form */}
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         <Input
           label="Machine Name"
           placeholder="e.g., Kitchen Espresso"
@@ -59,4 +59,3 @@ export function MachineNameStep({
     </div>
   );
 }
-

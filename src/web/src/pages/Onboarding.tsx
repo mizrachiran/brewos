@@ -112,88 +112,100 @@ export function Onboarding() {
     setClaiming(false);
   };
 
+  const renderStepContent = () => {
+    switch (step) {
+      case "welcome":
+        return (
+          <WelcomeStep
+            onScanClick={() => setStep("scan")}
+            onManualClick={() => setStep("manual")}
+          />
+        );
+      case "scan":
+        return (
+          <ScanStep
+            onScan={(result) => {
+              setClaimCode(result);
+              setError("");
+            }}
+            onScanError={(err) => {
+              setError(err || "Failed to scan QR code");
+            }}
+            error={error}
+            onBack={() => {
+              setStep("welcome");
+              setError("");
+              setClaimCode("");
+            }}
+            onValidate={handleValidate}
+            disabled={!claimCode || validating}
+            loading={validating}
+          />
+        );
+      case "manual":
+        return (
+          <ManualStep
+            claimCode={claimCode}
+            onClaimCodeChange={setClaimCode}
+            error={error}
+            onBack={() => {
+              setStep("welcome");
+              setError("");
+            }}
+            onValidate={handleValidate}
+            disabled={!claimCode || validating}
+            loading={validating}
+          />
+        );
+      case "name":
+        return (
+          <MachineNameStep
+            deviceName={deviceName}
+            onDeviceNameChange={setDeviceName}
+            onBack={() => {
+              setStep(previousStep);
+              setError("");
+            }}
+            onContinue={handleClaim}
+            loading={claiming}
+          />
+        );
+      case "success":
+        return <SuccessStep deviceName={deviceName} />;
+    }
+  };
+
+  // CSS variables for dark background (mobile full-screen)
+  const darkBgStyles = {
+    "--text": "#faf8f5",
+    "--text-secondary": "#e8e0d5",
+    "--text-muted": "#d4c8b8",
+    "--card-bg": "rgba(255,255,255,0.05)",
+    "--bg-secondary": "rgba(255,255,255,0.08)",
+    "--bg-tertiary": "rgba(255,255,255,0.05)",
+    "--border": "rgba(255,255,255,0.12)",
+  } as React.CSSProperties;
+
   return (
-    <div
-      className={`full-page-scroll bg-gradient-to-br from-coffee-800 via-coffee-900 to-coffee-950 p-4 transition-all duration-300 ${
-        step === "welcome"
-          ? "flex flex-col items-center justify-center"
-          : "flex justify-center"
-      }`}
-    >
-      {step === "welcome" ? (
+    <div className="full-page-scroll bg-gradient-to-br from-coffee-800 via-coffee-900 to-coffee-950 min-h-screen">
+      {/* Mobile: Full-screen without card */}
+      <div 
+        className="sm:hidden min-h-screen flex flex-col justify-center px-5 py-8"
+        style={darkBgStyles}
+      >
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {renderStepContent()}
+        </div>
+      </div>
+
+      {/* Desktop: Card layout with fixed top position */}
+      <div className="hidden sm:flex min-h-screen justify-center p-4 pt-16">
         <div className="w-full max-w-lg">
-          <Card className="text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <WelcomeStep
-              onScanClick={() => setStep("scan")}
-              onManualClick={() => setStep("manual")}
-            />
+          <Card className="animate-in fade-in slide-in-from-bottom-4 duration-300">
+            {renderStepContent()}
           </Card>
         </div>
-      ) : (
-        <div className={`w-full max-w-lg transition-all duration-300 pt-16`}>
-          {step === "scan" && (
-            <Card className="animate-in fade-in slide-in-from-right-4 duration-300">
-              <ScanStep
-                onScan={(result) => {
-                  setClaimCode(result);
-                  setError(""); // Clear any previous errors
-                }}
-                onScanError={(err) => {
-                  setError(err || "Failed to scan QR code");
-                }}
-                error={error}
-                onBack={() => {
-                  setStep("welcome");
-                  setError("");
-                  setClaimCode("");
-                }}
-                onValidate={handleValidate}
-                disabled={!claimCode || validating}
-                loading={validating}
-              />
-            </Card>
-          )}
-
-          {step === "manual" && (
-            <Card className="animate-in fade-in slide-in-from-right-4 duration-300">
-              <ManualStep
-                claimCode={claimCode}
-                onClaimCodeChange={setClaimCode}
-                error={error}
-                onBack={() => {
-                  setStep("welcome");
-                  setError("");
-                }}
-                onValidate={handleValidate}
-                disabled={!claimCode || validating}
-                loading={validating}
-              />
-            </Card>
-          )}
-
-          {step === "name" && (
-            <Card className="animate-in fade-in slide-in-from-right-4 duration-300">
-              <MachineNameStep
-                deviceName={deviceName}
-                onDeviceNameChange={setDeviceName}
-                onBack={() => {
-                  setStep(previousStep);
-                  setError("");
-                }}
-                onContinue={handleClaim}
-                loading={claiming}
-              />
-            </Card>
-          )}
-
-          {step === "success" && (
-            <Card className="animate-in fade-in zoom-in-95 duration-500">
-              <SuccessStep deviceName={deviceName} />
-            </Card>
-          )}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
-

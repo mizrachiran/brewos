@@ -33,7 +33,10 @@ export function WelcomeStep({ onScanClick, onManualClick }: WelcomeStepProps) {
         <div className="relative">
           <div className="absolute inset-0 bg-accent/20 rounded-full blur-2xl animate-pulse" />
           <div className="relative">
-            <Logo className="w-16 h-16 sm:w-24 sm:h-24" />
+            {/* Mobile: force light text for dark background */}
+            <Logo size="xl" forceLight className="sm:hidden" />
+            {/* Desktop: use theme colors */}
+            <Logo size="xl" className="hidden sm:flex" />
           </div>
         </div>
       </div>
@@ -65,7 +68,9 @@ export function WelcomeStep({ onScanClick, onManualClick }: WelcomeStepProps) {
             <div className="w-full border-t border-theme/20"></div>
           </div>
           <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-theme-card px-3 text-theme-muted">or</span>
+            <span className="bg-coffee-900 sm:bg-theme-card px-3 text-theme-muted">
+              or
+            </span>
           </div>
         </div>
 

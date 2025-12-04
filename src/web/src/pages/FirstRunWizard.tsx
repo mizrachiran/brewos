@@ -23,6 +23,7 @@ import {
   type WizardStep,
   type PairingData,
 } from "@/components/wizard";
+import React from "react";
 
 const STEPS: WizardStep[] = [
   { id: "welcome", title: "Welcome", icon: <Coffee className="w-5 h-5" /> },
@@ -35,6 +36,17 @@ const STEPS: WizardStep[] = [
   { id: "cloud", title: "Cloud Access", icon: <Cloud className="w-5 h-5" /> },
   { id: "done", title: "All Set!", icon: <Check className="w-5 h-5" /> },
 ];
+
+// CSS variables for dark background (mobile full-screen)
+const darkBgStyles = {
+  "--text": "#faf8f5",
+  "--text-secondary": "#e8e0d5",
+  "--text-muted": "#d4c8b8",
+  "--card-bg": "rgba(255,255,255,0.05)",
+  "--bg-secondary": "rgba(255,255,255,0.08)",
+  "--bg-tertiary": "rgba(255,255,255,0.05)",
+  "--border": "rgba(255,255,255,0.12)",
+} as React.CSSProperties;
 
 interface FirstRunWizardProps {
   onComplete: () => void;
@@ -352,45 +364,66 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
 
   const isWelcomeStep = STEPS[currentStep].id === "welcome";
 
+  const renderNavigation = () => (
+    <div className="flex justify-between pt-4 sm:pt-6 border-t border-theme mt-4 sm:mt-6">
+      {currentStep > 0 && STEPS[currentStep].id !== "done" ? (
+        <Button variant="ghost" onClick={prevStep}>
+          <ArrowLeft className="w-4 h-4" />
+          Back
+        </Button>
+      ) : (
+        <div />
+      )}
+
+      <Button onClick={nextStep} loading={saving}>
+        {getButtonLabel()}
+      </Button>
+    </div>
+  );
+
   return (
-    <div
-      className={`full-page-scroll bg-gradient-to-br from-coffee-800 via-coffee-900 to-coffee-950 p-4 transition-all duration-300 ${
-        isWelcomeStep
-          ? "flex items-center justify-center"
-          : "flex justify-center"
-      }`}
-    >
-      <div
-        className={`w-full max-w-xl transition-all duration-300 ${
-          !isWelcomeStep ? "pt-16" : ""
-        }`}
+    <div className="full-page-scroll bg-gradient-to-br from-coffee-800 via-coffee-900 to-coffee-950 min-h-screen">
+      {/* Mobile: Full-screen without card */}
+      <div 
+        className="sm:hidden min-h-screen flex flex-col px-5 py-6"
+        style={darkBgStyles}
       >
         <ProgressIndicator steps={STEPS} currentStep={currentStep} />
-
-        <Card
-          className={
-            !isWelcomeStep
-              ? "animate-in fade-in slide-in-from-right-4 duration-300"
-              : ""
-          }
-        >
-          {renderStepContent()}
-
-          <div className="flex justify-between pt-6 border-t border-theme mt-6">
-            {currentStep > 0 && STEPS[currentStep].id !== "done" ? (
-              <Button variant="ghost" onClick={prevStep}>
-                <ArrowLeft className="w-4 h-4" />
-                Back
-              </Button>
-            ) : (
-              <div />
-            )}
-
-            <Button onClick={nextStep} loading={saving}>
-              {getButtonLabel()}
-            </Button>
+        
+        <div className={`flex-1 flex flex-col ${isWelcomeStep ? 'justify-center' : 'pt-4'}`}>
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {renderStepContent()}
+            {renderNavigation()}
           </div>
-        </Card>
+        </div>
+      </div>
+
+      {/* Desktop: Card layout with fixed top position */}
+      <div
+        className={`hidden sm:flex min-h-screen p-4 transition-all duration-300 ${
+          isWelcomeStep
+            ? "items-center justify-center"
+            : "justify-center"
+        }`}
+      >
+        <div
+          className={`w-full max-w-xl transition-all duration-300 ${
+            !isWelcomeStep ? "pt-16" : ""
+          }`}
+        >
+          <ProgressIndicator steps={STEPS} currentStep={currentStep} />
+
+          <Card
+            className={
+              !isWelcomeStep
+                ? "animate-in fade-in slide-in-from-right-4 duration-300"
+                : ""
+            }
+          >
+            {renderStepContent()}
+            {renderNavigation()}
+          </Card>
+        </div>
       </div>
     </div>
   );
