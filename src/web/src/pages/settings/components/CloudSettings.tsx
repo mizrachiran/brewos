@@ -117,14 +117,17 @@ export function CloudSettings() {
   }, [pairing?.expiresIn]);
 
   useEffect(() => {
-    if (timeLeft <= 0) return;
+    if (!pairing) return;
 
     const interval = setInterval(() => {
-      setTimeLeft((prev) => Math.max(0, prev - 1));
+      setTimeLeft((prev) => {
+        if (prev <= 0) return 0;
+        return prev - 1;
+      });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [timeLeft]);
+  }, [pairing]);
 
   // Handle environment preset selection
   const handleEnvChange = (env: CloudEnvironment) => {
