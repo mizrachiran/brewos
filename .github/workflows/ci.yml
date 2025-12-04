@@ -1,0 +1,227 @@
+# Unified CI workflow for PRs
+# This workflow runs on all PRs and is the single required status check
+name: CI
+
+on:
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+# Cancel in-progress runs for the same PR
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ==========================================================================
+  # Detect what changed to conditionally run jobs
+  # ==========================================================================
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+      cloud: ${{ steps.filter.outputs.cloud }}
+      pico: ${{ steps.filter.outputs.pico }}
+      esp32: ${{ steps.filter.outputs.esp32 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            web:
+              - 'src/web/**'
+            cloud:
+              - 'src/cloud/**'
+            pico:
+              - 'src/pico/**'
+              - 'src/shared/**'
+            esp32:
+              - 'src/esp32/**'
+              - 'src/web/**'
+
+  # ==========================================================================
+  # Web UI - Lint, Type Check, Build
+  # ==========================================================================
+  web:
+    name: Web UI
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: src/web/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: src/web
+        run: npm ci
+
+      - name: Lint
+        working-directory: src/web
+        run: npm run lint
+
+      - name: Type Check
+        working-directory: src/web
+        run: npx tsc --noEmit
+
+      - name: Build
+        working-directory: src/web
+        run: npm run build
+
+  # ==========================================================================
+  # Cloud Service - Lint, Type Check, Build
+  # ==========================================================================
+  cloud:
+    name: Cloud Service
+    needs: changes
+    if: needs.changes.outputs.cloud == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: src/cloud/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: src/cloud
+        run: npm ci
+
+      - name: Lint
+        working-directory: src/cloud
+        run: npm run lint
+
+      - name: Type Check
+        working-directory: src/cloud
+        run: npx tsc --noEmit
+
+      - name: Build
+        working-directory: src/cloud
+        run: npm run build
+
+  # ==========================================================================
+  # Pico Firmware - Unit Tests + Build
+  # ==========================================================================
+  pico:
+    name: Pico Firmware
+    needs: changes
+    if: needs.changes.outputs.pico == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential cmake
+
+      - name: Run Unit Tests
+        run: |
+          cd src/pico/test
+          mkdir -p build && cd build
+          cmake ..
+          make -j$(nproc)
+          ./brewos_tests
+
+      - name: Clone Pico SDK
+        run: |
+          git clone --depth 1 https://github.com/raspberrypi/pico-sdk.git ~/pico-sdk
+          cd ~/pico-sdk && git submodule update --init
+
+      - name: Build Firmware
+        env:
+          PICO_SDK_PATH: ~/pico-sdk
+        run: |
+          cd src/pico
+          mkdir build && cd build
+          cmake -DBUILD_ALL_MACHINES=ON ..
+          make -j$(nproc)
+          
+      - name: Verify Output
+        run: |
+          cd src/pico/build
+          test -f brewos_dual_boiler.uf2
+          test -f brewos_single_boiler.uf2
+          test -f brewos_heat_exchanger.uf2
+          echo "✓ All firmware variants built"
+
+  # ==========================================================================
+  # ESP32 Firmware - Build
+  # ==========================================================================
+  esp32:
+    name: ESP32 Firmware
+    needs: changes
+    if: needs.changes.outputs.esp32 == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: src/web/package-lock.json
+
+      - name: Build Web UI for ESP32
+        run: |
+          cd src/web
+          npm ci
+          npm run build:esp32
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Build ESP32
+        run: |
+          cd src/esp32
+          pio run -e esp32s3
+
+      - name: Build LittleFS
+        run: |
+          cd src/esp32
+          pio run -e esp32s3 -t buildfs
+
+  # ==========================================================================
+  # Final Status Check (always runs, reports overall status)
+  # ==========================================================================
+  ci-status:
+    name: CI Status
+    runs-on: ubuntu-latest
+    needs: [changes, web, cloud, pico, esp32]
+    if: always()
+    steps:
+      - name: Check Results
+        run: |
+          echo "=== CI Results ==="
+          echo "Web:   ${{ needs.web.result || 'skipped' }}"
+          echo "Cloud: ${{ needs.cloud.result || 'skipped' }}"
+          echo "Pico:  ${{ needs.pico.result || 'skipped' }}"
+          echo "ESP32: ${{ needs.esp32.result || 'skipped' }}"
+          
+          # Fail if any required job failed
+          if [[ "${{ needs.web.result }}" == "failure" ]] || \
+             [[ "${{ needs.cloud.result }}" == "failure" ]] || \
+             [[ "${{ needs.pico.result }}" == "failure" ]] || \
+             [[ "${{ needs.esp32.result }}" == "failure" ]]; then
+            echo "❌ CI Failed"
+            exit 1
+          fi
+          
+          echo "✅ CI Passed"
+
