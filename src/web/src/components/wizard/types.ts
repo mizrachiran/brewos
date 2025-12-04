@@ -1,9 +1,9 @@
-import { ReactNode } from "react";
+import { ReactElement } from "react";
 
 export interface WizardStep {
   id: string;
   title: string;
-  icon: ReactNode;
+  icon: ReactElement;
 }
 
 export interface PairingData {

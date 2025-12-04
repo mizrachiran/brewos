@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement } from "react";
+import { cloneElement } from "react";
 import { Check } from "lucide-react";
 import type { WizardStep } from "./types";
 
@@ -26,10 +26,8 @@ export function ProgressIndicator({ steps, currentStep }: ProgressIndicatorProps
             >
               {index < currentStep ? (
                 <Check className={iconClassName} />
-              ) : isValidElement(step.icon) ? (
-                cloneElement(step.icon, { className: iconClassName })
               ) : (
-                step.icon
+                cloneElement(step.icon, { className: iconClassName })
               )}
             </div>
             {index < steps.length - 1 && (

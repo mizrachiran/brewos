@@ -1,13 +1,14 @@
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { ProgressIndicator } from "@/components/wizard";
+import type { WizardStep } from "@/components/wizard/types";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { darkBgStyles } from "@/lib/darkBgStyles";
 
 interface WizardStepWrapperProps {
   currentStep: number;
-  steps: Array<{ id: string; title: string; icon: ReactNode }>;
+  steps: WizardStep[];
   children: ReactNode;
   showBack?: boolean;
   backLabel?: string;
