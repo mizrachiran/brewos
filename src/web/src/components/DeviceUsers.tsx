@@ -371,9 +371,7 @@ export function DeviceUsers({
                           }`}
                         >
                           <User
-                            className={`w-6 h-6 ${
-                              isCurrent ? "text-accent" : "text-accent"
-                            }`}
+                            className="w-6 h-6 text-accent"
                           />
                         </div>
                       )}
