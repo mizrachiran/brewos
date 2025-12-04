@@ -116,6 +116,19 @@ export async function initDatabase(): Promise<SqlJsDatabase> {
       last_used_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
     );
+
+    -- User-device associations (many-to-many with per-user device names)
+    CREATE TABLE IF NOT EXISTS user_devices (
+      user_id TEXT NOT NULL,
+      device_id TEXT NOT NULL,
+      name TEXT NOT NULL DEFAULT 'My BrewOS',
+      claimed_at TEXT DEFAULT (datetime('now')),
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, device_id),
+      FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE,
+      FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
+    );
   `);
 
   // Create indexes
@@ -142,6 +155,12 @@ export async function initDatabase(): Promise<SqlJsDatabase> {
   db.run(
     `CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(refresh_expires_at)`
   );
+  db.run(
+    `CREATE INDEX IF NOT EXISTS idx_user_devices_user ON user_devices(user_id)`
+  );
+  db.run(
+    `CREATE INDEX IF NOT EXISTS idx_user_devices_device ON user_devices(device_id)`
+  );
 
   // Migrations for existing databases
   // Add machine_brand and machine_model columns if they don't exist
@@ -154,6 +173,55 @@ export async function initDatabase(): Promise<SqlJsDatabase> {
     db.run(`ALTER TABLE devices ADD COLUMN machine_model TEXT`);
   } catch {
     // Column already exists
+  }
+
+  // Migration: Migrate existing owner_id relationships to user_devices table
+  // This preserves existing data when upgrading to the new schema
+  try {
+    const migrationCheck = db.exec(
+      `SELECT COUNT(*) as count FROM sqlite_master WHERE type='table' AND name='user_devices'`
+    );
+    const hasUserDevicesTable =
+      migrationCheck.length > 0 &&
+      migrationCheck[0].values.length > 0 &&
+      migrationCheck[0].values[0][0] > 0;
+
+    if (hasUserDevicesTable) {
+      // Check if migration is needed (devices with owner_id but no user_devices entry)
+      const needsMigration = db.exec(`
+        SELECT COUNT(*) as count 
+        FROM devices d 
+        WHERE d.owner_id IS NOT NULL 
+        AND NOT EXISTS (
+          SELECT 1 FROM user_devices ud 
+          WHERE ud.device_id = d.id AND ud.user_id = d.owner_id
+        )
+      `);
+
+      if (
+        needsMigration.length > 0 &&
+        needsMigration[0].values.length > 0 &&
+        needsMigration[0].values[0][0] > 0
+      ) {
+        console.log("[DB] Migrating existing device ownership to user_devices...");
+        // Migrate existing owner_id + name to user_devices
+        db.run(`
+          INSERT INTO user_devices (user_id, device_id, name, claimed_at, created_at, updated_at)
+          SELECT owner_id, id, name, claimed_at, created_at, updated_at
+          FROM devices
+          WHERE owner_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM user_devices ud 
+            WHERE ud.device_id = devices.id AND ud.user_id = devices.owner_id
+          )
+        `);
+        console.log("[DB] Migration completed successfully");
+        saveDatabase();
+      }
+    }
+  } catch (error) {
+    console.error("[DB] Error during migration:", error);
+    // Don't fail initialization if migration fails
   }
 
   // Save initial database
@@ -192,8 +260,8 @@ export function getDb(): SqlJsDatabase {
 // Types
 export interface Device {
   id: string;
-  owner_id: string | null;
-  name: string;
+  owner_id: string | null; // Deprecated: kept for backward compatibility, use user_devices instead
+  name: string; // Deprecated: kept for backward compatibility, use user_devices.name instead
   machine_brand: string | null;
   machine_model: string | null;
   firmware_version: string | null;
@@ -201,7 +269,16 @@ export interface Device {
   machine_type: string | null;
   is_online: number;
   last_seen_at: string | null;
-  claimed_at: string | null;
+  claimed_at: string | null; // Deprecated: kept for backward compatibility
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserDevice {
+  user_id: string;
+  device_id: string;
+  name: string;
+  claimed_at: string;
   created_at: string;
   updated_at: string;
 }

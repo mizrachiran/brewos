@@ -20,8 +20,10 @@ import {
   ChevronLeft,
   AlertTriangle,
   Check,
+  Users,
 } from "lucide-react";
 import { UserMenu } from "@/components/UserMenu";
+import { DeviceUsers } from "@/components/DeviceUsers";
 
 // Demo data
 const DEMO_USER = {
@@ -69,6 +71,10 @@ export function Machines() {
   const [disconnectingDevice, setDisconnectingDevice] =
     useState<CloudDevice | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [deviceUsersOpen, setDeviceUsersOpen] = useState<{
+    deviceId: string;
+    deviceName: string;
+  } | null>(null);
 
   useEffect(() => {
     if (isDemo) return; // Skip auth check in demo mode
@@ -306,23 +312,53 @@ export function Machines() {
                     </div>
                   </div>
 
-                  {isEditMode && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDisconnectingDevice(device);
-                      }}
-                      className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-error-soft hover:bg-red-200 dark:hover:bg-red-900/50 flex items-center justify-center text-error transition-colors flex-shrink-0"
-                    >
-                      <X className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {!isEditMode && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeviceUsersOpen({
+                            deviceId: device.id,
+                            deviceName: device.name,
+                          });
+                        }}
+                        className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-secondary hover:bg-theme-tertiary flex items-center justify-center text-theme-muted hover:text-theme transition-colors"
+                        title="Manage users"
+                      >
+                        <Users className="w-4 h-4 sm:w-5 sm:h-5" />
+                      </button>
+                    )}
+                    {isEditMode && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDisconnectingDevice(device);
+                        }}
+                        className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-error-soft hover:bg-red-200 dark:hover:bg-red-900/50 flex items-center justify-center text-error transition-colors"
+                      >
+                        <X className="w-4 h-4 sm:w-5 sm:h-5" />
+                      </button>
+                    )}
+                  </div>
                 </button>
               );
             })}
           </div>
         )}
       </main>
+
+      {/* Device Users Modal */}
+      {deviceUsersOpen && (
+        <DeviceUsers
+          deviceId={deviceUsersOpen.deviceId}
+          deviceName={deviceUsersOpen.deviceName}
+          onClose={() => setDeviceUsersOpen(null)}
+          onLeave={() => {
+            setDeviceUsersOpen(null);
+            fetchDevices();
+          }}
+        />
+      )}
 
       {/* Add Machine Flow */}
       {addMode && (

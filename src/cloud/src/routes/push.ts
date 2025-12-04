@@ -10,6 +10,7 @@ import {
   updateNotificationPreferences,
 } from '../services/push.js';
 import { userOwnsDevice, getDevice } from '../services/device.js';
+import { getDb } from '../lib/database.js';
 import type { NotificationType } from '../lib/database.js';
 
 const router = Router();
@@ -185,10 +186,24 @@ router.post('/notify', async (req, res) => {
       return res.status(400).json({ error: 'Invalid device ID format' });
     }
 
-    // Verify device exists and is claimed
+    // Verify device exists and is claimed by at least one user
     const device = getDevice(deviceId);
-    if (!device || !device.owner_id) {
-      return res.status(404).json({ error: 'Device not found or not claimed' });
+    if (!device) {
+      return res.status(404).json({ error: 'Device not found' });
+    }
+
+    // Check if device has any users (is claimed)
+    const db = getDb();
+    const userCheck = db.exec(
+      `SELECT COUNT(*) as count FROM user_devices WHERE device_id = ?`,
+      [deviceId]
+    );
+    const hasUsers = userCheck.length > 0 && 
+                     userCheck[0].values.length > 0 && 
+                     (userCheck[0].values[0][0] as number) > 0;
+
+    if (!hasUsers) {
+      return res.status(404).json({ error: 'Device not claimed' });
     }
 
     // Map notification type to title/body
