@@ -15,8 +15,8 @@
 // Version
 // -----------------------------------------------------------------------------
 #define FIRMWARE_VERSION_MAJOR      0
-#define FIRMWARE_VERSION_MINOR      2
-#define FIRMWARE_VERSION_PATCH      2
+#define FIRMWARE_VERSION_MINOR      3
+#define FIRMWARE_VERSION_PATCH      0
 #define PICO_VERSION_MAJOR      FIRMWARE_VERSION_MAJOR
 #define PICO_VERSION_MINOR      FIRMWARE_VERSION_MINOR
 #define PICO_VERSION_PATCH      FIRMWARE_VERSION_PATCH
