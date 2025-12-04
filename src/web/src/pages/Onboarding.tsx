@@ -10,6 +10,7 @@ import {
 } from "@/components/onboarding";
 import { useAppStore } from "@/lib/mode";
 import { parseClaimCode } from "@/lib/claim-parser";
+import { darkBgStyles } from "@/lib/darkBgStyles";
 
 export function Onboarding() {
   const navigate = useNavigate();
@@ -174,17 +175,6 @@ export function Onboarding() {
         return <SuccessStep deviceName={deviceName} />;
     }
   };
-
-  // CSS variables for dark background (mobile full-screen)
-  const darkBgStyles = {
-    "--text": "#faf8f5",
-    "--text-secondary": "#e8e0d5",
-    "--text-muted": "#d4c8b8",
-    "--card-bg": "rgba(255,255,255,0.05)",
-    "--bg-secondary": "rgba(255,255,255,0.08)",
-    "--bg-tertiary": "rgba(255,255,255,0.05)",
-    "--border": "rgba(255,255,255,0.12)",
-  } as React.CSSProperties;
 
   return (
     <div className="full-page-scroll bg-gradient-to-br from-coffee-800 via-coffee-900 to-coffee-950 min-h-screen">
