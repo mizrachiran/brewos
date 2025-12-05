@@ -285,8 +285,9 @@ function App() {
 
   // Show loading state
   // For cloud mode with existing user, also wait for initial device fetch
+  // Skip device waiting in demo mode - demo doesn't fetch real devices
   const isWaitingForDevices =
-    mode === "cloud" && user && !initialDevicesFetched;
+    !inDemoMode && mode === "cloud" && user && !initialDevicesFetched;
 
   if (loading || (!inDemoMode && !initialized) || isWaitingForDevices) {
     return <Loading message={initError || undefined} />;
