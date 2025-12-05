@@ -129,6 +129,18 @@ export async function initDatabase(): Promise<SqlJsDatabase> {
       FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE,
       FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
     );
+
+    -- Share tokens for sharing device access with other users
+    CREATE TABLE IF NOT EXISTS device_share_tokens (
+      id TEXT PRIMARY KEY,
+      device_id TEXT NOT NULL,
+      created_by TEXT NOT NULL,
+      token_hash TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE CASCADE
+    );
   `);
 
   // Create indexes
@@ -160,6 +172,12 @@ export async function initDatabase(): Promise<SqlJsDatabase> {
   );
   db.run(
     `CREATE INDEX IF NOT EXISTS idx_user_devices_device ON user_devices(device_id)`
+  );
+  db.run(
+    `CREATE INDEX IF NOT EXISTS idx_share_tokens_device ON device_share_tokens(device_id)`
+  );
+  db.run(
+    `CREATE INDEX IF NOT EXISTS idx_share_tokens_expires ON device_share_tokens(expires_at)`
   );
 
   // Migrations for existing databases
@@ -288,6 +306,15 @@ export interface UserDevice {
 export interface ClaimToken {
   id: string;
   device_id: string;
+  token_hash: string;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface ShareToken {
+  id: string;
+  device_id: string;
+  created_by: string;
   token_hash: string;
   expires_at: string;
   created_at: string;

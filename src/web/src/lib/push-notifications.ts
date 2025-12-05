@@ -42,6 +42,9 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
   try {
     const registration = await navigator.serviceWorker.register('/sw.js', {
       scope: '/',
+      // CRITICAL: Always fetch sw.js from network, never use HTTP cache
+      // This ensures new deployments are detected immediately
+      updateViaCache: 'none',
     });
 
     console.log('[PWA] Service worker registered:', registration.scope);

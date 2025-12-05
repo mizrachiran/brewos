@@ -164,8 +164,8 @@ function IOSInstallModal({ onClose }: { onClose: () => void }) {
   const isIPad = /ipad/.test(navigator.userAgent.toLowerCase());
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-theme-card rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-slide-up">
+    <div className="fixed inset-0 bg-black/60 xs:backdrop-blur-sm z-50 flex items-end xs:items-center justify-center xs:p-4">
+      <div className="bg-theme-card rounded-t-2xl xs:rounded-2xl w-full h-full xs:h-auto xs:max-w-sm overflow-hidden xs:shadow-2xl animate-slide-up flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-theme">
           <h3 className="text-lg font-semibold text-theme">Install BrewOS</h3>
@@ -178,7 +178,7 @@ function IOSInstallModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Instructions */}
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 flex-1 xs:flex-initial overflow-y-auto">
           <p className="text-sm text-theme-muted text-center">
             Install BrewOS on your {isIPad ? 'iPad' : 'iPhone'} for quick access
           </p>

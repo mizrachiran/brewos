@@ -14,7 +14,8 @@ const MockMachineStatusCard = (props: {
     <MachineStatusCard
       {...props}
       onSetMode={(mode) => console.log("Set mode:", mode)}
-      onPowerOn={() => console.log("Power on")}
+      onQuickOn={() => console.log("Quick on")}
+      onOpenStrategyModal={() => console.log("Open strategy modal")}
     />
   );
 };

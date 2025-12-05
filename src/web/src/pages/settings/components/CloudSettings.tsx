@@ -8,7 +8,6 @@ import { Badge } from "@/components/Badge";
 import {
   QrCode,
   Copy,
-  ExternalLink,
   Cloud,
   Wifi,
   Globe,
@@ -108,6 +107,27 @@ export function CloudSettings() {
     detectEnvironment(cloudConfig?.serverUrl || "wss://cloud.brewos.io")
   );
   const [saving, setSaving] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(pairing?.expiresIn || 0);
+
+  // Countdown timer for pairing expiration
+  useEffect(() => {
+    if (pairing?.expiresIn !== undefined) {
+      setTimeLeft(pairing.expiresIn);
+    }
+  }, [pairing?.expiresIn]);
+
+  useEffect(() => {
+    if (!pairing) return;
+
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 0) return 0;
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [pairing]);
 
   // Handle environment preset selection
   const handleEnvChange = (env: CloudEnvironment) => {
@@ -250,7 +270,8 @@ export function CloudSettings() {
     fetchCloudStatus();
   }, [isDemo, fetchPairingQR, fetchCloudStatus]);
 
-  const isExpired = pairing?.expiresIn !== undefined && pairing.expiresIn <= 0;
+  const isExpired =
+    pairing !== null && pairing.expiresIn !== undefined && timeLeft <= 0;
 
   return (
     <div className="space-y-6">
@@ -307,74 +328,79 @@ export function CloudSettings() {
                   </Badge>
                 ) : (
                   <p className="text-xs text-theme-muted mt-2">
-                    Expires in {Math.floor(pairing.expiresIn / 60)}m{" "}
-                    {pairing.expiresIn % 60}s
+                    Expires in {Math.floor(timeLeft / 60)}m {timeLeft % 60}s
                   </p>
                 )}
               </>
             ) : null}
           </div>
 
-          <div className="mt-4 space-y-3">
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                className="flex-1"
-                onClick={refreshPairing}
-                disabled={loadingQR}
-              >
-                <RefreshCw
-                  className={`w-4 h-4 mr-2 ${loadingQR ? "animate-spin" : ""}`}
-                />
-                New Code
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={copyPairingUrl}
-                disabled={!pairing}
-              >
-                {copied ? (
-                  <Check className="w-4 h-4" />
-                ) : (
-                  <Copy className="w-4 h-4" />
-                )}
-              </Button>
-            </div>
-
-            {pairing && (
-              <a
-                href={pairing.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 text-sm text-accent hover:underline"
-              >
-                Open pairing link
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            )}
+          <div className="mt-4">
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={refreshPairing}
+              disabled={loadingQR}
+            >
+              <RefreshCw
+                className={`w-4 h-4 mr-2 ${loadingQR ? "animate-spin" : ""}`}
+              />
+              New Code
+            </Button>
           </div>
 
           {pairing && (
-            <div className="mt-4 pt-4 border-t border-theme">
-              <h3 className="text-sm font-medium text-theme mb-2">
-                Manual Pairing Code
-              </h3>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 bg-theme-secondary px-4 py-3 rounded-lg text-lg font-mono text-theme tracking-wider text-center">
-                  {pairing.manualCode ||
-                    `${pairing.deviceId}:${pairing.token.substring(0, 8)}...`}
-                </code>
-                <Button variant="secondary" size="sm" onClick={copyPairingCode}>
-                  {copiedCode ? (
-                    <Check className="w-4 h-4" />
-                  ) : (
-                    <Copy className="w-4 h-4" />
-                  )}
-                </Button>
+            <div className="mt-4 pt-4 border-t border-theme space-y-4">
+              <div>
+                <h3 className="text-sm font-medium text-theme mb-2">
+                  Pairing Link
+                </h3>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-theme-secondary px-3 py-2.5 rounded-lg text-xs font-mono text-theme truncate">
+                    {pairing.url}
+                  </code>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={copyPairingUrl}
+                  >
+                    {copied ? (
+                      <Check className="w-4 h-4" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-theme-muted mt-2">
+                  Share this link to let others add your machine
+                </p>
               </div>
-              <p className="text-xs text-theme-muted mt-2">
-                Enter this code at cloud.brewos.io if you can't scan the QR
-              </p>
+
+              <div>
+                <h3 className="text-sm font-medium text-theme mb-2">
+                  Manual Pairing Code
+                </h3>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-theme-secondary px-4 py-3 rounded-lg text-lg font-mono text-theme tracking-wider text-center">
+                    {pairing.manualCode ||
+                      `${pairing.deviceId}:${pairing.token.substring(0, 8)}...`}
+                  </code>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={copyPairingCode}
+                  >
+                    {copiedCode ? (
+                      <Check className="w-4 h-4" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-theme-muted mt-2">
+                  Enter this code at cloud.brewos.io if you can't scan the QR
+                </p>
+              </div>
             </div>
           )}
         </Card>
@@ -489,23 +515,27 @@ export function CloudSettings() {
                 </p>
               </div>
 
-              {/* Custom URL input - only shown when Custom is selected */}
-              {selectedEnv === "custom" && (
-                <Input
-                  label="Custom Server URL"
-                  value={cloudUrl}
-                  onChange={(e) => setCloudUrl(e.target.value)}
-                  placeholder="wss://your-server.com"
-                  disabled={!cloudEnabled}
-                />
-              )}
-
-              {/* Show current URL for non-custom environments */}
-              {selectedEnv !== "custom" && (
-                <div className="text-xs text-theme-muted bg-theme-secondary rounded-lg px-3 py-2">
-                  <span className="font-medium">Server:</span> {cloudUrl}
-                </div>
-              )}
+              {/* Server URL - either editable (custom) or read-only display */}
+              <div>
+                {selectedEnv === "custom" ? (
+                  <Input
+                    label="Custom Server URL"
+                    value={cloudUrl}
+                    onChange={(e) => setCloudUrl(e.target.value)}
+                    placeholder="wss://your-server.com"
+                    disabled={!cloudEnabled}
+                  />
+                ) : (
+                  <>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">
+                      Server URL
+                    </label>
+                    <div className="w-full px-4 py-3 rounded-xl bg-theme-secondary border border-theme text-sm text-theme-muted font-mono">
+                      {cloudUrl}
+                    </div>
+                  </>
+                )}
+              </div>
 
               <div className="flex-1" />
               <div className="flex justify-end">

@@ -39,7 +39,8 @@ export class DemoConnection implements IConnection {
   private flowRate = 0;
 
   // Machine type (for diagnostics)
-  private machineType: "dual_boiler" | "single_boiler" | "heat_exchanger" = "dual_boiler";
+  private machineType: "dual_boiler" | "single_boiler" | "heat_exchanger" =
+    "dual_boiler";
 
   async connect(): Promise<void> {
     this.isDisconnected = false;
@@ -147,7 +148,10 @@ export class DemoConnection implements IConnection {
       case "set_machine_info":
         // Update machine type for diagnostics
         if (data.machineType) {
-          this.machineType = data.machineType as "dual_boiler" | "single_boiler" | "heat_exchanger";
+          this.machineType = data.machineType as
+            | "dual_boiler"
+            | "single_boiler"
+            | "heat_exchanger";
         }
         // Update device info
         this.emit({
@@ -232,38 +236,143 @@ export class DemoConnection implements IConnection {
 
     // Define all possible test results with realistic values
     // Based on ECM_Control_Board_Specification_v2.20 hardware components
-    const allTests: Record<number, { status: number; rawValue: number; min: number; max: number; message: string }> = {
+    const allTests: Record<
+      number,
+      {
+        status: number;
+        rawValue: number;
+        min: number;
+        max: number;
+        message: string;
+      }
+    > = {
       // Temperature Sensors (T1, T2, T3)
-      0x01: { status: 0, rawValue: 2450, min: 2000, max: 3000, message: "25.2°C - NTC sensor OK" },
-      0x02: { status: 0, rawValue: 2380, min: 2000, max: 3000, message: "26.1°C - NTC sensor OK" },
-      0x03: { status: 3, rawValue: 0, min: 0, max: 10000, message: "Not installed" }, // Optional
-      
+      0x01: {
+        status: 0,
+        rawValue: 2450,
+        min: 2000,
+        max: 3000,
+        message: "25.2°C - NTC sensor OK",
+      },
+      0x02: {
+        status: 0,
+        rawValue: 2380,
+        min: 2000,
+        max: 3000,
+        message: "26.1°C - NTC sensor OK",
+      },
+      0x03: {
+        status: 3,
+        rawValue: 0,
+        min: 0,
+        max: 10000,
+        message: "Not installed",
+      }, // Optional
+
       // Pressure Sensor (P1)
-      0x04: { status: 0, rawValue: 102, min: 50, max: 500, message: "0.0 bar - Transducer OK" },
-      
+      0x04: {
+        status: 0,
+        rawValue: 102,
+        min: 50,
+        max: 500,
+        message: "0.0 bar - Transducer OK",
+      },
+
       // Water Level Sensors (S1, S2, S3)
-      0x05: { status: 2, rawValue: 1, min: 0, max: 1, message: "Low level - Fill reservoir" }, // Warning
-      0x0e: { status: 0, rawValue: 1, min: 0, max: 1, message: "Probe circuit OK - Level normal" },
-      
+      0x05: {
+        status: 2,
+        rawValue: 1,
+        min: 0,
+        max: 1,
+        message: "Low level - Fill reservoir",
+      }, // Warning
+      0x0e: {
+        status: 0,
+        rawValue: 1,
+        min: 0,
+        max: 1,
+        message: "Probe circuit OK - Level normal",
+      },
+
       // Brew Control (S4)
-      0x0f: { status: 0, rawValue: 0, min: 0, max: 1, message: "Switch released - OK" },
-      
+      0x0f: {
+        status: 0,
+        rawValue: 0,
+        min: 0,
+        max: 1,
+        message: "Switch released - OK",
+      },
+
       // Heater SSRs (SSR1, SSR2)
-      0x06: { status: 0, rawValue: 1, min: 0, max: 1, message: "SSR trigger activated" },
-      0x07: { status: 0, rawValue: 1, min: 0, max: 1, message: "SSR trigger activated" },
-      
+      0x06: {
+        status: 0,
+        rawValue: 1,
+        min: 0,
+        max: 1,
+        message: "SSR trigger activated",
+      },
+      0x07: {
+        status: 0,
+        rawValue: 1,
+        min: 0,
+        max: 1,
+        message: "SSR trigger activated",
+      },
+
       // Relays (K1, K2, K3)
-      0x10: { status: 3, rawValue: 0, min: 0, max: 0, message: "Not installed" }, // Optional - not all machines have indicator
-      0x08: { status: 0, rawValue: 1, min: 0, max: 1, message: "Relay click detected" },
-      0x09: { status: 0, rawValue: 1, min: 0, max: 1, message: "Relay click detected" },
-      
+      0x10: {
+        status: 3,
+        rawValue: 0,
+        min: 0,
+        max: 0,
+        message: "Not installed",
+      }, // Optional - not all machines have indicator
+      0x08: {
+        status: 0,
+        rawValue: 1,
+        min: 0,
+        max: 1,
+        message: "Relay click detected",
+      },
+      0x09: {
+        status: 0,
+        rawValue: 1,
+        min: 0,
+        max: 1,
+        message: "Relay click detected",
+      },
+
       // Communication
-      0x0b: { status: 0, rawValue: 1, min: 0, max: 1, message: "UART link 921600 baud OK" },
-      0x0a: { status: 3, rawValue: 0, min: 0, max: 0, message: "Not installed" }, // Optional PZEM
-      
+      0x0b: {
+        status: 0,
+        rawValue: 1,
+        min: 0,
+        max: 1,
+        message: "UART link 921600 baud OK",
+      },
+      0x0a: {
+        status: 3,
+        rawValue: 0,
+        min: 0,
+        max: 0,
+        message: "Not installed",
+      }, // Optional PZEM
+
       // User Interface
-      0x0c: { status: 0, rawValue: 1, min: 0, max: 1, message: "Beep confirmed" },
-      0x0d: { status: 0, rawValue: 1, min: 0, max: 1, message: "LED blink confirmed" },
+      0x0c: {
+        status: 0,
+        rawValue: 1,
+        min: 0,
+        max: 1,
+        message: "Beep confirmed",
+      },
+      0x0d: {
+        status: 0,
+        rawValue: 1,
+        min: 0,
+        max: 1,
+        message: "LED blink confirmed",
+      },
     };
 
     // Determine which tests to run based on machine type
@@ -278,25 +387,31 @@ export class DemoConnection implements IConnection {
     } else if (machineType === "heat_exchanger") {
       testsToRun.push(0x02); // Steam NTC only (HX uses steam boiler temp)
     }
-    
+
     // Optional group head thermocouple
     testsToRun.push(0x03);
-    
+
     // Pressure sensor (optional - let's say this user has it installed)
     testsToRun.push(0x04);
-    allTests[0x04] = { status: 0, rawValue: 102, min: 50, max: 500, message: "0.0 bar - Transducer OK" };
-    
+    allTests[0x04] = {
+      status: 0,
+      rawValue: 102,
+      min: 50,
+      max: 500,
+      message: "0.0 bar - Transducer OK",
+    };
+
     // Water level sensors (required for all)
     testsToRun.push(0x05); // Reservoir + tank
-    
+
     // Steam boiler level probe - only for machines with steam boilers
     if (machineType === "dual_boiler" || machineType === "heat_exchanger") {
       testsToRun.push(0x0e); // Steam boiler level probe
     }
-    
+
     // Brew switch (required for all)
     testsToRun.push(0x0f);
-    
+
     // Heater SSRs - machine type specific
     if (machineType === "dual_boiler") {
       testsToRun.push(0x06); // Brew SSR
@@ -306,16 +421,16 @@ export class DemoConnection implements IConnection {
     } else if (machineType === "heat_exchanger") {
       testsToRun.push(0x07); // Steam SSR only
     }
-    
+
     // Relays (required)
     testsToRun.push(0x10); // Water LED relay (optional)
     testsToRun.push(0x08); // Pump relay
     testsToRun.push(0x09); // Solenoid relay
-    
+
     // Communication
     testsToRun.push(0x0b); // ESP32
     testsToRun.push(0x0a); // PZEM (optional)
-    
+
     // User interface
     testsToRun.push(0x0c); // Buzzer
     testsToRun.push(0x0d); // LED
@@ -324,7 +439,7 @@ export class DemoConnection implements IConnection {
     testsToRun.sort((a, b) => a - b);
 
     // Build final test list
-    const tests = testsToRun.map(testId => ({
+    const tests = testsToRun.map((testId) => ({
       testId,
       ...allTests[testId],
     }));
@@ -419,15 +534,22 @@ export class DemoConnection implements IConnection {
     const prevMode = this.machineMode;
     this.machineMode = mode as "standby" | "on" | "eco";
 
-    if (mode === "on" && prevMode !== "on") {
-      // Machine turned ON - start tracking uptime
-      this.machineOnTimestamp = Date.now();
-      this.isHeating = true;
-      // Store and log heating strategy if provided
+    if (mode === "on") {
+      // Machine is on - handle strategy change
+      if (prevMode !== "on") {
+        // Just turned ON - start tracking uptime
+        this.machineOnTimestamp = Date.now();
+        this.isHeating = true;
+      }
+      // Store and log heating strategy if provided (supports changing while on)
       if (strategy !== undefined) {
+        const prevStrategy = this.heatingStrategy;
         this.heatingStrategy = strategy as 0 | 1 | 2 | 3;
-        console.log("[Demo] Heating with strategy:", strategy);
-      } else {
+        if (prevStrategy !== strategy) {
+          console.log("[Demo] Heating strategy changed to:", strategy);
+        }
+      } else if (prevMode !== "on") {
+        // Only set default strategy when first turning on
         this.heatingStrategy = 1; // Default to Sequential
       }
     } else if (mode === "standby") {
@@ -516,21 +638,57 @@ export class DemoConnection implements IConnection {
     const noise = () => (Math.random() - 0.5) * 0.2;
 
     if (this.machineMode === "on") {
-      // Determine if heating is needed using hysteresis
-      const brewNeedsHeat = this.brewTemp < this.targetBrewTemp - 2;
-      const steamNeedsHeat = this.steamTemp < this.targetSteamTemp - 3;
+      // Determine heating behavior based on strategy
+      const strategy = this.heatingStrategy ?? 1; // Default to Sequential
+
+      // Use consistent thresholds to avoid gaps
       const brewAtTarget = this.brewTemp >= this.targetBrewTemp - 0.5;
       const steamAtTarget = this.steamTemp >= this.targetSteamTemp - 1;
+      const brewNeedsHeat = !brewAtTarget; // Heat until at target
+      const steamNeedsHeat = !steamAtTarget; // Heat until at target
 
-      // Use hysteresis for isHeating flag
-      if ((brewNeedsHeat || steamNeedsHeat) && !this.isHeating) {
+      // Determine which boilers should heat based on strategy
+      let heatBrew = false;
+      let heatSteam = false;
+
+      switch (strategy) {
+        case 0: // Brew Only
+          heatBrew = brewNeedsHeat;
+          heatSteam = false; // Never heat steam
+          break;
+        case 1: // Sequential - brew first, then steam
+          heatBrew = brewNeedsHeat;
+          heatSteam = brewAtTarget && steamNeedsHeat; // Only heat steam after brew is ready
+          break;
+        case 2: // Parallel - both at once
+          heatBrew = brewNeedsHeat;
+          heatSteam = steamNeedsHeat;
+          break;
+        case 3: {
+          // Smart Stagger - staggered start, slight delay for steam
+          heatBrew = brewNeedsHeat;
+          // Start steam when brew is 50% there or brew is at target
+          const brewProgress = this.brewTemp / this.targetBrewTemp;
+          heatSteam = steamNeedsHeat && (brewProgress > 0.5 || brewAtTarget);
+          break;
+        }
+      }
+
+      // Update isHeating flag based on whether any boiler needs heat
+      const anyHeating = heatBrew || heatSteam;
+      const bothAtTarget =
+        strategy === 0
+          ? brewAtTarget // Brew Only: only brew matters
+          : brewAtTarget && steamAtTarget; // Other strategies: both matter
+
+      if (anyHeating && !this.isHeating) {
         this.isHeating = true;
-      } else if (brewAtTarget && steamAtTarget && this.isHeating) {
+      } else if (bothAtTarget && this.isHeating) {
         this.isHeating = false;
       }
 
       // Brew boiler temperature
-      if (this.brewTemp < this.targetBrewTemp - 0.5) {
+      if (heatBrew) {
         this.brewTemp += heatingRate + noise();
       } else if (this.brewTemp > this.targetBrewTemp + 0.5) {
         this.brewTemp -= coolingRate;
@@ -540,11 +698,16 @@ export class DemoConnection implements IConnection {
       }
 
       // Steam boiler temperature
-      if (this.steamTemp < this.targetSteamTemp - 1) {
+      if (heatSteam) {
         this.steamTemp += heatingRate * 1.2 + noise();
+      } else if (strategy === 0) {
+        // Brew Only: steam cools down or stays ambient
+        if (this.steamTemp > 26) {
+          this.steamTemp -= coolingRate * 0.5;
+        }
       } else if (this.steamTemp > this.targetSteamTemp + 1) {
         this.steamTemp -= coolingRate;
-      } else {
+      } else if (steamAtTarget) {
         // Stable at target with small fluctuation
         this.steamTemp = this.targetSteamTemp + noise();
       }
@@ -723,7 +886,7 @@ export class DemoConnection implements IConnection {
     const sessionUptime = this.machineOnTimestamp
       ? Date.now() - this.machineOnTimestamp
       : 0;
-    
+
     const now = Date.now();
     const day = 24 * 60 * 60 * 1000;
 
@@ -734,12 +897,12 @@ export class DemoConnection implements IConnection {
       totalSteamCycles: 234,
       totalKwh: 89.3,
       totalOnTimeMinutes: 15420,
-      
+
       // Today's stats
       shotsToday: this.shotsToday,
       kwhToday: 0.8 + this.shotsToday * 0.05,
       onTimeToday: Math.floor(sessionUptime / 60000),
-      
+
       // Maintenance tracking (legacy)
       shotsSinceDescale: 145,
       shotsSinceGroupClean: 12,
@@ -747,7 +910,7 @@ export class DemoConnection implements IConnection {
       lastDescaleTimestamp: now - 30 * day,
       lastGroupCleanTimestamp: now - 2 * day,
       lastBackflushTimestamp: now - 7 * day,
-      
+
       // Maintenance (structured)
       maintenance: {
         shotsSinceBackflush: 45,
@@ -757,21 +920,21 @@ export class DemoConnection implements IConnection {
         lastGroupCleanTimestamp: now - 2 * day,
         lastDescaleTimestamp: now - 30 * day,
       },
-      
+
       // Brew time stats
       avgBrewTimeMs: 28500,
       minBrewTimeMs: 22000,
       maxBrewTimeMs: 35000,
-      
+
       // Period counts
       dailyCount: this.shotsToday,
       weeklyCount: 28,
       monthlyCount: 124,
-      
+
       // Session
       sessionShots: this.shotsToday,
       sessionStartTimestamp: this.machineOnTimestamp || now,
-      
+
       // Period stats (for power tab)
       daily: {
         shotCount: this.shotsToday,

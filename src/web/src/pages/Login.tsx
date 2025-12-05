@@ -49,12 +49,12 @@ export function Login() {
   }
 
   return (
-    <div className="full-page flex overflow-hidden">
+    <div className="min-h-screen min-h-[100dvh] flex flex-col lg:flex-row">
       {/* Left Panel - Hero/Brand Section (hidden on mobile) */}
       <LoginHero animated />
 
       {/* Right Panel - Login Form */}
-      <div className="w-full lg:w-1/2 xl:w-[45%] flex items-center justify-center bg-theme p-6 sm:p-8 relative overflow-hidden">
+      <div className="flex-1 lg:w-1/2 xl:w-[45%] flex items-center justify-center bg-theme p-4 sm:p-6 lg:p-8 relative overflow-y-auto min-h-screen min-h-[100dvh] lg:min-h-0">
         {/* Subtle decorative elements */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-accent/5 to-transparent rounded-full blur-3xl" />
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-tr from-accent/5 to-transparent rounded-full blur-3xl" />
@@ -74,7 +74,7 @@ export function Login() {
               }}
               theme={isDark ? "filled_black" : "outline"}
               size="large"
-              width="320"
+              width="280"
               text="continue_with"
               shape="pill"
             />

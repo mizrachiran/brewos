@@ -103,21 +103,30 @@ export function SystemSettings() {
       ? `Install BETA version ${version}? This is a pre-release version for testing. The device will restart after update.`
       : `Install version ${version}? The device will restart after update.`;
 
-    sendCommandWithConfirm("ota_start", warningText, { version }, 
-      { successMessage: `Installing version ${version}...` });
+    sendCommandWithConfirm(
+      "ota_start",
+      warningText,
+      { version },
+      { successMessage: `Installing version ${version}...` }
+    );
   };
 
   const currentVersionDisplay = getVersionDisplay(esp32.version || "0.0.0");
 
   const restartDevice = () => {
-    sendCommandWithConfirm("restart", "Restart the device?", undefined, 
-      { successMessage: "Restarting device..." });
+    sendCommandWithConfirm("restart", "Restart the device?", undefined, {
+      successMessage: "Restarting device...",
+    });
   };
 
   const factoryReset = () => {
     if (confirm("This will erase all settings. Are you sure?")) {
-      sendCommandWithConfirm("factory_reset", "Really? This cannot be undone!", undefined,
-        { successMessage: "Factory reset initiated..." });
+      sendCommandWithConfirm(
+        "factory_reset",
+        "Really? This cannot be undone!",
+        undefined,
+        { successMessage: "Factory reset initiated..." }
+      );
     }
   };
 
@@ -209,7 +218,9 @@ export function SystemSettings() {
             onClick={handleCheckForUpdates}
             disabled={checkingUpdate}
           >
-            <RefreshCw className={`w-4 h-4 ${checkingUpdate ? "animate-spin" : ""}`} />
+            <RefreshCw
+              className={`w-4 h-4 ${checkingUpdate ? "animate-spin" : ""}`}
+            />
             {checkingUpdate ? "Checking..." : "Check"}
           </Button>
         </div>
@@ -217,9 +228,14 @@ export function SystemSettings() {
         {/* Update Channel Selection */}
         <div className="mb-6">
           <label className="text-sm font-medium text-theme mb-3 block">
-            Update Channel {devMode && <span className="text-purple-400 text-xs">(Dev Mode)</span>}
+            Update Channel{" "}
+            {devMode && (
+              <span className="text-purple-400 text-xs">(Dev Mode)</span>
+            )}
           </label>
-          <div className={`grid gap-3 ${devMode ? "grid-cols-3" : "grid-cols-2"}`}>
+          <div
+            className={`grid gap-3 ${devMode ? "grid-cols-3" : "grid-cols-2"}`}
+          >
             <button
               onClick={() => handleChannelChange("stable")}
               className={`p-4 rounded-xl border-2 transition-all text-left ${
@@ -456,8 +472,7 @@ export function SystemSettings() {
                       </Badge>
                     </div>
                     <p className="text-xs text-theme-muted mb-2">
-                      Built{" "}
-                      {formatReleaseDate(updateResult.dev.releaseDate)}
+                      Built {formatReleaseDate(updateResult.dev.releaseDate)}
                     </p>
                     <p className="text-sm text-purple-400 flex items-center gap-1">
                       <RefreshCw className="w-4 h-4" />
@@ -468,8 +483,8 @@ export function SystemSettings() {
                     <div className="mt-3 p-2 bg-purple-500/10 rounded-lg flex items-start gap-2">
                       <AlertTriangle className="w-4 h-4 text-purple-400 flex-shrink-0 mt-0.5" />
                       <p className="text-xs text-purple-300">
-                        Dev builds are for development testing only. 
-                        They may be unstable or contain breaking changes.
+                        Dev builds are for development testing only. They may be
+                        unstable or contain breaking changes.
                       </p>
                     </div>
                   </div>
@@ -512,9 +527,9 @@ export function SystemSettings() {
 
       {/* Beta Warning Modal */}
       {showBetaWarning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <Card className="w-full max-w-md">
-            <div className="text-center p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 xs:backdrop-blur-sm xs:p-4">
+          <Card className="w-full h-full xs:h-auto xs:max-w-md rounded-none xs:rounded-2xl flex flex-col">
+            <div className="text-center p-6 flex-1 xs:flex-initial flex flex-col justify-center">
               <div className="w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
                 <FlaskConical className="w-8 h-8 text-amber-500" />
               </div>
@@ -556,9 +571,9 @@ export function SystemSettings() {
 
       {/* Dev Warning Modal - only in dev mode */}
       {devMode && showDevWarning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <Card className="w-full max-w-md">
-            <div className="text-center p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 xs:backdrop-blur-sm xs:p-4">
+          <Card className="w-full h-full xs:h-auto xs:max-w-md rounded-none xs:rounded-2xl flex flex-col">
+            <div className="text-center p-6 flex-1 xs:flex-initial flex flex-col justify-center">
               <div className="w-16 h-16 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Terminal className="w-8 h-8 text-purple-500" />
               </div>
@@ -566,8 +581,8 @@ export function SystemSettings() {
                 Enable Dev Builds?
               </h3>
               <p className="text-sm text-theme-muted mb-4">
-                Dev builds are automated builds from the main branch.
-                They're intended for developers testing the latest changes.
+                Dev builds are automated builds from the main branch. They're
+                intended for developers testing the latest changes.
               </p>
               <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg mb-6 text-left">
                 <h4 className="font-semibold text-purple-400 text-sm mb-2 flex items-center gap-2">
@@ -588,8 +603,8 @@ export function SystemSettings() {
                 >
                   Cancel
                 </Button>
-                <Button 
-                  className="flex-1 bg-purple-600 hover:bg-purple-700" 
+                <Button
+                  className="flex-1 bg-purple-600 hover:bg-purple-700"
                   onClick={confirmDevChannel}
                 >
                   <Terminal className="w-4 h-4" />

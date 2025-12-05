@@ -8,7 +8,6 @@ import {
   SuccessStep,
 } from "@/components/onboarding";
 import React from "react";
-import { darkBgStyles } from "@/lib/darkBgStyles";
 
 // Wrapper component for stories
 function OnboardingStoryWrapper({ children }: { children?: React.ReactNode }) {
@@ -27,8 +26,8 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-// Desktop wrapper with Card
-function DesktopWrapper({ children }: { children: React.ReactNode }) {
+// Responsive wrapper - works for both mobile and desktop
+function OnboardingWrapper({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-coffee-800 via-coffee-900 to-coffee-950 flex justify-center p-4 pt-16">
       <div className="w-full max-w-lg">
@@ -40,127 +39,62 @@ function DesktopWrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Mobile wrapper without Card (full-screen)
-function MobileWrapper({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-coffee-800 via-coffee-900 to-coffee-950">
-      <div 
-        className="min-h-screen flex flex-col justify-center px-5 py-8"
-        style={darkBgStyles}
-      >
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ============ WELCOME STEP ============
 
-export const WelcomeDesktop: Story = {
-  name: "1. Welcome - Desktop",
+export const Welcome: Story = {
+  name: "1. Welcome",
   render: () => (
-    <DesktopWrapper>
+    <OnboardingWrapper>
       <WelcomeStep />
-    </DesktopWrapper>
-  ),
-};
-
-export const WelcomeMobile: Story = {
-  name: "1. Welcome - Mobile",
-  parameters: {
-    viewport: { defaultViewport: "mobile1" },
-  },
-  render: () => (
-    <MobileWrapper>
-      <WelcomeStep />
-    </MobileWrapper>
+    </OnboardingWrapper>
   ),
 };
 
 // ============ SCAN STEP ============
 
-export const ScanDesktop: Story = {
-  name: "2. Scan QR - Desktop",
+export const Scan: Story = {
+  name: "2. Scan QR",
   render: () => (
-    <DesktopWrapper>
-      <ScanStep
-        onScan={() => {}}
-        onBack={() => {}}
-        onValidate={() => {}}
-      />
-    </DesktopWrapper>
+    <OnboardingWrapper>
+      <ScanStep onScan={() => {}} onBack={() => {}} onValidate={() => {}} />
+    </OnboardingWrapper>
   ),
 };
 
-export const ScanMobile: Story = {
-  name: "2. Scan QR - Mobile",
-  parameters: {
-    viewport: { defaultViewport: "mobile1" },
-  },
+export const ScanWithError: Story = {
+  name: "2. Scan QR - Error",
   render: () => (
-    <MobileWrapper>
-      <ScanStep
-        onScan={() => {}}
-        onBack={() => {}}
-        onValidate={() => {}}
-      />
-    </MobileWrapper>
-  ),
-};
-
-export const ScanWithErrorDesktop: Story = {
-  name: "2. Scan QR - Error (Desktop)",
-  render: () => (
-    <DesktopWrapper>
+    <OnboardingWrapper>
       <ScanStep
         error="Invalid QR code. Please try again."
         onScan={() => {}}
         onBack={() => {}}
         onValidate={() => {}}
       />
-    </DesktopWrapper>
+    </OnboardingWrapper>
   ),
 };
 
 // ============ MANUAL STEP ============
 
-export const ManualDesktop: Story = {
-  name: "3. Manual Entry - Desktop",
+export const Manual: Story = {
+  name: "3. Manual Entry",
   render: () => (
-    <DesktopWrapper>
+    <OnboardingWrapper>
       <ManualStep
         claimCode="X6ST-AP3G"
         onClaimCodeChange={() => {}}
         onBack={() => {}}
         onValidate={() => {}}
       />
-    </DesktopWrapper>
+    </OnboardingWrapper>
   ),
 };
 
-export const ManualMobile: Story = {
-  name: "3. Manual Entry - Mobile",
-  parameters: {
-    viewport: { defaultViewport: "mobile1" },
-  },
+export const ManualWithError: Story = {
+  name: "3. Manual Entry - Error",
   render: () => (
-    <MobileWrapper>
-      <ManualStep
-        claimCode="X6ST-AP3G"
-        onClaimCodeChange={() => {}}
-        onBack={() => {}}
-        onValidate={() => {}}
-      />
-    </MobileWrapper>
-  ),
-};
-
-export const ManualWithErrorDesktop: Story = {
-  name: "3. Manual Entry - Error (Desktop)",
-  render: () => (
-    <DesktopWrapper>
+    <OnboardingWrapper>
       <ManualStep
         claimCode="X6ST-AP3G"
         error="Invalid or expired code"
@@ -168,187 +102,96 @@ export const ManualWithErrorDesktop: Story = {
         onBack={() => {}}
         onValidate={() => {}}
       />
-    </DesktopWrapper>
+    </OnboardingWrapper>
   ),
 };
 
 // ============ MACHINE NAME STEP ============
 
-export const MachineNameDesktop: Story = {
-  name: "4. Machine Name - Desktop",
+export const MachineName: Story = {
+  name: "4. Machine Name",
   render: () => (
-    <DesktopWrapper>
+    <OnboardingWrapper>
       <MachineNameStep
         deviceName="Kitchen Espresso"
         onDeviceNameChange={() => {}}
         onBack={() => {}}
         onContinue={() => {}}
       />
-    </DesktopWrapper>
-  ),
-};
-
-export const MachineNameMobile: Story = {
-  name: "4. Machine Name - Mobile",
-  parameters: {
-    viewport: { defaultViewport: "mobile1" },
-  },
-  render: () => (
-    <MobileWrapper>
-      <MachineNameStep
-        deviceName="Kitchen Espresso"
-        onDeviceNameChange={() => {}}
-        onBack={() => {}}
-        onContinue={() => {}}
-      />
-    </MobileWrapper>
+    </OnboardingWrapper>
   ),
 };
 
 // ============ SUCCESS STEP ============
 
-export const SuccessDesktop: Story = {
-  name: "5. Success - Desktop",
+export const Success: Story = {
+  name: "5. Success",
   render: () => (
-    <DesktopWrapper>
+    <OnboardingWrapper>
       <SuccessStep deviceName="Kitchen Espresso" />
-    </DesktopWrapper>
-  ),
-};
-
-export const SuccessMobile: Story = {
-  name: "5. Success - Mobile",
-  parameters: {
-    viewport: { defaultViewport: "mobile1" },
-  },
-  render: () => (
-    <MobileWrapper>
-      <SuccessStep deviceName="Kitchen Espresso" />
-    </MobileWrapper>
+    </OnboardingWrapper>
   ),
 };
 
 // ============ ALL STEPS OVERVIEW ============
 
-export const AllStepsDesktop: Story = {
-  name: "All Steps - Desktop Overview",
+export const AllSteps: Story = {
+  name: "All Steps Overview",
   render: () => (
     <div className="space-y-8 p-4 bg-coffee-950">
       <div>
         <h3 className="text-cream-200 text-lg font-semibold mb-4 text-center">
           Step 1: Welcome
         </h3>
-        <DesktopWrapper>
+        <OnboardingWrapper>
           <WelcomeStep />
-        </DesktopWrapper>
+        </OnboardingWrapper>
       </div>
       <div>
         <h3 className="text-cream-200 text-lg font-semibold mb-4 text-center">
           Step 2: Scan QR Code
         </h3>
-        <DesktopWrapper>
+        <OnboardingWrapper>
           <ScanStep onScan={() => {}} onBack={() => {}} onValidate={() => {}} />
-        </DesktopWrapper>
+        </OnboardingWrapper>
       </div>
       <div>
         <h3 className="text-cream-200 text-lg font-semibold mb-4 text-center">
           Step 2 (Alt): Manual Entry
         </h3>
-        <DesktopWrapper>
+        <OnboardingWrapper>
           <ManualStep
             claimCode="X6ST-AP3G"
             onClaimCodeChange={() => {}}
             onBack={() => {}}
             onValidate={() => {}}
           />
-        </DesktopWrapper>
+        </OnboardingWrapper>
       </div>
       <div>
         <h3 className="text-cream-200 text-lg font-semibold mb-4 text-center">
           Step 3: Name Your Machine
         </h3>
-        <DesktopWrapper>
+        <OnboardingWrapper>
           <MachineNameStep
             deviceName="Kitchen Espresso"
             onDeviceNameChange={() => {}}
             onBack={() => {}}
             onContinue={() => {}}
           />
-        </DesktopWrapper>
+        </OnboardingWrapper>
       </div>
       <div>
         <h3 className="text-cream-200 text-lg font-semibold mb-4 text-center">
           Step 4: Success
         </h3>
-        <DesktopWrapper>
+        <OnboardingWrapper>
           <SuccessStep deviceName="Kitchen Espresso" />
-        </DesktopWrapper>
+        </OnboardingWrapper>
       </div>
     </div>
   ),
   parameters: {
     layout: "padded",
   },
-};
-
-export const AllStepsMobile: Story = {
-  name: "All Steps - Mobile Overview",
-  parameters: {
-    viewport: { defaultViewport: "mobile1" },
-    layout: "padded",
-  },
-  render: () => (
-    <div className="space-y-8 bg-coffee-950">
-      <div>
-        <h3 className="text-cream-200 text-sm font-semibold mb-2 text-center px-4 pt-4">
-          Step 1: Welcome
-        </h3>
-        <MobileWrapper>
-          <WelcomeStep />
-        </MobileWrapper>
-      </div>
-      <div>
-        <h3 className="text-cream-200 text-sm font-semibold mb-2 text-center px-4">
-          Step 2: Scan QR Code
-        </h3>
-        <MobileWrapper>
-          <ScanStep onScan={() => {}} onBack={() => {}} onValidate={() => {}} />
-        </MobileWrapper>
-      </div>
-      <div>
-        <h3 className="text-cream-200 text-sm font-semibold mb-2 text-center px-4">
-          Step 2 (Alt): Manual Entry
-        </h3>
-        <MobileWrapper>
-          <ManualStep
-            claimCode="X6ST-AP3G"
-            onClaimCodeChange={() => {}}
-            onBack={() => {}}
-            onValidate={() => {}}
-          />
-        </MobileWrapper>
-      </div>
-      <div>
-        <h3 className="text-cream-200 text-sm font-semibold mb-2 text-center px-4">
-          Step 3: Name Your Machine
-        </h3>
-        <MobileWrapper>
-          <MachineNameStep
-            deviceName="Kitchen Espresso"
-            onDeviceNameChange={() => {}}
-            onBack={() => {}}
-            onContinue={() => {}}
-          />
-        </MobileWrapper>
-      </div>
-      <div>
-        <h3 className="text-cream-200 text-sm font-semibold mb-2 text-center px-4">
-          Step 4: Success
-        </h3>
-        <MobileWrapper>
-          <SuccessStep deviceName="Kitchen Espresso" />
-        </MobileWrapper>
-      </div>
-    </div>
-  ),
 };

@@ -1,16 +1,15 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card } from "@/components/Card";
 import {
   WelcomeStep,
   ScanStep,
   ManualStep,
   MachineNameStep,
   SuccessStep,
+  OnboardingLayout,
 } from "@/components/onboarding";
 import { useAppStore } from "@/lib/mode";
 import { parseClaimCode } from "@/lib/claim-parser";
-import { darkBgStyles } from "@/lib/darkBgStyles";
 
 export function Onboarding() {
   const navigate = useNavigate();
@@ -176,26 +175,5 @@ export function Onboarding() {
     }
   };
 
-  return (
-    <div className="full-page-scroll bg-gradient-to-br from-coffee-800 via-coffee-900 to-coffee-950 min-h-screen">
-      {/* Narrow width (< 640px): Full-screen without card */}
-      <div
-        className="sm:hidden min-h-screen flex flex-col justify-center px-5 py-8"
-        style={darkBgStyles}
-      >
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          {renderStepContent()}
-        </div>
-      </div>
-
-      {/* Wide width (>= 640px): Card layout with fixed top position */}
-      <div className="hidden sm:flex min-h-screen justify-center p-4 pt-16">
-        <div className="w-full max-w-lg">
-          <Card className="animate-in fade-in slide-in-from-bottom-4 duration-300">
-            {renderStepContent()}
-          </Card>
-        </div>
-      </div>
-    </div>
-  );
+  return <OnboardingLayout>{renderStepContent()}</OnboardingLayout>;
 }

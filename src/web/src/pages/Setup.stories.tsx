@@ -7,8 +7,6 @@ import {
   SuccessView,
   type Network,
 } from "@/components/setup";
-import React from "react";
-import { darkBgStyles } from "@/lib/darkBgStyles";
 
 // Wrapper component for stories
 function SetupStoryWrapper({ children }: { children?: React.ReactNode }) {
@@ -35,8 +33,8 @@ const mockNetworks: Network[] = [
   { ssid: "Neighbor's WiFi", rssi: -80, secure: true },
 ];
 
-// Desktop wrapper with Card
-function DesktopWrapper({ children }: { children: React.ReactNode }) {
+// Responsive wrapper - works for both mobile and desktop
+function SetupWrapper({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-coffee-800 to-coffee-900 flex justify-center items-center p-4">
       <Card className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-300">
@@ -48,152 +46,72 @@ function DesktopWrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Mobile wrapper without Card (full-screen)
-function MobileWrapper({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-coffee-800 to-coffee-900">
-      <div 
-        className="min-h-screen flex flex-col justify-center px-5 py-8"
-        style={darkBgStyles}
-      >
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="py-4">
-            {children}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============ DESKTOP STORIES ============
-
-export const DefaultDesktop: Story = {
-  name: "Default - Desktop",
+export const Default: Story = {
   render: () => (
-    <DesktopWrapper>
+    <SetupWrapper>
       <SetupHeader />
       <NetworkList networks={mockNetworks} />
-    </DesktopWrapper>
+    </SetupWrapper>
   ),
 };
 
-export const NetworkSelectedDesktop: Story = {
-  name: "Network Selected - Desktop",
+export const NetworkSelected: Story = {
   render: () => (
-    <DesktopWrapper>
+    <SetupWrapper>
       <SetupHeader />
       <NetworkList networks={mockNetworks} selectedSsid="Home WiFi" />
-    </DesktopWrapper>
+    </SetupWrapper>
   ),
 };
 
-export const ScanningDesktop: Story = {
-  name: "Scanning - Desktop",
+export const Scanning: Story = {
   render: () => (
-    <DesktopWrapper>
+    <SetupWrapper>
       <SetupHeader />
       <NetworkList networks={[]} scanning={true} />
-    </DesktopWrapper>
+    </SetupWrapper>
   ),
 };
 
-export const NoNetworksDesktop: Story = {
-  name: "No Networks - Desktop",
+export const NoNetworks: Story = {
   render: () => (
-    <DesktopWrapper>
+    <SetupWrapper>
       <SetupHeader />
       <NetworkList networks={[]} />
-    </DesktopWrapper>
+    </SetupWrapper>
   ),
 };
 
-export const ConnectionErrorDesktop: Story = {
-  name: "Connection Error - Desktop",
+export const ConnectionError: Story = {
   render: () => (
-    <DesktopWrapper>
+    <SetupWrapper>
       <SetupHeader />
       <NetworkList
         networks={mockNetworks}
         selectedSsid="Home WiFi"
         error="Connection failed. Please check your password and try again."
       />
-    </DesktopWrapper>
+    </SetupWrapper>
   ),
 };
 
-export const ConnectingDesktop: Story = {
-  name: "Connecting - Desktop",
+export const Connecting: Story = {
   render: () => (
-    <DesktopWrapper>
+    <SetupWrapper>
       <SetupHeader />
       <ConnectingView ssid="Home WiFi" />
-    </DesktopWrapper>
+    </SetupWrapper>
   ),
 };
 
-export const SuccessDesktop: Story = {
-  name: "Success - Desktop",
+export const Success: Story = {
   render: () => (
-    <DesktopWrapper>
+    <SetupWrapper>
       <SetupHeader />
       <SuccessView />
-    </DesktopWrapper>
+    </SetupWrapper>
   ),
 };
-
-// ============ MOBILE STORIES ============
-
-export const DefaultMobile: Story = {
-  name: "Default - Mobile",
-  parameters: {
-    viewport: { defaultViewport: "mobile1" },
-  },
-  render: () => (
-    <MobileWrapper>
-      <SetupHeader />
-      <NetworkList networks={mockNetworks} />
-    </MobileWrapper>
-  ),
-};
-
-export const NetworkSelectedMobile: Story = {
-  name: "Network Selected - Mobile",
-  parameters: {
-    viewport: { defaultViewport: "mobile1" },
-  },
-  render: () => (
-    <MobileWrapper>
-      <SetupHeader />
-      <NetworkList networks={mockNetworks} selectedSsid="Home WiFi" />
-    </MobileWrapper>
-  ),
-};
-
-export const SuccessMobile: Story = {
-  name: "Success - Mobile",
-  parameters: {
-    viewport: { defaultViewport: "mobile1" },
-  },
-  render: () => (
-    <MobileWrapper>
-      <SetupHeader />
-      <SuccessView />
-    </MobileWrapper>
-  ),
-};
-
-// ============ LEGACY ALIASES (for backward compatibility) ============
-
-export const Default = DefaultDesktop;
-export const NetworkSelected = NetworkSelectedDesktop;
-export const Scanning = ScanningDesktop;
-export const NoNetworks = NoNetworksDesktop;
-export const ConnectionError = ConnectionErrorDesktop;
-export const Connecting = ConnectingDesktop;
-export const Success = SuccessDesktop;
-
-// ============ ALL STATES ============
 
 export const AllStates: Story = {
   name: "All States",
@@ -203,46 +121,46 @@ export const AllStates: Story = {
         <h3 className="text-cream-200 text-lg font-semibold mb-4 text-center">
           Network List
         </h3>
-        <DesktopWrapper>
+        <SetupWrapper>
           <SetupHeader />
           <NetworkList networks={mockNetworks} />
-        </DesktopWrapper>
+        </SetupWrapper>
       </div>
       <div>
         <h3 className="text-cream-200 text-lg font-semibold mb-4 text-center">
           Network Selected
         </h3>
-        <DesktopWrapper>
+        <SetupWrapper>
           <SetupHeader />
           <NetworkList networks={mockNetworks} selectedSsid="Home WiFi" />
-        </DesktopWrapper>
+        </SetupWrapper>
       </div>
       <div>
         <h3 className="text-cream-200 text-lg font-semibold mb-4 text-center">
           Scanning
         </h3>
-        <DesktopWrapper>
+        <SetupWrapper>
           <SetupHeader />
           <NetworkList networks={[]} scanning={true} />
-        </DesktopWrapper>
+        </SetupWrapper>
       </div>
       <div>
         <h3 className="text-cream-200 text-lg font-semibold mb-4 text-center">
           Connecting
         </h3>
-        <DesktopWrapper>
+        <SetupWrapper>
           <SetupHeader />
           <ConnectingView ssid="Home WiFi" />
-        </DesktopWrapper>
+        </SetupWrapper>
       </div>
       <div>
         <h3 className="text-cream-200 text-lg font-semibold mb-4 text-center">
           Success
         </h3>
-        <DesktopWrapper>
+        <SetupWrapper>
           <SetupHeader />
           <SuccessView />
-        </DesktopWrapper>
+        </SetupWrapper>
       </div>
     </div>
   ),

@@ -66,19 +66,19 @@ export function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center xs:p-4"
       onClick={onClose}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+      <div className="absolute inset-0 bg-black/50 xs:backdrop-blur-sm transition-opacity" />
 
       {/* Modal */}
       <div
-        className="relative w-full max-w-md bg-theme-card rounded-xl sm:rounded-2xl shadow-2xl border border-theme overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200"
+        className="relative w-full h-full xs:h-auto xs:max-w-md bg-theme-card rounded-none xs:rounded-2xl xs:shadow-2xl border-0 xs:border border-theme overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200 flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start gap-4 p-5 sm:p-6">
+        <div className="flex items-start gap-4 p-5 sm:p-6 flex-1 xs:flex-initial">
           {/* Icon */}
           <div
             className={cn(
@@ -115,7 +115,7 @@ export function ConfirmDialog({
         )}
 
         {/* Actions */}
-        <div className="flex items-center justify-end gap-3 p-5 sm:p-6 pt-4 border-t border-theme">
+        <div className="flex items-center justify-end gap-3 p-5 sm:p-6 pt-4 border-t border-theme mt-auto xs:mt-0">
           <Button variant="secondary" onClick={onClose} disabled={confirmLoading}>
             {cancelText}
           </Button>

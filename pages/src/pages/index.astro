@@ -284,7 +284,8 @@ const steps = [
   /* Hero styles */
   .hero {
     padding: 140px 0 100px;
-    background: linear-gradient(180deg, var(--cream-100) 0%, var(--cream-200) 100%);
+    background: 
+      linear-gradient(180deg, #fefcfa 0%, #faf5ef 40%, #f5ebe0 100%);
     position: relative;
     overflow: hidden;
   }
@@ -292,12 +293,22 @@ const steps = [
   .hero::before {
     content: '';
     position: absolute;
-    top: -50%;
-    right: -20%;
-    width: 80%;
-    height: 150%;
-    background: radial-gradient(ellipse, rgba(212, 112, 58, 0.1) 0%, transparent 70%);
+    top: -20%;
+    right: -10%;
+    width: 60%;
+    height: 120%;
+    background: radial-gradient(ellipse, rgba(212, 112, 58, 0.08) 0%, transparent 60%);
     pointer-events: none;
+  }
+
+  .hero::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(61, 43, 36, 0.15), transparent);
   }
 
   .hero-content {
@@ -392,10 +403,39 @@ const steps = [
     animation: float 6s ease-in-out infinite;
   }
 
-  /* Features styles - Clean list layout */
+  /* Features styles - Dark coffee theme */
   .features {
     padding: 100px 0;
-    background: var(--cream-100);
+    background: linear-gradient(180deg, #2a1f1a 0%, #1f1714 100%);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .features::before {
+    content: '';
+    position: absolute;
+    top: -30%;
+    left: -10%;
+    width: 50%;
+    height: 100%;
+    background: radial-gradient(ellipse, rgba(212, 112, 58, 0.08) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .features::after {
+    content: '';
+    position: absolute;
+    bottom: -20%;
+    right: -5%;
+    width: 40%;
+    height: 80%;
+    background: radial-gradient(ellipse, rgba(139, 90, 43, 0.06) 0%, transparent 55%);
+    pointer-events: none;
+  }
+
+  .features .section-label {
+    color: var(--accent-light);
+    background: rgba(212, 112, 58, 0.15);
   }
 
   .features-layout {
@@ -403,6 +443,8 @@ const steps = [
     grid-template-columns: 1fr 1.5fr;
     gap: 80px;
     align-items: start;
+    position: relative;
+    z-index: 1;
   }
 
   .features-header {
@@ -413,7 +455,7 @@ const steps = [
   .features-header h2 {
     font-size: 2.5rem;
     font-weight: 700;
-    color: var(--coffee-800);
+    color: var(--cream-100);
     line-height: 1.2;
     margin-top: 16px;
   }
@@ -428,7 +470,7 @@ const steps = [
     display: flex;
     gap: 20px;
     padding: 28px 0;
-    border-bottom: 1px solid var(--cream-300);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     transition: all 0.2s ease;
   }
 
@@ -447,24 +489,25 @@ const steps = [
   .feature-icon {
     width: 48px;
     height: 48px;
-    background: var(--white);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
     transition: all 0.2s ease;
-    box-shadow: 0 2px 8px rgba(45, 30, 20, 0.06);
   }
 
   .feature-item:hover .feature-icon {
     background: var(--accent);
+    border-color: var(--accent);
   }
 
   .feature-icon svg {
     width: 24px;
     height: 24px;
-    color: var(--coffee-700);
+    color: var(--accent-light);
     transition: all 0.2s ease;
   }
 
@@ -475,25 +518,52 @@ const steps = [
   .feature-content h3 {
     font-size: 1.1rem;
     font-weight: 600;
-    color: var(--coffee-800);
+    color: var(--cream-100);
     margin-bottom: 6px;
   }
 
   .feature-content p {
     font-size: 0.95rem;
-    color: var(--text-secondary);
+    color: var(--cream-400);
     line-height: 1.6;
   }
 
-  /* Integrations - Elegant warm section */
+  /* Integrations - Warm terracotta section */
   .integrations {
     padding: 120px 0;
-    background: var(--cream-200);
+    background: 
+      linear-gradient(180deg, #faf5ef 0%, #f5ebe0 50%, #efe3d5 100%);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .integrations::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 200px;
+    background: linear-gradient(180deg, rgba(42, 31, 26, 0.03) 0%, transparent 100%);
+    pointer-events: none;
+  }
+
+  .integrations::after {
+    content: '';
+    position: absolute;
+    top: 20%;
+    right: -5%;
+    width: 35%;
+    height: 60%;
+    background: radial-gradient(ellipse, rgba(212, 112, 58, 0.06) 0%, transparent 60%);
+    pointer-events: none;
   }
 
   .integrations-layout {
     max-width: 1100px;
     margin: 0 auto;
+    position: relative;
+    z-index: 1;
   }
 
   .integrations-header {
@@ -711,21 +781,53 @@ const steps = [
     color: #18bce9;
   }
 
-  /* How it works - Clean timeline */
+  /* How it works - Warm accent section */
   .how-it-works {
     padding: 100px 0;
-    background: var(--white);
+    background: 
+      linear-gradient(135deg, #3d2b24 0%, #2a1f1a 50%, #1f1714 100%);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .how-it-works::before {
+    content: '';
+    position: absolute;
+    top: -20%;
+    left: 30%;
+    width: 60%;
+    height: 100%;
+    background: radial-gradient(ellipse, rgba(212, 112, 58, 0.12) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  .how-it-works::after {
+    content: '';
+    position: absolute;
+    bottom: -30%;
+    left: -10%;
+    width: 50%;
+    height: 80%;
+    background: radial-gradient(ellipse, rgba(139, 90, 43, 0.08) 0%, transparent 55%);
+    pointer-events: none;
+  }
+
+  .how-it-works .section-label {
+    color: var(--accent-light);
+    background: rgba(212, 112, 58, 0.15);
   }
 
   .steps-header {
     text-align: center;
     margin-bottom: 60px;
+    position: relative;
+    z-index: 1;
   }
 
   .steps-header h2 {
     font-size: 2rem;
     font-weight: 700;
-    color: var(--coffee-800);
+    color: var(--cream-100);
     margin-top: 12px;
   }
 
@@ -735,16 +837,17 @@ const steps = [
     max-width: 900px;
     margin: 0 auto;
     position: relative;
+    z-index: 1;
   }
 
   .steps-timeline::before {
     content: '';
     position: absolute;
-    top: 20px;
-    left: 40px;
-    right: 40px;
+    top: 24px;
+    left: 60px;
+    right: 60px;
     height: 2px;
-    background: linear-gradient(90deg, var(--cream-300), var(--accent-glow), var(--cream-300));
+    background: linear-gradient(90deg, rgba(212, 112, 58, 0.3), rgba(212, 112, 58, 0.6), rgba(212, 112, 58, 0.3));
   }
 
   .step-item {
@@ -754,41 +857,43 @@ const steps = [
   }
 
   .step-marker {
-    width: 40px;
-    height: 40px;
+    width: 48px;
+    height: 48px;
     background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     margin: 0 auto 20px;
-    font-size: 1rem;
+    font-size: 1.1rem;
     font-weight: 700;
     color: white;
     position: relative;
     z-index: 1;
-    box-shadow: 0 4px 12px rgba(212, 112, 58, 0.3);
+    box-shadow: 0 4px 20px rgba(212, 112, 58, 0.4);
+    border: 3px solid rgba(212, 112, 58, 0.3);
   }
 
   .step-content h3 {
     font-size: 1rem;
     font-weight: 600;
-    color: var(--coffee-800);
+    color: var(--cream-100);
     margin-bottom: 6px;
   }
 
   .step-content p {
     font-size: 0.85rem;
-    color: var(--text-secondary);
+    color: var(--cream-400);
     max-width: 160px;
     margin: 0 auto;
     line-height: 1.5;
   }
 
-  /* CTA Section - Warm gradient */
+  /* CTA Section - Warm cream with accent */
   .cta-section {
     padding: 100px 0;
-    background: linear-gradient(135deg, var(--coffee-800) 0%, var(--coffee-900) 100%);
+    background: 
+      linear-gradient(180deg, #f5ebe0 0%, #efe3d5 50%, #e8daca 100%);
     text-align: center;
     position: relative;
     overflow: hidden;
@@ -797,12 +902,22 @@ const steps = [
   .cta-section::before {
     content: '';
     position: absolute;
-    top: -50%;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 120%;
-    height: 200%;
-    background: radial-gradient(ellipse, rgba(212, 112, 58, 0.15) 0%, transparent 60%);
+    top: -30%;
+    left: 20%;
+    width: 60%;
+    height: 100%;
+    background: radial-gradient(ellipse, rgba(212, 112, 58, 0.08) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  .cta-section::after {
+    content: '';
+    position: absolute;
+    bottom: -20%;
+    right: 10%;
+    width: 40%;
+    height: 80%;
+    background: radial-gradient(ellipse, rgba(139, 90, 43, 0.06) 0%, transparent 55%);
     pointer-events: none;
   }
 
@@ -816,13 +931,13 @@ const steps = [
   .cta-section h2 { 
     font-size: 2.2rem; 
     font-weight: 700; 
-    color: var(--white); 
+    color: var(--coffee-800); 
     margin-bottom: 12px; 
   }
   
   .cta-section p { 
     font-size: 1.05rem; 
-    color: var(--cream-400); 
+    color: var(--text-secondary); 
     margin-bottom: 32px; 
   }
   
@@ -833,39 +948,43 @@ const steps = [
   }
 
   .btn-cta-primary {
-    background: var(--accent);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
     color: var(--white);
-    padding: 14px 28px;
+    padding: 16px 32px;
     font-size: 1rem;
     font-weight: 600;
-    border-radius: 10px;
+    border-radius: 12px;
     text-decoration: none;
     transition: all 0.2s ease;
+    box-shadow: 0 4px 20px rgba(212, 112, 58, 0.35);
   }
 
   .btn-cta-primary:hover {
-    background: var(--accent-dark);
+    background: linear-gradient(135deg, var(--accent-light) 0%, var(--accent) 100%);
     transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(212, 112, 58, 0.45);
   }
 
   .btn-cta-secondary {
-    background: transparent;
-    color: var(--cream-300);
-    padding: 14px 28px;
+    background: var(--coffee-800);
+    color: var(--white);
+    padding: 16px 32px;
     font-size: 1rem;
     font-weight: 500;
-    border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    border: none;
     display: inline-flex;
     align-items: center;
     gap: 8px;
     text-decoration: none;
     transition: all 0.2s ease;
+    box-shadow: 0 4px 16px rgba(61, 43, 36, 0.2);
   }
 
   .btn-cta-secondary:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.3);
+    background: var(--coffee-700);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(61, 43, 36, 0.3);
   }
 
   /* Responsive */
@@ -894,6 +1013,7 @@ const steps = [
     .features { padding: 60px 0; }
     .features-header h2 { font-size: 1.8rem; }
     .step-item { flex: 0 0 100%; }
+    .step-marker { width: 44px; height: 44px; }
     .integrations { padding: 80px 0; }
     .integrations-header h2 { font-size: 2rem; }
     .cloud-hero { padding: 32px; }
@@ -904,7 +1024,7 @@ const steps = [
     .how-it-works { padding: 60px 0; }
     .cta-section { padding: 60px 0; }
     .cta-section h2 { font-size: 1.6rem; }
-    .cta-buttons { flex-direction: column; }
+    .cta-buttons { flex-direction: column; gap: 16px; }
     .btn-cta-primary, .btn-cta-secondary { width: 100%; justify-content: center; }
   }
 </style>

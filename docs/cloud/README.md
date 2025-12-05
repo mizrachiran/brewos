@@ -226,10 +226,16 @@ For persistence on cloud platforms, mount a volume to `DATA_DIR`.
 |----------|--------|------|-------------|
 | `/api/devices` | GET | Yes | List user's devices |
 | `/api/devices/claim` | POST | Yes | Claim a device with QR token |
+| `/api/devices/claim-share` | POST | Yes | Claim a device with share link |
 | `/api/devices/register-claim` | POST | No | ESP32 registers claim token |
 | `/api/devices/:id` | GET | Yes | Get device details |
 | `/api/devices/:id` | PATCH | Yes | Update device (name, brand, model) |
 | `/api/devices/:id` | DELETE | Yes | Remove device from account |
+| `/api/devices/:id/share` | POST | Yes | Generate share link for device |
+| `/api/devices/:id/users` | GET | Yes | List users with access to device |
+| `/api/devices/:id/users/:userId` | DELETE | Yes | Revoke user's access to device |
+
+> 📖 **See [Pairing_and_Sharing.md](./Pairing_and_Sharing.md)** for detailed documentation on device pairing and sharing flows.
 
 ### Other
 
@@ -246,22 +252,23 @@ For persistence on cloud platforms, mount a volume to `DATA_DIR`.
 | `/ws/device` | ESP32 device connections |
 | `/ws/client?token=...&device=...` | Client app connections (requires session token) |
 
-## Device Pairing Flow
+## Device Pairing & Sharing
 
-1. **ESP32 generates QR code**
-   - Generates random claim token
-   - Calls `/api/devices/register-claim` to store token hash
-   - Displays QR code with URL: `https://<your-domain>/pair?id=BRW-XXXXX&token=TOKEN`
+BrewOS supports two methods for adding devices to accounts:
 
-2. **User scans QR code**
-   - Opens pairing URL in browser
-   - Redirects to login (Google) if not authenticated
-   - Shows device confirmation screen
+### 1. ESP32 QR Pairing (Physical Access)
 
-3. **User claims device**
-   - App calls `/api/devices/claim` with device ID and token
-   - Server verifies token hash matches
-   - Device is added to user's account
+1. **ESP32 generates QR code** - Displays pairing URL on screen
+2. **User scans QR code** - Opens `/pair` page, logs in if needed
+3. **Device is claimed** - Added to user's account
+
+### 2. User-to-User Sharing (Remote)
+
+1. **Owner generates share link** - Via `/api/devices/:id/share`
+2. **Owner shares link** - QR code, URL, or manual code
+3. **Recipient claims device** - Via `/api/devices/claim-share`
+
+> 📖 **See [Pairing_and_Sharing.md](./Pairing_and_Sharing.md)** for complete documentation including flow diagrams, API details, and security considerations.
 
 ## Session Configuration
 

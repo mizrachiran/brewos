@@ -50,10 +50,8 @@ const mockPairing: PairingData = {
   manualCode: "X6ST-AP3G",
 };
 
-// ============ DESKTOP STORIES ============
-
-export const WelcomeDesktop: Story = {
-  name: "1. Welcome - Desktop",
+export const Welcome: Story = {
+  name: "1. Welcome",
   render: () => (
     <WizardStepWrapper
       currentStep={0}
@@ -67,7 +65,7 @@ export const WelcomeDesktop: Story = {
   ),
 };
 
-function MachineSelectionDesktopComponent() {
+function MachineSelectionComponent() {
   const [name, setName] = useState("");
   const [machineId, setMachineId] = useState("");
   const [errors] = useState<Record<string, string>>({});
@@ -84,12 +82,12 @@ function MachineSelectionDesktopComponent() {
   );
 }
 
-export const MachineSelectionDesktop: Story = {
-  name: "2. Machine Selection - Desktop",
-  render: () => <MachineSelectionDesktopComponent />,
+export const MachineSelection: Story = {
+  name: "2. Machine Selection",
+  render: () => <MachineSelectionComponent />,
 };
 
-function PowerSettingsDesktopComponent() {
+function PowerSettingsComponent() {
   const [voltage, setVoltage] = useState(220);
   const [current, setCurrent] = useState(13);
   const [errors] = useState<Record<string, string>>({});
@@ -106,12 +104,12 @@ function PowerSettingsDesktopComponent() {
   );
 }
 
-export const PowerSettingsDesktop: Story = {
-  name: "3. Power Settings - Desktop",
-  render: () => <PowerSettingsDesktopComponent />,
+export const PowerSettings: Story = {
+  name: "3. Power Settings",
+  render: () => <PowerSettingsComponent />,
 };
 
-function CloudSetupDesktopComponent() {
+function CloudSetupComponent() {
   const [enabled, setEnabled] = useState(true);
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
@@ -141,13 +139,13 @@ function CloudSetupDesktopComponent() {
   );
 }
 
-export const CloudSetupDesktop: Story = {
-  name: "4. Cloud Setup - Desktop",
-  render: () => <CloudSetupDesktopComponent />,
+export const CloudSetup: Story = {
+  name: "4. Cloud Setup",
+  render: () => <CloudSetupComponent />,
 };
 
-export const DoneDesktop: Story = {
-  name: "5. Done - Desktop",
+export const Done: Story = {
+  name: "5. Done",
   render: () => (
     <WizardStepWrapper
       currentStep={4}
@@ -155,132 +153,6 @@ export const DoneDesktop: Story = {
       showBack={false}
       nextLabel="Start Brewing"
       variant="desktop"
-    >
-      <DoneStep machineName="My Bianca" />
-    </WizardStepWrapper>
-  ),
-};
-
-// ============ MOBILE STORIES ============
-
-export const WelcomeMobile: Story = {
-  name: "1. Welcome - Mobile",
-  parameters: {
-    viewport: { defaultViewport: "mobile1" },
-  },
-  render: () => (
-    <WizardStepWrapper
-      currentStep={0}
-      steps={WIZARD_STEPS}
-      showBack={false}
-      nextLabel="Next"
-      variant="mobile"
-    >
-      <WelcomeStep />
-    </WizardStepWrapper>
-  ),
-};
-
-function MachineSelectionMobileComponent() {
-  const [name, setName] = useState("My Bianca");
-  const [machineId, setMachineId] = useState("lelit_bianca");
-  const [errors] = useState<Record<string, string>>({});
-  return (
-    <WizardStepWrapper currentStep={1} steps={WIZARD_STEPS} variant="mobile">
-      <MachineStep
-        machineName={name}
-        selectedMachineId={machineId}
-        errors={errors}
-        onMachineNameChange={setName}
-        onMachineIdChange={setMachineId}
-      />
-    </WizardStepWrapper>
-  );
-}
-
-export const MachineSelectionMobile: Story = {
-  name: "2. Machine Selection - Mobile",
-  parameters: {
-    viewport: { defaultViewport: "mobile1" },
-  },
-  render: () => <MachineSelectionMobileComponent />,
-};
-
-function PowerSettingsMobileComponent() {
-  const [voltage, setVoltage] = useState(220);
-  const [current, setCurrent] = useState(13);
-  const [errors] = useState<Record<string, string>>({});
-  return (
-    <WizardStepWrapper currentStep={2} steps={WIZARD_STEPS} variant="mobile">
-      <EnvironmentStep
-        voltage={voltage}
-        maxCurrent={current}
-        errors={errors}
-        onVoltageChange={setVoltage}
-        onMaxCurrentChange={setCurrent}
-      />
-    </WizardStepWrapper>
-  );
-}
-
-export const PowerSettingsMobile: Story = {
-  name: "3. Power Settings - Mobile",
-  parameters: {
-    viewport: { defaultViewport: "mobile1" },
-  },
-  render: () => <PowerSettingsMobileComponent />,
-};
-
-function CloudSetupMobileComponent() {
-  const [enabled, setEnabled] = useState(true);
-  const [copied, setCopied] = useState(false);
-  const handleCopy = () => {
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-  return (
-    <WizardStepWrapper
-      currentStep={3}
-      steps={WIZARD_STEPS}
-      nextLabel="Continue"
-      variant="mobile"
-    >
-      <CloudStep
-        pairing={enabled ? mockPairing : null}
-        loading={false}
-        copied={copied}
-        cloudEnabled={enabled}
-        cloudConnected={true}
-        checkingStatus={false}
-        error={undefined}
-        onCopy={handleCopy}
-        onSkip={() => setEnabled(false)}
-        onCloudEnabledChange={setEnabled}
-      />
-    </WizardStepWrapper>
-  );
-}
-
-export const CloudSetupMobile: Story = {
-  name: "4. Cloud Setup - Mobile",
-  parameters: {
-    viewport: { defaultViewport: "mobile1" },
-  },
-  render: () => <CloudSetupMobileComponent />,
-};
-
-export const DoneMobile: Story = {
-  name: "5. Done - Mobile",
-  parameters: {
-    viewport: { defaultViewport: "mobile1" },
-  },
-  render: () => (
-    <WizardStepWrapper
-      currentStep={4}
-      steps={WIZARD_STEPS}
-      showBack={false}
-      nextLabel="Start Brewing"
-      variant="mobile"
     >
       <DoneStep machineName="My Bianca" />
     </WizardStepWrapper>
@@ -319,8 +191,8 @@ function CloudConnectedComponent() {
   );
 }
 
-export const CloudConnectedDesktop: Story = {
-  name: "4. Cloud Connected - Desktop",
+export const CloudConnected: Story = {
+  name: "4. Cloud Connected",
   render: () => <CloudConnectedComponent />,
 };
 
@@ -354,30 +226,10 @@ function CloudDisabledComponent() {
   );
 }
 
-export const CloudDisabledDesktop: Story = {
-  name: "4. Cloud Disabled - Desktop",
-  render: () => <CloudDisabledComponent />,
-};
-
-// ============ LEGACY ALIASES (for backward compatibility) ============
-
-export const Welcome = WelcomeDesktop;
-export const MachineSelection: Story = {
-  render: () => <MachineSelectionDesktopComponent />,
-};
-export const PowerSettings: Story = {
-  render: () => <PowerSettingsDesktopComponent />,
-};
-export const CloudSetup: Story = {
-  render: () => <CloudSetupDesktopComponent />,
-};
-export const CloudConnected: Story = {
-  render: () => <CloudConnectedComponent />,
-};
 export const CloudDisabled: Story = {
+  name: "4. Cloud Disabled",
   render: () => <CloudDisabledComponent />,
 };
-export const Done = DoneDesktop;
 
 // ============ ALL STEPS OVERVIEW ============
 

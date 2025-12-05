@@ -39,7 +39,7 @@ jobs:
               - 'src/shared/**'
             esp32:
               - 'src/esp32/**'
-              - 'src/web/**'
+              - 'src/shared/**'
 
   # ==========================================================================
   # Web UI - Lint, Type Check, Build
@@ -51,12 +51,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: src/web/package-lock.json
 
       - name: Install Dependencies
@@ -85,12 +85,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: src/cloud/package-lock.json
 
       - name: Install Dependencies
@@ -146,7 +146,7 @@ jobs:
           mkdir build && cd build
           cmake -DBUILD_ALL_MACHINES=ON ..
           make -j$(nproc)
-          
+
       - name: Verify Output
         run: |
           cd src/pico/build
@@ -169,8 +169,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: src/web/package-lock.json
 
       - name: Build Web UI for ESP32
@@ -182,7 +182,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install PlatformIO
         run: pip install platformio
@@ -213,7 +213,7 @@ jobs:
           echo "Cloud: ${{ needs.cloud.result || 'skipped' }}"
           echo "Pico:  ${{ needs.pico.result || 'skipped' }}"
           echo "ESP32: ${{ needs.esp32.result || 'skipped' }}"
-          
+
           # Fail if any required job failed
           if [[ "${{ needs.web.result }}" == "failure" ]] || \
              [[ "${{ needs.cloud.result }}" == "failure" ]] || \
@@ -222,6 +222,5 @@ jobs:
             echo "❌ CI Failed"
             exit 1
           fi
-          
-          echo "✅ CI Passed"
 
+          echo "✅ CI Passed"

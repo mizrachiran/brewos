@@ -285,8 +285,9 @@ function App() {
 
   // Show loading state
   // For cloud mode with existing user, also wait for initial device fetch
+  // Skip device waiting in demo mode - demo doesn't fetch real devices
   const isWaitingForDevices =
-    mode === "cloud" && user && !initialDevicesFetched;
+    !inDemoMode && mode === "cloud" && user && !initialDevicesFetched;
 
   if (loading || (!inDemoMode && !initialized) || isWaitingForDevices) {
     return <Loading message={initError || undefined} />;
@@ -326,6 +327,11 @@ function App() {
     );
   }
 
+  // ===== DEV MODE ROUTES =====
+  // These are available in any mode for testing welcome screens
+  // Enable via ?dev=true or localStorage
+  const isDev = isDevModeEnabled();
+
   // ===== LOCAL MODE (ESP32) =====
   // IMPORTANT: If setup is not complete, we MUST stay in local mode
   // even if mode detection changes. The wizard must complete first.
@@ -342,9 +348,6 @@ function App() {
     if (!setupComplete) {
       return <FirstRunWizard onComplete={handleSetupComplete} />;
     }
-
-    // Check for dev preview routes (dev mode enabled via ?dev=true or localStorage)
-    const isDev = isDevModeEnabled();
 
     return (
       <>
@@ -390,6 +393,22 @@ function App() {
     return (
       <>
         <Routes>
+          {/* Dev preview routes for testing welcome screens */}
+          {isDev && (
+            <>
+              <Route path="/dev/login" element={<Login />} />
+              <Route path="/dev/onboarding" element={<Onboarding />} />
+              <Route path="/dev/pair" element={<Pair />} />
+              <Route
+                path="/dev/wizard"
+                element={
+                  <FirstRunWizard
+                    onComplete={() => (window.location.href = "/")}
+                  />
+                }
+              />
+            </>
+          )}
           <Route path="/login" element={<Login />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/pair" element={<Pair />} />
@@ -405,6 +424,22 @@ function App() {
     return (
       <>
         <Routes>
+          {/* Dev preview routes for testing welcome screens */}
+          {isDev && (
+            <>
+              <Route path="/dev/login" element={<Login />} />
+              <Route path="/dev/onboarding" element={<Onboarding />} />
+              <Route path="/dev/pair" element={<Pair />} />
+              <Route
+                path="/dev/wizard"
+                element={
+                  <FirstRunWizard
+                    onComplete={() => (window.location.href = "/")}
+                  />
+                }
+              />
+            </>
+          )}
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/pair" element={<Pair />} />
@@ -422,6 +457,23 @@ function App() {
   return (
     <>
       <Routes>
+        {/* Dev preview routes for testing welcome screens */}
+        {isDev && (
+          <>
+            <Route path="/dev/login" element={<Login />} />
+            <Route path="/dev/onboarding" element={<Onboarding />} />
+            <Route path="/dev/pair" element={<Pair />} />
+            <Route
+              path="/dev/wizard"
+              element={
+                <FirstRunWizard
+                  onComplete={() => (window.location.href = "/")}
+                />
+              }
+            />
+          </>
+        )}
+
         {/* Auth routes */}
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/pair" element={<Pair />} />

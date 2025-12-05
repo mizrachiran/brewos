@@ -24,27 +24,27 @@ export function ManualStep({
   const isValidCode = claimCode && claimCode.length >= 8;
   
   return (
-    <div className="py-4 sm:py-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="py-2 xs:py-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header */}
-      <div className="text-center mb-6 sm:mb-8">
-        <div className="w-12 h-12 sm:w-14 sm:h-14 bg-accent/10 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4">
-          <KeyRound className="w-6 h-6 sm:w-7 sm:h-7 text-accent" />
+      <div className="text-center mb-4 xs:mb-8">
+        <div className="w-10 h-10 xs:w-14 xs:h-14 bg-accent/10 rounded-xl xs:rounded-2xl flex items-center justify-center mx-auto mb-2 xs:mb-4">
+          <KeyRound className="w-5 h-5 xs:w-7 xs:h-7 text-accent" />
         </div>
-        <h2 className="text-2xl sm:text-3xl font-bold text-theme mb-2">
+        <h2 className="text-xl xs:text-3xl font-bold text-theme mb-1 xs:mb-2">
           Enter Pairing Code
         </h2>
-        <p className="text-theme-muted text-sm sm:text-base max-w-md mx-auto">
+        <p className="text-theme-muted text-xs xs:text-base max-w-md mx-auto">
           Find the code on your BrewOS display under <span className="font-semibold text-theme">System → Cloud Access</span>
         </p>
       </div>
 
       {/* Info box */}
-      <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-accent/5 border border-accent/20 rounded-xl">
-        <div className="flex items-start gap-2 sm:gap-3">
-          <Info className="w-4 h-4 sm:w-5 sm:h-5 text-accent flex-shrink-0 mt-0.5" />
+      <div className="mb-3 xs:mb-6 p-2.5 xs:p-4 bg-accent/5 border border-accent/20 rounded-lg xs:rounded-xl">
+        <div className="flex items-start gap-2 xs:gap-3">
+          <Info className="w-3.5 h-3.5 xs:w-5 xs:h-5 text-accent flex-shrink-0 mt-0.5" />
           <div className="flex-1">
-            <p className="text-xs sm:text-sm font-medium text-theme mb-1">Where to find your code</p>
-            <p className="text-xs text-theme-muted leading-relaxed">
+            <p className="text-[10px] xs:text-sm font-medium text-theme mb-0.5 xs:mb-1">Where to find your code</p>
+            <p className="text-[10px] xs:text-xs text-theme-muted leading-relaxed">
               Navigate to your machine's display, go to <span className="font-mono text-accent">System</span> → <span className="font-mono text-accent">Cloud Access</span> to find your 8-character pairing code.
             </p>
           </div>
@@ -52,7 +52,7 @@ export function ManualStep({
       </div>
 
       {/* Form */}
-      <div className="space-y-4 sm:space-y-5">
+      <div className="space-y-3 xs:space-y-5">
         <div>
           <Input
             label="Pairing Code"
@@ -63,10 +63,10 @@ export function ManualStep({
             }
             hint="Enter the 8-character code (letters and numbers)"
             maxLength={9}
-            className="text-center text-lg font-mono tracking-wider"
+            className="text-center text-base xs:text-lg font-mono tracking-wider"
           />
           {isValidCode && !error && (
-            <div className="mt-2 flex items-center gap-2 text-xs text-emerald-500">
+            <div className="mt-1.5 xs:mt-2 flex items-center gap-2 text-[10px] xs:text-xs text-emerald-500">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span>Code format looks good</span>
             </div>
@@ -75,16 +75,16 @@ export function ManualStep({
 
         {/* Error message */}
         {error && (
-          <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 animate-in fade-in slide-in-from-top-2">
+          <div className="p-2.5 xs:p-3 rounded-lg xs:rounded-xl bg-red-500/10 border border-red-500/20 animate-in fade-in slide-in-from-top-2">
             <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-              <p className="text-xs sm:text-sm text-red-500">{error}</p>
+              <AlertCircle className="w-3.5 h-3.5 xs:w-4 xs:h-4 text-red-500 flex-shrink-0" />
+              <p className="text-[10px] xs:text-sm text-red-500">{error}</p>
             </div>
           </div>
         )}
 
         {/* Action buttons */}
-        <div className="flex gap-3 pt-2">
+        <div className="flex gap-2 xs:gap-3 pt-1 xs:pt-2">
           {onBack && (
             <Button variant="secondary" className="flex-1" onClick={onBack}>
               Back

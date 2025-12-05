@@ -14,6 +14,9 @@ import {
   getDeviceUsers,
   revokeUserAccess,
   getDeviceUserCount,
+  createShareToken,
+  verifyShareToken,
+  claimDeviceWithShareToken,
 } from "../services/device.js";
 
 const router = Router();
@@ -284,6 +287,76 @@ router.delete("/:id", writeLimiter, sessionAuthMiddleware, (req, res) => {
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: "Failed to remove device" });
+  }
+});
+
+/**
+ * POST /api/devices/:id/share
+ * Generate a share link for a device
+ * Allows owners to share device access with others
+ */
+router.post("/:id/share", writeLimiter, sessionAuthMiddleware, (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.id;
+
+    const { token, expiresAt } = createShareToken(id, userId);
+
+    // Build the share URL
+    const baseUrl = process.env.CLOUD_URL || "https://cloud.brewos.io";
+    const shareUrl = `${baseUrl}/pair?id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}&share=true`;
+
+    // Generate a manual code (8 chars with hyphen: XXXX-XXXX)
+    const manualCode = `${token.substring(0, 4)}-${token.substring(4, 8)}`;
+
+    res.json({
+      deviceId: id,
+      token,
+      url: shareUrl,
+      manualCode,
+      expiresAt,
+      expiresIn: 24 * 60 * 60, // 24 hours in seconds
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to generate share link";
+    res.status(400).json({ error: message });
+  }
+});
+
+/**
+ * POST /api/devices/claim-share
+ * Claim a device using a share link
+ * Used when someone clicks a share link and has an account
+ */
+router.post("/claim-share", strictLimiter, sessionAuthMiddleware, (req, res) => {
+  try {
+    const { deviceId, token, name } = req.body;
+    const userId = req.user!.id;
+
+    if (!deviceId || !token) {
+      return res.status(400).json({ error: "Missing deviceId or token" });
+    }
+
+    // Claim the device using share token
+    const device = claimDeviceWithShareToken(deviceId, token, userId, name);
+
+    // Get the user-specific name
+    const userDevices = getUserDevices(userId);
+    const userDevice = userDevices.find((d) => d.id === deviceId);
+
+    res.json({
+      success: true,
+      device: {
+        id: device.id,
+        name: userDevice?.user_name || name || "My BrewOS",
+        claimedAt: userDevice?.user_claimed_at || device.claimed_at,
+      },
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to claim device";
+    res.status(400).json({ error: message });
   }
 });
 

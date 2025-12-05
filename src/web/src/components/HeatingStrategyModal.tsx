@@ -150,15 +150,15 @@ export function HeatingStrategyModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center xs:p-4"
       onClick={onClose}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+      <div className="absolute inset-0 bg-black/50 xs:backdrop-blur-sm transition-opacity" />
 
       {/* Modal */}
       <div
-        className="relative w-full max-w-2xl max-h-[90vh] bg-theme-card rounded-xl sm:rounded-2xl shadow-2xl border border-theme overflow-hidden transform transition-all flex flex-col"
+        className="relative w-full h-full xs:h-auto xs:max-w-2xl xs:max-h-[90vh] bg-theme-card rounded-none xs:rounded-2xl xs:shadow-2xl border-0 xs:border border-theme overflow-hidden transform transition-all flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

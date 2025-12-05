@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import rateLimit from "express-rate-limit";
 import cors from "cors";
 import path from "path";
 import { createServer } from "http";
@@ -42,7 +43,47 @@ app.use((_req, res, next) => {
 const webDistPath = path.resolve(
   process.env.WEB_DIST_PATH || path.join(process.cwd(), "../web/dist")
 );
-app.use(express.static(webDistPath));
+
+// Rate limiter for static file endpoints (prevents abuse)
+const staticFileLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60, // limit each IP to 60 requests per minute
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Cache control for service worker - MUST never be cached by browsers
+// This ensures new deployments are detected immediately
+app.get("/sw.js", staticFileLimiter, (_req, res) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.sendFile(path.join(webDistPath, "sw.js"));
+});
+
+// Cache control for index.html - should revalidate on each request
+app.get("/index.html", staticFileLimiter, (_req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.sendFile(path.join(webDistPath, "index.html"));
+});
+
+// Static files with proper caching:
+// - Hashed assets (/assets/*) can be cached forever (immutable)
+// - Other files should revalidate
+app.use(
+  "/assets",
+  express.static(path.join(webDistPath, "assets"), {
+    maxAge: "1y",
+    immutable: true,
+  })
+);
+
+app.use(express.static(webDistPath, {
+  // Other static files: cache for 1 hour but always revalidate
+  maxAge: "1h",
+  etag: true,
+  lastModified: true,
+}));
 
 // Create HTTP server
 const server = createServer(app);
@@ -136,7 +177,7 @@ app.use("/api/devices", devicesRouter);
 app.use("/api/push", pushRouter);
 
 // SPA fallback
-app.get("*", (_req, res) => {
+app.get("*", staticFileLimiter, (_req, res) => {
   res.sendFile(path.join(webDistPath, "index.html"));
 });
 

@@ -301,8 +301,22 @@ void handle_packet(const packet_t* packet) {
                     } else {
                         protocol_send_ack(MSG_CMD_CONFIG, packet->seq, ACK_ERROR_INVALID);
                     }
+                } else if (config_type == CONFIG_HEATING_STRATEGY) {
+                    // Set heating strategy
+                    if (packet->length >= 2) {
+                        uint8_t strategy = packet->payload[1];
+                        if (control_set_heating_strategy(strategy)) {
+                            DEBUG_PRINT("CMD_CONFIG: Heating strategy set to %d\n", strategy);
+                            protocol_send_ack(MSG_CMD_CONFIG, packet->seq, ACK_SUCCESS);
+                        } else {
+                            DEBUG_PRINT("CMD_CONFIG: Invalid heating strategy %d\n", strategy);
+                            protocol_send_ack(MSG_CMD_CONFIG, packet->seq, ACK_ERROR_INVALID);
+                        }
+                    } else {
+                        protocol_send_ack(MSG_CMD_CONFIG, packet->seq, ACK_ERROR_INVALID);
+                    }
                 } else {
-                    // Other config types handled elsewhere
+                    // Other config types - just ACK for now
                     protocol_send_ack(MSG_CMD_CONFIG, packet->seq, ACK_SUCCESS);
                 }
             }

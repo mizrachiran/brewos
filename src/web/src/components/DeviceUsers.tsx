@@ -24,7 +24,13 @@ interface DeviceUser {
   claimedAt: string;
 }
 
-// Demo mode mock users
+// Demo mode mock data
+const DEMO_USER = {
+  id: "demo-user",
+  email: "demo@brewos.io",
+  name: "Demo User",
+};
+
 const DEMO_USERS: DeviceUser[] = [
   {
     userId: "demo-user",
@@ -55,7 +61,7 @@ export function DeviceUsers({
   onClose,
   onLeave,
 }: DeviceUsersProps) {
-  const { user, getAccessToken } = useAppStore();
+  const { user: realUser, getAccessToken } = useAppStore();
   const { success, error } = useToast();
   const [users, setUsers] = useState<DeviceUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,6 +75,7 @@ export function DeviceUsers({
   const [leaving, setLeaving] = useState(false);
 
   const isDemo = isDemoMode();
+  const user = isDemo ? DEMO_USER : realUser;
 
   const fetchUsers = useCallback(
     async (showLoading = true) => {
@@ -275,14 +282,14 @@ export function DeviceUsers({
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200"
+        className="fixed inset-0 bg-black/50 xs:backdrop-blur-sm flex items-center justify-center xs:p-4 z-50 animate-in fade-in duration-200"
         onClick={(e) => {
           if (e.target === e.currentTarget) {
             onClose();
           }
         }}
       >
-        <Card className="w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 shadow-2xl">
+        <Card className="w-full h-full xs:h-auto xs:max-w-md xs:max-h-[85vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 xs:shadow-2xl rounded-none xs:rounded-2xl">
           {/* Clean header - title left, close button right */}
           <div className="flex items-center justify-between p-4 border-b border-theme/10 flex-shrink-0">
             <div className="flex-1 min-w-0 pr-4">
@@ -335,74 +342,96 @@ export function DeviceUsers({
                 </p>
               </div>
             ) : (
-              users.map((deviceUser) => (
-                <div
-                  key={deviceUser.userId}
-                  className="group flex items-center justify-between p-4 rounded-xl bg-theme-secondary/30 border border-theme/10 hover:border-theme/20 hover:bg-theme-secondary/50 transition-all duration-200"
-                >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    {deviceUser.avatarUrl ? (
-                      <img
-                        src={deviceUser.avatarUrl}
-                        alt={getUserDisplayName(deviceUser)}
-                        className="w-12 h-12 rounded-full flex-shrink-0 ring-2 ring-theme/10"
-                      />
-                    ) : (
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-accent/20 to-accent/10 flex items-center justify-center flex-shrink-0 ring-2 ring-theme/10">
-                        <User className="w-6 h-6 text-accent" />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="font-semibold text-sm text-theme truncate">
-                          {getUserDisplayName(deviceUser)}
-                        </p>
-                        {isCurrentUser(deviceUser.userId) && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-accent/20 text-accent font-medium flex-shrink-0">
-                            You
-                          </span>
+              users.map((deviceUser) => {
+                const isCurrent = isCurrentUser(deviceUser.userId);
+                return (
+                  <div
+                    key={deviceUser.userId}
+                    className={`group flex items-center justify-between p-4 rounded-xl border transition-all duration-200 ${
+                      isCurrent
+                        ? "bg-accent/10 border-accent/30 hover:border-accent/50"
+                        : "bg-theme-secondary/30 border-theme/10 hover:border-theme/20 hover:bg-theme-secondary/50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {deviceUser.avatarUrl ? (
+                        <img
+                          src={deviceUser.avatarUrl}
+                          alt={getUserDisplayName(deviceUser)}
+                          className={`w-12 h-12 rounded-full flex-shrink-0 ring-2 ${
+                            isCurrent ? "ring-accent/30" : "ring-theme/10"
+                          }`}
+                        />
+                      ) : (
+                        <div
+                          className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ring-2 ${
+                            isCurrent
+                              ? "bg-accent/20 ring-accent/30"
+                              : "bg-gradient-to-br from-accent/20 to-accent/10 ring-theme/10"
+                          }`}
+                        >
+                          <User
+                            className="w-6 h-6 text-accent"
+                          />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <p className="font-semibold text-sm text-theme truncate">
+                            {getUserDisplayName(deviceUser)}
+                          </p>
+                          {isCurrent && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-accent text-white font-medium flex-shrink-0">
+                              You
+                            </span>
+                          )}
+                        </div>
+                        {isCurrent && deviceUser.email && (
+                          <p className="text-xs text-theme-muted truncate mb-0.5">
+                            {deviceUser.email}
+                          </p>
                         )}
-                      </div>
-                      <div className="flex items-center gap-1.5 text-xs text-theme-muted">
-                        <Calendar className="w-3 h-3" />
-                        <span>Added {formatDate(deviceUser.claimedAt)}</span>
+                        <div className="flex items-center gap-1.5 text-xs text-theme-muted">
+                          <Calendar className="w-3 h-3" />
+                          <span>Added {formatDate(deviceUser.claimedAt)}</span>
+                        </div>
                       </div>
                     </div>
+                    {isCurrent ? (
+                      <button
+                        onClick={() => setConfirmLeave(true)}
+                        disabled={leaving}
+                        className="ml-2 w-8 h-8 rounded-lg text-accent hover:text-error hover:bg-error-soft flex items-center justify-center transition-colors flex-shrink-0 disabled:opacity-50"
+                        title="Leave device"
+                      >
+                        {leaving ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <LogOut className="w-4 h-4" />
+                        )}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() =>
+                          setConfirmRemove({
+                            userId: deviceUser.userId,
+                            userName: getUserDisplayName(deviceUser),
+                          })
+                        }
+                        disabled={removingUserId === deviceUser.userId}
+                        className="ml-2 w-8 h-8 rounded-lg text-theme-muted hover:text-error hover:bg-error-soft flex items-center justify-center transition-colors flex-shrink-0 disabled:opacity-50"
+                        title="Remove user"
+                      >
+                        {removingUserId === deviceUser.userId ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <UserX className="w-4 h-4" />
+                        )}
+                      </button>
+                    )}
                   </div>
-                  {isCurrentUser(deviceUser.userId) ? (
-                    <button
-                      onClick={() => setConfirmLeave(true)}
-                      disabled={leaving}
-                      className="ml-2 w-8 h-8 rounded-lg text-theme-muted hover:text-error hover:bg-error-soft flex items-center justify-center transition-colors flex-shrink-0 disabled:opacity-50"
-                      title="Leave device"
-                    >
-                      {leaving ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <LogOut className="w-4 h-4" />
-                      )}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() =>
-                        setConfirmRemove({
-                          userId: deviceUser.userId,
-                          userName: getUserDisplayName(deviceUser),
-                        })
-                      }
-                      disabled={removingUserId === deviceUser.userId}
-                      className="ml-2 w-8 h-8 rounded-lg text-theme-muted hover:text-error hover:bg-error-soft flex items-center justify-center transition-colors flex-shrink-0 disabled:opacity-50"
-                      title="Remove user"
-                    >
-                      {removingUserId === deviceUser.userId ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <UserX className="w-4 h-4" />
-                      )}
-                    </button>
-                  )}
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 

@@ -31,3 +31,4 @@ export const TIMEZONES = [
   { offset: 660, label: "UTC+11:00 (Solomon Islands)" },
   { offset: 720, label: "UTC+12:00 (Auckland)" },
 ];
+
