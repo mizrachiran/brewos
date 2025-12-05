@@ -154,7 +154,8 @@ const notificationCategories = [
       {
         key: "firmwareUpdate" as const,
         label: "Firmware Updates",
-        description: "When a new firmware version is available for your channel",
+        description:
+          "When a new firmware version is available for your channel",
         icon: Download,
         recommended: true,
       },
@@ -186,7 +187,10 @@ export function PushNotificationSettings() {
 
     // Demo mode: use default preferences with local firmware setting
     if (isDemo) {
-      setPreferences({ ...defaultPreferences, firmwareUpdate: firmwareUpdateEnabled });
+      setPreferences({
+        ...defaultPreferences,
+        firmwareUpdate: firmwareUpdateEnabled,
+      });
       return;
     }
 
@@ -198,15 +202,24 @@ export function PushNotificationSettings() {
       if (response.ok) {
         const data = await response.json();
         // Merge server preferences with local firmware update preference
-        setPreferences({ ...data.preferences, firmwareUpdate: firmwareUpdateEnabled });
+        setPreferences({
+          ...data.preferences,
+          firmwareUpdate: firmwareUpdateEnabled,
+        });
       } else {
         // If server fetch fails, at least set local preference
-        setPreferences({ ...defaultPreferences, firmwareUpdate: firmwareUpdateEnabled });
+        setPreferences({
+          ...defaultPreferences,
+          firmwareUpdate: firmwareUpdateEnabled,
+        });
       }
     } catch (err) {
       console.error("Failed to fetch notification preferences:", err);
       // Set defaults with local firmware preference on error
-      setPreferences({ ...defaultPreferences, firmwareUpdate: firmwareUpdateEnabled });
+      setPreferences({
+        ...defaultPreferences,
+        firmwareUpdate: firmwareUpdateEnabled,
+      });
     } finally {
       setLoadingPrefs(false);
     }
@@ -329,9 +342,9 @@ export function PushNotificationSettings() {
           </CardDescription>
         </CardHeader>
 
-        <div className="p-6 space-y-6">
+        <div className="p-4 sm:p-6 space-y-5">
           {/* Status */}
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-theme">
                 Service Worker
@@ -459,16 +472,16 @@ export function PushNotificationSettings() {
           </CardDescription>
         </CardHeader>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {loadingPrefs ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="w-6 h-6 animate-spin text-accent" />
             </div>
           ) : (
-            <div className="space-y-8">
+            <div className="space-y-6">
               {notificationCategories.map((category) => (
                 <div key={category.title}>
-                  <div className="mb-4">
+                  <div className="mb-3">
                     <h3 className="font-semibold text-theme">
                       {category.title}
                     </h3>
@@ -476,46 +489,48 @@ export function PushNotificationSettings() {
                       {category.description}
                     </p>
                   </div>
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {category.items.map((item) => {
                       const Icon = item.icon;
                       return (
                         <div
                           key={item.key}
-                          className={`flex items-start justify-between p-3 bg-theme-secondary rounded-xl ${
+                          className={`flex items-start gap-2.5 p-2.5 sm:p-3 bg-theme-secondary rounded-xl ${
                             !isSubscribed ? "pointer-events-none" : ""
                           }`}
                         >
-                          <div className="flex items-start gap-3">
-                            <div className="p-2 bg-theme-tertiary rounded-lg">
-                              <Icon className="w-4 h-4 text-accent" />
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-theme">
-                                  {item.label}
-                                </span>
-                                {item.recommended && (
-                                  <Badge
-                                    variant="info"
-                                    className="text-[10px] px-1.5 py-0"
-                                  >
-                                    Recommended
-                                  </Badge>
-                                )}
+                          <div className="p-1.5 sm:p-2 bg-theme-tertiary rounded-lg shrink-0">
+                            <Icon className="w-4 h-4 text-accent" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="font-medium text-sm text-theme">
+                                    {item.label}
+                                  </span>
+                                  {item.recommended && (
+                                    <Badge
+                                      variant="info"
+                                      className="text-[10px] px-1.5 py-0"
+                                    >
+                                      Recommended
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="text-xs text-theme-muted mt-0.5">
+                                  {item.description}
+                                </p>
                               </div>
-                              <p className="text-xs text-theme-muted mt-0.5">
-                                {item.description}
-                              </p>
+                              <Toggle
+                                checked={preferences[item.key]}
+                                onChange={(checked) =>
+                                  updatePreference(item.key, checked)
+                                }
+                                disabled={!isSubscribed}
+                              />
                             </div>
                           </div>
-                          <Toggle
-                            checked={preferences[item.key]}
-                            onChange={(checked) =>
-                              updatePreference(item.key, checked)
-                            }
-                            disabled={!isSubscribed}
-                          />
                         </div>
                       );
                     })}

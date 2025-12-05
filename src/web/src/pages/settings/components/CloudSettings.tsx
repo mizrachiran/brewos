@@ -275,9 +275,9 @@ export function CloudSettings() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 md:grid-cols-2 items-stretch">
+      <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
         {/* Pairing QR Code */}
-        <Card className="h-full">
+        <Card className="lg:row-span-2">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-accent/10 rounded-lg">
               <QrCode className="w-5 h-5 text-accent" />
@@ -405,151 +405,150 @@ export function CloudSettings() {
           )}
         </Card>
 
-        {/* Cloud Status & Settings */}
-        <div className="flex flex-col gap-6 h-full">
-          <Card className="flex-1">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-accent/10 rounded-lg">
-                <Cloud className="w-5 h-5 text-accent" />
-              </div>
-              <div>
-                <h2 className="font-semibold text-theme">Cloud Status</h2>
-                <p className="text-sm text-theme-muted">
-                  Connection to BrewOS Cloud
-                </p>
-              </div>
+        {/* Cloud Status */}
+        <Card>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-accent/10 rounded-lg">
+              <Cloud className="w-5 h-5 text-accent" />
             </div>
+            <div>
+              <h2 className="font-semibold text-theme">Cloud Status</h2>
+              <p className="text-sm text-theme-muted">
+                Connection to BrewOS Cloud
+              </p>
+            </div>
+          </div>
 
-            <div className="space-y-3">
-              <div className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-2">
-                  <Wifi className="w-4 h-4 text-theme-muted" />
-                  <span className="text-sm text-theme-secondary">
-                    Cloud Connection
-                  </span>
-                </div>
-                <Badge variant={cloudConfig?.connected ? "success" : "default"}>
-                  {cloudConfig?.connected ? "Connected" : "Disconnected"}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-theme-muted" />
-                  <span className="text-sm text-theme-secondary">Server</span>
-                </div>
-                <span className="text-sm text-theme-muted font-mono">
-                  {cloudConfig?.serverUrl || "Not configured"}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between py-2">
+              <div className="flex items-center gap-2">
+                <Wifi className="w-4 h-4 text-theme-muted" />
+                <span className="text-sm text-theme-secondary">
+                  Cloud Connection
                 </span>
               </div>
-              <div className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-theme-muted" />
-                  <span className="text-sm text-theme-secondary">
-                    Machine ID
-                  </span>
-                </div>
-                <span className="text-sm text-theme-muted font-mono">
-                  {pairing?.deviceId || "—"}
+              <Badge variant={cloudConfig?.connected ? "success" : "default"}>
+                {cloudConfig?.connected ? "Connected" : "Disconnected"}
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between py-2">
+              <div className="flex items-center gap-2">
+                <Globe className="w-4 h-4 text-theme-muted" />
+                <span className="text-sm text-theme-secondary">Server</span>
+              </div>
+              <span className="text-sm text-theme-muted font-mono">
+                {cloudConfig?.serverUrl || "Not configured"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between py-2">
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-theme-muted" />
+                <span className="text-sm text-theme-secondary">
+                  Machine ID
                 </span>
               </div>
+              <span className="text-sm text-theme-muted font-mono">
+                {pairing?.deviceId || "—"}
+              </span>
             </div>
-          </Card>
+          </div>
+        </Card>
 
-          <Card className="flex-1 flex flex-col">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-theme-secondary rounded-lg">
-                <Cloud className="w-5 h-5 text-theme-secondary" />
-              </div>
-              <div>
-                <h2 className="font-semibold text-theme">Cloud Settings</h2>
-                <p className="text-sm text-theme-muted">
-                  Configure cloud connection
-                </p>
-              </div>
+        {/* Cloud Settings */}
+        <Card className="flex flex-col">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-theme-secondary rounded-lg">
+              <Cloud className="w-5 h-5 text-theme-secondary" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-theme">Cloud Settings</h2>
+              <p className="text-sm text-theme-muted">
+                Configure cloud connection
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4 flex-1 flex flex-col">
+            <div>
+              <Toggle
+                label="Enable Cloud Connection"
+                checked={cloudEnabled}
+                onChange={setCloudEnabled}
+              />
+              <p className="text-xs text-theme-muted mt-1 ml-14">
+                Allow remote access via BrewOS Cloud
+              </p>
             </div>
 
-            <div className="space-y-4 flex-1 flex flex-col">
-              <div>
-                <Toggle
-                  label="Enable Cloud Connection"
-                  checked={cloudEnabled}
-                  onChange={setCloudEnabled}
+            {/* Environment Selector */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">
+                Environment{" "}
+                {devMode && <span className="text-purple-400">(Dev)</span>}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {(Object.keys(CLOUD_ENVIRONMENTS) as CloudEnvironment[])
+                  .filter(
+                    (env) => !CLOUD_ENVIRONMENTS[env].devOnly || devMode
+                  )
+                  .map((env) => (
+                    <button
+                      key={env}
+                      onClick={() => handleEnvChange(env)}
+                      disabled={!cloudEnabled}
+                      className={`flex-1 min-w-[80px] px-4 py-2.5 rounded-xl text-sm font-medium transition-all border-2 ${
+                        selectedEnv === env
+                          ? env === "staging"
+                            ? "border-purple-500 bg-purple-500/15 text-purple-600 dark:text-purple-400"
+                            : "border-amber-500 bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                          : "border-transparent bg-theme-secondary text-theme-muted hover:bg-theme-tertiary hover:text-theme"
+                      } ${
+                        !cloudEnabled ? "opacity-50 cursor-not-allowed" : ""
+                      }`}
+                    >
+                      {CLOUD_ENVIRONMENTS[env].label}
+                    </button>
+                  ))}
+              </div>
+              <p className="text-xs text-theme-muted mt-1">
+                {CLOUD_ENVIRONMENTS[selectedEnv].description}
+              </p>
+            </div>
+
+            {/* Server URL - either editable (custom) or read-only display */}
+            <div>
+              {selectedEnv === "custom" ? (
+                <Input
+                  label="Custom Server URL"
+                  value={cloudUrl}
+                  onChange={(e) => setCloudUrl(e.target.value)}
+                  placeholder="wss://your-server.com"
+                  disabled={!cloudEnabled}
                 />
-                <p className="text-xs text-theme-muted mt-1 ml-14">
-                  Allow remote access via BrewOS Cloud
-                </p>
-              </div>
-
-              {/* Environment Selector */}
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">
-                  Environment{" "}
-                  {devMode && <span className="text-purple-400">(Dev)</span>}
-                </label>
-                <div className="flex gap-2">
-                  {(Object.keys(CLOUD_ENVIRONMENTS) as CloudEnvironment[])
-                    .filter(
-                      (env) => !CLOUD_ENVIRONMENTS[env].devOnly || devMode
-                    )
-                    .map((env) => (
-                      <button
-                        key={env}
-                        onClick={() => handleEnvChange(env)}
-                        disabled={!cloudEnabled}
-                        className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-medium transition-all border-2 ${
-                          selectedEnv === env
-                            ? env === "staging"
-                              ? "border-purple-500 bg-purple-500/15 text-purple-600 dark:text-purple-400"
-                              : "border-amber-500 bg-amber-500/15 text-amber-600 dark:text-amber-400"
-                            : "border-transparent bg-theme-secondary text-theme-muted hover:bg-theme-tertiary hover:text-theme"
-                        } ${
-                          !cloudEnabled ? "opacity-50 cursor-not-allowed" : ""
-                        }`}
-                      >
-                        {CLOUD_ENVIRONMENTS[env].label}
-                      </button>
-                    ))}
-                </div>
-                <p className="text-xs text-theme-muted mt-1">
-                  {CLOUD_ENVIRONMENTS[selectedEnv].description}
-                </p>
-              </div>
-
-              {/* Server URL - either editable (custom) or read-only display */}
-              <div>
-                {selectedEnv === "custom" ? (
-                  <Input
-                    label="Custom Server URL"
-                    value={cloudUrl}
-                    onChange={(e) => setCloudUrl(e.target.value)}
-                    placeholder="wss://your-server.com"
-                    disabled={!cloudEnabled}
-                  />
-                ) : (
-                  <>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">
-                      Server URL
-                    </label>
-                    <div className="w-full px-4 py-3 rounded-xl bg-theme-secondary border border-theme text-sm text-theme-muted font-mono">
-                      {cloudUrl}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className="flex-1" />
-              <div className="flex justify-end">
-                <Button
-                  onClick={saveSettings}
-                  loading={saving}
-                  disabled={saving || (!cloudEnabled && !cloudConfig?.enabled)}
-                >
-                  Save Settings
-                </Button>
-              </div>
+              ) : (
+                <>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">
+                    Server URL
+                  </label>
+                  <div className="w-full px-4 py-3 rounded-xl bg-theme-secondary border border-theme text-sm text-theme-muted font-mono break-all">
+                    {cloudUrl}
+                  </div>
+                </>
+              )}
             </div>
-          </Card>
-        </div>
+
+            <div className="flex-1" />
+            <div className="flex justify-end">
+              <Button
+                onClick={saveSettings}
+                loading={saving}
+                disabled={saving || (!cloudEnabled && !cloudConfig?.enabled)}
+              >
+                Save Settings
+              </Button>
+            </div>
+          </div>
+        </Card>
       </div>
     </div>
   );

@@ -149,9 +149,9 @@ export function CloudShareSettings() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 md:grid-cols-2 items-stretch">
+      <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
         {/* Share Device Card */}
-        <Card className="h-full">
+        <Card>
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-accent/10 rounded-lg">
               <Share2 className="w-5 h-5 text-accent" />
@@ -288,7 +288,7 @@ export function CloudShareSettings() {
         </Card>
 
         {/* Cloud Status Card */}
-        <Card className="h-full">
+        <Card>
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-accent/10 rounded-lg">
               <Cloud className="w-5 h-5 text-accent" />
