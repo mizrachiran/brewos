@@ -24,11 +24,11 @@ import fs from "fs";
 
 /**
  * Plugin to inject build version into service worker
- * This ensures the service worker cache is invalidated on every new build,
- * preventing stale JavaScript from being served.
- * 
- * For builds: Injects version at closeBundle
- * For dev: Injects version on server start and updates public/sw.js directly
+ *
+ * For production builds: Injects version + timestamp at closeBundle
+ * For dev: Serves transformed sw.js via middleware (no file modification)
+ *
+ * This ensures cache is invalidated on deployments without modifying source files during dev.
  */
 function serviceWorkerVersionPlugin(version: string, isDev: boolean): Plugin {
   const generateCacheVersion = () => {
@@ -36,57 +36,83 @@ function serviceWorkerVersionPlugin(version: string, isDev: boolean): Plugin {
     return `${version}-${buildTime}`;
   };
 
-  const injectVersion = (swPath: string) => {
-    if (!fs.existsSync(swPath)) {
-      console.warn("[SW Plugin] sw.js not found, skipping version injection");
-      return;
-    }
+  const transformSwContent = (
+    content: string,
+    cacheVersion: string,
+    isDevMode: boolean
+  ) => {
+    let transformed = content;
 
-    const cacheVersion = generateCacheVersion();
-    let content = fs.readFileSync(swPath, "utf-8");
-    
-    // Replace the placeholder with actual version
-    content = content.replace(
+    // Replace CACHE_VERSION
+    transformed = transformed.replace(
       /const CACHE_VERSION = "[^"]+";/,
       `const CACHE_VERSION = "${cacheVersion}";`
     );
-    
-    // Mark dev mode in the SW
-    if (isDev) {
-      content = content.replace(
-        /const IS_DEV_MODE = [^;]+;/,
-        `const IS_DEV_MODE = true;`
-      );
-    }
 
-    fs.writeFileSync(swPath, content);
-    console.log(`[SW Plugin] Injected cache version: ${cacheVersion} (dev: ${isDev})`);
+    // Replace IS_DEV_MODE
+    transformed = transformed.replace(
+      /const IS_DEV_MODE = [^;]+;/,
+      `const IS_DEV_MODE = ${isDevMode};`
+    );
+
+    return transformed;
   };
 
   return {
     name: "sw-version-inject",
-    apply: isDev ? undefined : "build", // Run in both dev and build
-    
-    // For dev server: update on start
+    apply: isDev ? undefined : "build",
+
+    // For dev server: intercept sw.js requests and transform on-the-fly
     configureServer(server) {
       if (isDev) {
-        const swPath = path.resolve(__dirname, "public", "sw.js");
-        injectVersion(swPath);
-        
-        // Watch for changes to sw.js and re-inject (useful during SW development)
-        server.watcher.on('change', (file) => {
-          if (file.endsWith('sw.js')) {
-            setTimeout(() => injectVersion(swPath), 100);
+        const cacheVersion = generateCacheVersion();
+        console.log(
+          `[SW Plugin] Dev mode - will serve sw.js with version: ${cacheVersion}`
+        );
+
+        server.middlewares.use((req, res, next) => {
+          if (req.url === "/sw.js") {
+            const swPath = path.resolve(__dirname, "public", "sw.js");
+
+            if (fs.existsSync(swPath)) {
+              const content = fs.readFileSync(swPath, "utf-8");
+              const transformed = transformSwContent(
+                content,
+                cacheVersion,
+                true
+              );
+
+              res.setHeader("Content-Type", "application/javascript");
+              res.setHeader("Service-Worker-Allowed", "/");
+              res.end(transformed);
+              return;
+            }
           }
+          next();
         });
       }
     },
-    
-    // For builds: inject at closeBundle
+
+    // For builds: inject at closeBundle (modifies dist output only)
     closeBundle() {
       if (!isDev) {
         const swPath = path.resolve(__dirname, "dist", "sw.js");
-        injectVersion(swPath);
+
+        if (!fs.existsSync(swPath)) {
+          console.warn(
+            "[SW Plugin] sw.js not found in dist, skipping version injection"
+          );
+          return;
+        }
+
+        const cacheVersion = generateCacheVersion();
+        const content = fs.readFileSync(swPath, "utf-8");
+        const transformed = transformSwContent(content, cacheVersion, false);
+
+        fs.writeFileSync(swPath, transformed);
+        console.log(
+          `[SW Plugin] Build - injected cache version: ${cacheVersion}`
+        );
       }
     },
   };

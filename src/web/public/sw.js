@@ -1,12 +1,13 @@
 // Service Worker for BrewOS PWA
 //
 // IMPORTANT: CACHE_VERSION and IS_DEV_MODE are auto-injected by vite.config.ts
+// - In dev: Transformed on-the-fly via middleware (source file unchanged)
+// - In build: Injected at build time into dist/sw.js
 // - CACHE_VERSION format: "{version}-{timestamp}" e.g., "0.2.0-2024-01-15T12-30-45-123Z"
 // - IS_DEV_MODE is true during dev server, false for production builds
-// This ensures cache is invalidated on every deployment and during development.
 //
-const CACHE_VERSION = "dev-2025-12-07T07-12-28-958Z";
-const IS_DEV_MODE = true;
+const CACHE_VERSION = "dev";
+const IS_DEV_MODE = false;
 const STATIC_CACHE_NAME = `brewos-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE_NAME = `brewos-runtime-${CACHE_VERSION}`;
 
