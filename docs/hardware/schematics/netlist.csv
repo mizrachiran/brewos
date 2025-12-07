@@ -36,7 +36,9 @@ LED5,LED,Orange_0805,0805,A=LED5_A,K=GND,,SSR1 indicator
 LED6,LED,Orange_0805,0805,A=LED6_A,K=GND,,SSR2 indicator
 LED7,LED,Green_0805,0805,A=GPIO15,K=GND,,Status LED (Green)
 R1,Resistor,3.3k_1%,0805,1=ADC_VREF,2=ADC0,,Brew NTC pull-up (50k NTC optimized for 93C)
+R1A,Resistor,1.5k_1%,0805,1=ADC_VREF,2=ADC0,,Brew NTC parallel resistor (10k NTC via JP2 solder jumper)
 R2,Resistor,1.2k_1%,0805,1=ADC_VREF,2=ADC1,,Steam NTC pull-up (50k NTC optimized for 135C)
+R2A,Resistor,680R_1%,0805,1=ADC_VREF,2=ADC1,,Steam NTC parallel resistor (10k NTC via JP3 solder jumper)
 R3,Resistor,10k_1%,0805,1=ADC2,2=GND,,Pressure divider (to GND)
 R4,Resistor,5.6k_1%,0805,1=PRESS_SIG,2=ADC2,,Pressure divider (series) - prevents ADC saturation at 4.5V sensor output
 R5,Resistor,1k_1%,0805,1=ADC0_R,2=ADC0,,Brew NTC series protection
@@ -88,7 +90,7 @@ R99,Resistor,120R_1%,0805,1=RS485_A,2=RS485_B,,RS485 termination (via JP1 solder
 R100,Resistor,10k_1%,0805,1=+5V,2=5V_DIV,,5V monitor upper divider (ratiometric pressure compensation)
 R101,Resistor,5.6k_1%,0805,1=5V_DIV,2=GND,,5V monitor lower divider (ratio matches R3/R4)
 C1,Capacitor,100nF_X2,Radial,1=L_FUSED,2=N_FUSED,,Mains EMI filter
-C2,Capacitor,100uF_16V,Radial_6.3mm,1=+5V,2=GND,,5V bulk cap (Polymer low ESR)
+C2,Capacitor,470uF_6.3V,Radial_6.3mm,1=+5V,2=GND,,5V bulk cap (Polymer low ESR)
 C3,Capacitor,22uF_25V,1206,1=+5V,2=GND,,Buck input cap (ceramic X5R)
 C4,Capacitor,22uF_10V,1206,1=+3.3V,2=GND,,Buck output cap (ceramic X5R)
 C4A,Capacitor,22uF_10V,1206,1=+3.3V,2=GND,,Buck output cap 2 (ceramic X5R) - parallel
@@ -124,8 +126,8 @@ SW2,Switch,Tactile_6x6mm,SMD,1=BOOTSEL,2=GND,,Boot button
 BZ1,Buzzer,Passive_12mm,TH,1=BZ1_POS,2=GND,,Passive piezo buzzer
 FB1,Ferrite_Bead,600R_100MHz,0603,1=+3.3V,2=3V3_ANALOG,,ADC reference section isolation (feeds R7→LM4040→U9A→ADC_VREF)
 JP1,Solder_Jumper,Open,2-pad,1=RS485_A,2=R99,,RS485 120Ω termination enable (default: OPEN)
-JP2,Solder_Jumper,Open,2-pad,1=R1,2=R1A,,Brew NTC selection (OPEN=50k ECM, CLOSE=10k Rocket)
-JP3,Solder_Jumper,Open,2-pad,1=R2,2=R2A,,Steam NTC selection (OPEN=50k ECM, CLOSE=10k Rocket)
+JP2,Solder_Jumper,Open,2-pad,1=ADC_VREF,2=R1A,,Brew NTC selection (OPEN=50k ECM, CLOSE=10k Rocket) - enables R1A parallel
+JP3,Solder_Jumper,Open,2-pad,1=ADC_VREF,2=R2A,,Steam NTC selection (OPEN=50k ECM, CLOSE=10k Rocket) - enables R2A parallel
 JP4,Solder_Jumper,Open,2-pad,1=J17_RX,2=J17_DIV,,J17 RX 3.3V bypass (OPEN=5V meter via divider, CLOSE=3.3V meter direct) ⚠️ CLOSE ONLY for 3.3V meters!
 J1,Connector,Terminal_3pos,6.3mm_Spade,1=L,2=N,3=PE,Mains input
 J2,Connector,Terminal_2pos,6.3mm_Spade,1=J2_COM,2=J2_NO,,K1 output (Mains indicator lamp)
