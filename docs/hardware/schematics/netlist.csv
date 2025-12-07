@@ -3,10 +3,11 @@ U1,Raspberry_Pi_Pico_2,RP2350,Module,VSYS=+5V,GND=GND,3V3=+3.3V,3V3_EN=GND,Micro
 U2,AC_DC_Converter,HLK-15M05C,Module,L=L_HLK,N=N_FUSED,+Vout=+5V,Isolated 5V 3A/15W power supply (via F2 500mA fuse)
 U3,DC_DC_Buck,TPS563200DDCR,SOT-23-6,VIN=+5V,VOUT=+3.3V,GND=GND,3.3V 3A synchronous buck converter (>90% efficient)
 U4,Thermocouple_Amp,MAX31855KASA+,SOIC-8,T+=TC_POS,T-=TC_NEG,VCC=+3.3V,K-type thermocouple amplifier
-U5,Voltage_Ref,LM4040DIM3-3.0,SOT-23,VREF=ADC_VREF,GND=GND,,Precision 3.0V shunt reference for ADC
+U5,Voltage_Ref,LM4040DIM3-3.0,SOT-23,VREF=LM4040_VREF,GND=GND,,Precision 3.0V shunt reference (feeds U9A buffer)
 U6,Op_Amp,OPA342UA,SOIC-8,VCC=+3.3V,OUT=AC_OUT,GND=GND,Level probe oscillator (Wien bridge)
 U7,Comparator,TLV3201AIDBVR,SOT-23-5,VCC=+3.3V,OUT=GPIO4,GND=GND,Level probe detector with hysteresis
 U8,RS485_Transceiver,MAX3485ESA+,SOIC-8,VCC=+3.3V,DI=GPIO6,RO=GPIO7,RS485 transceiver for industrial meters (DE/RE=GPIO20)
+U9,Dual_Op_Amp,OPA2342UA,SOIC-8,VCC=+3.3V,OUT_A=ADC_VREF,IN_A+=LM4040_VREF,VREF buffer (U9A) + spare (U9B) - CRITICAL for sensor loading
 K1,Relay_SPST,APAN3105,Relay_SPST,Coil+=K1_DRIVE,COM=J2_COM,NO=J2_NO,Mains indicator lamp relay 3A (slim 5mm)
 K2,Relay_SPST,G5LE-1A4-E_DC5,Relay_SPST,Coil+=K2_DRIVE,COM=J3_COM,NO=J3_NO,Pump relay 16A (high-capacity -E variant required)
 K3,Relay_SPST,APAN3105,Relay_SPST,Coil+=K3_DRIVE,COM=J4_COM,NO=J4_NO,Solenoid relay 3A (slim 5mm)
@@ -27,6 +28,7 @@ D15,ESD_Diode,PESD5V0S1BL,SOD-323,A=GND,K=ADC1,,Steam NTC ESD
 D16,Schottky_Diode,BAT54S,SOT-23,A1=ADC2,A2=GND,K=+3.3V,Pressure ADC overvoltage protection
 D20,TVS_Diode,SMBJ5.0A,SMB,A=GND,K=+5V,,5V rail protection
 D21,TVS_Diode,SM712,SOT-23,1=RS485_A,2=GND,3=RS485_B,RS485 A/B line surge protection (-7V to +12V asymmetric)
+D22,ESD_Diode,TPD2E001DRLR,SOT-553,1=TC_POS,2=GND,3=TC_NEG,Thermocouple ESD protection (±15kV HBM dual-line low-cap)
 LED1,LED,Green_0805,0805,A=LED1_A,K=GND,,K1 indicator
 LED2,LED,Green_0805,0805,A=LED2_A,K=GND,,K2 indicator
 LED3,LED,Green_0805,0805,A=LED3_A,K=GND,,K3 indicator
@@ -39,7 +41,7 @@ R3,Resistor,10k_1%,0805,1=ADC2,2=GND,,Pressure divider (to GND)
 R4,Resistor,5.6k_1%,0805,1=PRESS_SIG,2=ADC2,,Pressure divider (series) - prevents ADC saturation at 4.5V sensor output
 R5,Resistor,1k_1%,0805,1=ADC0_R,2=ADC0,,Brew NTC series protection
 R6,Resistor,1k_1%,0805,1=ADC1_R,2=ADC1,,Steam NTC series protection
-R7,Resistor,1k_1%,0805,1=+3.3V,2=U5_K,,LM4040 bias resistor (0.3mA)
+R7,Resistor,1k_1%,0805,1=3V3_ANALOG,2=LM4040_VREF,,LM4040 bias resistor (0.3mA via FB1) - connects to U9A buffer input
 R10,Resistor,10k,0805,1=GPIO10,2=GND,,K1 driver pull-down
 R11,Resistor,10k,0805,1=GPIO11,2=GND,,K2 driver pull-down
 R12,Resistor,10k,0805,1=GPIO12,2=GND,,K3 driver pull-down
@@ -83,6 +85,8 @@ R96,Resistor,100k_1%,0805,1=+3.3V,2=VREF,,Level probe reference divider
 R97,Resistor,100k_1%,0805,1=VREF,2=GND,,Level probe reference divider
 R98,Resistor,1M,0805,1=GPIO4,2=COMP_POS,,Level probe hysteresis
 R99,Resistor,120R_1%,0805,1=RS485_A,2=RS485_B,,RS485 termination (via JP1 solder jumper)
+R100,Resistor,10k_1%,0805,1=+5V,2=5V_DIV,,5V monitor upper divider (ratiometric pressure compensation)
+R101,Resistor,5.6k_1%,0805,1=5V_DIV,2=GND,,5V monitor lower divider (ratio matches R3/R4)
 C1,Capacitor,100nF_X2,Radial,1=L_FUSED,2=N_FUSED,,Mains EMI filter
 C2,Capacitor,100uF_16V,Radial_6.3mm,1=+5V,2=GND,,5V bulk cap (Polymer low ESR)
 C3,Capacitor,22uF_25V,1206,1=+5V,2=GND,,Buck input cap (ceramic X5R)
@@ -97,7 +101,9 @@ C9,Capacitor,100nF,0805,1=ADC1,2=GND,,Steam NTC filter
 C10,Capacitor,100nF,0805,1=+3.3V,2=GND,,MAX31855 decoupling
 C11,Capacitor,100nF,0805,1=ADC2,2=GND,,Pressure filter
 C13,Capacitor,100uF_10V,Radial,1=+5V,2=GND,,ESP32 bulk cap
-C40,Capacitor,10nF,0805,1=TC_POS,2=TC_NEG,,Thermocouple filter
+C40,Capacitor,10nF,0805,1=TC_POS,2=TC_NEG,,Thermocouple differential filter
+C41,Capacitor,1nF,0805,1=TC_POS,2=GND,,Thermocouple common-mode filter (+)
+C42,Capacitor,1nF,0805,1=TC_NEG,2=GND,,Thermocouple common-mode filter (-)
 C60,Capacitor,100nF,0805,1=+3.3V,2=GND,,OPA342 VCC decoupling
 C61,Capacitor,10nF,0805,1=WIEN1,2=GND,,Level probe Wien bridge timing (~1.6kHz for probe longevity)
 C62,Capacitor,10nF,0805,1=WIEN2,2=GND,,Level probe Wien bridge timing (~1.6kHz for probe longevity)
@@ -105,6 +111,8 @@ C63,Capacitor,100nF,0805,1=+3.3V,2=GND,,TLV3201 VCC decoupling
 C64,Capacitor,1uF,0805,1=AC_OUT,2=AC_SENSE,,Level probe AC coupling
 C65,Capacitor,100nF,0805,1=AC_SENSE,2=GND,,Level probe sense filter
 C70,Capacitor,100nF,0805,1=+3.3V,2=GND,,MAX3485 VCC decoupling
+C80,Capacitor,100nF,0805,1=+3.3V,2=GND,,OPA2342 (U9) VCC decoupling
+C81,Capacitor,100nF,0805,1=5V_DIV,2=GND,,5V monitor filter
 L1,Inductor,2.2uH_3A,1210,1=SW,2=+3.3V,,Buck inductor (TPS563200) - 2.2µH per TI datasheet for 3.3V output
 F1,Fuse,10A_250V,5x20mm,1=L,2=L_FUSED,,Main mains fuse 10A slow-blow + holder 01000056Z
 F2,Fuse,500mA_250V,5x20mm,1=L_FUSED,2=L_HLK,,HLK module secondary fuse 500mA slow-blow (fusing hierarchy)
@@ -114,10 +122,11 @@ RV3,Varistor,275V,10mm,1=K3_NO,2=K3_COM,,Solenoid relay arc suppression MOV - MA
 SW1,Switch,Tactile_6x6mm,SMD,1=RUN,2=GND,,Reset button
 SW2,Switch,Tactile_6x6mm,SMD,1=BOOTSEL,2=GND,,Boot button
 BZ1,Buzzer,Passive_12mm,TH,1=BZ1_POS,2=GND,,Passive piezo buzzer
-FB1,Ferrite_Bead,600R_100MHz,0603,1=+3.3V,2=ADC_VREF,,ADC reference isolation
+FB1,Ferrite_Bead,600R_100MHz,0603,1=+3.3V,2=3V3_ANALOG,,ADC reference section isolation (feeds R7→LM4040→U9A→ADC_VREF)
 JP1,Solder_Jumper,Open,2-pad,1=RS485_A,2=R99,,RS485 120Ω termination enable (default: OPEN)
 JP2,Solder_Jumper,Open,2-pad,1=R1,2=R1A,,Brew NTC selection (OPEN=50k ECM, CLOSE=10k Rocket)
 JP3,Solder_Jumper,Open,2-pad,1=R2,2=R2A,,Steam NTC selection (OPEN=50k ECM, CLOSE=10k Rocket)
+JP4,Solder_Jumper,Open,2-pad,1=J17_RX,2=J17_DIV,,J17 RX 3.3V bypass (OPEN=5V meter via divider, CLOSE=3.3V meter direct) ⚠️ CLOSE ONLY for 3.3V meters!
 J1,Connector,Terminal_3pos,6.3mm_Spade,1=L,2=N,3=PE,Mains input
 J2,Connector,Terminal_2pos,6.3mm_Spade,1=J2_COM,2=J2_NO,,K1 output (Mains indicator lamp)
 J3,Connector,Terminal_2pos,6.3mm_Spade,1=J3_COM,2=J3_NO,,K2 output (Pump)
@@ -130,7 +139,8 @@ J23,Connector,Header_4pos,2.54mm,1=+3.3V,2=GND,3=I2C0_SDA,4=I2C0_SCL,I2C accesso
 J24,Connector,Screw_3pos,5.08mm,1=L_FUSED,2=N,3=PE,External power meter HV input (L/N/PE only - NO CT)
 J26,Connector,Screw_22pos,5.08mm,1=GPIO2,2=GND,3=GPIO3,4=GND,5=PROBE,6=GPIO5,7=GND,8=NTC1_SIG,9=GND,10=NTC2_SIG,11=GND,12=TC_POS,13=TC_NEG,14=+5V,15=GND,16=PRESS_SIG,17=+5V,18=SSR1_NEG,19=+5V,20=SSR2_NEG,21=GND,22=GND,Unified LV terminal 22-pos (NO CT - CT on external meter)
 TP1,Test_Point,GPIO20_Spare,1.5mm,1=GPIO20,,,GPIO20/RS485_DE test point
-TP2,Test_Point,ADC_VREF,1.5mm,1=ADC_VREF,,,ADC reference test point (3.0V)
+TP2,Test_Point,ADC_VREF,1.5mm,1=ADC_VREF,,,ADC reference test point (3.0V buffered)
+TP3,Test_Point,5V_MONITOR,1.5mm,1=5V_DIV,,,5V monitor test point (~1.8V at 5V nominal) - for ratiometric calibration
 MH1,Mounting_Hole,M3,3.2mm,1=GND,,,PE Star Point - PTH connected to GND
 MH2,Mounting_Hole,M3,3.2mm,1=NC,,,NPTH - Isolated (no GND connection)
 MH3,Mounting_Hole,M3,3.2mm,1=NC,,,NPTH - Isolated (no GND connection)

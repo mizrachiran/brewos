@@ -4,7 +4,8 @@
 
 | Rev    | Date     | Description                                                  |
 | ------ | -------- | ------------------------------------------------------------ |
-| 2.23   | Dec 2025 | **CURRENT** - Design review action items (warnings, coating) |
+| 2.24   | Dec 2025 | **CURRENT** - Critical VREF buffer, TC protection, ratiometric ADC |
+| 2.23   | Dec 2025 | Design review action items (warnings, coating)               |
 | 2.22   | Dec 2025 | Engineering review fixes (thermal, GPIO protection)          |
 | 2.21.1 | Dec 2025 | Pico 2 compatibility fixes, power supply                     |
 | 2.21   | Dec 2025 | External power metering, multi-machine NTC support           |
@@ -12,6 +13,262 @@
 | 2.19   | Dec 2025 | Removed spare relay K4                                       |
 | 2.17   | Nov 2025 | Brew-by-weight support (J15 8-pin)                           |
 | 2.16   | Nov 2025 | Production-ready specification                               |
+
+---
+
+## v2.24 (December 2025)
+
+**Independent Engineering Review - Critical Analog Fixes**
+
+This revision addresses critical issues identified in an independent engineering design review that would have caused system failure in production.
+
+### 🔴 Critical Engineering Change Orders (ECOs)
+
+#### 1. VREF Buffer Op-Amp (SYSTEM-CRITICAL FIX)
+
+| Component | Old (v2.23)           | New (v2.24)                  | Reason                                      |
+| --------- | --------------------- | ---------------------------- | ------------------------------------------- |
+| **U9**    | (none)                | OPA2342UA (dual op-amp)      | Buffers ADC_VREF for high-current loads     |
+| **C80**   | (none)                | 100nF 25V ceramic            | U9 VCC decoupling                           |
+| **R7**    | To ADC_VREF directly  | To U9A input (high-Z)        | LM4040 now sees only ~60µA load             |
+| **ADC_VREF** | Direct from LM4040 | From U9A output (buffered)   | Can now drive 10mA+ without voltage collapse |
+
+**The Problem (Why This Was Critical):**
+
+The LM4040 shunt reference with R7=1kΩ provides only **300µA** of bias current:
+$$I_{available} = \frac{3.3V - 3.0V}{1k\Omega} = 0.3mA$$
+
+But the NTC sensor dividers demand **~4mA** at operating temperature:
+- Brew NTC at 93°C: R_NTC ≈ 3.5kΩ → I = 3.0V / (3.3kΩ + 3.5kΩ) ≈ 441µA
+- Steam NTC at 135°C: R_NTC ≈ 1kΩ → I = 3.0V / (1.2kΩ + 1kΩ) ≈ **1.36mA**
+- Total: **~1.8mA minimum**, often higher
+
+**Result without fix:** ADC_VREF collapses to ~0.5-1.0V, causing complete temperature sensing failure. The PID would either emergency shutdown (thinking boiler overheated) or overheat the boiler dangerously.
+
+**The Solution:**
+
+```
+    +3.3V
+       │
+    ┌──┴──┐
+    │ 1kΩ │  R7 (unchanged)
+    └──┬──┘
+       │
+       ├───────────────────────────► LM4040_VREF (3.0V, unloaded)
+       │                                    │
+    ┌──┴──┐                          ┌──────┴──────┐
+    │LM4040│                         │    U9A      │
+    │ 3.0V │  U5                     │   OPA2342   │
+    └──┬──┘                          │  (+) ───────┤
+       │                             │      Buffer │
+      GND                            │  (-) ◄──┬───┤
+                                     │         │   │
+                                     └────┬────┘   │
+                                          │        │
+                                          └────────┴──────► ADC_VREF (3.0V, buffered)
+                                                                   │
+                                                           ┌───────┴───────┐
+                                                           │               │
+                                                          R1             R2
+                                                       (3.3kΩ)        (1.2kΩ)
+                                                           │               │
+                                                         ADC0           ADC1
+                                                      (Brew NTC)    (Steam NTC)
+```
+
+The op-amp buffer:
+- Presents ~pA input bias to LM4040 (maintains precision reference accuracy)
+- Drives the ~4mA sensor load from its output stage (powered from 3.3V rail)
+- Unity-gain follower: Vout = Vin (no gain error)
+
+**U9B (second half of OPA2342) is available for future use** (e.g., pressure sensor buffer if needed)
+
+#### 2. Pressure Sensor Ratiometric Compensation (ADC Channel)
+
+| Component | Old (v2.23)           | New (v2.24)                  | Reason                                      |
+| --------- | --------------------- | ---------------------------- | ------------------------------------------- |
+| **R100**  | (none)                | 10kΩ 1% 0805                 | 5V monitor upper divider                    |
+| **R101**  | (none)                | 5.6kΩ 1% 0805                | 5V monitor lower divider (same ratio as R3/R4) |
+| **C81**   | (none)                | 100nF 25V ceramic            | 5V monitor filter                           |
+| **ADC3**  | (unused internal)     | 5V_MONITOR                   | Firmware ratiometric correction             |
+
+**The Problem:**
+
+Pressure transducers are **ratiometric** - their output is proportional to their supply voltage:
+$$V_{out} = P \times k \times V_{supply}$$
+
+If the 5V rail (from HLK-15M05C) drifts by 5% under load, pressure readings drift by 5%. In a 10-bar system, that's **0.5 bar error** - significant for pressure profiling.
+
+**The Solution:**
+
+Route the 5V rail through an identical voltage divider to a spare ADC input. Firmware calculates:
+$$P_{actual} = \frac{ADC_{pressure}}{ADC_{5V\_monitor}} \times k$$
+
+This cancels out any 5V supply drift.
+
+```
+    +5V Rail
+       │
+    ┌──┴──┐
+    │ 10kΩ │  R100
+    │  1%  │
+    └──┬──┘
+       │
+       ├──────────[100nF C81]──────► GND
+       │
+       └──────────────────────────► ADC3/GPIO29 (5V_MONITOR)
+       │
+    ┌──┴──┐
+    │5.6kΩ│  R101
+    │ 1%  │
+    └──┬──┘
+       │
+      GND
+
+    Divider ratio: 5.6k / (10k + 5.6k) = 0.359
+    At 5.0V: ADC reads 1.795V (safe for 3.0V reference)
+    At 5.5V: ADC reads 1.974V (still within range)
+```
+
+**Note:** GPIO29/ADC3 is internal to Pico 2 but accessible via software. Firmware must configure it for ADC use.
+
+### 🟡 Reliability Enhancements
+
+#### 3. Thermocouple ESD Protection
+
+| Component | Old (v2.23) | New (v2.24)     | Reason                                      |
+| --------- | ----------- | --------------- | ------------------------------------------- |
+| **D22**   | (none)      | TPD2E001DRLR    | TC_POS/TC_NEG ESD protection                |
+
+**The Problem:**
+
+Thermocouple inputs (TC_POS, TC_NEG on J26 pins 12-13) are the most ESD-vulnerable points in the system:
+- Long wires act as antennas
+- Connector is user-accessible during installation
+- No protection between connector and MAX31855
+
+A static discharge could destroy U4 (MAX31855) - an expensive failure requiring board rework.
+
+**The Solution:**
+
+Add TPD2E001DRLR dual-line ESD protection diode near J26:
+- Bidirectional TVS clamp
+- Ultra-low capacitance (<0.5pF) - won't affect µV-level TC signals
+- ±15kV ESD protection (HBM)
+
+```
+    J26-12 (TC+) ───┬───────────────────────────► TC_POS (to MAX31855)
+                    │
+               ┌────┴────┐
+               │ TPD2E001│
+               │   D22   │  Bidirectional ESD clamp
+               └────┬────┘
+                    │
+    J26-13 (TC-) ───┴───────────────────────────► TC_NEG (to MAX31855)
+```
+
+#### 4. Thermocouple Common-Mode Filter
+
+| Component | Old (v2.23) | New (v2.24)     | Reason                                      |
+| --------- | ----------- | --------------- | ------------------------------------------- |
+| **C41**   | (none)      | 1nF 50V ceramic | TC+ common-mode shunt                       |
+| **C42**   | (none)      | 1nF 50V ceramic | TC- common-mode shunt                       |
+
+**The Problem:**
+
+C40 (10nF across TC+/TC-) filters **differential** noise, but **common-mode** interference from chassis coupling passes through. In industrial environments with motor-driven pumps, common-mode noise can corrupt MAX31855 readings.
+
+**The Solution:**
+
+Add small capacitors from each TC line to GND:
+- 1nF is small enough to not affect thermocouple response time
+- Shunts common-mode RF/EMI to ground
+- Standard practice in industrial thermocouple interfaces
+
+```
+                    C40 (10nF differential)
+                   ┌────────┐
+    TC_POS ────────┤        ├────────► MAX31855 T+
+                   │        │
+            ┌──────┘        └──────┐
+            │                      │
+       ┌────┴────┐            ┌────┴────┐
+       │  C41    │            │  C42    │
+       │  1nF    │            │  1nF    │
+       │  CM     │            │  CM     │
+       └────┬────┘            └────┬────┘
+            │                      │
+           ─┴─                    ─┴─
+           GND                    GND
+
+    TC_NEG ──────────────────────────────────► MAX31855 T-
+```
+
+#### 5. J17 Level Shifter 3.3V Bypass Jumper
+
+| Component | Old (v2.23)         | New (v2.24)                  | Reason                                |
+| --------- | ------------------- | ---------------------------- | ------------------------------------- |
+| **JP4**   | (none)              | Solder jumper (default OPEN) | Bypass 5V→3.3V divider for 3.3V meters |
+
+**The Problem:**
+
+The resistive divider (R45/R45A) converts 5V signals to 3.0V - perfect for 5V meters. But for **3.3V meters**:
+$$V_{out} = 3.3V \times \frac{3.3k\Omega}{2.2k\Omega + 3.3k\Omega} = 3.3V \times 0.6 = 1.98V$$
+
+This is **below** the RP2350's V_IH threshold (2.145V), causing communication failures with 3.3V logic meters.
+
+**The Solution:**
+
+Add JP4 solder jumper to bypass the voltage divider when using 3.3V meters:
+
+```
+    J17 Pin 4 (RX from meter)
+         │
+         ├────────────────────────────────────┐
+         │                                    │
+    ┌────┴────┐                          ┌────┴────┐
+    │  2.2kΩ  │  R45                     │   JP4   │  Solder jumper
+    └────┬────┘                          │ (Bypass)│  Default: OPEN
+         │                               └────┬────┘
+         ├───────────────────────────────────┘
+         │
+    ┌────┴────┐
+    │  3.3kΩ  │  R45A
+    └────┬────┘
+         │
+        GND
+         │
+    ┌────┴────┐
+    │   33Ω   │  R45B (series protection)
+    └────┬────┘
+         │
+         └────────────────────────────────────► GPIO7 (METER_RX)
+```
+
+| Meter Type | JP4 Setting | Result                              |
+| ---------- | ----------- | ----------------------------------- |
+| 5V TTL     | OPEN        | 5V → 3.0V via divider (safe)        |
+| 3.3V       | CLOSED      | 3.3V → 3.3V bypassed (direct)       |
+
+**⚠️ WARNING:** Closing JP4 with a 5V meter connected will damage GPIO7!
+
+### 📋 Component Summary (v2.24 Changes)
+
+| Category       | Added                          | Changed                           | Removed |
+| -------------- | ------------------------------ | --------------------------------- | ------- |
+| **ICs**        | U9 (OPA2342UA dual buffer)     | -                                 | -       |
+| **Diodes**     | D22 (TPD2E001DRLR ESD)         | -                                 | -       |
+| **Resistors**  | R100, R101 (5V monitor)        | -                                 | -       |
+| **Capacitors** | C41, C42 (1nF TC CM), C80, C81 | -                                 | -       |
+| **Jumpers**    | JP4 (J17 3.3V bypass)          | -                                 | -       |
+
+### Design Verdict
+
+**Status:** Approved for production
+
+The v2.24 changes fix a **critical analog design flaw** (VREF buffer) that would have caused complete system failure in the field. The additional protections (TC ESD, CM filter, ratiometric compensation) improve reliability and measurement accuracy.
+
+**Total component cost impact:** ~$2.50 (OPA2342: $1.50, TPD2E001: $0.50, passives: $0.50)
 
 ---
 

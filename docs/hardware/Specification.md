@@ -4,7 +4,7 @@
 
 **Document Purpose:** Complete technical specification for PCB design and manufacturing  
 **Target:** Plug & play replacement for GICAR control board and PID controller  
-**Revision:** 2.23  
+**Revision:** 2.24  
 **Date:** December 2025
 
 ---
@@ -573,14 +573,18 @@ critical for reliable operation inside hot espresso machine enclosures.
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Precision ADC Voltage Reference
+### Precision ADC Voltage Reference (Buffered)
 
 **Purpose:** Provides stable, low-drift reference for NTC temperature measurements.
 Using 3.3V rail directly as ADC reference couples LDO/buck thermal drift into readings.
 
+**⚠️ CRITICAL (v2.24): The LM4040 MUST be buffered by an op-amp.** Without the buffer,
+the reference voltage collapses under load, causing complete temperature sensing failure.
+
 ```
 ┌────────────────────────────────────────────────────────────────────────────────┐
-│                      PRECISION ADC VOLTAGE REFERENCE                            │
+│                  PRECISION ADC VOLTAGE REFERENCE (BUFFERED)                     │
+│                        ⚠️ v2.24 CRITICAL DESIGN FIX                            │
 ├────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                 │
 │      3.3V Rail                                                                  │
@@ -588,42 +592,73 @@ Using 3.3V rail directly as ADC reference couples LDO/buck thermal drift into re
 │    ┌────┴────┐                                                                  │
 │    │   1kΩ   │  R7 - Bias resistor                                             │
 │    │   1%    │  I_bias = (3.3V - 3.0V) / 1kΩ = 0.3mA                          │
-│    └────┬────┘  (min 60µA for LM4040, we use 300µA for stability)             │
+│    └────┬────┘  (min 60µA for LM4040, only drives buffer input ~pA)           │
 │         │                                                                       │
-│         ├──────────────────────────────┬──────────────────► ADC_VREF (3.0V)   │
-│         │                              │                                        │
-│    ┌────┴────┐                    ┌────┴────┐                                  │
-│    │ LM4040  │                    │  22µF   │  C7 - Bulk cap                   │
-│    │  3.0V   │  U5               │  10V    │                                  │
-│    │ Shunt   │                    │ Ceramic │                                  │
-│    │  Ref    │                    └────┬────┘                                  │
-│    └────┬────┘                         │                                        │
-│         │                         ┌────┴────┐                                  │
-│        GND                        │  100nF  │  C7A - HF decoupling            │
-│                                   │ Ceramic │                                  │
-│                                   └────┬────┘                                  │
-│                                        │                                        │
-│                                       GND                                       │
+│         ├────────────────────────► LM4040_VREF (3.0V, unloaded)               │
+│         │                                 │                                     │
+│    ┌────┴────┐                     ┌──────┴──────┐                             │
+│    │ LM4040  │                     │    U9A      │  OPA2342UA (half)           │
+│    │  3.0V   │  U5                 │   Buffer    │                             │
+│    │ Shunt   │                     │  (+) ───────┤  Unity-gain follower        │
+│    │  Ref    │                     │             │  Vout = Vin                 │
+│    └────┬────┘                     │  (-) ◄──┬───┤  (feedback)                 │
+│         │                          │         │   │                             │
+│        GND                         └────┬────┘   │                             │
+│                                         │        │                             │
+│                                         └────────┴─────────► ADC_VREF (3.0V)  │
+│                                                                   │            │
+│                                                              ┌────┴────┐       │
+│                                                              │  22µF   │ C7    │
+│                                                              └────┬────┘       │
+│                                                              ┌────┴────┐       │
+│                                                              │  100nF  │ C7A   │
+│                                                              └────┬────┘       │
+│                                                                   │            │
+│                                                                  GND           │
+│                                                                                 │
+│    ⚠️ WHY BUFFER IS MANDATORY (The Math):                                      │
+│    ────────────────────────────────────────                                    │
+│    Without buffer, R7 provides only 0.3mA to share between LM4040 and loads.  │
+│                                                                                 │
+│    NTC Load Current (at operating temperatures):                               │
+│    • Brew NTC at 93°C: R_NTC ≈ 3.5kΩ → I = 3.0V/(3.3kΩ+3.5kΩ) ≈ 441µA        │
+│    • Steam NTC at 135°C: R_NTC ≈ 1kΩ → I = 3.0V/(1.2kΩ+1kΩ) ≈ 1.36mA         │
+│    • Total: ~1.8mA (6× more than available 0.3mA!)                            │
+│                                                                                 │
+│    Without buffer: ADC_VREF collapses to ~0.5V → SYSTEM FAILURE               │
+│    With buffer: Op-amp drives load from 3.3V rail → ADC_VREF stable at 3.0V   │
+│                                                                                 │
+│    Buffer Selection:                                                           │
+│    ─────────────────                                                           │
+│    U9: OPA2342UA (SOIC-8) - Dual rail-to-rail op-amp                          │
+│      - U9A: VREF buffer (unity gain follower)                                 │
+│      - U9B: Available for future use (spare)                                  │
+│      - Gain bandwidth: 1MHz (adequate for DC reference)                       │
+│      - Input bias: ~2pA (negligible load on LM4040)                           │
+│      - Output: Can drive >10mA (plenty for sensor networks)                   │
 │                                                                                 │
 │    Reference Selection:                                                        │
 │    ───────────────────                                                         │
-│    LM4040DIM3-3.0 (SOT-23-3)                                                  │
+│    U5: LM4040DIM3-3.0 (SOT-23-3)                                              │
 │      - Voltage: 3.000V ±0.5% (A-grade)                                        │
 │      - Tempco: 100ppm/°C max                                                  │
-│      - I_bias: 60µA to 15mA                                                   │
-│                                                                                 │
-│    ✅ WHY 3.0V INSTEAD OF 3.3V?                                               │
-│    ────────────────────────────                                                │
-│    • 3.0V is below the 3.3V rail, ensuring headroom for shunt operation       │
-│    • Standard precision reference value with good availability                │
-│    • ADC full-scale at 3.0V still provides excellent resolution               │
+│      - I_bias: 60µA to 15mA (we use 300µA, well within range)                 │
 │                                                                                 │
 │    Connection to NTC Pull-ups:                                                 │
 │    ──────────────────────────                                                  │
-│    R1 (Brew NTC) and R2 (Steam NTC) connect to ADC_VREF instead of 3.3V      │
+│    R1 (Brew NTC) and R2 (Steam NTC) connect to ADC_VREF (buffered output)    │
 │    This eliminates supply voltage variations from temperature readings        │
 │                                                                                 │
 │    Test Point: TP2 provides access to ADC_VREF for calibration verification  │
+│                                                                                 │
+│    Component Values:                                                           │
+│    ─────────────────                                                           │
+│    U5:  LM4040DIM3-3.0, 3.0V shunt ref, SOT-23-3                              │
+│    U9:  OPA2342UA, dual RRIO op-amp, SOIC-8                                   │
+│    R7:  1kΩ 1%, 0805 (bias resistor)                                          │
+│    C7:  22µF 10V X5R Ceramic, 1206 (bulk)                                     │
+│    C7A: 100nF 25V Ceramic, 0805 (HF decoupling)                               │
+│    C80: 100nF 25V Ceramic, 0805 (U9 VCC decoupling)                           │
 │                                                                                 │
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -1136,23 +1171,45 @@ Different espresso machine brands use different NTC sensor values. **Solder jump
 ```
 ┌────────────────────────────────────────────────────────────────────────────────┐
 │                      K-TYPE THERMOCOUPLE INTERFACE                              │
-│                         (MAX31855K SPI Amplifier)                              │
+│              (MAX31855K SPI Amplifier with ESD & CM Protection)                │
 ├────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                 │
-│    K-Type                                                                      │
-│  Thermocouple                          MAX31855KASA+                           │
-│  (From brew head)                     ┌─────────────┐                          │
-│        ║                           1  │             │  8                       │
-│     (+)╠══════════════════════════════│ T+      Vcc ├────────► 3.3V           │
-│        ║                   10nF    2  │             │  7                       │
-│        ║              ┌────┼──────────│ T-      SCK ├────────► GPIO18         │
-│     (-)╠══════════════┤    │       3  │             │  6                       │
-│        ║              │   GND      NC─│ NC       CS ├────────► GPIO17         │
-│                       │            4  │             │  5                       │
-│                       │       GND ────│ GND      DO ├────────► GPIO16         │
-│                       │               └─────────────┘                          │
-│                       │                                                        │
-│                      GND                                                       │
+│    K-Type                    ESD & FILTER NETWORK                              │
+│  Thermocouple               (v2.24 Enhancement)                                │
+│  (From brew head)                                                              │
+│        ║                                                                       │
+│        ║          D22: TPD2E001           C40 (10nF)                          │
+│     (+)╠════════╦═══════════════╦═════════╦═══════════╦══════► TC_POS         │
+│        ║        ║    ESD TVS    ║         ║           ║                        │
+│        ║        ║ (±15kV HBM)   ║       C41║        C40║        MAX31855       │
+│        ║        ╠═══════════════╣       1nF║       10nF║       ┌──────────┐   │
+│        ║        ║               ║          ║           ║    1  │          │ 8 │
+│     (-)╠════════╩═══════════════╩══════════╩═══════════╬══════►│ T+   Vcc ├──► 3.3V
+│        ║                        ║          ║           ║    2  │          │ 7 │
+│                            D22 GND    C42 1nF      Diff.╠══════►│ T-   SCK ├──► GPIO18
+│                                 ║          ║           ║    3  │          │ 6 │
+│                                 ╚══════════╬═══════════╝   NC──│ NC    CS ├──► GPIO17
+│                                            ║            4  │          │ 5 │
+│                                           GND      GND ────│ GND   DO ├──► GPIO16
+│                                                            └──────────┘   │
+│                                                                                 │
+│    PROTECTION STAGES (v2.24):                                                 │
+│    ──────────────────────────                                                  │
+│                                                                                 │
+│    1. ESD PROTECTION (D22: TPD2E001DRLR)                                      │
+│       - Dual-line bidirectional TVS                                           │
+│       - ±15kV HBM ESD protection                                              │
+│       - Ultra-low capacitance: <0.5pF (won't affect µV TC signal)            │
+│       - Place close to J26 connector (Pin 12-13)                              │
+│                                                                                 │
+│    2. COMMON-MODE FILTER (C41, C42: 1nF)                                      │
+│       - Shunts common-mode RF/EMI to ground                                   │
+│       - Small value (1nF) doesn't affect TC response time                     │
+│       - Protects against chassis-coupled interference                         │
+│                                                                                 │
+│    3. DIFFERENTIAL FILTER (C40: 10nF)                                         │
+│       - Filters differential noise between T+ and T-                          │
+│       - Place close to MAX31855 pins                                          │
 │                                                                                 │
 │    Component: MAX31855KASA+ (SOIC-8) - K-TYPE ONLY                            │
 │    ────────────────────────────────────────────────                           │
@@ -1164,12 +1221,23 @@ Different espresso machine brands use different NTC sensor values. **Solder jump
 │    - SPI interface (read-only, 32-bit frame)                                  │
 │    - Fault detection (open, short to GND, short to VCC)                       │
 │                                                                                 │
+│    Component Values:                                                           │
+│    ─────────────────                                                           │
+│    U4:  MAX31855KASA+, SOIC-8 (K-type only)                                   │
+│    D22: TPD2E001DRLR, SOT-553 (dual-line ESD, <0.5pF)                         │
+│    C40: 10nF 50V Ceramic, 0805 (differential filter)                          │
+│    C41: 1nF 50V Ceramic, 0805 (T+ common-mode filter)                         │
+│    C42: 1nF 50V Ceramic, 0805 (T- common-mode filter)                         │
+│    C10: 100nF 25V Ceramic, 0805 (VCC decoupling)                              │
+│                                                                                 │
 │    PCB Layout Notes:                                                           │
 │    ──────────────────                                                          │
+│    - Place D22 (ESD) as close to J26 connector as possible                    │
+│    - Place C41/C42 (CM filter) between D22 and C40                            │
+│    - Place C40 (differential) close to MAX31855                               │
 │    - Place MAX31855 near thermocouple connector                               │
 │    - Keep T+ and T- traces short and symmetric                                │
 │    - Guard ring around T+ and T- (connected to GND)                           │
-│    - Add 10nF ceramic between T+ and T- (close to IC)                         │
 │    - Use shielded cable for thermocouple wires                                │
 │    - Ground shield at PCB end only (avoid ground loops)                       │
 │    - Keep away from power traces and relay coils                              │
@@ -1326,6 +1394,72 @@ Different espresso machine brands use different NTC sensor values. **Solder jump
 │    The Schottky diode clamps overvoltage to 3.3V + 0.3V = 3.6V (safe).       │
 │                                                                                 │
 │    Connector: 3-pin screw terminal (5V, GND, Signal)                          │
+│                                                                                 │
+└────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Ratiometric Pressure Compensation (v2.24)
+
+**Purpose:** Eliminates pressure reading errors caused by 5V supply voltage drift.
+
+Pressure transducers are **ratiometric** - their output is proportional to their supply voltage.
+If the 5V rail from the HLK-15M05C varies by 5% under load, pressure readings drift by 5%.
+In a 10-bar system, that's a **0.5 bar error** - significant for pressure profiling.
+
+```
+┌────────────────────────────────────────────────────────────────────────────────┐
+│              5V SUPPLY MONITOR FOR RATIOMETRIC COMPENSATION                     │
+│                            (v2.24 Enhancement)                                 │
+├────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│    +5V Rail (from HLK-15M05C)                                                  │
+│         │                                                                       │
+│         ├────────────────────────────────► Pressure transducer Vcc             │
+│         │                                                                       │
+│    ┌────┴────┐                                                                  │
+│    │  10kΩ   │  R100 (upper divider)                                           │
+│    │   1%    │                                                                  │
+│    └────┬────┘                                                                  │
+│         │                                                                       │
+│         ├──────────────────────────────────► ADC3/GPIO29 (5V_MONITOR)          │
+│         │                                    (Pico internal - firmware config) │
+│    ┌────┴────┐                          ┌────┴────┐                            │
+│    │  5.6kΩ  │  R101 (lower divider)    │  100nF  │ C81 (filter)              │
+│    │   1%    │                          │  25V    │                            │
+│    └────┬────┘                          └────┬────┘                            │
+│         │                                    │                                  │
+│        GND                                  GND                                 │
+│                                                                                 │
+│    DIVIDER CALCULATION:                                                        │
+│    Ratio = 5.6k / (10k + 5.6k) = 0.359 (SAME ratio as pressure divider)       │
+│                                                                                 │
+│    At 5.0V nominal: ADC reads 1.795V                                          │
+│    At 5.5V (+10%):  ADC reads 1.974V (still within 3.0V reference)            │
+│    At 4.5V (-10%):  ADC reads 1.615V                                          │
+│                                                                                 │
+│    FIRMWARE RATIOMETRIC CALCULATION:                                           │
+│    ─────────────────────────────────                                           │
+│    P_corrected = (ADC_pressure / ADC_5V_monitor) × k                          │
+│                                                                                 │
+│    This formula CANCELS OUT any 5V supply drift:                              │
+│    - If 5V drops 5%, both ADC readings drop 5%                                │
+│    - The ratio stays constant → pressure reading stays accurate               │
+│                                                                                 │
+│    Component Values:                                                           │
+│    ─────────────────                                                           │
+│    R100: 10kΩ 1%, 0805 (matches R3 in pressure divider)                       │
+│    R101: 5.6kΩ 1%, 0805 (matches R4 in pressure divider)                      │
+│    C81:  100nF 25V Ceramic, 0805 (filter, matches C11)                        │
+│                                                                                 │
+│    ⚠️ GPIO29/ADC3 ACCESS:                                                      │
+│    GPIO29 is internal to the Pico 2 module (not on 40-pin header).            │
+│    Firmware must configure GPIO29 for ADC input mode.                         │
+│    Connection: Route from 5V_DIV pad near pressure divider to GPIO29 via      │
+│    Pico socket pin (Pico internal connection handles the rest).               │
+│                                                                                 │
+│    ALTERNATIVE (if GPIO29 unavailable):                                        │
+│    Sacrifice GPIO22 (SPARE on J15-8) and route 5V monitor there instead.      │
+│    GPIO22 is not ADC-capable, so use external ADC or calibration table.       │
 │                                                                                 │
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -2219,14 +2353,18 @@ The control PCB provides a universal interface for connecting external power met
 │    Some power meters (PZEM, JSY, etc.) output 5V TTL. RP2350 is NOT 5V tolerant!
 │    Without level shifting, 5V signals will damage GPIO7 over time.           │
 │                                                                                 │
-│    SOLUTION: Resistive voltage divider on RX input                            │
+│    SOLUTION: Resistive voltage divider with bypass jumper (v2.24)             │
 │                                                                                 │
-│         J17 Pin 4 (RX from meter - 5V)                                        │
+│         J17 Pin 4 (RX from meter)                                             │
 │              │                                                                 │
-│         ┌────┴────┐                                                           │
-│         │  2.2kΩ  │  R45 (upper divider)                                      │
-│         │   1%    │                                                           │
-│         └────┬────┘                                                           │
+│              ├──────────────────────────────────────┐                         │
+│              │                                      │                         │
+│         ┌────┴────┐                            ┌────┴────┐                    │
+│         │  2.2kΩ  │  R45 (upper divider)       │   JP4   │ Solder jumper      │
+│         │   1%    │                            │ (Bypass)│ Default: OPEN      │
+│         └────┬────┘                            └────┬────┘                    │
+│              │                                      │                         │
+│              ├──────────────────────────────────────┘                         │
 │              │                                                                 │
 │              ├──────────[33Ω R45B]───────────► GPIO7 (METER_RX)              │
 │              │                                                                 │
@@ -2237,17 +2375,38 @@ The control PCB provides a universal interface for connecting external power met
 │              │                                                                 │
 │             GND                                                                │
 │                                                                                 │
-│    DIVIDER CALCULATION:                                                        │
+│    JP4 JUMPER SETTINGS (v2.24):                                               │
+│    ───────────────────────────                                                 │
+│    │ Meter Type │ JP4 Setting │ Result                                      │ │
+│    │────────────│─────────────│─────────────────────────────────────────────│ │
+│    │ 5V TTL     │ OPEN        │ 5V → 3.0V via divider (safe for GPIO7)      │ │
+│    │ 3.3V Logic │ CLOSED      │ 3.3V → 3.3V bypassed (no attenuation)       │ │
+│                                                                                 │
+│    ⚠️ WARNING: Closing JP4 with a 5V meter connected WILL DAMAGE GPIO7!      │
+│                                                                                 │
+│    DIVIDER CALCULATION (JP4 OPEN):                                             │
 │    V_out = V_in × R_lower / (R_upper + R_lower)                               │
 │    V_out = 5V × 3.3kΩ / (2.2kΩ + 3.3kΩ) = 5V × 0.6 = 3.0V  ✓               │
 │                                                                                 │
-│    This safely converts 5V signals to ~3.0V (within RP2350's 3.3V range)     │
+│    THE 3.3V METER PROBLEM (Why JP4 exists):                                   │
+│    ─────────────────────────────────────────                                   │
+│    3.3V meters through divider: 3.3V × 0.6 = 1.98V                            │
+│    RP2350 V_IH threshold: 0.65 × 3.3V = 2.145V                                │
+│    1.98V < 2.145V = COMMUNICATION FAILURE with 3.3V meters!                   │
+│    JP4 bypasses divider, allowing 3.3V signals to pass directly.              │
 │                                                                                 │
-│    TTL UART MODE (PZEM, JSY):                                                  │
-│    ──────────────────────────                                                  │
+│    TTL UART MODE (PZEM, JSY - 5V):                                             │
+│    ─────────────────────────────────                                           │
+│    • JP4 = OPEN (default)                                                      │
 │    • Connect Pin 2 (5V), Pin 3 (GND), Pin 4 (RX), Pin 5 (TX)                  │
 │    • Leave Pin 6 (DE/RE) unconnected                                          │
 │    • RX line automatically level-shifted via on-board resistor divider       │
+│                                                                                 │
+│    TTL UART MODE (Modern 3.3V meters):                                         │
+│    ─────────────────────────────────────                                       │
+│    • JP4 = CLOSED (solder bridge)                                             │
+│    • Connect Pin 1 (3.3V), Pin 3 (GND), Pin 4 (RX), Pin 5 (TX)               │
+│    • Leave Pin 6 (DE/RE) unconnected                                          │
 │                                                                                 │
 │    RS485 MODE (Eastron, Industrial):                                          │
 │    ──────────────────────────────────                                          │
@@ -3322,17 +3481,19 @@ GPIO22 is available on **J15 Pin 8 (SPARE)** for future expansion:
 | 1   | U6  | Rail-to-Rail Op-Amp      | OPA342UA       | SOIC-8   | Level probe oscillator (alt: OPA207)       |
 | 1   | U7  | Precision Comparator     | TLV3201AIDBVR  | SOT-23-5 | Level probe detector                       |
 | 1   | U8  | RS485 Transceiver        | MAX3485ESA+    | SOIC-8   | For industrial meters (alt: SP3485EN-L/TR) |
+| 1   | U9  | Dual Rail-to-Rail Op-Amp | OPA2342UA      | SOIC-8   | **v2.24** VREF buffer (CRITICAL) + spare   |
 
 ## 14.2 Transistors and Diodes
 
-| Qty | Ref     | Description        | Part Number | Package | Notes                                         |
-| --- | ------- | ------------------ | ----------- | ------- | --------------------------------------------- |
-| 5   | Q1-Q5   | NPN Transistor     | MMBT2222A   | SOT-23  | Relay (3) + SSR (2) drivers                   |
-| 3   | D1-D3   | Fast Flyback Diode | UF4007      | DO-41   | Fast recovery (75ns) for snappy relay opening |
-| 6   | D10-D15 | ESD Protection     | PESD5V0S1BL | SOD-323 | Sensor inputs                                 |
-| 1   | D16     | Schottky Clamp     | BAT54S      | SOT-23  | Pressure ADC overvoltage                      |
-| 1   | D20     | TVS Diode          | SMBJ5.0A    | SMB     | 5V rail protection                            |
-| 1   | D21     | RS485 TVS          | SM712       | SOT-23  | RS485 A/B line surge protection (-7V/+12V)    |
+| Qty | Ref     | Description        | Part Number  | Package | Notes                                         |
+| --- | ------- | ------------------ | ------------ | ------- | --------------------------------------------- |
+| 5   | Q1-Q5   | NPN Transistor     | MMBT2222A    | SOT-23  | Relay (3) + SSR (2) drivers                   |
+| 3   | D1-D3   | Fast Flyback Diode | UF4007       | DO-41   | Fast recovery (75ns) for snappy relay opening |
+| 6   | D10-D15 | ESD Protection     | PESD5V0S1BL  | SOD-323 | Sensor inputs                                 |
+| 1   | D16     | Schottky Clamp     | BAT54S       | SOT-23  | Pressure ADC overvoltage                      |
+| 1   | D20     | TVS Diode          | SMBJ5.0A     | SMB     | 5V rail protection                            |
+| 1   | D21     | RS485 TVS          | SM712        | SOT-23  | RS485 A/B line surge protection (-7V/+12V)    |
+| 1   | D22     | Thermocouple ESD   | TPD2E001DRLR | SOT-553 | **v2.24** TC dual-line ESD (<0.5pF, ±15kV)    |
 
 ## 14.3 Passive Components - Resistors
 
@@ -3367,16 +3528,21 @@ GPIO22 is available on **J15 Pin 8 (SPARE)** for future expansion:
 | 2   | R96-R97 | 100kΩ | 1%        | 0805    | Level probe threshold divider                                 |
 | 1   | R98     | 1MΩ   | 5%        | 0805    | Level probe hysteresis                                        |
 | 1   | R99     | 120Ω  | 1%        | 0805    | RS485 termination (via JP1 solder jumper)                     |
+| 1   | R100    | 10kΩ  | 1%        | 0805    | **v2.24** 5V monitor upper divider (ratiometric)              |
+| 1   | R101    | 5.6kΩ | 1%        | 0805    | **v2.24** 5V monitor lower divider (ratiometric)              |
 
 ## 14.3a Solder Jumpers
 
-| Qty | Ref | Function               | Default | Notes                                       |
-| --- | --- | ---------------------- | ------- | ------------------------------------------- |
-| 1   | JP1 | RS485 120Ω termination | OPEN    | Close for long cable runs (>10m)            |
-| 1   | JP2 | Brew NTC selection     | OPEN    | OPEN=50kΩ (ECM), CLOSE=10kΩ (Rocket/Gaggia) |
-| 1   | JP3 | Steam NTC selection    | OPEN    | OPEN=50kΩ (ECM), CLOSE=10kΩ (Rocket/Gaggia) |
+| Qty | Ref | Function               | Default | Notes                                          |
+| --- | --- | ---------------------- | ------- | ---------------------------------------------- |
+| 1   | JP1 | RS485 120Ω termination | OPEN    | Close for long cable runs (>10m)               |
+| 1   | JP2 | Brew NTC selection     | OPEN    | OPEN=50kΩ (ECM), CLOSE=10kΩ (Rocket/Gaggia)    |
+| 1   | JP3 | Steam NTC selection    | OPEN    | OPEN=50kΩ (ECM), CLOSE=10kΩ (Rocket/Gaggia)    |
+| 1   | JP4 | J17 RX 3.3V bypass     | OPEN    | **v2.24** OPEN=5V meters, CLOSE=3.3V meters ⚠️ |
 
 **Solder Jumper Implementation:** 2 pads with ~0.5mm gap. Apply solder blob to bridge.
+
+**⚠️ JP4 WARNING:** Closing JP4 with a 5V meter connected will damage GPIO7!
 
 ## 14.4 Passive Components - Capacitors
 
@@ -3396,8 +3562,11 @@ GPIO22 is available on **J15 Pin 8 (SPARE)** for future expansion:
 | 1   | C64     | 1µF      | 25V     | 0805         | Level probe AC coupling                                      |
 | 1   | C65     | 100nF    | 25V     | 0805         | Level probe sense filter                                     |
 | 4   | C30-C33 | 100pF    | 50V     | 0603         | UART/ADC filter                                              |
-| 1   | C40     | 10nF     | 50V     | 0805         | Thermocouple filter                                          |
+| 1   | C40     | 10nF     | 50V     | 0805         | Thermocouple differential filter                             |
+| 2   | C41-C42 | 1nF      | 50V     | 0805         | **v2.24** Thermocouple common-mode filter                    |
 | 1   | C70     | 100nF    | 25V     | 0805         | RS485 transceiver (U8) decoupling                            |
+| 1   | C80     | 100nF    | 25V     | 0805         | **v2.24** OPA2342 (U9) VCC decoupling                        |
+| 1   | C81     | 100nF    | 25V     | 0805         | **v2.24** 5V monitor filter (ratiometric)                    |
 
 ## 14.4a Inductors
 

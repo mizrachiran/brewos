@@ -4,7 +4,7 @@
 
 **Board Size:** 130mm × 80mm (2-layer, 2oz copper)  
 **Enclosure:** 150mm × 100mm mounting area  
-**Revision:** Matches ECM_Control_Board_Specification_v2.md (v2.22)
+**Revision:** Matches ECM_Control_Board_Specification_v2.md (v2.24)
 
 ---
 
@@ -152,54 +152,85 @@ critical for reliable operation inside hot espresso machine enclosures.
     This avoids "hard parallel" regulator contention and potential reverse current.
 ```
 
-## 1.4 Precision ADC Voltage Reference
+## 1.4 Precision ADC Voltage Reference (Buffered - v2.24 CRITICAL FIX)
 
 **Purpose:** Provides stable reference for NTC measurements, eliminating supply drift errors.
 
+**⚠️ CRITICAL (v2.24):** The LM4040 MUST be buffered by an op-amp. Without the buffer,
+the reference voltage collapses under load, causing complete temperature sensing failure.
+
 ```
-                            PRECISION ADC VOLTAGE REFERENCE
+                      PRECISION ADC VOLTAGE REFERENCE (BUFFERED)
+                          ⚠️ v2.24 CRITICAL DESIGN FIX
     ════════════════════════════════════════════════════════════════════════════
 
-    +3.3V
-       │
-    ┌──┴──┐
-    │ 1kΩ │  R7 - Bias resistor
-    │ 1%  │  I = (3.3V - 3.0V) / 1kΩ = 0.3mA
-    └──┬──┘
-       │
-       ├────────────────────────┬────────────────────────────► ADC_VREF (3.0V)
-       │                        │                                    │
-    ┌──┴──┐                ┌────┴────┐                          ┌────┴────┐
-    │LM4040│               │  22µF   │  C7                      │  100nF  │ C7A
-    │ 3.0V │  U5           │  10V    │                          │  25V    │
-    │ Ref  │               │ Ceramic │                          │ Ceramic │
-    └──┬──┘                └────┬────┘                          └────┬────┘
-       │                        │                                    │
-      ─┴─                      ─┴─                                  ─┴─
-      GND                      GND                                  GND
+    +3.3V ──────[FB1: 600Ω @ 100MHz]───────┬──────────────────────────────────┐
+                                           │                                   │
+                                      ┌────┴────┐                              │
+                                      │  100nF  │ C80 (U9 decoupling)          │
+                                      └────┬────┘                              │
+                                           │                                   │
+                                      ┌────┴────┐                              │
+                                      │   1kΩ   │ R7 (bias)                    │
+                                      │   1%    │ I = 0.3mA (buffer input only)│
+                                      └────┬────┘                              │
+                                           │                                   │
+                                           ├────────► LM4040_VREF (3.0V unloaded)
+                                           │                │
+                                      ┌────┴────┐           │
+                                      │ LM4040  │           │    U9A (OPA2342)
+                                      │  3.0V   │ U5        │   ┌───────────┐
+                                      │  Ref    │           └───┤ +   OUT   ├────┐
+                                      └────┬────┘           ┌───┤ -         │    │
+                                           │                │   └───────────┘    │
+                                          ─┴─               └────────────────────┤
+                                          GND                    (feedback)      │
+                                                                                 │
+                                                      ADC_VREF (3.0V BUFFERED) ◄─┘
+                                                                 │
+                                         ┌───────────────────────┼────────────────┐
+                                         │                       │                │
+                                    ┌────┴────┐             ┌────┴────┐      ┌────┴────┐
+                                    │  22µF   │ C7          │  100nF  │ C7A  │  R1/R2  │
+                                    │  10V    │             │  25V    │      │Pull-ups │
+                                    └────┬────┘             └────┬────┘      └────┬────┘
+                                         │                       │                │
+                                        ─┴─                     ─┴─         To NTC ADCs
+                                        GND                     GND
 
-
-                        Ferrite Bead for ADC Reference
-                        ───────────────────────────────
-
-    +3.3V ──────────────[FB1: 600Ω @ 100MHz]──────────► to R7 (above)
-
-    This isolates the precision reference from digital switching noise.
+    ⚠️ WHY BUFFER IS MANDATORY (The Math):
+    ────────────────────────────────────────
+    Without buffer, R7 provides only 0.3mA to share between LM4040 and sensor loads.
+    
+    NTC Load Current (at operating temperatures):
+    • Brew NTC at 93°C: R_NTC ≈ 3.5kΩ → I = 3.0V/(3.3kΩ+3.5kΩ) ≈ 441µA
+    • Steam NTC at 135°C: R_NTC ≈ 1kΩ → I = 3.0V/(1.2kΩ+1kΩ) ≈ 1.36mA
+    • Total: ~1.8mA (6× more than available 0.3mA!)
+    
+    Without buffer: ADC_VREF collapses to ~0.5V → SYSTEM FAILURE
+    With buffer: Op-amp drives load from 3.3V rail → ADC_VREF stable at 3.0V
 
     Component Values:
     ─────────────────
     U5:  TI LM4040DIM3-3.0, 3.0V shunt ref, SOT-23-3
-    R7:  1kΩ 1%, 0805 (bias resistor)
+    U9:  TI OPA2342UA, dual RRIO op-amp, SOIC-8 (U9A used, U9B spare)
+    R7:  1kΩ 1%, 0805 (bias resistor - now loads only pA into buffer input)
     FB1: Murata BLM18PG601SN1D, 600Ω @ 100MHz, 0603
-    C7:  22µF 10V X5R Ceramic, 1206 (bulk)
-    C7A: 100nF 25V Ceramic, 0805 (HF decoupling)
+    C7:  22µF 10V X5R Ceramic, 1206 (bulk, on ADC_VREF output)
+    C7A: 100nF 25V Ceramic, 0805 (HF decoupling, on ADC_VREF output)
+    C80: 100nF 25V Ceramic, 0805 (U9 VCC decoupling)
 
     Connection to NTC Pull-ups:
     ──────────────────────────
-    R1 (Brew NTC) and R2 (Steam NTC) connect to ADC_VREF (3.0V)
+    R1 (Brew NTC) and R2 (Steam NTC) connect to ADC_VREF (buffered output)
     instead of 3.3V rail. This eliminates supply variations.
 
     Test Point: TP2 provides access to ADC_VREF for verification.
+
+    U9B (Spare):
+    ────────────
+    Second half of OPA2342 available for future use (e.g., pressure buffer).
+    Tie unused inputs to prevent oscillation: IN+ to GND, IN- to OUT.
 ```
 
 ---
@@ -586,7 +617,7 @@ critical for reliable operation inside hot espresso machine enclosures.
     • Steam (135°C): ~25 ADC counts/°C → 0.04°C resolution
 ```
 
-## 5.2 K-Type Thermocouple Input
+## 5.2 K-Type Thermocouple Input (v2.24: ESD + CM Protection)
 
 **⚠️ SENSOR RESTRICTION:** MAX31855**K** is hard-wired for **Type-K ONLY**.
 
@@ -599,40 +630,79 @@ Grounded junction thermocouples create a ground loop through the boiler PE bond,
 causing MAX31855 to report "Short to GND" fault. See Specification §7.2 for details.
 
 ```
-                        K-TYPE THERMOCOUPLE INPUT
+                   K-TYPE THERMOCOUPLE INPUT (v2.24 Enhanced)
+                      with ESD Protection & Common-Mode Filter
     ════════════════════════════════════════════════════════════════════════════
 
                                     +3.3V
                                       │
                                  ┌────┴────┐
-                                 │  100nF  │  Decoupling
-                                 │   C10   │
+                                 │  100nF  │ C10 (MAX31855 decoupling)
                                  └────┬────┘
                                       │
-                      U4: MAX31855KASA+
-                     ┌─────────────────────────┐
-                     │                         │
-    J26-12 (TC+)─────┤ T+   (1)        VCC (8) ├───────────────────── +3.3V
-    (TC+)            │                         │
-                     │                         │
-    J26-13 (TC-)─┬───┤ T-   (2)        SCK (7) ├───────────────────── GPIO18 (SPI_SCK)
-    (TC-)        │   │                         │
-                 │   │                         │
-            ┌────┴───┤ NC   (3)         CS (6) ├───────────────────── GPIO17 (SPI_CS)
-            │ 10nF   │                         │
-            │ C40    │                         │
-            └───┬────┤ GND  (4)         DO (5) ├───────────────────── GPIO16 (SPI_MISO)
-                │    │                         │
-                │    └─────────────────────────┘
-                │
-               ─┴─
-               GND
+                                      │           U4: MAX31855KASA+
+                                      │          ┌─────────────────────────┐
+                                      │          │                         │
+    J26-12 ──┬──────────┬─────────────┼──────────┤ T+   (1)        VCC (8) ├── +3.3V
+    (TC+)    │          │             │          │                         │
+             │          │             │          │                         │
+           ┌─┴─┐    ┌───┴───┐     ┌───┴───┐     │                         │
+           │D22│    │ C41   │     │ C40   │     │                         │
+           │ESD│    │ 1nF   │     │ 10nF  │     │                         │
+           │TVS│    │ (CM)  │     │(Diff) │     │                         │
+           └─┬─┘    └───┬───┘     └───┬───┘     │                         │
+             │          │             │          │                         │
+    J26-13 ──┴──────────┼─────────────┼──────────┤ T-   (2)        SCK (7) ├── GPIO18
+    (TC-)               │             │          │                         │
+                    ┌───┴───┐         │          │                         │
+                    │ C42   │         │      NC──┤ NC   (3)         CS (6) ├── GPIO17
+                    │ 1nF   │         │          │                         │
+                    │ (CM)  │         │          │                         │
+                    └───┬───┘         │     GND──┤ GND  (4)         DO (5) ├── GPIO16
+                        │             │          │                         │
+                       ─┴─           ─┴─         └─────────────────────────┘
+                       GND           GND
+
+
+    PROTECTION STAGES (v2.24):
+    ──────────────────────────
+
+    1. ESD PROTECTION (D22: TPD2E001DRLR) - Place CLOSEST to J26 connector
+       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       - Dual-line bidirectional TVS diode
+       - ±15kV HBM ESD protection
+       - Ultra-low capacitance: <0.5pF (won't affect µV-level TC signal)
+       - Protects MAX31855 from static discharge during installation
+
+    2. COMMON-MODE FILTER (C41, C42: 1nF) - Between ESD and differential filter
+       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       - Shunts common-mode RF/EMI to ground
+       - Small value (1nF) doesn't affect TC response time
+       - Protects against chassis-coupled interference from pump motor
+
+    3. DIFFERENTIAL FILTER (C40: 10nF) - Place CLOSEST to MAX31855
+       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       - Filters differential noise between T+ and T-
+       - Standard recommended filter for MAX31855
+
+    Component Values:
+    ─────────────────
+    U4:  MAX31855KASA+, SOIC-8 (K-type thermocouple specific)
+    D22: TPD2E001DRLR, SOT-553 (dual-line ESD, <0.5pF, ±15kV HBM)
+    C40: 10nF 50V Ceramic, 0805 (differential filter)
+    C41: 1nF 50V Ceramic, 0805 (T+ common-mode filter)
+    C42: 1nF 50V Ceramic, 0805 (T- common-mode filter)
+    C10: 100nF 25V Ceramic, 0805 (VCC decoupling)
 
     Thermocouple Connector:
     ───────────────────────
-    J26-12/13: Thermocouple connections (part of unified 24-pos terminal)
-    Pin 1: TC+ (Yellow for K-type, or check thermocouple wire color code)
-    Pin 2: TC- (Red for K-type)
+    J26-12/13: Thermocouple connections (part of unified 22-pos terminal)
+    Pin 12: TC+ (Yellow for K-type, or check thermocouple wire color code)
+    Pin 13: TC- (Red for K-type)
+
+    PCB LAYOUT ORDER (signal flow from connector to IC):
+    ────────────────────────────────────────────────────
+    J26 → D22 (ESD) → C41/C42 (CM) → C40 (Diff) → MAX31855
 
     NOTE: Use proper K-type thermocouple connectors if available
 
