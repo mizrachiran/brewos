@@ -97,6 +97,16 @@ extern "C" {
 #define DIAG_TEST_BUZZER        0x0C    // Piezo buzzer PWM (GPIO19)
 #define DIAG_TEST_LED           0x0D    // Status LED green (GPIO15)
 
+// Class B Safety Tests (IEC 60730/60335 Annex R)
+#define DIAG_TEST_CLASS_B_ALL   0x30    // Run all Class B tests
+#define DIAG_TEST_CLASS_B_RAM   0x31    // RAM March C- test
+#define DIAG_TEST_CLASS_B_FLASH 0x32    // Flash CRC verification
+#define DIAG_TEST_CLASS_B_CPU   0x33    // CPU register test
+#define DIAG_TEST_CLASS_B_IO    0x34    // I/O state verification
+#define DIAG_TEST_CLASS_B_CLOCK 0x35    // Clock frequency test
+#define DIAG_TEST_CLASS_B_STACK 0x36    // Stack overflow detection
+#define DIAG_TEST_CLASS_B_PC    0x37    // Program counter test
+
 // Diagnostic result status
 #define DIAG_STATUS_PASS        0x00    // Test passed
 #define DIAG_STATUS_FAIL        0x01    // Test failed

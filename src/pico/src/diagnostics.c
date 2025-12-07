@@ -7,6 +7,7 @@
 
 #include "pico/stdlib.h"
 #include "hardware/watchdog.h"
+#include "hardware/clocks.h"
 #include "diagnostics.h"
 #include "config.h"
 #include "hardware.h"
@@ -16,6 +17,7 @@
 #include "pzem.h"
 #include "safety.h"
 #include "protocol_defs.h"
+#include "class_b.h"
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
@@ -193,6 +195,31 @@ uint8_t diagnostics_run_test(uint8_t test_id, diag_result_t* result) {
             break;
         case DIAG_TEST_LED:
             diag_test_led(result);
+            break;
+        // Class B Safety Tests
+        case DIAG_TEST_CLASS_B_ALL:
+            diag_test_class_b_all(result);
+            break;
+        case DIAG_TEST_CLASS_B_RAM:
+            diag_test_class_b_ram(result);
+            break;
+        case DIAG_TEST_CLASS_B_FLASH:
+            diag_test_class_b_flash(result);
+            break;
+        case DIAG_TEST_CLASS_B_CPU:
+            diag_test_class_b_cpu(result);
+            break;
+        case DIAG_TEST_CLASS_B_IO:
+            diag_test_class_b_io(result);
+            break;
+        case DIAG_TEST_CLASS_B_CLOCK:
+            diag_test_class_b_clock(result);
+            break;
+        case DIAG_TEST_CLASS_B_STACK:
+            diag_test_class_b_stack(result);
+            break;
+        case DIAG_TEST_CLASS_B_PC:
+            diag_test_class_b_pc(result);
             break;
         default:
             init_result(result, test_id);
@@ -603,6 +630,161 @@ uint8_t diag_test_led(diag_result_t* result) {
     set_result(result, DIAG_STATUS_PASS, "LED flashed");
     
     DEBUG_PRINT("LED: test flash\n");
+    return result->status;
+}
+
+// =============================================================================
+// Class B Safety Test Implementations (IEC 60730/60335 Annex R)
+// =============================================================================
+
+uint8_t diag_test_class_b_all(diag_result_t* result) {
+    init_result(result, DIAG_TEST_CLASS_B_ALL);
+    
+    class_b_result_t class_b_res = class_b_startup_test();
+    
+    if (class_b_res == CLASS_B_PASS) {
+        class_b_status_t status;
+        class_b_get_status(&status);
+        
+        result->raw_value = (int16_t)status.fail_count;
+        set_result(result, DIAG_STATUS_PASS, "All Class B tests PASS");
+    } else {
+        result->raw_value = (int16_t)class_b_res;
+        set_result(result, DIAG_STATUS_FAIL, class_b_result_string(class_b_res));
+    }
+    
+    DEBUG_PRINT("Class B All: %s\n", result->message);
+    return result->status;
+}
+
+uint8_t diag_test_class_b_ram(diag_result_t* result) {
+    init_result(result, DIAG_TEST_CLASS_B_RAM);
+    
+    class_b_result_t class_b_res = class_b_test_ram();
+    
+    if (class_b_res == CLASS_B_PASS) {
+        set_result(result, DIAG_STATUS_PASS, "RAM March C- PASS");
+    } else {
+        set_result(result, DIAG_STATUS_FAIL, "RAM test failed");
+    }
+    
+    DEBUG_PRINT("Class B RAM: %s\n", result->message);
+    return result->status;
+}
+
+uint8_t diag_test_class_b_flash(diag_result_t* result) {
+    init_result(result, DIAG_TEST_CLASS_B_FLASH);
+    
+    // For diagnostic test, do full CRC verification
+    class_b_status_t status;
+    class_b_get_status(&status);
+    
+    // Force complete Flash CRC calculation
+    uint32_t crc;
+    bool complete = false;
+    while (!complete) {
+        class_b_crc32_flash_incremental(&crc, &complete);
+        watchdog_update();  // Keep watchdog alive during long calculation
+    }
+    
+    result->raw_value = (int16_t)(crc >> 16);  // High word of CRC
+    
+    if (crc == status.flash_crc_reference) {
+        char msg[32];
+        snprintf(msg, sizeof(msg), "CRC OK: 0x%08lX", crc);
+        set_result(result, DIAG_STATUS_PASS, msg);
+    } else {
+        char msg[32];
+        snprintf(msg, sizeof(msg), "CRC fail: 0x%08lX", crc);
+        set_result(result, DIAG_STATUS_FAIL, msg);
+    }
+    
+    DEBUG_PRINT("Class B Flash: %s\n", result->message);
+    return result->status;
+}
+
+uint8_t diag_test_class_b_cpu(diag_result_t* result) {
+    init_result(result, DIAG_TEST_CLASS_B_CPU);
+    
+    class_b_result_t class_b_res = class_b_test_cpu_registers();
+    
+    if (class_b_res == CLASS_B_PASS) {
+        set_result(result, DIAG_STATUS_PASS, "CPU registers PASS");
+    } else {
+        set_result(result, DIAG_STATUS_FAIL, "CPU register test failed");
+    }
+    
+    DEBUG_PRINT("Class B CPU: %s\n", result->message);
+    return result->status;
+}
+
+uint8_t diag_test_class_b_io(diag_result_t* result) {
+    init_result(result, DIAG_TEST_CLASS_B_IO);
+    
+    class_b_result_t class_b_res = class_b_test_io();
+    
+    if (class_b_res == CLASS_B_PASS) {
+        set_result(result, DIAG_STATUS_PASS, "I/O verification PASS");
+    } else {
+        set_result(result, DIAG_STATUS_FAIL, "I/O state mismatch");
+    }
+    
+    DEBUG_PRINT("Class B I/O: %s\n", result->message);
+    return result->status;
+}
+
+uint8_t diag_test_class_b_clock(diag_result_t* result) {
+    init_result(result, DIAG_TEST_CLASS_B_CLOCK);
+    
+    class_b_result_t class_b_res = class_b_test_clock();
+    
+    // Get actual clock frequency for raw value
+    uint32_t sys_clk = clock_get_hz(clk_sys);
+    result->raw_value = (int16_t)(sys_clk / 1000000);  // MHz
+    result->expected_min = 118;  // 118 MHz (-5%)
+    result->expected_max = 131;  // 131 MHz (+5%)
+    
+    if (class_b_res == CLASS_B_PASS) {
+        char msg[32];
+        snprintf(msg, sizeof(msg), "Clock OK: %ld MHz", sys_clk / 1000000);
+        set_result(result, DIAG_STATUS_PASS, msg);
+    } else {
+        char msg[32];
+        snprintf(msg, sizeof(msg), "Clock error: %ld MHz", sys_clk / 1000000);
+        set_result(result, DIAG_STATUS_FAIL, msg);
+    }
+    
+    DEBUG_PRINT("Class B Clock: %s\n", result->message);
+    return result->status;
+}
+
+uint8_t diag_test_class_b_stack(diag_result_t* result) {
+    init_result(result, DIAG_TEST_CLASS_B_STACK);
+    
+    class_b_result_t class_b_res = class_b_test_stack();
+    
+    if (class_b_res == CLASS_B_PASS) {
+        set_result(result, DIAG_STATUS_PASS, "Stack canaries intact");
+    } else {
+        set_result(result, DIAG_STATUS_FAIL, "Stack overflow detected");
+    }
+    
+    DEBUG_PRINT("Class B Stack: %s\n", result->message);
+    return result->status;
+}
+
+uint8_t diag_test_class_b_pc(diag_result_t* result) {
+    init_result(result, DIAG_TEST_CLASS_B_PC);
+    
+    class_b_result_t class_b_res = class_b_test_program_counter();
+    
+    if (class_b_res == CLASS_B_PASS) {
+        set_result(result, DIAG_STATUS_PASS, "PC flow verified");
+    } else {
+        set_result(result, DIAG_STATUS_FAIL, "PC flow error");
+    }
+    
+    DEBUG_PRINT("Class B PC: %s\n", result->message);
     return result->status;
 }
 

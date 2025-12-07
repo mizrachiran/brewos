@@ -158,5 +158,57 @@ uint8_t diag_test_buzzer(diag_result_t* result);
  */
 uint8_t diag_test_led(diag_result_t* result);
 
+// =============================================================================
+// Class B Safety Tests (IEC 60730/60335 Annex R)
+// =============================================================================
+
+/**
+ * Run all Class B safety tests
+ * Checks: RAM, Flash CRC, CPU registers, I/O, Clock, Stack, PC
+ */
+uint8_t diag_test_class_b_all(diag_result_t* result);
+
+/**
+ * Test RAM using March C- algorithm
+ * Checks: RAM integrity with walking bit pattern
+ */
+uint8_t diag_test_class_b_ram(diag_result_t* result);
+
+/**
+ * Test Flash CRC verification
+ * Checks: Application code integrity against stored reference
+ */
+uint8_t diag_test_class_b_flash(diag_result_t* result);
+
+/**
+ * Test CPU registers
+ * Checks: Register pattern write/read/verify
+ */
+uint8_t diag_test_class_b_cpu(diag_result_t* result);
+
+/**
+ * Test I/O state verification
+ * Checks: GPIO output state read-back matches expected
+ */
+uint8_t diag_test_class_b_io(diag_result_t* result);
+
+/**
+ * Test system clock frequency
+ * Checks: Clock within ±5% tolerance
+ */
+uint8_t diag_test_class_b_clock(diag_result_t* result);
+
+/**
+ * Test stack overflow detection
+ * Checks: Stack canary values intact
+ */
+uint8_t diag_test_class_b_stack(diag_result_t* result);
+
+/**
+ * Test program counter
+ * Checks: Execution flow verification
+ */
+uint8_t diag_test_class_b_pc(diag_result_t* result);
+
 #endif // DIAGNOSTICS_H
 

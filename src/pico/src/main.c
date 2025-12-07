@@ -32,6 +32,7 @@
 #include "pzem.h"
 #include "diagnostics.h"
 #include "flash_safe.h"
+#include "class_b.h"
 
 // -----------------------------------------------------------------------------
 // Globals
@@ -638,6 +639,23 @@ int main(void) {
     safety_init();
     DEBUG_PRINT("Safety system initialized\n");
     
+    // Initialize Class B safety routines (IEC 60730/60335 compliance)
+    if (class_b_init() != CLASS_B_PASS) {
+        DEBUG_PRINT("ERROR: Class B initialization failed!\n");
+        // Continue but log the error - safety system will catch issues
+    }
+    
+    // Run Class B startup self-test
+    class_b_result_t class_b_result = class_b_startup_test();
+    if (class_b_result != CLASS_B_PASS) {
+        DEBUG_PRINT("ERROR: Class B startup test failed: %s\n", 
+                   class_b_result_string(class_b_result));
+        // Enter safe state if startup tests fail
+        safety_enter_safe_state();
+    } else {
+        DEBUG_PRINT("Class B startup tests PASSED\n");
+    }
+    
     // Initialize sensors
     sensors_init();
     DEBUG_PRINT("Sensors initialized\n");
@@ -739,6 +757,17 @@ int main(void) {
             } else if (safety == SAFETY_FAULT) {
                 // Warning condition - may continue with limits
                 protocol_send_alarm(safety_get_last_alarm(), 1, 0);
+            }
+            
+            // Run periodic Class B self-tests (IEC 60730/60335)
+            // Tests are staggered across cycles to minimize latency impact
+            class_b_result_t class_b_periodic = class_b_periodic_test();
+            if (class_b_periodic != CLASS_B_PASS) {
+                // Class B failure - enter safe state
+                DEBUG_PRINT("CLASS B FAILURE: %s - entering safe state\n",
+                           class_b_result_string(class_b_periodic));
+                safety_enter_safe_state();
+                protocol_send_alarm(ALARM_WATCHDOG, 2, 0);  // Use watchdog alarm for internal fault
             }
             
             // SAF-003: Feed watchdog only from main control loop after safety checks pass

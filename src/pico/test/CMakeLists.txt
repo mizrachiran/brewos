@@ -63,6 +63,7 @@ set(TEST_SOURCES
     test_cleaning.c
     test_config_validation.c
     test_power_meter.c
+    test_class_b.c
 )
 
 # =============================================================================
