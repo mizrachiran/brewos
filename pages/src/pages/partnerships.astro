@@ -191,7 +191,48 @@ const useCases = [
   /* Offerings */
   .offerings {
     padding: 100px 0;
-    background: var(--white);
+    background: linear-gradient(180deg, #2a1f1a 0%, #1f1714 100%);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .offerings::before {
+    content: '';
+    position: absolute;
+    top: -30%;
+    left: -10%;
+    width: 50%;
+    height: 100%;
+    background: radial-gradient(ellipse, rgba(212, 112, 58, 0.08) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .offerings::after {
+    content: '';
+    position: absolute;
+    bottom: -20%;
+    right: -5%;
+    width: 40%;
+    height: 80%;
+    background: radial-gradient(ellipse, rgba(139, 90, 43, 0.06) 0%, transparent 55%);
+    pointer-events: none;
+  }
+
+  .offerings .container {
+    position: relative;
+    z-index: 1;
+  }
+
+  .offerings .section-label {
+    color: var(--accent-light);
+  }
+
+  .offerings .section-title {
+    color: var(--cream-100);
+  }
+
+  .offerings .section-description {
+    color: var(--cream-400);
   }
 
   .offerings-grid {
@@ -201,8 +242,8 @@ const useCases = [
   }
 
   .offering-card {
-    background: var(--cream-100);
-    border: 1px solid var(--cream-300);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 20px;
     padding: 40px;
     transition: all 0.3s ease;
@@ -210,8 +251,9 @@ const useCases = [
 
   .offering-card:hover {
     transform: translateY(-4px);
-    box-shadow: var(--shadow-lg);
+    background: rgba(255, 255, 255, 0.08);
     border-color: var(--accent);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.3);
   }
 
   .offering-icon {
@@ -234,12 +276,12 @@ const useCases = [
   .offering-card h3 {
     font-size: 1.25rem;
     font-weight: 700;
-    color: var(--coffee-800);
+    color: var(--cream-100);
     margin-bottom: 12px;
   }
 
   .offering-card p {
-    color: var(--text-secondary);
+    color: var(--cream-400);
     margin-bottom: 20px;
   }
 
@@ -252,21 +294,55 @@ const useCases = [
 
   .offering-card li {
     font-size: 0.9rem;
-    color: var(--text-secondary);
+    color: var(--cream-300);
     padding: 8px 12px;
-    background: var(--white);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
   }
 
   /* Use Cases */
   .use-cases {
-    padding: 100px 0;
-    background: var(--coffee-800);
-    color: var(--white);
+    padding: 120px 0;
+    background: linear-gradient(180deg, #faf5ef 0%, #f5ebe0 50%, #efe3d5 100%);
+    position: relative;
+    overflow: hidden;
   }
 
-  .use-cases .section-label { color: var(--accent-light); }
-  .use-cases .section-title { color: var(--white); }
+  .use-cases::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 200px;
+    background: linear-gradient(180deg, rgba(42, 31, 26, 0.03) 0%, transparent 100%);
+    pointer-events: none;
+  }
+
+  .use-cases::after {
+    content: '';
+    position: absolute;
+    top: 20%;
+    right: -5%;
+    width: 35%;
+    height: 60%;
+    background: radial-gradient(ellipse, rgba(212, 112, 58, 0.06) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .use-cases .container {
+    position: relative;
+    z-index: 1;
+  }
+
+  .use-cases .section-label { 
+    color: var(--accent);
+  }
+  
+  .use-cases .section-title { 
+    color: var(--coffee-800);
+  }
 
   .use-cases-grid {
     display: grid;
@@ -275,20 +351,29 @@ const useCases = [
   }
 
   .use-case-card {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--white);
+    border: 1px solid var(--cream-300);
     border-radius: 20px;
     padding: 32px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 16px rgba(61, 43, 36, 0.08);
+  }
+
+  .use-case-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(61, 43, 36, 0.15);
+    border-color: var(--accent);
   }
 
   .use-case-card h3 {
     font-size: 1.25rem;
     font-weight: 700;
+    color: var(--coffee-800);
     margin-bottom: 12px;
   }
 
   .use-case-card p {
-    color: var(--cream-400);
+    color: var(--text-secondary);
     margin-bottom: 20px;
     font-size: 0.95rem;
   }
@@ -302,12 +387,12 @@ const useCases = [
     align-items: center;
     gap: 8px;
     font-size: 0.9rem;
-    color: var(--cream-300);
+    color: var(--text-secondary);
     margin-bottom: 8px;
   }
 
   .use-case-card li svg {
-    color: var(--success);
+    color: var(--accent);
     flex-shrink: 0;
   }
 
