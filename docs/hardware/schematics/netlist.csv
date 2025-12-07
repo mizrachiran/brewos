@@ -7,42 +7,42 @@ U6,Op_Amp,OPA342UA,SOIC-8,VCC=+3.3V,OUT=AC_OUT,GND=GND,Level probe oscillator (W
 U7,Comparator,TLV3201AIDBVR,SOT-23-5,VCC=+3.3V,OUT=GPIO4,GND=GND,Level probe detector with hysteresis
 U8,RS485_Transceiver,MAX3485ESA+,SOIC-8,VCC=+3.3V,DI=GPIO6,RO=U8_RO,A=RS485_A,B=RS485_B,RS485 transceiver for industrial meters (DE/RE=GPIO20) - RO routed via JP4
 U9,Dual_Op_Amp,OPA2342UA,SOIC-8,VCC=+3.3V,OUT_A=U9A_OUT,IN_A+=LM4040_VREF,IN_A-=U9A_OUT,VREF buffer (U9A unity-gain follower) + spare (U9B)
-K1,Relay_SPST,APAN3105,Relay_SPST,Coil+=K1_DRIVE,COM=J2_COM,NO=J2_NO,Mains indicator lamp relay 3A (slim 5mm)
-K2,Relay_SPST,G5LE-1A4-E_DC5,Relay_SPST,Coil+=K2_DRIVE,COM=J3_COM,NO=J3_NO,Pump relay 16A (high-capacity -E variant required)
-K3,Relay_SPST,APAN3105,Relay_SPST,Coil+=K3_DRIVE,COM=J4_COM,NO=J4_NO,Solenoid relay 3A (slim 5mm)
+K1,Relay_SPST,APAN3105,Relay_SPST,Coil+=+5V,Coil-=K1_COIL,COM=J2_COM,NO=J2_NO,Mains indicator lamp relay 3A (slim 5mm)
+K2,Relay_SPST,G5LE-1A4-E_DC5,Relay_SPST,Coil+=+5V,Coil-=K2_COIL,COM=J3_COM,NO=J3_NO,Pump relay 16A (high-capacity -E variant required)
+K3,Relay_SPST,APAN3105,Relay_SPST,Coil+=+5V,Coil-=K3_COIL,COM=J4_COM,NO=J4_NO,Solenoid relay 3A (slim 5mm)
 Q1,NPN_Transistor,MMBT2222A,SOT-23,C=K1_COIL,B=GPIO10_R,E=GND,K1 relay driver
 Q2,NPN_Transistor,MMBT2222A,SOT-23,C=K2_COIL,B=GPIO11_R,E=GND,K2 relay driver
 Q3,NPN_Transistor,MMBT2222A,SOT-23,C=K3_COIL,B=GPIO12_R,E=GND,K3 relay driver
 Q5,NPN_Transistor,MMBT2222A,SOT-23,C=SSR1_NEG,B=GPIO13_R,E=GND,SSR1 low-side driver
 Q6,NPN_Transistor,MMBT2222A,SOT-23,C=SSR2_NEG,B=GPIO14_R,E=GND,SSR2 low-side driver
-D1,Diode,UF4007,DO-41,A=GND,K=K1_COIL,,K1 fast flyback diode (1A 1000V 75ns)
-D2,Diode,UF4007,DO-41,A=GND,K=K2_COIL,,K2 fast flyback diode (1A 1000V 75ns)
-D3,Diode,UF4007,DO-41,A=GND,K=K3_COIL,,K3 fast flyback diode (1A 1000V 75ns)
+D1,Diode,UF4007,DO-41,A=K1_COIL,K=+5V,,K1 flyback diode across coil (1A 1000V 75ns)
+D2,Diode,UF4007,DO-41,A=K2_COIL,K=+5V,,K2 flyback diode across coil (1A 1000V 75ns)
+D3,Diode,UF4007,DO-41,A=K3_COIL,K=+5V,,K3 flyback diode across coil (1A 1000V 75ns)
 D10,ESD_Diode,PESD5V0S1BL,SOD-323,A=GND,K=GPIO2,,Water switch ESD
 D11,ESD_Diode,PESD5V0S1BL,SOD-323,A=GND,K=GPIO3,,Tank level ESD
 D12,ESD_Diode,PESD5V0S1BL,SOD-323,A=GND,K=GPIO4,,Steam level ESD
 D13,ESD_Diode,PESD5V0S1BL,SOD-323,A=GND,K=GPIO5,,Brew switch ESD
 D14,ESD_Diode,PESD5V0S1BL,SOD-323,A=GND,K=ADC0,,Brew NTC ESD
 D15,ESD_Diode,PESD5V0S1BL,SOD-323,A=GND,K=ADC1,,Steam NTC ESD
-D16,Schottky_Diode,BAT54S,SOT-23,A1=ADC2,A2=GND,K=+3.3V,Pressure ADC overvoltage protection
+D16,Schottky_Diode,BAT54S,SOT-23,A1=GPIO28,A2=GND,K=+3.3V,Pressure ADC2 overvoltage protection
 D20,TVS_Diode,SMBJ5.0A,SMB,A=GND,K=+5V,,5V rail protection
 D21,TVS_Diode,SM712,SOT-23,1=RS485_A,2=GND,3=RS485_B,RS485 A/B line surge protection (-7V to +12V asymmetric)
 D23,Zener_Diode,BZT52C3V3,SOD-123,A=GND,K=J16_3,,Service port TX 3.3V clamp (protects from 5V TTL adapters)
 D24,Zener_Diode,BZT52C3V3,SOD-123,A=GND,K=J16_4,,Service port RX 3.3V clamp (protects from 5V TTL adapters)
-LED1,LED,Green_0805,0805,A=LED1_A,K=GND,,K1 indicator
-LED2,LED,Green_0805,0805,A=LED2_A,K=GND,,K2 indicator
-LED3,LED,Green_0805,0805,A=LED3_A,K=GND,,K3 indicator
+LED1,LED,Green_0805,0805,A=LED1_A,K=K1_COIL,,K1 indicator (parallel with relay coil)
+LED2,LED,Green_0805,0805,A=LED2_A,K=K2_COIL,,K2 indicator (parallel with relay coil)
+LED3,LED,Green_0805,0805,A=LED3_A,K=K3_COIL,,K3 indicator (parallel with relay coil)
 LED5,LED,Orange_0805,0805,A=LED5_A,K=GND,,SSR1 indicator
 LED6,LED,Orange_0805,0805,A=LED6_A,K=GND,,SSR2 indicator
-LED7,LED,Green_0805,0805,A=GPIO15,K=GND,,Status LED (Green)
+LED7,LED,Green_0805,0805,A=LED7_A,K=GND,,Status LED (Green)
 R1,Resistor,3.3k_1%,0805,1=ADC_VREF,2=ADC0,,Brew NTC pull-up (50k NTC optimized for 93C)
 R1A,Resistor,1.5k_1%,0805,1=ADC_VREF,2=ADC0,,Brew NTC parallel resistor (10kΩ NTC via JP1)
 R2,Resistor,1.2k_1%,0805,1=ADC_VREF,2=ADC1,,Steam NTC pull-up (50k NTC optimized for 135C)
 R2A,Resistor,680R_1%,0805,1=ADC_VREF,2=ADC1,,Steam NTC parallel resistor (10kΩ NTC via JP2)
-R3,Resistor,10k_1%,0805,1=ADC2,2=GND,,Pressure divider (to GND)
-R4,Resistor,5.6k_1%,0805,1=PRESS_SIG,2=ADC2,,Pressure divider (series) - prevents ADC saturation at 4.5V sensor output
-R5,Resistor,1k_1%,0805,1=ADC0_R,2=ADC0,,Brew NTC series protection
-R6,Resistor,1k_1%,0805,1=ADC1_R,2=ADC1,,Steam NTC series protection
+R3,Resistor,10k_1%,0805,1=GPIO28,2=GND,,Pressure divider (to GND, ADC2)
+R4,Resistor,5.6k_1%,0805,1=PRESS_SIG,2=GPIO28,,Pressure divider (series, ADC2) - prevents ADC saturation at 4.5V sensor output
+R5,Resistor,1k_1%,0805,1=GPIO26,2=ADC0,,Brew NTC series protection (ADC0→GPIO26)
+R6,Resistor,1k_1%,0805,1=GPIO27,2=ADC1,,Steam NTC series protection (ADC1→GPIO27)
 R7,Resistor,1k_1%,0805,1=3V3_ANALOG,2=LM4040_VREF,,LM4040 bias resistor (0.3mA via FB1)
 R8,Resistor,47R_1%,0805,1=U9A_OUT,2=ADC_VREF,,ADC VREF buffer isolation (prevents oscillation with cap load)
 R9,Resistor,33k_1%,0805,1=FB,2=+3.3V,,TPS563200 feedback upper (voltage divider)
@@ -56,11 +56,11 @@ R16,Resistor,10k,0805,1=+3.3V,2=GPIO2,,Water reservoir switch pull-up
 R17,Resistor,10k,0805,1=+3.3V,2=GPIO3,,Tank level sensor pull-up
 R18,Resistor,10k,0805,1=+3.3V,2=GPIO5,,Brew handle switch pull-up
 R19,Resistor,4.7k,0805,1=GPIO20,2=GND,,RS485 DE/RE pull-down (per RP2350 errata E9)
-R20,Resistor,470R,0805,1=GPIO10,2=Q1_B,,Q1 base resistor
-R21,Resistor,470R,0805,1=GPIO11,2=Q2_B,,Q2 base resistor
-R22,Resistor,470R,0805,1=GPIO12,2=Q3_B,,Q3 base resistor
-R24,Resistor,470R,0805,1=GPIO13,2=Q5_B,,Q5 base resistor
-R25,Resistor,470R,0805,1=GPIO14,2=Q6_B,,Q6 base resistor
+R20,Resistor,470R,0805,1=GPIO10,2=GPIO10_R,,Q1 base resistor
+R21,Resistor,470R,0805,1=GPIO11,2=GPIO11_R,,Q2 base resistor
+R22,Resistor,470R,0805,1=GPIO12,2=GPIO12_R,,Q3 base resistor
+R24,Resistor,470R,0805,1=GPIO13,2=GPIO13_R,,Q5 base resistor
+R25,Resistor,470R,0805,1=GPIO14,2=GPIO14_R,,Q6 base resistor
 R30,Resistor,470R,0805,1=+5V,2=LED1_A,,LED1 current limit (6.4mA)
 R31,Resistor,470R,0805,1=+5V,2=LED2_A,,LED2 current limit (6.4mA)
 R32,Resistor,470R,0805,1=+5V,2=LED3_A,,LED3 current limit (6.4mA)
@@ -105,7 +105,7 @@ C7,Capacitor,22uF_10V,1206,1=ADC_VREF,2=GND,,ADC reference bulk cap
 C7A,Capacitor,100nF,0805,1=ADC_VREF,2=GND,,ADC reference decoupling
 C8,Capacitor,100nF,0805,1=ADC0,2=GND,,Brew NTC filter
 C9,Capacitor,100nF,0805,1=ADC1,2=GND,,Steam NTC filter
-C11,Capacitor,100nF,0805,1=ADC2,2=GND,,Pressure filter
+C11,Capacitor,100nF,0805,1=GPIO28,2=GND,,Pressure ADC2 filter
 C13,Capacitor,100uF_10V,Radial,1=+5V,2=GND,,ESP32 bulk cap
 C60,Capacitor,100nF,0805,1=+3.3V,2=GND,,OPA342 VCC decoupling
 C61,Capacitor,10nF,0805,1=WIEN1,2=GND,,Level probe Wien bridge timing (~1.6kHz for probe longevity)
@@ -122,8 +122,8 @@ F2,Fuse,2A_250V,5x20mm,1=L_FUSED,2=L_HLK,,HLK module secondary fuse 2A slow-blow
 RV1,Varistor,275V,14mm,1=L_FUSED,2=N_FUSED,,Mains surge protection (S14K275)
 RV2,Varistor,275V,10mm,1=J3_NO,2=N,,Pump arc suppression MOV across load (S10K275)
 RV3,Varistor,275V,10mm,1=J4_NO,2=N,,Solenoid arc suppression MOV across load (S10K275)
-SW1,Switch,Tactile_6x6mm,SMD,1=RUN,2=GND,,Reset button
-SW2,Switch,Tactile_6x6mm,SMD,1=BOOTSEL,2=GND,,Boot button
+SW1,Switch,Tactile_6x6mm,SMD,1=PICO_RUN,2=GND,,Reset button (active-low via R71 pull-up)
+SW2,Switch,Tactile_6x6mm,SMD,1=PICO_BOOTSEL,2=GND,,Boot button (active-low via R72 pull-up)
 BZ1,Buzzer,Passive_12mm,TH,1=BZ1_POS,2=GND,,Passive piezo buzzer
 FB1,Ferrite_Bead,600R_100MHz,0603,1=+3.3V,2=3V3_ANALOG,,ADC reference section isolation (feeds R7→LM4040→U9A→ADC_VREF)
 JP1,Solder_Jumper,Open,2-pad,1=ADC_VREF,2=R1A,,Brew NTC selection (OPEN=50kΩ ECM/Profitec, CLOSE=10kΩ Rocket/Gaggia)
@@ -140,7 +140,7 @@ J17,Connector,JST-XH_6pos,2.54mm,1=+3.3V,2=+5V,3=GND,4=J17_RX,5=J17_TX,6=RS485_D
 J20,Connector,Header_2x20,2.54mm,,,,"Pico socket"
 J23,Connector,Header_4pos,2.54mm,1=+3.3V,2=GND,3=I2C0_SDA,4=I2C0_SCL,I2C accessory port (GPIO8/9)
 J24,Connector,Screw_3pos,5.08mm,1=L_FUSED,2=N,3=PE,External power meter HV input (L/N/PE only - NO CT)
-J26,Connector,Screw_18pos,5.08mm,1=GPIO2,2=GND,3=GPIO3,4=GND,5=PROBE,6=GPIO5,7=GND,8=NTC1_SIG,9=GND,10=NTC2_SIG,11=GND,12=+5V,13=GND,14=PRESS_SIG,15=+5V,16=SSR1_NEG,17=+5V,18=SSR2_NEG,Unified LV terminal 18-pos (switches + NTCs + pressure + SSRs)
+J26,Connector,Screw_18pos,5.08mm,1=GPIO2,2=GND,3=GPIO3,4=GND,5=PROBE,6=GPIO5,7=GND,8=ADC0,9=GND,10=ADC1,11=GND,12=+5V,13=GND,14=PRESS_SIG,15=+5V,16=SSR1_NEG,17=+5V,18=SSR2_NEG,Unified LV terminal 18-pos (switches + NTCs + pressure + SSRs)
 TP1,Test_Point,GPIO20_Spare,1.5mm,1=GPIO20,,,GPIO20/RS485_DE test point
 TP2,Test_Point,ADC_VREF,1.5mm,1=ADC_VREF,,,ADC reference test point (3.0V buffered)
 TP3,Test_Point,5V_MONITOR,1.5mm,1=5V_DIV,,,5V monitor test point (~1.8V at 5V nominal) - for ratiometric calibration

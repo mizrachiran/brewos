@@ -3140,9 +3140,9 @@ Relay-switched loads (pump, valves) are fused and distributed via internal bus. 
 │  │  5  │ S3    │ Steam Boiler Level Probe    │ 22 AWG │ PROBE       │ Via OPA342/TLV3201→GPIO4    │ │
 │  │  6  │ S4    │ Brew Handle Switch          │ 22 AWG │ GPIO5       │ Digital input, active low   │ │
 │  │  7  │ S4-G  │ Brew Handle GND             │ 22 AWG │ GND         │ Switch return               │ │
-│  │  8  │ T1    │ Brew NTC Signal             │ 22 AWG │ NTC1_SIG    │ To ADC via divider          │ │
+│  │  8  │ T1    │ Brew NTC Signal             │ 22 AWG │ ADC0        │ To GPIO26 via divider       │ │
 │  │  9  │ T1-G  │ Brew NTC GND                │ 22 AWG │ GND         │ Sensor return               │ │
-│  │ 10  │ T2    │ Steam NTC Signal            │ 22 AWG │ NTC2_SIG    │ To ADC via divider          │ │
+│  │ 10  │ T2    │ Steam NTC Signal            │ 22 AWG │ ADC1        │ To GPIO27 via divider       │ │
 │  │ 11  │ T2-G  │ Steam NTC GND               │ 22 AWG │ GND         │ Sensor return               │ │
 │  │ 12  │ P-5V  │ Pressure Transducer +5V     │ 22 AWG │ +5V         │ Power for YD4060            │ │
 │  │ 13  │ P-GND │ Pressure Transducer GND     │ 22 AWG │ GND         │ Sensor return               │ │
@@ -3363,50 +3363,50 @@ GPIO22 is available on **J15 Pin 8 (SPARE)** for future expansion:
 
 ## 14.3 Passive Components - Resistors
 
-| Qty | Ref         | Value | Tolerance | Package | Notes                                                         |
-| --- | ----------- | ----- | --------- | ------- | ------------------------------------------------------------- |
-| 1   | R1          | 3.3kΩ | 1%        | 0805    | Brew NTC pull-up (always populated)                           |
-| 1   | R1A         | 1.5kΩ | 1%        | 0805    | Brew NTC parallel (via JP2, for 10kΩ NTC)                     |
-| 1   | R2          | 1.2kΩ | 1%        | 0805    | Steam NTC pull-up (always populated)                          |
-| 1   | R2A         | 680Ω  | 1%        | 0805    | Steam NTC parallel (via JP3, for 10kΩ NTC)                    |
-| 2   | R5-R6       | 1kΩ   | 1%        | 0805    | NTC ADC series protection                                     |
-| 1   | R3          | 10kΩ  | 1%        | 0805    | Pressure divider (to GND)                                     |
-| 1   | R4          | 5.6kΩ | 1%        | 0805    | Pressure divider (series) - prevents saturation with 3.0V ref |
-| 5   | R16-R18     | 10kΩ  | 5%        | 0805    | Switch pull-ups (Water, Tank, Brew)                           |
-| 2   | R71-R72     | 10kΩ  | 5%        | 0805    | Pico RUN/BOOTSEL pull-ups                                     |
-| 6   | R11-R15,R19 | 4.7kΩ | 5%        | 0805    | Driver pull-downs (RP2350 errata E9)                          |
-| 1   | R73         | 4.7kΩ | 5%        | 0805    | WEIGHT_STOP pull-down (RP2350 errata E9)                      |
-| 5   | R20-R24     | 470Ω  | 5%        | 0805    | Transistor base (3 relay + 2 SSR)                             |
-| 3   | R30-R32     | 470Ω  | 5%        | 0805    | Relay Indicator LEDs (K1, K2, K3)                             |
-| 2   | R34-R35     | 330Ω  | 5%        | 0805    | SSR Indicator LEDs (logic-side)                               |
-| 4   | R40-R43     | 33Ω   | 5%        | 0805    | UART series (ESP32/Service)                                   |
-| 1   | R44         | 33Ω   | 5%        | 0805    | J17 TX series (power meter)                                   |
-| 1   | R45         | 2.2kΩ | 1%        | 0805    | J17 RX 5V→3.3V level shifter (upper divider)                  |
-| 1   | R45A        | 3.3kΩ | 1%        | 0805    | J17 RX 5V→3.3V level shifter (lower divider)                  |
-| 1   | R45B        | 33Ω   | 5%        | 0805    | J17 RX series (after divider)                                 |
-| 1   | R7          | 1kΩ   | 1%        | 0805    | LM4040 voltage reference bias resistor                        |
-| 1   | R_ISO       | 47Ω   | 1%        | 0805    | ADC VREF buffer isolation (U9A output stability)              |
-| 2   | R_FB1       | 33kΩ  | 1%        | 0805    | TPS563200 feedback upper (sets 3.3V output)                   |
-| 1   | R_FB2       | 10kΩ  | 1%        | 0805    | TPS563200 feedback lower (to GND)                             |
-| 2   | R46-R47     | 4.7kΩ | 5%        | 0805    | I2C pull-ups (SDA, SCL)                                       |
-| 1   | R48         | 330Ω  | 5%        | 0805    | Status LED                                                    |
-| 1   | R49         | 100Ω  | 5%        | 0805    | Buzzer                                                        |
-| 2   | R71-R72     | 10kΩ  | 5%        | 0805    | Pico RUN/BOOTSEL pull-ups (J15 Pin 5/6)                       |
-| 1   | R73         | 4.7kΩ | 5%        | 0805    | WEIGHT_STOP pull-down (RP2350 errata E9)                      |
-| 1   | R81         | 10kΩ  | 1%        | 0805    | Level probe oscillator feedback                               |
-| 1   | R82         | 4.7kΩ | 1%        | 0805    | Wien bridge gain resistor (A_CL=3.13, ensures oscillation)    |
-| 2   | R83-R84     | 10kΩ  | 1%        | 0805    | Level probe Wien bridge                                       |
-| 1   | R85         | 100Ω  | 5%        | 0805    | Level probe current limit                                     |
-| 1   | R86         | 10kΩ  | 5%        | 0805    | Level probe AC bias                                           |
-| 2   | R87-R88     | 100kΩ | 1%        | 0805    | Level probe threshold divider                                 |
-| 1   | R89         | 1MΩ   | 5%        | 0805    | Level probe comparator hysteresis                             |
-| 1   | R91         | 10kΩ  | 1%        | 0805    | 5V monitor divider (upper)                                    |
-| 1   | R92         | 5.6kΩ | 1%        | 0805    | 5V monitor divider (lower)                                    |
-| 1   | R93         | 20kΩ  | 5%        | 0805    | RS485 failsafe bias (A line pull-up)                          |
-| 1   | R94         | 20kΩ  | 5%        | 0805    | RS485 failsafe bias (B line pull-down)                        |
-| 1   | R98         | 1MΩ   | 5%        | 0805    | Level probe hysteresis                                        |
-| 1   | R100        | 10kΩ  | 1%        | 0805    | 5V monitor upper divider (ratiometric pressure compensation)  |
-| 1   | R101        | 5.6kΩ | 1%        | 0805    | 5V monitor lower divider (ratiometric pressure compensation)  |
+| Qty | Ref             | Value | Tolerance | Package | Notes                                                         |
+| --- | --------------- | ----- | --------- | ------- | ------------------------------------------------------------- |
+| 1   | R1              | 3.3kΩ | 1%        | 0805    | Brew NTC pull-up (always populated)                           |
+| 1   | R1A             | 1.5kΩ | 1%        | 0805    | Brew NTC parallel (via JP2, for 10kΩ NTC)                     |
+| 1   | R2              | 1.2kΩ | 1%        | 0805    | Steam NTC pull-up (always populated)                          |
+| 1   | R2A             | 680Ω  | 1%        | 0805    | Steam NTC parallel (via JP3, for 10kΩ NTC)                    |
+| 2   | R5-R6           | 1kΩ   | 1%        | 0805    | NTC ADC series protection                                     |
+| 1   | R3              | 10kΩ  | 1%        | 0805    | Pressure divider (to GND)                                     |
+| 1   | R4              | 5.6kΩ | 1%        | 0805    | Pressure divider (series) - prevents saturation with 3.0V ref |
+| 5   | R16-R18         | 10kΩ  | 5%        | 0805    | Switch pull-ups (Water, Tank, Brew)                           |
+| 2   | R71-R72         | 10kΩ  | 5%        | 0805    | Pico RUN/BOOTSEL pull-ups                                     |
+| 6   | R11-R15,R19     | 4.7kΩ | 5%        | 0805    | Driver pull-downs (RP2350 errata E9)                          |
+| 1   | R73             | 4.7kΩ | 5%        | 0805    | WEIGHT_STOP pull-down (RP2350 errata E9)                      |
+| 5   | R20-R22,R24-R25 | 470Ω  | 5%        | 0805    | Transistor base (3 relay + 2 SSR)                             |
+| 3   | R30-R32         | 470Ω  | 5%        | 0805    | Relay Indicator LEDs (K1, K2, K3)                             |
+| 2   | R34-R35         | 330Ω  | 5%        | 0805    | SSR Indicator LEDs (logic-side)                               |
+| 4   | R40-R43         | 33Ω   | 5%        | 0805    | UART series (ESP32/Service)                                   |
+| 1   | R44             | 33Ω   | 5%        | 0805    | J17 TX series (power meter)                                   |
+| 1   | R45             | 2.2kΩ | 1%        | 0805    | J17 RX 5V→3.3V level shifter (upper divider)                  |
+| 1   | R45A            | 3.3kΩ | 1%        | 0805    | J17 RX 5V→3.3V level shifter (lower divider)                  |
+| 1   | R45B            | 33Ω   | 5%        | 0805    | J17 RX series (after divider)                                 |
+| 1   | R7              | 1kΩ   | 1%        | 0805    | LM4040 voltage reference bias resistor                        |
+| 1   | R_ISO           | 47Ω   | 1%        | 0805    | ADC VREF buffer isolation (U9A output stability)              |
+| 2   | R_FB1           | 33kΩ  | 1%        | 0805    | TPS563200 feedback upper (sets 3.3V output)                   |
+| 1   | R_FB2           | 10kΩ  | 1%        | 0805    | TPS563200 feedback lower (to GND)                             |
+| 2   | R46-R47         | 4.7kΩ | 5%        | 0805    | I2C pull-ups (SDA, SCL)                                       |
+| 1   | R48             | 330Ω  | 5%        | 0805    | Status LED                                                    |
+| 1   | R49             | 100Ω  | 5%        | 0805    | Buzzer                                                        |
+| 2   | R71-R72         | 10kΩ  | 5%        | 0805    | Pico RUN/BOOTSEL pull-ups (J15 Pin 5/6)                       |
+| 1   | R73             | 4.7kΩ | 5%        | 0805    | WEIGHT_STOP pull-down (RP2350 errata E9)                      |
+| 1   | R81             | 10kΩ  | 1%        | 0805    | Level probe oscillator feedback                               |
+| 1   | R82             | 4.7kΩ | 1%        | 0805    | Wien bridge gain resistor (A_CL=3.13, ensures oscillation)    |
+| 2   | R83-R84         | 10kΩ  | 1%        | 0805    | Level probe Wien bridge                                       |
+| 1   | R85             | 100Ω  | 5%        | 0805    | Level probe current limit                                     |
+| 1   | R86             | 10kΩ  | 5%        | 0805    | Level probe AC bias                                           |
+| 2   | R87-R88         | 100kΩ | 1%        | 0805    | Level probe threshold divider                                 |
+| 1   | R89             | 1MΩ   | 5%        | 0805    | Level probe comparator hysteresis                             |
+| 1   | R91             | 10kΩ  | 1%        | 0805    | 5V monitor divider (upper)                                    |
+| 1   | R92             | 5.6kΩ | 1%        | 0805    | 5V monitor divider (lower)                                    |
+| 1   | R93             | 20kΩ  | 5%        | 0805    | RS485 failsafe bias (A line pull-up)                          |
+| 1   | R94             | 20kΩ  | 5%        | 0805    | RS485 failsafe bias (B line pull-down)                        |
+| 1   | R98             | 1MΩ   | 5%        | 0805    | Level probe hysteresis                                        |
+| 1   | R100            | 10kΩ  | 1%        | 0805    | 5V monitor upper divider (ratiometric pressure compensation)  |
+| 1   | R101            | 5.6kΩ | 1%        | 0805    | 5V monitor lower divider (ratiometric pressure compensation)  |
 
 ## 14.3a Solder Jumpers
 
