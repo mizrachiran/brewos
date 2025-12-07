@@ -53,7 +53,9 @@ export function LoginForm({
 }: LoginFormProps) {
   return (
     <div
-      className={`w-full max-w-md relative z-10 ${animated ? "login-card-enter" : ""}`}
+      className={`w-full max-w-md relative z-10 ${
+        animated ? "login-card-enter" : ""
+      }`}
     >
       {/* Mobile logo (hidden on desktop) */}
       {showMobileLogo && (
@@ -72,13 +74,17 @@ export function LoginForm({
           <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-theme mb-1 sm:mb-2">
             Welcome back
           </h2>
-          <p className="text-sm sm:text-base text-theme-muted">Sign in to manage your machines</p>
+          <p className="text-sm sm:text-base text-theme-muted mb-2">
+            Sign in to manage your machines
+          </p>
         </div>
 
         {/* Error message */}
         {error && (
           <div
-            className={`mb-6 p-4 rounded-xl flex items-start gap-3 bg-error-soft border border-error ${animated ? "login-error" : ""}`}
+            className={`mb-6 p-4 rounded-xl flex items-start gap-3 bg-error-soft border border-error ${
+              animated ? "login-error" : ""
+            }`}
           >
             <AlertCircle className="w-5 h-5 text-error flex-shrink-0 mt-0.5" />
             <span className="text-sm text-error">{error}</span>
@@ -128,7 +134,9 @@ export function LoginForm({
 
       {/* Footer */}
       <p
-        className={`text-center text-xs text-theme-muted mt-6 ${animated ? "opacity-0 login-footer" : ""}`}
+        className={`text-center text-xs text-theme-muted mt-6 ${
+          animated ? "opacity-0 login-footer" : ""
+        }`}
       >
         By signing in, you agree to our{" "}
         <a
@@ -152,4 +160,3 @@ export function LoginForm({
     </div>
   );
 }
-

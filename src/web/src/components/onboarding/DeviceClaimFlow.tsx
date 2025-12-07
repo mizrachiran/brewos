@@ -19,6 +19,7 @@ interface DeviceClaimFlowProps {
   ) => Promise<boolean>;
   onClaimManual?: (manualCode: string, deviceName?: string) => Promise<boolean>;
   showTabs?: boolean; // Show tab switcher at top (for modal context)
+  initialStep?: "scan" | "manual"; // Initial step to show (default: scan)
   className?: string;
 }
 
@@ -28,10 +29,11 @@ export function DeviceClaimFlow({
   onClaim,
   onClaimManual,
   showTabs = false,
+  initialStep = "scan",
   className = "",
 }: DeviceClaimFlowProps) {
   const [step, setStep] = useState<"scan" | "manual" | "name" | "success">(
-    "scan"
+    initialStep
   );
   const [claimCode, setClaimCode] = useState("");
   const [deviceName, setDeviceName] = useState("");
