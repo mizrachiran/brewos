@@ -5,7 +5,7 @@
 // - IS_DEV_MODE is true during dev server, false for production builds
 // This ensures cache is invalidated on every deployment and during development.
 //
-const CACHE_VERSION = "dev-2025-12-07T07-12-15-376Z";
+const CACHE_VERSION = "dev-2025-12-07T07-12-21-678Z";
 const IS_DEV_MODE = true;
 const STATIC_CACHE_NAME = `brewos-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE_NAME = `brewos-runtime-${CACHE_VERSION}`;
