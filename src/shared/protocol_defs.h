@@ -57,6 +57,7 @@ extern "C" {
 #define MSG_ENV_CONFIG          0x08    // Environmental config (voltage, current limits)
 #define MSG_STATISTICS          0x09    // Statistics response
 #define MSG_DIAGNOSTICS         0x0A    // Diagnostics response
+#define MSG_POWER_METER         0x0B    // Power meter reading (from Pico)
 
 // =============================================================================
 // Diagnostic Test IDs
@@ -133,6 +134,8 @@ extern "C" {
 #define MSG_CMD_SET_ECO         0x1E    // Set eco mode configuration
 #define MSG_CMD_BOOTLOADER      0x1F    // Enter bootloader mode
 #define MSG_CMD_DIAGNOSTICS     0x20    // Run diagnostic test(s)
+#define MSG_CMD_POWER_METER_CONFIG 0x21 // Configure power meter
+#define MSG_CMD_POWER_METER_DISCOVER 0x22 // Start power meter auto-discovery
 
 // =============================================================================
 // Alarm Codes

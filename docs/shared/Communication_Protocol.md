@@ -5,6 +5,7 @@
 Binary protocol for communication between the Pico (RP2040) and ESP32 display module.
 
 **See also:**
+
 - [Setup Guide](../../SETUP.md) - OTA firmware update instructions
 - [Architecture](Architecture.md) - System architecture and communication flow
 - [Feature Status](Feature_Status_Table.md) - Implementation status
@@ -12,7 +13,7 @@ Binary protocol for communication between the Pico (RP2040) and ESP32 display mo
 **Transport:** UART  
 **Baud Rate:** 921600  
 **Format:** 8N1  
-**GPIO:** Pico TX=GPIO0, RX=GPIO1  
+**GPIO:** Pico TX=GPIO0, RX=GPIO1
 
 ---
 
@@ -38,14 +39,14 @@ All packets follow this format:
 └───────┴──────────┴────────┴─────┴─────────────────┴───────────┘
 ```
 
-| Field | Size | Description |
-|-------|------|-------------|
-| START | 1 | Sync byte, always `0xAA` |
-| MSG_TYPE | 1 | Message type identifier |
-| LENGTH | 1 | Payload length in bytes (0-56) |
-| SEQ | 1 | Sequence number (0-255, wraps) |
-| PAYLOAD | 0-56 | Message-specific data |
-| CRC16 | 2 | CRC-16-CCITT over TYPE+LENGTH+SEQ+PAYLOAD |
+| Field    | Size | Description                               |
+| -------- | ---- | ----------------------------------------- |
+| START    | 1    | Sync byte, always `0xAA`                  |
+| MSG_TYPE | 1    | Message type identifier                   |
+| LENGTH   | 1    | Payload length in bytes (0-56)            |
+| SEQ      | 1    | Sequence number (0-255, wraps)            |
+| PAYLOAD  | 0-56 | Message-specific data                     |
+| CRC16    | 2    | CRC-16-CCITT over TYPE+LENGTH+SEQ+PAYLOAD |
 
 **Maximum packet size:** 62 bytes (4 header + 56 payload + 2 CRC)
 
@@ -58,7 +59,7 @@ CRC-16-CCITT (polynomial 0x1021, initial value 0xFFFF):
 ```c
 uint16_t crc16(const uint8_t* data, size_t length) {
     uint16_t crc = 0xFFFF;
-    
+
     for (size_t i = 0; i < length; i++) {
         crc ^= (uint16_t)data[i] << 8;
         for (int j = 0; j < 8; j++) {
@@ -82,36 +83,39 @@ CRC is transmitted little-endian (low byte first).
 
 ### Pico → ESP32
 
-| Type | Value | Description | Interval |
-|------|-------|-------------|----------|
-| MSG_STATUS | 0x01 | **Unified status** (temps, pressure, power, state) | 500ms |
-| MSG_ALARM | 0x02 | Alarm event (immediate, safety-critical) | On event |
-| MSG_BOOT | 0x03 | Boot complete notification | Once |
-| MSG_ACK | 0x04 | Command acknowledgment | On command |
-| MSG_CONFIG | 0x05 | **Full configuration** (setpoints, PID, heating, etc.) | On request/change |
-| MSG_DEBUG | 0x06 | Debug log message (see [Debugging.md](Debugging.md)) | On log event |
-| MSG_DEBUG_RESP | 0x07 | Debug command response | On debug command |
-| MSG_ENV_CONFIG | 0x08 | **Environmental config** (voltage, current limits) | On request/change |
+| Type            | Value | Description                                               | Interval          |
+| --------------- | ----- | --------------------------------------------------------- | ----------------- |
+| MSG_STATUS      | 0x01  | **Unified status** (temps, pressure, power, state)        | 500ms             |
+| MSG_ALARM       | 0x02  | Alarm event (immediate, safety-critical)                  | On event          |
+| MSG_BOOT        | 0x03  | Boot complete notification                                | Once              |
+| MSG_ACK         | 0x04  | Command acknowledgment                                    | On command        |
+| MSG_CONFIG      | 0x05  | **Full configuration** (setpoints, PID, heating, etc.)    | On request/change |
+| MSG_DEBUG       | 0x06  | Debug log message (see [Debugging.md](Debugging.md))      | On log event      |
+| MSG_DEBUG_RESP  | 0x07  | Debug command response                                    | On debug command  |
+| MSG_ENV_CONFIG  | 0x08  | **Environmental config** (voltage, current limits)        | On request/change |
+| MSG_POWER_METER | 0x0B  | **Power meter reading** (voltage, current, power, energy) | 1 second          |
 
 ### ESP32 → Pico
 
-| Type | Value | Description |
-|------|-------|-------------|
-| MSG_CMD_SET_TEMP | 0x10 | Set temperature setpoint |
-| MSG_CMD_SET_PID | 0x11 | Set PID parameters |
-| MSG_CMD_BREW | 0x13 | Start/stop brew |
-| MSG_CMD_MODE | 0x14 | Change operating mode |
-| MSG_CMD_CONFIG | 0x15 | Set runtime configuration |
-| MSG_CMD_GET_CONFIG | 0x16 | **Request current configuration** |
-| MSG_CMD_GET_ENV_CONFIG | 0x17 | **Request environmental configuration** |
-| MSG_CMD_DEBUG | 0x1D | Debug commands (see [Debugging.md](Debugging.md)) |
-| MSG_CMD_BOOTLOADER | 0x1F | Enter bootloader for OTA |
+| Type                         | Value | Description                                       |
+| ---------------------------- | ----- | ------------------------------------------------- |
+| MSG_CMD_SET_TEMP             | 0x10  | Set temperature setpoint                          |
+| MSG_CMD_SET_PID              | 0x11  | Set PID parameters                                |
+| MSG_CMD_BREW                 | 0x13  | Start/stop brew                                   |
+| MSG_CMD_MODE                 | 0x14  | Change operating mode                             |
+| MSG_CMD_CONFIG               | 0x15  | Set runtime configuration                         |
+| MSG_CMD_GET_CONFIG           | 0x16  | **Request current configuration**                 |
+| MSG_CMD_GET_ENV_CONFIG       | 0x17  | **Request environmental configuration**           |
+| MSG_CMD_DEBUG                | 0x1D  | Debug commands (see [Debugging.md](Debugging.md)) |
+| MSG_CMD_BOOTLOADER           | 0x1F  | Enter bootloader for OTA                          |
+| MSG_CMD_POWER_METER_CONFIG   | 0x21  | Configure power meter (enable/disable)            |
+| MSG_CMD_POWER_METER_DISCOVER | 0x22  | Start power meter auto-discovery                  |
 
 ### Bidirectional
 
-| Type | Value | Description |
-|------|-------|-------------|
-| MSG_PING | 0x00 | Heartbeat (echo back) |
+| Type     | Value | Description           |
+| -------- | ----- | --------------------- |
+| MSG_PING | 0x00  | Heartbeat (echo back) |
 
 ---
 
@@ -154,6 +158,7 @@ typedef struct __attribute__((packed)) {
 | 5-7 | Reserved | |
 
 **Note:** Status flags are different from state enum:
+
 - **State enum** (`state` field): Single operational state (IDLE, HEATING, READY, BREWING, etc.)
 - **Status flags** (`flags` field): Multiple boolean conditions that can be true simultaneously
 - Example: In `STATE_READY`, `STATUS_FLAG_HEATING` may be true (PID maintaining temp), but `STATE_HEATING` is false (not in initial heating phase)
@@ -238,6 +243,7 @@ typedef struct __attribute__((packed)) {
 | 255 | `PCB_TYPE_CUSTOM` | Custom PCB |
 
 **PCB Version:**
+
 - Major: Pinout or significant hardware changes
 - Minor: Component changes, same pinout
 - Patch: Bug fixes, same hardware
@@ -259,17 +265,18 @@ typedef struct __attribute__((packed)) {
 
 **ACK Result Codes** (from `protocol_defs.h`):
 
-| Code | Constant | Description |
-|------|----------|-------------|
-| 0x00 | `ACK_SUCCESS` | Command executed successfully |
-| 0x01 | `ACK_ERROR_INVALID` | Invalid command or parameters |
-| 0x02 | `ACK_ERROR_REJECTED` | Command rejected (e.g., safety, state) |
-| 0x03 | `ACK_ERROR_FAILED` | Command failed (e.g., hardware error) |
-| 0x04 | `ACK_ERROR_TIMEOUT` | Operation timed out |
-| 0x05 | `ACK_ERROR_BUSY` | System busy, try again later |
-| 0x06 | `ACK_ERROR_NOT_READY` | System not ready for this command |
+| Code | Constant              | Description                            |
+| ---- | --------------------- | -------------------------------------- |
+| 0x00 | `ACK_SUCCESS`         | Command executed successfully          |
+| 0x01 | `ACK_ERROR_INVALID`   | Invalid command or parameters          |
+| 0x02 | `ACK_ERROR_REJECTED`  | Command rejected (e.g., safety, state) |
+| 0x03 | `ACK_ERROR_FAILED`    | Command failed (e.g., hardware error)  |
+| 0x04 | `ACK_ERROR_TIMEOUT`   | Operation timed out                    |
+| 0x05 | `ACK_ERROR_BUSY`      | System busy, try again later           |
+| 0x06 | `ACK_ERROR_NOT_READY` | System not ready for this command      |
 
 **Examples:**
+
 - `MSG_CMD_SET_TEMP` with invalid payload → `ACK_ERROR_INVALID`
 - `MSG_CMD_MODE` during active brew → `ACK_ERROR_REJECTED`
 - `MSG_CMD_BOOTLOADER` timeout → `ACK_ERROR_TIMEOUT`
@@ -280,6 +287,7 @@ typedef struct __attribute__((packed)) {
 ### MSG_CONFIG (0x05) - Pico → ESP32
 
 **Full configuration** (setpoints, PID, heating strategy). Sent:
+
 - Once after boot (after MSG_BOOT)
 - In response to MSG_CMD_GET_CONFIG
 - After any configuration change
@@ -390,6 +398,7 @@ typedef struct __attribute__((packed)) {
 | 2 | MODE_STEAM | Steam mode: heats both boilers (steam for milk, brew for espresso) |
 
 **Behavior:**
+
 - `MODE_IDLE`: Machine idle, no heating. Remote control, schedules, web access continue.
 - `MODE_BREW`: Machine turns on, heats brew boiler to brew temperature.
 - `MODE_STEAM`: Machine turns on, heats both boilers sequentially (brew first, then steam).
@@ -427,12 +436,14 @@ typedef struct __attribute__((packed)) {
 ```
 
 **Usage:**
+
 - ESP32 sends `MSG_CMD_CONFIG` with `config_type = CONFIG_ENVIRONMENTAL`
 - Pico updates environmental config and recalculates electrical state
 - Pico responds with `MSG_ACK` (with result code: ACK_SUCCESS, ACK_ERROR_INVALID, etc.)
 - Pico may send updated `MSG_CONFIG` if environmental config affects heating strategy
 
 **Example:**
+
 ```c
 // ESP32 → Pico: Set 230V / 16A limit
 cmd_config_t cmd = {
@@ -459,6 +470,7 @@ cmd_config_t cmd = {
 ```
 
 Use cases:
+
 - ESP32 just connected/reconnected
 - ESP32 UI needs to refresh settings display
 - Sync check after communication loss
@@ -468,6 +480,7 @@ Use cases:
 ### MSG_ENV_CONFIG (0x08) - Pico → ESP32
 
 **Environmental configuration** (voltage, current limits). Sent:
+
 - Once after boot (after MSG_BOOT and MSG_CONFIG)
 - In response to MSG_CMD_GET_ENV_CONFIG
 - After environmental configuration change (following MSG_ACK)
@@ -486,6 +499,7 @@ typedef struct __attribute__((packed)) {
 ```
 
 **Configuration Flow:**
+
 ```
 ┌────────────────┐                              ┌────────────────┐
 │     Pico       │                              │     ESP32      │
@@ -524,27 +538,108 @@ typedef struct __attribute__((packed)) {
 ```
 
 Use cases:
+
 - ESP32 just connected/reconnected
 - ESP32 UI needs to display/verify voltage and current limits
 - User wants to check current environmental settings
 
 ---
 
+### MSG_POWER_METER (0x0B) - Pico → ESP32
+
+**Power meter reading** from hardware modules (PZEM, JSY, Eastron). Sent every 1 second when power metering is enabled.
+
+```c
+typedef struct __attribute__((packed)) {
+    float voltage;        // Volts (RMS) - 4 bytes
+    float current;        // Amps (RMS) - 4 bytes
+    float power;          // Watts (Active) - 4 bytes
+    float energy_import;  // kWh (from grid) - 4 bytes
+    float energy_export;  // kWh (to grid, for solar) - 4 bytes
+    float frequency;      // Hz - 4 bytes
+    float power_factor;   // 0.0 - 1.0 - 4 bytes
+    uint32_t timestamp;   // milliseconds when read - 4 bytes
+    uint8_t valid;        // 1 if reading is valid - 1 byte
+    uint8_t padding[3];   // Padding to 4-byte alignment - 3 bytes
+} power_meter_reading_t;  // 36 bytes
+
+// Full packet: 4 (header) + 36 (payload) + 2 (CRC) = 42 bytes
+```
+
+**Notes:**
+
+- Only sent when power meter is enabled and connected
+- `valid` flag is 0 if meter communication failed
+- `energy_export` is 0 for non-bidirectional meters
+- Pico handles hardware meters via UART1 (GPIO6/7) using Modbus protocol
+- Supported meters: PZEM-004T, JSY-MK-163T/194T, Eastron SDM120/230
+
+---
+
+### MSG_CMD_POWER_METER_CONFIG (0x21) - ESP32 → Pico
+
+Enable or disable power metering.
+
+```c
+typedef struct __attribute__((packed)) {
+    uint8_t enabled;  // 0 = disable, 1 = enable
+} cmd_power_meter_config_t;  // 1 byte
+```
+
+**Behavior:**
+
+- When enabled: Pico initializes power meter on UART1 and starts sending MSG_POWER_METER
+- When disabled: Pico stops polling meter and closes UART1
+- Pico responds with MSG_ACK (success or error)
+
+---
+
+### MSG_CMD_POWER_METER_DISCOVER (0x22) - ESP32 → Pico
+
+Start auto-discovery of connected power meter.
+
+```c
+// No payload - LENGTH = 0
+```
+
+**Behavior:**
+
+- Pico tries each known meter type (PZEM @ 9600, JSY @ 4800, Eastron @ 2400/9600)
+- First valid response is saved to configuration
+- Takes ~10-15 seconds (tries 5 meter types with timeouts)
+- Pico sends MSG_ACK when complete
+- If meter found: Pico starts sending MSG_POWER_METER readings
+- If not found: Pico sends MSG_ACK with error code
+
+**Discovery Process:**
+
+1. Try PZEM-004T @ 9600 baud, addr 0xF8
+2. Try JSY-MK-163T @ 4800 baud, addr 0x01
+3. Try JSY-MK-194T @ 4800 baud, addr 0x01
+4. Try Eastron SDM120 @ 2400 baud, addr 0x01
+5. Try Eastron SDM230 @ 9600 baud, addr 0x01
+
+Each attempt: Send Modbus read request, wait 500ms, verify voltage reading is 50-300V.
+
+---
+
 ### MSG_CMD_BOOTLOADER (0x1F) - ESP32 → Pico
 
-Enter bootloader for OTA update. 
+Enter bootloader for OTA update.
 
 **Payload:** Optional 4-byte magic header (0xFFFFFFFF) to indicate firmware streaming will follow.
 
 **Response:** Pico should enter bootloader mode and prepare to receive firmware.
 
 **Implementation:**
+
 - ESP32 sends this command via normal protocol
 - **Serial bootloader (recommended):** Pico enters bootloader mode and waits for firmware over UART
 - **Hardware bootloader entry (fallback):** ESP32 can also use hardware bootloader entry (BOOTSEL + RUN pins)
 - ESP32 streams firmware using bootloader protocol (see [Firmware Streaming Protocol](#firmware-streaming-protocol-bootloader-mode) section below)
 
 **Implementation:**
+
 - ESP32 side: Supports both serial and hardware bootloader entry
 - Pico side: Serial bootloader receives firmware over UART, writes to flash, verifies checksums
 
@@ -570,18 +665,20 @@ typedef struct __attribute__((packed)) {
 
 ## Timing
 
-| Message | Direction | Interval | Priority |
-|---------|-----------|----------|----------|
-| MSG_STATUS | Pico → ESP32 | 500ms | Normal |
-| MSG_CONFIG | Pico → ESP32 | On boot + on change | Normal |
-| MSG_ALARM | Pico → ESP32 | Immediate | High |
-| MSG_PING | Either | 5000ms (timeout detection) | Low |
-| Commands | ESP32 → Pico | On demand | Normal |
+| Message         | Direction    | Interval                   | Priority |
+| --------------- | ------------ | -------------------------- | -------- |
+| MSG_STATUS      | Pico → ESP32 | 500ms                      | Normal   |
+| MSG_POWER_METER | Pico → ESP32 | 1000ms (when enabled)      | Normal   |
+| MSG_CONFIG      | Pico → ESP32 | On boot + on change        | Normal   |
+| MSG_ALARM       | Pico → ESP32 | Immediate                  | High     |
+| MSG_PING        | Either       | 5000ms (timeout detection) | Low      |
+| Commands        | ESP32 → Pico | On demand                  | Normal   |
 
 ### Boot Sequence
 
 ```
 Pico boots → MSG_BOOT → MSG_CONFIG → MSG_ENV_CONFIG → MSG_STATUS (repeating)
+                                                     → MSG_POWER_METER (repeating, if enabled)
 ```
 
 ### After Config Change
@@ -591,6 +688,7 @@ ESP32 sends MSG_CMD_* → Pico sends MSG_ACK (with result code) → Pico sends M
 ```
 
 **ACK Result Codes:**
+
 - `ACK_SUCCESS` (0x00) - Command executed successfully
 - `ACK_ERROR_INVALID` (0x01) - Invalid command or parameters
 - `ACK_ERROR_REJECTED` (0x02) - Command rejected (e.g., safety, state)
@@ -613,27 +711,28 @@ The protocol implementation tracks errors for diagnostics:
 
 ### Receive Errors
 
-| Condition | Action | Error Tracking |
-|-----------|--------|----------------|
-| Invalid start byte | Discard, wait for 0xAA | No tracking (expected) |
-| CRC mismatch | Discard packet, increment `g_crc_errors` | Logged with expected vs received CRC |
-| Invalid packet length | Reset state, increment `g_packet_errors` | Logged with invalid length value |
-| Buffer overflow | Reset state, increment `g_packet_errors` | Logged |
-| Unknown message type | Discard, no ACK sent | No tracking (expected for future commands) |
-| Timeout (incomplete packet) | Reset parser state after 100ms | No tracking (handled by state machine) |
+| Condition                   | Action                                   | Error Tracking                             |
+| --------------------------- | ---------------------------------------- | ------------------------------------------ |
+| Invalid start byte          | Discard, wait for 0xAA                   | No tracking (expected)                     |
+| CRC mismatch                | Discard packet, increment `g_crc_errors` | Logged with expected vs received CRC       |
+| Invalid packet length       | Reset state, increment `g_packet_errors` | Logged with invalid length value           |
+| Buffer overflow             | Reset state, increment `g_packet_errors` | Logged                                     |
+| Unknown message type        | Discard, no ACK sent                     | No tracking (expected for future commands) |
+| Timeout (incomplete packet) | Reset parser state after 100ms           | No tracking (handled by state machine)     |
 
 **Error Reporting:**
+
 - CRC errors are logged with both received and expected CRC values
 - Packet errors include context (invalid length, buffer overflow)
 - Error counts are available via protocol functions for diagnostics
 
 ### Communication Loss
 
-| Condition | Pico Action | ESP32 Action |
-|-----------|-------------|--------------|
-| No MSG_STATE for 2s | N/A | Display "Comm Lost" |
-| No commands for 30s | Continue standalone | N/A |
-| No PING response for 10s | Log warning | Attempt reconnect |
+| Condition                | Pico Action         | ESP32 Action        |
+| ------------------------ | ------------------- | ------------------- |
+| No MSG_STATE for 2s      | N/A                 | Display "Comm Lost" |
+| No commands for 30s      | Continue standalone | N/A                 |
+| No PING response for 10s | Log warning         | Attempt reconnect   |
 
 ---
 
@@ -656,6 +755,7 @@ Use `__attribute__((packed))` (GCC) or `#pragma pack(1)` to prevent padding.
 ### Thread Safety
 
 On Pico with dual-core:
+
 - Core 0 writes state to shared buffer
 - Core 1 reads and transmits
 - Use mutex or lock-free queue
@@ -731,28 +831,31 @@ Each firmware chunk follows this format:
 └──────────┴──────────────┴──────────┴──────────┴──────────┘
 ```
 
-| Field | Size | Description |
-|-------|------|-------------|
-| MAGIC | 2 | Magic bytes `0x55 0xAA` to identify chunk start |
-| CHUNK_NUM | 4 | Chunk number (little-endian, starting from 0) |
-| SIZE | 2 | Data size in bytes (little-endian, 0-256) |
-| DATA | variable | Firmware data (0-256 bytes) |
-| CHECKSUM | 1 | XOR checksum of all data bytes |
+| Field     | Size     | Description                                     |
+| --------- | -------- | ----------------------------------------------- |
+| MAGIC     | 2        | Magic bytes `0x55 0xAA` to identify chunk start |
+| CHUNK_NUM | 4        | Chunk number (little-endian, starting from 0)   |
+| SIZE      | 2        | Data size in bytes (little-endian, 0-256)       |
+| DATA      | variable | Firmware data (0-256 bytes)                     |
+| CHECKSUM  | 1        | XOR checksum of all data bytes                  |
 
 ### End Marker
 
 After all chunks are sent, ESP32 sends an end marker:
+
 - Chunk with chunk number `0xFFFFFFFF` and 2-byte data `0xAA 0x55` (reversed magic)
 
 ### Streaming Process
 
 1. **Initialization:**
+
    - ESP32 sends `MSG_CMD_BOOTLOADER` via normal protocol
    - **Serial bootloader (implemented):** Pico receives command, sends acknowledgment, and enters bootloader mode
    - **Hardware bootloader entry (fallback):** ESP32 can also trigger hardware bootloader entry (BOOTSEL + RUN pins)
    - Pico waits for firmware chunks over UART
 
 2. **Firmware Streaming:**
+
    - ESP32 reads firmware file from LittleFS
    - Splits into chunks of up to 256 bytes
    - Sends each chunk with header, data, and checksum
@@ -778,12 +881,14 @@ After all chunks are sent, ESP32 sends an end marker:
 ### Implementation Status
 
 **ESP32 Side:**
+
 - File upload with progress tracking
 - Bootloader entry sequence
 - Firmware streaming protocol
 - Progress reporting via WebSocket
 
 **Pico Side:**
+
 - Serial bootloader (receives firmware entirely over UART)
 - Handles `MSG_CMD_BOOTLOADER` command
 - Accepts firmware chunks in streaming format
@@ -813,12 +918,14 @@ After all chunks are sent, ESP32 sends an end marker:
 The protocol uses a version number (`ECM_PROTOCOL_VERSION`) defined in `protocol_defs.h` to track protocol compatibility. Currently set to version 1.
 
 **Version Components:**
+
 - **Protocol Version** (`ECM_PROTOCOL_VERSION`): Defines the binary protocol format
 - **Firmware Version** (in `MSG_BOOT`): Tracks individual device firmware versions
 
 ### Breaking Changes Policy
 
 **Breaking changes** are defined as:
+
 - Changes to packet structure (field order, size, or types)
 - Removal or modification of existing message types
 - Changes to message type values
@@ -826,6 +933,7 @@ The protocol uses a version number (`ECM_PROTOCOL_VERSION`) defined in `protocol
 - Changes to packet header format
 
 **Non-breaking changes** include:
+
 - Adding new message types (using unused type IDs)
 - Adding optional fields to existing messages (with version checks)
 - Extending reserved fields
@@ -873,16 +981,19 @@ For breaking protocol changes, both devices **must be updated together** using a
 #### Implementation Notes
 
 **During Update:**
+
 - Pico may be temporarily unavailable (during bootloader mode)
 - ESP32 web UI should show "Update in progress" status
 - Machine should be in safe state (heaters off) before starting update
 
 **Error Recovery:**
+
 - If Pico update fails: ESP32 can retry or enter recovery mode
 - If ESP32 update fails: Device will reboot to previous firmware (if OTA rollback enabled)
 - If both fail: Manual recovery via USB (Pico) or serial (ESP32)
 
 **Version Checking:**
+
 - ESP32 should parse `MSG_BOOT` to read Pico firmware version
 - ESP32 should check `ECM_PROTOCOL_VERSION` compatibility
 - Mismatched versions should trigger update sequence or show warning
@@ -890,6 +1001,7 @@ For breaking protocol changes, both devices **must be updated together** using a
 ### Non-Breaking Changes
 
 For non-breaking changes (new features, bug fixes):
+
 - Devices can be updated independently
 - Older firmware continues to work with newer firmware
 - New message types are ignored by older firmware (graceful degradation)
@@ -907,4 +1019,3 @@ For non-breaking changes (new features, bug fixes):
 For details on versioning, protocol version tracking, and release management, see [Versioning.md](Versioning.md).
 
 ---
-

@@ -50,6 +50,9 @@
 // Cloud Connection
 #include "cloud_connection.h"
 
+// Power Metering
+#include "power_meter/power_meter_manager.h"
+
 // Global instances
 WiFiManager wifiManager;
 PicoUART picoUart(Serial1);
@@ -72,6 +75,7 @@ static unsigned long demoStartTime = 0;
 // Timing
 unsigned long lastPing = 0;
 unsigned long lastStatusBroadcast = 0;
+unsigned long lastPowerMeterBroadcast = 0;
 unsigned long lastUIUpdate = 0;
 
 // Forward declarations
@@ -245,6 +249,16 @@ void setup() {
                 // Note: Full status broadcast is done periodically in loop()
                 break;
             
+            case MSG_POWER_METER: {
+                // Power meter reading from Pico
+                if (packet.length >= sizeof(power_meter_reading_t)) {
+                    power_meter_reading_t reading;
+                    memcpy(&reading, packet.payload, sizeof(power_meter_reading_t));
+                    powerMeterManager.onPicoPowerData(reading);
+                }
+                break;
+            }
+            
             case MSG_ALARM: {
                 // Alarm - show alarm screen
                 uint8_t alarmCode = packet.payload[0];
@@ -391,6 +405,9 @@ void setup() {
     
     // Initialize MQTT
     mqttClient.begin();
+    
+    // Initialize Power Meter Manager
+    powerMeterManager.begin();
     
     // Set up MQTT command handler
     mqttClient.onCommand([](const char* cmd, const JsonDocument& doc) {
@@ -605,6 +622,9 @@ void loop() {
     // Update MQTT
     mqttClient.loop();
     
+    // Update Power Meter
+    powerMeterManager.loop();
+    
     // Update BLE Scale
     if (scaleEnabled) {
         scaleManager.loop();
@@ -700,6 +720,24 @@ void loop() {
             
             // Broadcast unified status (goes to both local and cloud clients)
             webServer.broadcastFullStatus(machineState);
+        }
+    }
+    
+    // Periodic power meter status broadcast (5 seconds)
+    if (millis() - lastPowerMeterBroadcast > 5000) {
+        lastPowerMeterBroadcast = millis();
+        
+        if (powerMeterManager.getSource() != PowerMeterSource::NONE) {
+            // Broadcast to WebSocket clients
+            if (webServer.getClientCount() > 0 || cloudConnection.isConnected()) {
+                webServer.broadcastPowerMeterStatus();
+            }
+            
+            // Publish to MQTT if connected
+            PowerMeterReading reading;
+            if (mqttClient.isConnected() && powerMeterManager.getReading(reading)) {
+                mqttClient.publishPowerMeter(reading);
+            }
         }
     }
 }

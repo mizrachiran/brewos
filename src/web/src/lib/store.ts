@@ -809,6 +809,37 @@ export const useStore = create<BrewOSState>()(
           }));
           break;
 
+        case "power_meter_status": {
+          const meterData = data as Record<string, unknown>;
+          const readingData = meterData.reading as Record<string, unknown> | null;
+          
+          set((state) => ({
+            power: {
+              ...state.power,
+              meter: {
+                source: (meterData.source as PowerMeterStatus["source"]) || "none",
+                connected: (meterData.connected as boolean) ?? false,
+                meterType: (meterData.meterType as string) || null,
+                lastUpdate: (meterData.lastUpdate as number) || null,
+                reading: readingData ? {
+                  voltage: (readingData.voltage as number) ?? 0,
+                  current: (readingData.current as number) ?? 0,
+                  power: (readingData.power as number) ?? 0,
+                  energy: (readingData.energy as number) ?? 0,
+                  frequency: (readingData.frequency as number) ?? 0,
+                  powerFactor: (readingData.powerFactor as number) ?? 0,
+                } : null,
+                error: (meterData.error as string) || null,
+                discovering: (meterData.discovering as boolean) ?? false,
+                discoveryProgress: (meterData.discoveryProgress as string) || undefined,
+                discoveryStep: (meterData.discoveryStep as number) || undefined,
+                discoveryTotal: (meterData.discoveryTotal as number) || undefined,
+              },
+            },
+          }));
+          break;
+        }
+
         case "diagnostics_header": {
           const header: DiagnosticHeader = {
             testCount: (data.testCount as number) ?? 0,

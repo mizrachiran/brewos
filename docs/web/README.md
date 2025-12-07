@@ -176,25 +176,16 @@ function handleSetTemp() {
 }
 ```
 
-## Progressive Web App
+## Documentation
 
-The web interface is a fully functional PWA. See [PWA Documentation](./PWA.md) for:
-- Installation instructions
-- Offline support
-- Service worker details
-- Troubleshooting
+### Core Features
 
-## Push Notifications
-
-Receive real-time notifications when your machine needs attention. See [Push Notifications Documentation](./Push_Notifications.md) for:
-- Setup instructions
-- Supported notification types
-- API reference
-- Troubleshooting
-
-## WebSocket Protocol
-
-See [WebSocket Protocol](./WebSocket_Protocol.md) for message format details.
+| Document | Description |
+|----------|-------------|
+| [PWA Documentation](./PWA.md) | Progressive Web App setup and offline support |
+| [Push Notifications](./Push_Notifications.md) | Real-time alerts and notifications |
+| [Power Metering](./Power_Metering.md) | Power monitoring configuration and usage |
+| [WebSocket Protocol](./WebSocket_Protocol.md) | Message format and communication |
 
 ## Storybook
 

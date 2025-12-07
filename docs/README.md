@@ -20,6 +20,7 @@ docs/
 │   ├── Architecture.md
 │   ├── Implementation_Plan.md
 │   ├── Machine_Configurations.md
+│   ├── Power_Metering.md  # Hardware power meter driver
 │   ├── Debugging.md
 │   └── features/          # Cleaning, water, shot timer, errors
 ├── esp32/                 # ESP32 firmware (connectivity & UI)
@@ -34,6 +35,7 @@ docs/
 │   ├── README.md          # Web development guide
 │   ├── PWA.md
 │   ├── Push_Notifications.md
+│   ├── Power_Metering.md  # Power monitoring user guide
 │   └── WebSocket_Protocol.md
 ├── cloud/                 # Cloud service (remote access)
 │   ├── README.md          # Cloud architecture
@@ -96,6 +98,7 @@ docs/
 - [MQTT / Home Assistant](esp32/integrations/MQTT.md) - MQTT setup and auto-discovery
 - [BLE Scales](esp32/integrations/BLE_Scales.md) - Bluetooth scale integration
 - [Brew-by-Weight](esp32/integrations/Brew_By_Weight.md) - Auto-stop at target weight
+- [Power Metering](web/Power_Metering.md) - Power monitoring (hardware modules + MQTT smart plugs)
 - [Web API Reference](esp32/integrations/Web_API.md) - HTTP endpoints and WebSocket
 - [Notifications](esp32/integrations/Notifications.md) - Push reminders and alerts
 

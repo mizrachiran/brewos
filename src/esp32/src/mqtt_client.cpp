@@ -266,6 +266,29 @@ void MQTTClient::publishStatistics(const char* stats_json) {
     }
 }
 
+void MQTTClient::publishPowerMeter(const PowerMeterReading& reading) {
+    if (!_connected) return;
+    
+    // Build power JSON
+    JsonDocument doc;
+    doc["voltage"] = serialized(String(reading.voltage, 1));
+    doc["current"] = serialized(String(reading.current, 2));
+    doc["power"] = serialized(String(reading.power, 0));
+    doc["energy_import"] = serialized(String(reading.energy_import, 3));
+    doc["energy_export"] = serialized(String(reading.energy_export, 3));
+    doc["frequency"] = serialized(String(reading.frequency, 1));
+    doc["power_factor"] = serialized(String(reading.power_factor, 2));
+    
+    String powerJson;
+    serializeJson(doc, powerJson);
+    
+    // Publish to power topic (retained)
+    String powerTopic = topic("power");
+    if (!_client.publish(powerTopic.c_str(), (const uint8_t*)powerJson.c_str(), powerJson.length(), true)) {
+        LOG_W("Failed to publish power meter data");
+    }
+}
+
 void MQTTClient::publishAvailability(bool online) {
     // Allow publishing "offline" even if not connected (for graceful disconnect)
     if (!_client.connected() && online) return;
@@ -367,7 +390,18 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     publishBinarySensor("Alarm", "alarm_active", "{{ value_json.alarm_active }}", "problem");
     publishBinarySensor("Pico Connected", "pico_connected", "{{ value_json.pico_connected }}", "connectivity");
     
-    LOG_I("Home Assistant discovery published (%d sensors)", 10);
+    // Power meter sensors (published to separate power topic)
+    String powerTopic = topic("power");
+    
+    publishSensor("Voltage", "voltage", "{{ value_json.voltage }}", "V", "voltage", "measurement");
+    publishSensor("Current", "current", "{{ value_json.current }}", "A", "current", "measurement");
+    publishSensor("Power", "power", "{{ value_json.power }}", "W", "power", "measurement");
+    publishSensor("Energy Import", "energy_import", "{{ value_json.energy_import }}", "kWh", "energy", "total_increasing");
+    publishSensor("Energy Export", "energy_export", "{{ value_json.energy_export }}", "kWh", "energy", "total_increasing");
+    publishSensor("Frequency", "frequency", "{{ value_json.frequency }}", "Hz", "frequency", "measurement");
+    publishSensor("Power Factor", "power_factor", "{{ value_json.power_factor }}", "", "power_factor", "measurement");
+    
+    LOG_I("Home Assistant discovery published (17 sensors)");
 }
 
 void MQTTClient::onMessage(char* topicName, byte* payload, unsigned int length) {

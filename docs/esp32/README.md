@@ -28,6 +28,14 @@ The ESP32-S3 handles connectivity, user interface, and advanced features for the
 | [Web API Reference](integrations/Web_API.md)   | HTTP endpoints and WebSocket  |
 | [Notifications](integrations/Notifications.md) | Push reminders and alerts     |
 
+### Power Monitoring
+
+| Document                                                              | Description                              |
+| --------------------------------------------------------------------- | ---------------------------------------- |
+| [MQTT Power Metering](../web/Power_Metering.md#mqtt-smart-plug-setup) | Smart plug integration (Shelly, Tasmota) |
+
+> **Note:** Hardware power meters (PZEM, JSY, Eastron) are handled by Pico. See [Pico Power Metering](../pico/Power_Metering.md).
+
 ## Hardware
 
 - **MCU:** ESP32-S3

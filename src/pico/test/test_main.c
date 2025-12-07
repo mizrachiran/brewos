@@ -38,6 +38,7 @@ extern int run_protocol_tests(void);
 extern int run_pid_tests(void);
 extern int run_cleaning_tests(void);
 extern int run_config_validation_tests(void);
+extern int run_power_meter_tests(void);
 
 // =============================================================================
 // Main Entry Point
@@ -68,6 +69,9 @@ int main(int argc, char** argv) {
     
     printf("Running Config Validation Tests...\n");
     total_failures += run_config_validation_tests();
+    
+    printf("Running Power Meter Tests...\n");
+    total_failures += run_power_meter_tests();
     
     // Print summary
     printf("\n");

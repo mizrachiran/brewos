@@ -2500,16 +2500,32 @@ The control PCB provides a universal interface for connecting external power met
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## 10.5 Firmware Notes
+## 10.5 Electrical Interface Summary
 
-**Communication Protocol:**
+**J17 Connector (JST-XH 6-pin):**
 
-- UART1 @ configurable baud (9600, 4800, 2400, or 19200)
-- Modbus-RTU protocol for all supported meters
-- GPIO20 controls RS485 DE/RE direction (HIGH=TX, LOW=RX)
-- Firmware auto-detects meter type and baud rate on startup
+| Pin | Signal | Type      | Voltage  | Notes                          |
+| --- | ------ | --------- | -------- | ------------------------------ |
+| 1   | 3.3V   | Power Out | 3.3V DC  | For 3.3V logic meters          |
+| 2   | 5V     | Power Out | 5.0V DC  | For PZEM, JSY modules          |
+| 3   | GND    | Ground    | 0V       | System ground                  |
+| 4   | RX     | Input     | 3.3V TTL | UART RX from meter TX          |
+| 5   | TX     | Output    | 3.3V TTL | UART TX to meter RX            |
+| 6   | DE/RE  | Output    | 3.3V TTL | RS485 direction (Eastron only) |
 
-**For detailed firmware integration, see:** `docs/pico/Power_Metering.md`
+**Electrical Characteristics:**
+
+- **Power capacity:** 500mA @ 5V, 100mA @ 3.3V
+- **UART levels:** 3.3V TTL (5V tolerant via level shifter on RX)
+- **Communication:** Modbus RTU protocol (9600/4800/2400 baud)
+- **Protection:** 33Ω series resistors on TX/RX for ESD/overcurrent
+
+**Compatible Modules:**
+
+- TTL UART: PZEM-004T, JSY-MK-163T/194T (use pins 2,3,4,5 - leave pin 6 unconnected)
+- RS485: Eastron SDM120/230 (use all pins, GPIO20 controls transceiver direction)
+
+**For firmware integration details, see:** `docs/pico/Power_Metering.md`
 
 ---
 

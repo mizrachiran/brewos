@@ -103,6 +103,11 @@ public:
     void publishStatistics(const char* stats_json);
     
     /**
+     * Publish power meter data
+     */
+    void publishPowerMeter(const PowerMeterReading& reading);
+    
+    /**
      * Get connection status string
      */
     String getStatusString() const;

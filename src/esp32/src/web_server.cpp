@@ -1555,6 +1555,50 @@ void WebServer::processCommand(JsonDocument& doc) {
             
             broadcastLog("Power settings updated: " + String(voltage) + "V, " + String(maxCurrent) + "A", "info");
         }
+        // Power meter configuration
+        else if (cmd == "configure_power_meter") {
+            String source = doc["source"] | "none";
+            
+            if (source == "none") {
+                powerMeterManager.setSource(PowerMeterSource::NONE);
+                // Send disable command to Pico
+                uint8_t payload[1] = {0};  // 0 = disabled
+                _picoUart.sendCommand(MSG_CMD_POWER_METER_CONFIG, payload, 1);
+                broadcastLog("Power metering disabled", "info");
+            }
+            else if (source == "hardware") {
+                // Hardware meters are configured on Pico
+                powerMeterManager.configureHardware();
+                
+                // Send enable command to Pico
+                uint8_t payload[1] = {1};  // 1 = enabled
+                _picoUart.sendCommand(MSG_CMD_POWER_METER_CONFIG, payload, 1);
+                broadcastLog("Power meter configured (hardware)", "info");
+            }
+            else if (source == "mqtt") {
+                String topic = doc["topic"] | "";
+                String format = doc["format"] | "auto";
+                
+                if (topic.length() > 0) {
+                    if (powerMeterManager.configureMqtt(topic.c_str(), format.c_str())) {
+                        broadcastLog("MQTT power meter configured: " + topic, "info");
+                    } else {
+                        broadcastLog("Failed to configure MQTT power meter", "error");
+                    }
+                } else {
+                    broadcastLog("MQTT topic required", "error");
+                }
+            }
+            
+            // Broadcast updated status
+            broadcastPowerMeterStatus();
+        }
+        else if (cmd == "start_power_meter_discovery") {
+            // Forward discovery command to Pico
+            _picoUart.sendCommand(MSG_CMD_POWER_METER_DISCOVER, nullptr, 0);
+            powerMeterManager.startAutoDiscovery();
+            broadcastLog("Starting power meter auto-discovery...", "info");
+        }
         // WiFi commands
         else if (cmd == "wifi_forget") {
             _wifiManager.clearCredentials();
@@ -1801,7 +1845,36 @@ void WebServer::broadcastFullStatus(const ui_state_t& state) {
     // =========================================================================
     JsonObject power = doc["power"].to<JsonObject>();
     power["current"] = state.power_watts;
-    power["voltage"] = 220;  // TODO: Get from config
+    
+    // Get power meter reading if available
+    PowerMeterReading meterReading;
+    if (powerMeterManager.getReading(meterReading)) {
+        power["voltage"] = meterReading.voltage;
+        power["todayKwh"] = meterReading.energy_import;  // TODO: Track daily vs total separately
+        power["totalKwh"] = meterReading.energy_import;
+        
+        // Add meter info
+        JsonObject meter = power["meter"].to<JsonObject>();
+        meter["source"] = powerMeterSourceToString(powerMeterManager.getSource());
+        meter["connected"] = powerMeterManager.isConnected();
+        meter["meterType"] = powerMeterManager.getMeterName();
+        meter["lastUpdate"] = meterReading.timestamp;
+        
+        JsonObject reading = meter["reading"].to<JsonObject>();
+        reading["voltage"] = meterReading.voltage;
+        reading["current"] = meterReading.current;
+        reading["power"] = meterReading.power;
+        reading["energy"] = meterReading.energy_import;
+        reading["frequency"] = meterReading.frequency;
+        reading["powerFactor"] = meterReading.power_factor;
+    } else {
+        // Fallback to configured voltage
+        power["voltage"] = State.settings().power.mainsVoltage;
+        power["todayKwh"] = 0;
+        power["totalKwh"] = 0;
+    }
+    
+    power["maxCurrent"] = State.settings().power.maxCurrent;
     
     // =========================================================================
     // Cleaning Section
@@ -1868,6 +1941,23 @@ void WebServer::broadcastDeviceInfo() {
     // Machine type from Pico boot message or settings
     doc["machineType"] = "dual_boiler";  // TODO: Get from state
     doc["firmwareVersion"] = ESP32_VERSION;
+    
+    String json;
+    serializeJson(doc, json);
+    _ws.textAll(json);
+    
+    // Also send to cloud
+    if (_cloudConnection) {
+        _cloudConnection->send(json);
+    }
+}
+
+void WebServer::broadcastPowerMeterStatus() {
+    JsonDocument doc;
+    doc["type"] = "power_meter_status";
+    
+    // Get status from power meter manager
+    powerMeterManager.getStatus(doc);
     
     String json;
     serializeJson(doc, json);

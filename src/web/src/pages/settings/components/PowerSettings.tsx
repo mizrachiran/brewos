@@ -207,7 +207,7 @@ export function PowerSettings() {
       {/* Power Settings */}
       <Card>
         <CardHeader>
-          <CardTitle icon={<Zap className="w-5 h-5" />}>Power</CardTitle>
+          <CardTitle icon={<Zap className="w-5 h-5" />}>Electrical Configuration</CardTitle>
         </CardHeader>
 
         {!editingPower ? (

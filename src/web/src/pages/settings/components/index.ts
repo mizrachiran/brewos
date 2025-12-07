@@ -4,6 +4,7 @@ export { StatusRow } from './StatusRow';
 export { MachineSettings } from './MachineSettings';
 export { TemperatureSettings } from './TemperatureSettings';
 export { PowerSettings } from './PowerSettings';
+export { PowerMeterSettings } from './PowerMeterSettings';
 export { NetworkSettings } from './NetworkSettings';
 export { ScaleSettings } from './ScaleSettings';
 export { CloudSettings } from './CloudSettings';

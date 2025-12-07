@@ -26,12 +26,14 @@ typedef uint64_t absolute_time_t;
 // Time Functions (Mock)
 // =============================================================================
 
+extern uint32_t mock_time_ms;  // Can be set by tests
+
 static inline uint32_t to_ms_since_boot(absolute_time_t t) {
     return (uint32_t)t;
 }
 
 static inline absolute_time_t get_absolute_time(void) {
-    return (absolute_time_t)(clock() * 1000 / CLOCKS_PER_SEC);
+    return (absolute_time_t)mock_time_ms;
 }
 
 static inline absolute_time_t make_timeout_time_ms(uint32_t ms) {
@@ -41,6 +43,9 @@ static inline absolute_time_t make_timeout_time_ms(uint32_t ms) {
 static inline bool time_reached(absolute_time_t t) {
     return get_absolute_time() >= t;
 }
+
+// Function declaration for time_us_32 (used by power meter)
+uint32_t time_us_32(void);
 
 static inline void sleep_ms(uint32_t ms) {
     // No-op in tests
@@ -105,11 +110,20 @@ static inline void uart_set_hw_flow(uart_inst_t* uart, bool cts, bool rts) {
 static inline void uart_set_fifo_enabled(uart_inst_t* uart, bool enabled) {
     (void)uart; (void)enabled;
 }
-static inline bool uart_is_readable(uart_inst_t* uart) { (void)uart; return false; }
-static inline char uart_getc(uart_inst_t* uart) { (void)uart; return 0; }
+// UART RX buffer for mocking responses (can be overridden in tests)
+extern uint8_t mock_uart_rx_buffer[128];
+extern int mock_uart_rx_length;
+extern int mock_uart_rx_index;
+
+bool uart_is_readable(uart_inst_t* uart);
+char uart_getc(uart_inst_t* uart);
+
 static inline void uart_putc(uart_inst_t* uart, char c) { (void)uart; (void)c; }
 static inline void uart_write_blocking(uart_inst_t* uart, const uint8_t* data, size_t len) {
     (void)uart; (void)data; (void)len;
+}
+static inline void uart_deinit(uart_inst_t* uart) {
+    (void)uart;
 }
 
 // =============================================================================

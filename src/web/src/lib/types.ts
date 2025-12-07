@@ -87,6 +87,29 @@ export interface Temperatures {
   group: number;  // Group head temp for HX machines (°C)
 }
 
+// Power Meter
+export interface PowerMeterReading {
+  voltage: number;
+  current: number;
+  power: number;
+  energy: number;
+  frequency: number;
+  powerFactor: number;
+}
+
+export interface PowerMeterStatus {
+  source: "none" | "hardware" | "mqtt";
+  connected: boolean;
+  meterType: string | null;
+  lastUpdate: number | null;
+  reading: PowerMeterReading | null;
+  error: string | null;
+  discovering?: boolean;
+  discoveryProgress?: string;
+  discoveryStep?: number;
+  discoveryTotal?: number;
+}
+
 // Power
 export interface PowerStatus {
   current: number;
@@ -94,6 +117,7 @@ export interface PowerStatus {
   maxCurrent: number;  // Max current limit (Amps) - from device settings
   todayKwh: number;
   totalKwh: number;
+  meter?: PowerMeterStatus;  // Optional power meter status
 }
 
 // Cleaning
