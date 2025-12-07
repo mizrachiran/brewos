@@ -684,7 +684,9 @@ uint8_t diag_test_class_b_flash(diag_result_t* result) {
     bool complete = false;
     while (!complete) {
         class_b_crc32_flash_incremental(&crc, &complete);
-        watchdog_update();  // Keep watchdog alive during long calculation
+        // Note: watchdog_update() is safe to call even if watchdog is not enabled.
+        // This ensures the watchdog doesn't timeout during long CRC calculations.
+        watchdog_update();
     }
     
     result->raw_value = (int16_t)(crc >> 16);  // High word of CRC

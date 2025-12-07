@@ -48,6 +48,19 @@ static volatile uint32_t g_ram_test_buffer[CLASS_B_RAM_TEST_SIZE / sizeof(uint32
 
 // Stack canaries (placed at known stack boundaries)
 // Note: Actual placement depends on linker script
+//
+// Linker script requirements:
+// The linker script must define the sections '.stack_canary_top' and '.stack_canary_bottom'
+// and place them at the start and end of the stack region, respectively.
+// Example (GNU ld script):
+//   .stack_canary_top (NOLOAD) : {
+//     KEEP(*(.stack_canary_top))
+//   } > STACK
+//   .stack_canary_bottom (NOLOAD) : {
+//     KEEP(*(.stack_canary_bottom))
+//   } > STACK
+// Replace 'STACK' with the actual stack memory region as defined in your memory map.
+// See linker script (e.g., 'pico.ld') for details.
 static volatile uint32_t g_stack_canary_top __attribute__((section(".stack_canary_top"))) = CLASS_B_STACK_CANARY_VALUE;
 static volatile uint32_t g_stack_canary_bottom __attribute__((section(".stack_canary_bottom"))) = CLASS_B_STACK_CANARY_VALUE;
 
@@ -381,8 +394,10 @@ class_b_result_t class_b_test_io(void) {
         bool expected = (g_gpio_shadow.expected_state >> pcb->pins.ssr_brew) & 1;
         bool actual = hw_read_gpio(pcb->pins.ssr_brew);
         
-        // For PWM outputs, we can only verify the pin direction
-        // Full verification requires reading the PWM duty cycle
+        // For PWM outputs (like SSR brew), we cannot reliably verify the output state
+        // by reading the pin value, as the pin may be toggling rapidly due to PWM.
+        // Full verification would require reading the PWM duty cycle, which is not implemented here.
+        // Therefore, no verification is performed for this pin.
         (void)expected;
         (void)actual;
     }
