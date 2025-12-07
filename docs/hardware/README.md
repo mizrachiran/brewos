@@ -32,8 +32,8 @@ Custom control PCB for ECM Synchronika dual-boiler espresso machine.
 
 | Document | Description |
 |----------|-------------|
-| [Schematic Reference](schematics/schematic_reference.md) | Detailed ASCII circuit schematics |
-| [Component Reference](schematics/COMPONENT_REFERENCE_GUIDE.md) | Component numbering and cross-reference |
+| [Schematic Reference](schematics/Schematic_Reference.md) | Detailed ASCII circuit schematics |
+| [Component Reference](schematics/Component_Reference_Guide.md) | Component numbering and cross-reference |
 | [netlist.csv](schematics/netlist.csv) | Machine-readable net connections |
 
 ### Testing & Support
