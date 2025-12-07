@@ -5,6 +5,7 @@ import type {
   MachineStatus,
   Temperatures,
   PowerStatus,
+  PowerMeterStatus,
   CleaningStatus,
   WaterStatus,
   ScaleStatus,

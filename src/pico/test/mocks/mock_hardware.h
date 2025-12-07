@@ -26,7 +26,9 @@ typedef uint64_t absolute_time_t;
 // Time Functions (Mock)
 // =============================================================================
 
-extern uint32_t mock_time_ms;  // Can be set by tests
+// Mock time in milliseconds - MUST be initialized by tests before use
+// Example: mock_time_ms = 0; before calling functions that rely on timing
+extern uint32_t mock_time_ms;
 
 static inline uint32_t to_ms_since_boot(absolute_time_t t) {
     return (uint32_t)t;

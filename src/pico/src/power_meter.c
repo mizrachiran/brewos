@@ -31,6 +31,7 @@
 #define UART_TX_PIN 6
 #define UART_RX_PIN 7
 #define RS485_DE_RE_PIN 20
+#define RS485_SWITCHING_DELAY_US 100  // Delay for RS485 transceiver switching
 
 // Modbus protocol
 #define MODBUS_FC_READ_HOLDING_REGS 0x03
@@ -194,7 +195,7 @@ static void set_rs485_direction(bool transmit) {
     if (current_map && current_map->is_rs485) {
         gpio_put(RS485_DE_RE_PIN, transmit);
         if (transmit) {
-            sleep_us(100);  // Small delay for transceiver switching
+            sleep_us(RS485_SWITCHING_DELAY_US);
         }
     }
 }
@@ -287,8 +288,8 @@ static bool parse_response(const uint8_t* buffer, int length, power_meter_readin
     // Initialize reading
     memset(reading, 0, sizeof(power_meter_reading_t));
     
-    // Calculate register offsets from start
-    int voltage_offset = (current_map->voltage_reg - current_map->voltage_reg) * 2;
+    // Calculate register offsets from start (voltage is always first, so offset is 0)
+    int voltage_offset = 0;
     int current_offset = (current_map->current_reg - current_map->voltage_reg) * 2;
     int power_offset = (current_map->power_reg - current_map->voltage_reg) * 2;
     int energy_offset = (current_map->energy_reg - current_map->voltage_reg) * 2;

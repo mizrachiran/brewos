@@ -4,11 +4,19 @@ import { useCommand } from "@/lib/useCommand";
 import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
-import { Badge } from "@/components/Badge";
 import { Activity, Settings, ChevronRight, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { PowerMeterStatus } from "./PowerMeterStatus";
 
 type PowerSource = "none" | "hardware" | "mqtt";
+
+interface PowerMeterConfig extends Record<string, unknown> {
+  source: PowerSource;
+  meterType?: string;
+  slaveAddr?: number;
+  baudRate?: number;
+  topic?: string;
+  format?: string;
+}
 
 export function PowerMeterSettings() {
   const powerMeter = useStore((s) => s.power.meter);
@@ -35,7 +43,7 @@ export function PowerMeterSettings() {
   const handleSave = async () => {
     setSaving(true);
 
-    const config: any = {
+    const config: PowerMeterConfig = {
       source: source,
     };
 

@@ -47,7 +47,7 @@ public:
     DiscoveryStatus getDiscoveryStatus() const;
     
     // Handle power data from Pico (hardware meter readings)
-    void onPicoPowerData(const power_meter_reading_t& reading);
+    void onPicoPowerData(const PowerMeterReading& reading);
     
     // Data access
     bool getReading(PowerMeterReading& reading);

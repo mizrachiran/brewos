@@ -17,6 +17,9 @@
 // Include ui_state_t definition
 #include "ui/ui.h"
 
+// Include power meter types
+#include "power_meter/power_meter.h"
+
 // =============================================================================
 // MQTT Configuration Structure
 // =============================================================================

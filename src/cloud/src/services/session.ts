@@ -16,7 +16,7 @@
  * - Cache invalidation on revocation/refresh for security
  */
 
-import { randomBytes, createHash, timingSafeEqual } from "crypto";
+import { randomBytes, createHash } from "crypto";
 import { LRUCache } from "lru-cache";
 import { getDb, saveDatabase, rowToObject } from "../lib/database.js";
 import { nowUTC, futureUTC, isExpired } from "../lib/date.js";
@@ -139,20 +139,6 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-/**
- * Constant-time token comparison
- */
-function compareTokens(provided: string, storedHash: string): boolean {
-  try {
-    const providedHash = hashToken(provided);
-    return timingSafeEqual(
-      Buffer.from(providedHash, "hex"),
-      Buffer.from(storedHash, "hex")
-    );
-  } catch {
-    return false;
-  }
-}
 
 // =============================================================================
 // Batch Update System

@@ -147,16 +147,17 @@ bool MQTTPowerMeter::parseShelly(JsonDocument& doc) {
     //   "tmp": {...}
     // }
     
-    if (doc.containsKey("meters") && doc["meters"].is<JsonArray>()) {
+    if (doc["meters"].is<JsonArray>()) {
         JsonArray meters = doc["meters"].as<JsonArray>();
         if (meters.size() > 0) {
             JsonObject meter = meters[0].as<JsonObject>();
             
-            if (meter.containsKey("power")) {
+            if (meter["power"].is<float>()) {
                 _lastReading.power = meter["power"].as<float>();
             }
-            if (meter.containsKey("total")) {
-                _lastReading.energy_import = meter["total"].as<float>() / 60.0f / 1000.0f;  // Watt-minutes to kWh
+            if (meter["total"].is<float>()) {
+                // Convert Watt-minutes to kWh: Wm → Wh (/60) → kWh (/1000)
+                _lastReading.energy_import = meter["total"].as<float>() / 60.0f / 1000.0f;
             }
             
             // Shelly doesn't provide voltage/current in status, estimate from power
@@ -191,22 +192,22 @@ bool MQTTPowerMeter::parseTasmota(JsonDocument& doc) {
     //   }
     // }
     
-    if (doc.containsKey("ENERGY")) {
+    if (doc["ENERGY"].is<JsonObject>()) {
         JsonObject energy = doc["ENERGY"].as<JsonObject>();
         
-        if (energy.containsKey("Power")) {
+        if (energy["Power"].is<float>()) {
             _lastReading.power = energy["Power"].as<float>();
         }
-        if (energy.containsKey("Voltage")) {
+        if (energy["Voltage"].is<float>()) {
             _lastReading.voltage = energy["Voltage"].as<float>();
         }
-        if (energy.containsKey("Current")) {
+        if (energy["Current"].is<float>()) {
             _lastReading.current = energy["Current"].as<float>();
         }
-        if (energy.containsKey("Total")) {
+        if (energy["Total"].is<float>()) {
             _lastReading.energy_import = energy["Total"].as<float>();
         }
-        if (energy.containsKey("Factor")) {
+        if (energy["Factor"].is<float>()) {
             _lastReading.power_factor = energy["Factor"].as<float>();
         }
         
@@ -254,19 +255,19 @@ bool MQTTPowerMeter::tryAutoParse(JsonDocument& doc) {
     
     // Try simple direct fields
     bool found = false;
-    if (doc.containsKey("power")) {
+    if (doc["power"].is<float>()) {
         _lastReading.power = doc["power"].as<float>();
         found = true;
     }
-    if (doc.containsKey("voltage")) {
+    if (doc["voltage"].is<float>()) {
         _lastReading.voltage = doc["voltage"].as<float>();
         found = true;
     }
-    if (doc.containsKey("current")) {
+    if (doc["current"].is<float>()) {
         _lastReading.current = doc["current"].as<float>();
         found = true;
     }
-    if (doc.containsKey("energy")) {
+    if (doc["energy"].is<float>()) {
         _lastReading.energy_import = doc["energy"].as<float>();
         found = true;
     }
@@ -285,7 +286,7 @@ bool MQTTPowerMeter::extractJsonValue(JsonDocument& doc, const String& path, flo
     }
     
     // Simple path support (no nested paths for now - just top-level keys)
-    if (doc.containsKey(path.c_str())) {
+    if (doc[path.c_str()].is<float>()) {
         value = doc[path.c_str()].as<float>();
         return true;
     }

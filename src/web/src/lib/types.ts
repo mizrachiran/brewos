@@ -33,6 +33,7 @@ export type MessageType =
   | 'esp_status'
   | 'pico_status'
   | 'scale_status'
+  | 'power_meter_status'
   | 'stats'
   | 'event'
   | 'log'

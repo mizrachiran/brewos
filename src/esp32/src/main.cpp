@@ -251,9 +251,9 @@ void setup() {
             
             case MSG_POWER_METER: {
                 // Power meter reading from Pico
-                if (packet.length >= sizeof(power_meter_reading_t)) {
-                    power_meter_reading_t reading;
-                    memcpy(&reading, packet.payload, sizeof(power_meter_reading_t));
+                if (packet.length >= sizeof(PowerMeterReading)) {
+                    PowerMeterReading reading;
+                    memcpy(&reading, packet.payload, sizeof(PowerMeterReading));
                     powerMeterManager.onPicoPowerData(reading);
                 }
                 break;

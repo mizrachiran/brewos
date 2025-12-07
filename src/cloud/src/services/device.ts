@@ -3,7 +3,6 @@ import {
   getDb,
   saveDatabase,
   Device,
-  UserDevice,
   Profile,
   resultToObjects,
 } from "../lib/database.js";

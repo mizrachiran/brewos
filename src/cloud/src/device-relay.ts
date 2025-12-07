@@ -1,6 +1,5 @@
 import { WebSocketServer, WebSocket, RawData } from 'ws';
 import { IncomingMessage } from 'http';
-import { v4 as uuidv4 } from 'uuid';
 import type { DeviceMessage } from './types.js';
 
 interface DeviceConnection {

@@ -5,6 +5,7 @@
 #include "mqtt_client.h"
 #include "config.h"
 #include "ui/ui.h"  // For ui_state_t definition
+#include "power_meter/power_meter.h"
 #include <ArduinoJson.h>
 
 // Static instance for callback
@@ -12,6 +13,10 @@ MQTTClient* MQTTClient::_instance = nullptr;
 
 // MQTT buffer size - must be large enough for HA discovery messages (~600 bytes)
 static const uint16_t MQTT_BUFFER_SIZE = 1024;
+
+// Total number of sensors published to Home Assistant
+// 5 value sensors + 5 binary sensors + 7 power meter sensors = 17
+static const uint8_t HA_TOTAL_SENSOR_COUNT = 17;
 
 // =============================================================================
 // MQTT Client Implementation
@@ -401,7 +406,7 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     publishSensor("Frequency", "frequency", "{{ value_json.frequency }}", "Hz", "frequency", "measurement");
     publishSensor("Power Factor", "power_factor", "{{ value_json.power_factor }}", "", "power_factor", "measurement");
     
-    LOG_I("Home Assistant discovery published (17 sensors)");
+    LOG_I("Home Assistant discovery published (%d sensors)", HA_TOTAL_SENSOR_COUNT);
 }
 
 void MQTTClient::onMessage(char* topicName, byte* payload, unsigned int length) {

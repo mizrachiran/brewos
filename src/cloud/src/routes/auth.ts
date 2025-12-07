@@ -16,7 +16,7 @@ import {
   revokeAllUserSessions,
   getUserSessions,
 } from "../services/session.js";
-import { ensureProfile, getProfile } from "../services/device.js";
+import { ensureProfile } from "../services/device.js";
 import { sessionAuthMiddleware } from "../middleware/auth.js";
 
 const router = Router();

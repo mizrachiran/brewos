@@ -1,4 +1,4 @@
-import { Router, Request } from "express";
+import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { sessionAuthMiddleware } from "../middleware/auth.js";
 import {
@@ -8,14 +8,12 @@ import {
   getUserDevices,
   getDevice,
   removeDevice,
-  renameDevice,
   updateDeviceMachineInfo,
   userOwnsDevice,
   getDeviceUsers,
   revokeUserAccess,
   getDeviceUserCount,
   createShareToken,
-  verifyShareToken,
   claimDeviceWithShareToken,
 } from "../services/device.js";
 
@@ -153,7 +151,7 @@ router.get("/", sessionAuthMiddleware, (req, res) => {
         userCount: getDeviceUserCount(d.id),
       })),
     });
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: "Failed to get devices" });
   }
 });
@@ -191,7 +189,7 @@ router.get("/:id", sessionAuthMiddleware, (req, res) => {
         claimedAt: userDevice?.user_claimed_at || device.claimed_at,
       },
     });
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: "Failed to get device" });
   }
 });
@@ -212,7 +210,7 @@ router.patch("/:id", writeLimiter, sessionAuthMiddleware, (req, res) => {
     updateDeviceMachineInfo(id, req.user!.id, { name, brand, model });
 
     res.json({ success: true });
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: "Failed to update device" });
   }
 });
@@ -240,7 +238,7 @@ router.get("/:id/users", sessionAuthMiddleware, (req, res) => {
         claimedAt: u.claimed_at,
       })),
     });
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: "Failed to get device users" });
   }
 });
@@ -285,7 +283,7 @@ router.delete("/:id", writeLimiter, sessionAuthMiddleware, (req, res) => {
     removeDevice(id, req.user!.id);
 
     res.json({ success: true });
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: "Failed to remove device" });
   }
 });

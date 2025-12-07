@@ -69,7 +69,6 @@ bool PowerMeterManager::setSource(PowerMeterSource source) {
     cleanupMeter();
     
     _source = source;
-    _activeMeter = nullptr;
     
     return saveConfig();
 }
@@ -108,7 +107,7 @@ bool PowerMeterManager::configureMqtt(const char* topic, const char* format) {
     return saveConfig();
 }
 
-void PowerMeterManager::onPicoPowerData(const power_meter_reading_t& reading) {
+void PowerMeterManager::onPicoPowerData(const PowerMeterReading& reading) {
     // Only accept data if source is set to hardware
     if (_source != PowerMeterSource::HARDWARE_MODBUS) {
         return;

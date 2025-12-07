@@ -8,6 +8,7 @@
 #include "cloud_connection.h"
 #include "state/state_manager.h"
 #include "statistics/statistics_manager.h"
+#include "power_meter/power_meter_manager.h"
 #include <LittleFS.h>
 #include <HTTPClient.h>
 #include <Update.h>
