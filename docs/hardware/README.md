@@ -2,19 +2,21 @@
 
 Custom control PCB for ECM Synchronika dual-boiler espresso machine.
 
-**Current Version:** 2.22 (December 2025)
+**Current Version:** 2.24.2 (December 2025)
 
 ---
 
 ## 📋 Document Index
 
-| Document                                                        | Description                                                         |
-| --------------------------------------------------------------- | ------------------------------------------------------------------- |
-| [**Specification.md**](Specification.md)                        | Complete PCB design specification (BOM, GPIO, circuits, connectors) |
-| [**Schematic_Reference.md**](schematics/Schematic_Reference.md) | Detailed circuit schematics and component values                    |
-| [**Test_Procedures.md**](Test_Procedures.md)                    | Manufacturing test procedures and validation                        |
-| [**ESP32_Wiring.md**](ESP32_Wiring.md)                          | ESP32 display module wiring guide                                   |
-| [**CHANGELOG.md**](CHANGELOG.md)                                | Version history and design changes                                  |
+| Document                                                                 | Description                                                         |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| [**Specification.md**](Specification.md)                                 | Complete PCB design specification (BOM, GPIO, circuits, connectors) |
+| [**Schematic_Reference.md**](schematics/Schematic_Reference.md)          | Detailed circuit schematics and component values                    |
+| [**Component Reference Guide**](schematics/Component_Reference_Guide.md) | Component numbering scheme and cross-reference tables               |
+| [**netlist.csv**](schematics/netlist.csv)                                | Machine-readable component list and net connections                 |
+| [**Test_Procedures.md**](Test_Procedures.md)                             | Manufacturing test procedures and validation                        |
+| [**ESP32_Wiring.md**](ESP32_Wiring.md)                                   | ESP32 display module wiring guide                                   |
+| [**CHANGELOG.md**](CHANGELOG.md)                                         | Version history and design changes                                  |
 
 ---
 
@@ -53,11 +55,11 @@ Plug & play replacement for the factory GICAR control board and PID controller:
 
 ### Low Voltage (3.3V/5V)
 
-| Connector | Type                  | Function                       |
-| --------- | --------------------- | ------------------------------ |
-| J26       | Screw Terminal 22-pos | All sensors & SSR control      |
+| Connector | Type                  | Function                                           |
+| --------- | --------------------- | -------------------------------------------------- |
+| J26       | Screw Terminal 22-pos | All sensors & SSR control                          |
 | J15       | JST-XH 8-pin          | ESP32 display + brew-by-weight + expansion (Pin 8) |
-| J17       | JST-XH 6-pin          | Power meter UART/RS485         |
+| J17       | JST-XH 6-pin          | Power meter UART/RS485                             |
 
 ---
 
@@ -65,8 +67,12 @@ Plug & play replacement for the factory GICAR control board and PID controller:
 
 | Jumper  | Default | Function                                               |
 | ------- | ------- | ------------------------------------------------------ |
-| **JP2** | OPEN    | Brew NTC: OPEN=50kΩ (ECM), CLOSE=10kΩ (Rocket/Gaggia)  |
-| **JP3** | OPEN    | Steam NTC: OPEN=50kΩ (ECM), CLOSE=10kΩ (Rocket/Gaggia) |
+| **JP1** | OPEN    | Brew NTC: OPEN=50kΩ (ECM), CLOSE=10kΩ (Rocket/Gaggia)  |
+| **JP2** | OPEN    | Steam NTC: OPEN=50kΩ (ECM), CLOSE=10kΩ (Rocket/Gaggia) |
+| **JP3** | OPEN    | Power meter voltage: OPEN=5V, CLOSE=3.3V               |
+| **JP4** | 1-2     | Power meter type: 1-2=RS485, 2-3=TTL                   |
+
+**See:** [Component Reference Guide](schematics/COMPONENT_REFERENCE_GUIDE.md) for complete component listings.
 
 ---
 
@@ -98,7 +104,7 @@ See [Specification.md Section 14](Specification.md#14-bill-of-materials) for com
 
 - ECM Mechanika, Profitec Pro 700/800
 
-### Requires JP2/JP3 Change
+### Requires JP1/JP2 Change
 
 - Rocket Appartamento/Giotto (10kΩ NTC)
 - Rancilio Silvia (10kΩ NTC)
