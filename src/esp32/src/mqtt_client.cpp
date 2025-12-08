@@ -7,6 +7,7 @@
 #include "ui/ui.h"  // For ui_state_t definition
 #include "power_meter/power_meter.h"
 #include <ArduinoJson.h>
+#include <initializer_list>
 
 // Static instance for callback
 MQTTClient* MQTTClient::_instance = nullptr;
@@ -520,7 +521,7 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     
     // Helper to publish a select entity
     auto publishSelect = [&](const char* name, const char* selectId, const char* icon,
-                             const std::vector<String>& options, const char* valueTemplate,
+                             std::initializer_list<const char*> options, const char* valueTemplate,
                              const char* commandTemplate) {
         JsonDocument doc;
         addDeviceInfo(doc);
@@ -536,7 +537,7 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         doc["availability_topic"] = availTopic;
         
         JsonArray optionsArr = doc["options"].to<JsonArray>();
-        for (const auto& opt : options) {
+        for (const char* opt : options) {
             optionsArr.add(opt);
         }
         
