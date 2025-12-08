@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
 import { useStore } from '@/lib/store';
+import { cn } from '@/lib/utils';
 import { Card, CardHeader, CardTitle } from '@/components/Card';
 import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
@@ -32,11 +33,10 @@ export function ScaleStatusCard({
 
   return (
     <Card
-      className={`${
-        scale.connected
-          ? 'bg-gradient-to-br from-emerald-500/5 to-emerald-500/0 border-emerald-500/20'
-          : ''
-      } ${className}`}
+      className={cn(
+        scale.connected && 'bg-gradient-to-br from-emerald-500/5 to-emerald-500/0 border-emerald-500/20',
+        className
+      )}
     >
       <CardHeader
         action={

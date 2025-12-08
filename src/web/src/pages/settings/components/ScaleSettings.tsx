@@ -55,7 +55,7 @@ export function ScaleSettings() {
         <ScaleStatusCard
           compact
           actions={
-            <div className="space-y-0 border-t border-emerald-500/20 mt-4">
+            <div className="space-y-0 border-t border-emerald-500/20">
               <button
                 onClick={tareScale}
                 className="w-full flex items-center justify-between py-2.5 border-b border-emerald-500/20 text-left group transition-colors hover:opacity-80"
