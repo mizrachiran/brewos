@@ -1610,6 +1610,42 @@ void WebServer::processCommand(JsonDocument& doc) {
             }
             broadcastLog("Brew-by-weight settings updated", "info");
         }
+        // Pre-infusion settings
+        else if (cmd == "set_preinfusion") {
+            bool enabled = doc["enabled"] | false;
+            uint16_t onTimeMs = doc["onTimeMs"] | 3000;
+            uint16_t pauseTimeMs = doc["pauseTimeMs"] | 5000;
+            
+            // Validate timing parameters
+            if (onTimeMs > 10000) {
+                broadcastLog("Pre-infusion on_time too long (max 10000ms)", "error");
+            } else if (pauseTimeMs > 30000) {
+                broadcastLog("Pre-infusion pause_time too long (max 30000ms)", "error");
+            } else {
+                // Build payload for Pico: [config_type, enabled, on_time_ms(2), pause_time_ms(2)]
+                uint8_t payload[6];
+                payload[0] = CONFIG_PREINFUSION;  // Config type
+                payload[1] = enabled ? 1 : 0;
+                payload[2] = onTimeMs & 0xFF;         // Low byte
+                payload[3] = (onTimeMs >> 8) & 0xFF;  // High byte
+                payload[4] = pauseTimeMs & 0xFF;      // Low byte
+                payload[5] = (pauseTimeMs >> 8) & 0xFF; // High byte
+                
+                if (_picoUart.sendCommand(MSG_CMD_CONFIG, payload, sizeof(payload))) {
+                    // Update ESP32 state for persistence
+                    auto& settings = State.settings();
+                    settings.brew.preinfusionTime = onTimeMs / 1000.0f;  // Store as seconds
+                    settings.brew.preinfusionPressure = enabled ? 1.0f : 0.0f;  // Use as enabled flag
+                    State.saveBrewSettings();
+                    
+                    broadcastLog("Pre-infusion settings saved: " + 
+                                String(enabled ? "enabled" : "disabled") + 
+                                ", on=" + String(onTimeMs) + "ms, pause=" + String(pauseTimeMs) + "ms", "info");
+                } else {
+                    broadcastLog("Failed to send pre-infusion config to Pico", "error");
+                }
+            }
+        }
         // Power settings
         else if (cmd == "set_power") {
             uint16_t voltage = doc["voltage"] | 230;
@@ -2044,6 +2080,13 @@ void WebServer::broadcastDeviceInfo() {
     // Include eco mode settings
     doc["ecoBrewTemp"] = tempSettings.ecoBrewTemp;
     doc["ecoTimeoutMinutes"] = tempSettings.ecoTimeoutMinutes;
+    
+    // Include pre-infusion settings
+    const auto& brewSettings = State.settings().brew;
+    // preinfusionPressure > 0 is used as the enabled flag (legacy compatibility)
+    doc["preinfusionEnabled"] = brewSettings.preinfusionPressure > 0;
+    doc["preinfusionOnMs"] = (uint16_t)(brewSettings.preinfusionTime * 1000);  // Convert seconds to ms
+    doc["preinfusionPauseMs"] = (uint16_t)(brewSettings.preinfusionPressure > 0 ? 5000 : 0);  // Default pause
     
     String json;
     serializeJson(doc, json);

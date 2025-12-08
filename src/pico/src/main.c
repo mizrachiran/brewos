@@ -316,6 +316,55 @@ void handle_packet(const packet_t* packet) {
                     } else {
                         protocol_send_ack(MSG_CMD_CONFIG, packet->seq, ACK_ERROR_INVALID);
                     }
+                } else if (config_type == CONFIG_PREINFUSION) {
+                    // Set pre-infusion configuration
+                    if (packet->length >= sizeof(config_preinfusion_t) + 1) {
+                        // Use memcpy for safe unaligned access
+                        config_preinfusion_t preinfusion_cmd;
+                        memcpy(&preinfusion_cmd, &packet->payload[1], sizeof(config_preinfusion_t));
+                        
+                        // Validate timing parameters
+                        // on_time_ms: 0-10000ms (0 = disabled effectively)
+                        // pause_time_ms: 0-30000ms
+                        if (preinfusion_cmd.on_time_ms > 10000) {
+                            DEBUG_PRINT("CMD_CONFIG: Pre-infusion on_time too long %dms (max: 10000ms)\n", 
+                                       preinfusion_cmd.on_time_ms);
+                            protocol_send_ack(MSG_CMD_CONFIG, packet->seq, ACK_ERROR_INVALID);
+                            break;
+                        }
+                        if (preinfusion_cmd.pause_time_ms > 30000) {
+                            DEBUG_PRINT("CMD_CONFIG: Pre-infusion pause_time too long %dms (max: 30000ms)\n", 
+                                       preinfusion_cmd.pause_time_ms);
+                            protocol_send_ack(MSG_CMD_CONFIG, packet->seq, ACK_ERROR_INVALID);
+                            break;
+                        }
+                        
+                        // Apply pre-infusion settings
+                        state_set_preinfusion(
+                            preinfusion_cmd.enabled != 0,
+                            preinfusion_cmd.on_time_ms,
+                            preinfusion_cmd.pause_time_ms
+                        );
+                        
+                        // Save configuration to flash
+                        persisted_config_t config;
+                        config_persistence_get(&config);
+                        config.preinfusion_enabled = preinfusion_cmd.enabled != 0;
+                        config.preinfusion_on_ms = preinfusion_cmd.on_time_ms;
+                        config.preinfusion_pause_ms = preinfusion_cmd.pause_time_ms;
+                        config_persistence_set(&config);
+                        config_persistence_save();
+                        
+                        DEBUG_PRINT("Pre-infusion config saved: enabled=%d, on=%dms, pause=%dms\n",
+                                   preinfusion_cmd.enabled, preinfusion_cmd.on_time_ms, 
+                                   preinfusion_cmd.pause_time_ms);
+                        
+                        protocol_send_ack(MSG_CMD_CONFIG, packet->seq, ACK_SUCCESS);
+                    } else {
+                        DEBUG_PRINT("CMD_CONFIG: Pre-infusion payload too short (%d < %d)\n",
+                                   packet->length, (int)(sizeof(config_preinfusion_t) + 1));
+                        protocol_send_ack(MSG_CMD_CONFIG, packet->seq, ACK_ERROR_INVALID);
+                    }
                 } else {
                     // Other config types - just ACK for now
                     protocol_send_ack(MSG_CMD_CONFIG, packet->seq, ACK_SUCCESS);
