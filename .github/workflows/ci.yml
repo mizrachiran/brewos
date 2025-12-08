@@ -1,6 +1,6 @@
 # Unified CI workflow for PRs
 # This workflow runs on all PRs and is the single required status check
-name: CI
+name: "PR: Continuous Integration"
 
 on:
   pull_request:
@@ -25,7 +25,7 @@ jobs:
       pico: ${{ steps.filter.outputs.pico }}
       esp32: ${{ steps.filter.outputs.esp32 }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -50,10 +50,10 @@ jobs:
     if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: "npm"
@@ -84,10 +84,10 @@ jobs:
     if: needs.changes.outputs.cloud == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: "npm"
@@ -118,7 +118,7 @@ jobs:
     if: needs.changes.outputs.pico == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Dependencies
         run: |
@@ -164,10 +164,10 @@ jobs:
     if: needs.changes.outputs.esp32 == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: "npm"

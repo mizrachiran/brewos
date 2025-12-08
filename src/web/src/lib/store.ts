@@ -10,6 +10,7 @@ import type {
   WaterStatus,
   ScaleStatus,
   BBWSettings,
+  PreinfusionSettings,
   ShotStatus,
   WiFiStatus,
   MQTTStatus,
@@ -59,6 +60,12 @@ interface BrewOSState {
   // Brew-by-weight
   bbw: BBWSettings;
   shot: ShotStatus;
+
+  // Pre-infusion
+  preinfusion: PreinfusionSettings;
+
+  // Eco mode settings
+  ecoMode: EcoModeSettings;
 
   // Network
   wifi: WiFiStatus;
@@ -122,6 +129,16 @@ const defaultPower: PowerStatus = {
   totalKwh: 0,
 };
 
+interface EcoModeSettings {
+  ecoBrewTemp: number;
+  autoOffTimeout: number;
+}
+
+const defaultEcoMode: EcoModeSettings = {
+  ecoBrewTemp: 80, // °C
+  autoOffTimeout: 30, // minutes
+};
+
 const defaultCleaning: CleaningStatus = {
   brewCount: 0,
   reminderDue: false,
@@ -129,7 +146,6 @@ const defaultCleaning: CleaningStatus = {
 
 const defaultWater: WaterStatus = {
   tankLevel: "ok",
-  dripTrayFull: false,
 };
 
 const defaultScale: ScaleStatus = {
@@ -148,6 +164,12 @@ const defaultBBW: BBWSettings = {
   doseWeight: 18,
   stopOffset: 2,
   autoTare: true,
+};
+
+const defaultPreinfusion: PreinfusionSettings = {
+  enabled: false,
+  onTimeMs: 3000,    // 3 seconds pump on
+  pauseTimeMs: 5000, // 5 seconds soak
 };
 
 const defaultShot: ShotStatus = {
@@ -265,6 +287,7 @@ const defaultDevice: DeviceInfo = {
   machineModel: "",
   machineType: "" as DeviceInfo["machineType"],
   firmwareVersion: "",
+  hasPressureSensor: true, // Default true, will be updated from device
 };
 
 const defaultDiagnostics: DiagnosticReport = {
@@ -282,31 +305,89 @@ const defaultDiagnostics: DiagnosticReport = {
   timestamp: 0,
 };
 
-// Load preferences from localStorage
-const loadPreferences = (): UserPreferences => {
-  const defaults: UserPreferences = {
-    firstDayOfWeek: "sunday",
-    use24HourTime: false,
-    temperatureUnit: "celsius",
-  };
+// Default preferences (used as fallback)
+const defaultPreferences: UserPreferences = {
+  firstDayOfWeek: "sunday",
+  use24HourTime: false,
+  temperatureUnit: "celsius",
+  electricityPrice: 0.15,
+  currency: "USD",
+};
 
+// Load preferences from localStorage (fallback for offline/demo mode)
+const loadPreferencesFromStorage = (): UserPreferences => {
   try {
     const saved = localStorage.getItem("brewos_preferences");
     if (saved) {
-      return { ...defaults, ...JSON.parse(saved) };
+      return { ...defaultPreferences, ...JSON.parse(saved) };
     }
   } catch (e) {
-    console.warn("Failed to load preferences:", e);
+    console.warn("Failed to load preferences from storage:", e);
   }
-  return defaults;
+  return defaultPreferences;
 };
 
-const savePreferences = (prefs: UserPreferences) => {
+// Save preferences to localStorage (cache for offline use)
+const savePreferencesToStorage = (prefs: UserPreferences) => {
   try {
     localStorage.setItem("brewos_preferences", JSON.stringify(prefs));
   } catch (e) {
-    console.warn("Failed to save preferences:", e);
+    console.warn("Failed to save preferences to storage:", e);
   }
+};
+
+// Detect browser locale for initial preferences setup
+const detectBrowserPreferences = (): Partial<UserPreferences> => {
+  const detected: Partial<UserPreferences> = {};
+  
+  // Detect 24-hour time preference from locale
+  try {
+    const date = new Date();
+    const formatted = date.toLocaleTimeString(navigator.language, { hour: 'numeric' });
+    detected.use24HourTime = !formatted.includes('AM') && !formatted.includes('PM');
+  } catch {
+    detected.use24HourTime = false;
+  }
+  
+  // Detect first day of week from locale (US, Canada, Japan = Sunday; most others = Monday)
+  const sundayCountries = ['US', 'CA', 'JP', 'AU', 'NZ', 'IL', 'PH', 'TW'];
+  const locale = navigator.language || 'en-US';
+  
+  // Use Intl.Locale if available for robust region extraction
+  let country = 'US';
+  if (typeof Intl !== 'undefined' && typeof Intl.Locale === 'function') {
+    try {
+      const intlLocale = new Intl.Locale(locale);
+      if (intlLocale.region) {
+        country = intlLocale.region.toUpperCase();
+      }
+    } catch {
+      // Fallback to manual parsing below
+    }
+  }
+  // Fallback: handle both hyphen and underscore, and locales without country code
+  if (country === 'US' && locale !== 'en-US') {
+    const parts = locale.split(/[-_]/);
+    if (parts.length > 1 && parts[1].length === 2) {
+      country = parts[1].toUpperCase();
+    }
+  }
+  
+  detected.firstDayOfWeek = sundayCountries.includes(country) ? 'sunday' : 'monday';
+  
+  // Detect temperature unit (US, Bahamas, Cayman, Liberia, Palau = Fahrenheit)
+  const fahrenheitCountries = ['US', 'BS', 'KY', 'LR', 'PW'];
+  detected.temperatureUnit = fahrenheitCountries.includes(country) ? 'fahrenheit' : 'celsius';
+  
+  // Detect currency from locale
+  const currencyMap: Record<string, UserPreferences['currency']> = {
+    'US': 'USD', 'CA': 'CAD', 'AU': 'AUD', 'GB': 'GBP', 'UK': 'GBP',
+    'DE': 'EUR', 'FR': 'EUR', 'ES': 'EUR', 'IT': 'EUR', 'NL': 'EUR',
+    'JP': 'JPY', 'CH': 'CHF', 'IL': 'ILS',
+  };
+  detected.currency = currencyMap[country] || 'USD';
+  
+  return detected;
 };
 
 export const useStore = create<BrewOSState>()(
@@ -325,6 +406,8 @@ export const useStore = create<BrewOSState>()(
     scanResults: [],
     bbw: defaultBBW,
     shot: defaultShot,
+    preinfusion: defaultPreinfusion,
+    ecoMode: defaultEcoMode,
     wifi: defaultWifi,
     mqtt: defaultMqtt,
     esp32: defaultEsp32,
@@ -333,7 +416,7 @@ export const useStore = create<BrewOSState>()(
     alerts: [],
     logs: [],
     diagnostics: defaultDiagnostics,
-    preferences: loadPreferences(),
+    preferences: loadPreferencesFromStorage(),
 
     // Actions
     setConnectionState: (state) => set({ connectionState: state }),
@@ -362,6 +445,8 @@ export const useStore = create<BrewOSState>()(
           const wifiData = data.wifi as Record<string, unknown> | undefined;
           const mqttData = data.mqtt as Record<string, unknown> | undefined;
           const esp32Data = data.esp32 as Record<string, unknown> | undefined;
+          const shotData = data.shot as Record<string, unknown> | undefined;
+          const statsData = data.stats as Record<string, unknown> | undefined;
 
           set((state) => ({
             // Machine state
@@ -447,9 +532,6 @@ export const useStore = create<BrewOSState>()(
                   tankLevel:
                     (waterData.tankLevel as WaterStatus["tankLevel"]) ||
                     state.water.tankLevel,
-                  dripTrayFull:
-                    (waterData.dripTrayFull as boolean) ??
-                    state.water.dripTrayFull,
                 }
               : state.water,
             // Scale
@@ -466,6 +548,19 @@ export const useStore = create<BrewOSState>()(
                   battery: (scaleData.battery as number) ?? state.scale.battery,
                 }
               : state.scale,
+            // Shot (active brew data)
+            shot: shotData
+              ? {
+                  active: (shotData.active as boolean) ?? state.shot.active,
+                  startTime:
+                    (shotData.startTime as number) ?? state.shot.startTime,
+                  duration:
+                    (shotData.duration as number) ?? state.shot.duration,
+                  weight: (shotData.weight as number) ?? state.shot.weight,
+                  flowRate:
+                    (shotData.flowRate as number) ?? state.shot.flowRate,
+                }
+              : state.shot,
             // Connection status and full WiFi/MQTT data
             wifi: wifiData
               ? {
@@ -506,6 +601,49 @@ export const useStore = create<BrewOSState>()(
                     (esp32Data.freeHeap as number) ?? state.esp32.freeHeap,
                 }
               : state.esp32,
+            // Stats from status message (real-time updates)
+            stats: statsData
+              ? {
+                  ...state.stats,
+                  shotsToday:
+                    (statsData.shotsToday as number) ?? state.stats.shotsToday,
+                  sessionShots:
+                    (statsData.sessionShots as number) ??
+                    state.stats.sessionShots,
+                  daily: statsData.daily
+                    ? {
+                        ...state.stats.daily,
+                        shotCount:
+                          ((statsData.daily as Record<string, unknown>)
+                            .shotCount as number) ?? state.stats.daily.shotCount,
+                        avgBrewTimeMs:
+                          ((statsData.daily as Record<string, unknown>)
+                            .avgBrewTimeMs as number) ??
+                          state.stats.daily.avgBrewTimeMs,
+                        totalKwh:
+                          ((statsData.daily as Record<string, unknown>)
+                            .totalKwh as number) ?? state.stats.daily.totalKwh,
+                      }
+                    : state.stats.daily,
+                  lifetime: statsData.lifetime
+                    ? {
+                        ...state.stats.lifetime,
+                        totalShots:
+                          ((statsData.lifetime as Record<string, unknown>)
+                            .totalShots as number) ??
+                          state.stats.lifetime.totalShots,
+                        avgBrewTimeMs:
+                          ((statsData.lifetime as Record<string, unknown>)
+                            .avgBrewTimeMs as number) ??
+                          state.stats.lifetime.avgBrewTimeMs,
+                        totalKwh:
+                          ((statsData.lifetime as Record<string, unknown>)
+                            .totalKwh as number) ??
+                          state.stats.lifetime.totalKwh,
+                      }
+                    : state.stats.lifetime,
+                }
+              : state.stats,
           }));
           break;
         }
@@ -586,8 +724,6 @@ export const useStore = create<BrewOSState>()(
               tankLevel:
                 (data.waterLevel as WaterStatus["tankLevel"]) ||
                 state.water.tankLevel,
-              dripTrayFull:
-                (data.dripTrayFull as boolean) ?? state.water.dripTrayFull,
             },
           }));
           break;
@@ -602,6 +738,28 @@ export const useStore = create<BrewOSState>()(
               flowRate: (data.flowRate as number) ?? state.scale.flowRate,
               stable: (data.stable as boolean) ?? state.scale.stable,
               battery: (data.battery as number) ?? state.scale.battery,
+            },
+          }));
+          break;
+
+        case "bbw_settings":
+          set((state) => ({
+            bbw: {
+              enabled: (data.enabled as boolean) ?? state.bbw.enabled,
+              targetWeight: (data.targetWeight as number) ?? state.bbw.targetWeight,
+              doseWeight: (data.doseWeight as number) ?? state.bbw.doseWeight,
+              stopOffset: (data.stopOffset as number) ?? state.bbw.stopOffset,
+              autoTare: (data.autoTare as boolean) ?? state.bbw.autoTare,
+            },
+          }));
+          break;
+
+        case "preinfusion_settings":
+          set((state) => ({
+            preinfusion: {
+              enabled: (data.enabled as boolean) ?? state.preinfusion.enabled,
+              onTimeMs: (data.onTimeMs as number) ?? state.preinfusion.onTimeMs,
+              pauseTimeMs: (data.pauseTimeMs as number) ?? state.preinfusion.pauseTimeMs,
             },
           }));
           break;
@@ -790,7 +948,11 @@ export const useStore = create<BrewOSState>()(
           addAlert("error", data.message as string, set, get);
           break;
 
-        case "device_info":
+        case "device_info": {
+          // Process preferences from ESP32 if provided
+          const prefsData = data.preferences as Record<string, unknown> | undefined;
+          const prefsInitialized = prefsData?.initialized as boolean | undefined;
+          
           set((state) => ({
             device: {
               deviceId: (data.deviceId as string) || state.device.deviceId,
@@ -806,9 +968,72 @@ export const useStore = create<BrewOSState>()(
               firmwareVersion:
                 (data.firmwareVersion as string) ||
                 state.device.firmwareVersion,
+              hasPressureSensor:
+                data.hasPressureSensor !== undefined
+                  ? (data.hasPressureSensor as boolean)
+                  : state.device.hasPressureSensor,
             },
+            // Update power settings if provided
+            power: {
+              ...state.power,
+              voltage:
+                (data.mainsVoltage as number) ?? state.power.voltage,
+              maxCurrent:
+                (data.maxCurrent as number) ?? state.power.maxCurrent,
+            },
+            // Update eco mode settings if provided
+            ecoMode: {
+              ...(state.ecoMode ?? defaultEcoMode),
+              ecoBrewTemp:
+                (data.ecoBrewTemp as number) ?? state.ecoMode.ecoBrewTemp,
+              autoOffTimeout:
+                (data.ecoTimeoutMinutes as number) ?? state.ecoMode.autoOffTimeout,
+            },
+            // Update pre-infusion settings if provided
+            preinfusion: {
+              ...(state.preinfusion ?? defaultPreinfusion),
+              enabled:
+                (data.preinfusionEnabled as boolean) ?? state.preinfusion.enabled,
+              onTimeMs:
+                (data.preinfusionOnMs as number) ?? state.preinfusion.onTimeMs,
+              pauseTimeMs:
+                (data.preinfusionPauseMs as number) ?? state.preinfusion.pauseTimeMs,
+            },
+            // Update preferences from ESP32 (synced across devices)
+            preferences: prefsData
+              ? {
+                  firstDayOfWeek:
+                    (prefsData.firstDayOfWeek as UserPreferences["firstDayOfWeek"]) ??
+                    state.preferences.firstDayOfWeek,
+                  use24HourTime:
+                    (prefsData.use24HourTime as boolean) ?? state.preferences.use24HourTime,
+                  temperatureUnit:
+                    (prefsData.temperatureUnit as UserPreferences["temperatureUnit"]) ??
+                    state.preferences.temperatureUnit,
+                  electricityPrice:
+                    (prefsData.electricityPrice as number) ?? state.preferences.electricityPrice,
+                  currency:
+                    (prefsData.currency as UserPreferences["currency"]) ?? state.preferences.currency,
+                }
+              : state.preferences,
           }));
+          
+          // Also cache preferences locally
+          if (prefsData) {
+            const state = get();
+            savePreferencesToStorage(state.preferences);
+          }
+          
+          // If preferences not initialized on ESP32, send browser-detected defaults
+          // This is dispatched as a custom event to be handled by the connection manager
+          if (prefsData && prefsInitialized === false) {
+            const browserPrefs = detectBrowserPreferences();
+            window.dispatchEvent(new CustomEvent('brewos:init-preferences', { 
+              detail: { ...defaultPreferences, ...browserPrefs }
+            }));
+          }
           break;
+        }
 
         case "power_meter_status": {
           const meterData = data as Record<string, unknown>;
@@ -911,9 +1136,13 @@ export const useStore = create<BrewOSState>()(
     setPreference: (key, value) => {
       set((state) => {
         const newPrefs = { ...state.preferences, [key]: value };
-        savePreferences(newPrefs);
+        // Cache locally for offline use
+        savePreferencesToStorage(newPrefs);
         return { preferences: newPrefs };
       });
+      
+      // Note: The actual save to ESP32 happens via sendCommand('set_preferences', ...)
+      // This is handled in the UI components that call setPreference
     },
 
     setDiagnosticsRunning: (running) => {

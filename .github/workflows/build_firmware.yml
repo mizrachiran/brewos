@@ -1,6 +1,6 @@
 # Build and test firmware on PRs
 # Note: Push to main is handled by dev-release.yml which creates the dev release
-name: Build Firmware
+name: "PR: Pico Firmware Build & Test"
 
 on:
   pull_request:
@@ -27,7 +27,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Dependencies
         run: |
@@ -61,7 +61,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install ARM GCC Toolchain
         run: |

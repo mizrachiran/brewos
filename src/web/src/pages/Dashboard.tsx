@@ -10,9 +10,13 @@ import {
   PressureCard,
   PowerCard,
   QuickStat,
+  LastShotCard,
 } from "@/components/dashboard";
-import { Coffee, Clock, Droplets, Scale } from "lucide-react";
+import { Sparkles, Clock, Droplets, Scale } from "lucide-react";
 import { formatUptime } from "@/lib/utils";
+
+// Time to show pressure card after brewing ends (ms)
+const POST_BREW_PRESSURE_DISPLAY_MS = 30000; // 30 seconds
 
 export function Dashboard() {
   // Use specific selectors to prevent unnecessary re-renders
@@ -20,6 +24,9 @@ export function Dashboard() {
   const machineState = useStore((s) => s.machine.state);
   const machineType = useStore((s) => s.device.machineType);
   const heatingStrategy = useStore((s) => s.machine.heatingStrategy);
+  const isBrewing = useStore((s) => s.machine.isBrewing);
+  const shotActive = useStore((s) => s.shot.active);
+  const lastShotTimestamp = useStore((s) => s.machine.lastShotTimestamp);
 
   // Temperature data - individual primitive selectors to prevent unnecessary re-renders
   const brewTempCurrent = useStore(
@@ -62,8 +69,44 @@ export function Dashboard() {
   const scaleConnected = useStore((s) => s.scale.connected);
   const scaleWeight = useStore((s) => Math.round(s.scale.weight * 10) / 10);
   const scaleBattery = useStore((s) => s.scale.battery);
-  const shotsToday = useStore((s) => s.stats.shotsToday);
   const machineOnTimestamp = useStore((s) => s.machine.machineOnTimestamp);
+  const shotsSinceBackflush = useStore(
+    (s) => s.stats.maintenance.shotsSinceBackflush
+  );
+  const cleaningReminderDue = useStore((s) => s.cleaning.reminderDue);
+  const hasPressureSensor = useStore((s) => s.device.hasPressureSensor);
+
+  // Track whether to show pressure card (during and shortly after brewing, and only if sensor exists)
+  const [showPressureCard, setShowPressureCard] = useState(false);
+
+  useEffect(() => {
+    // No pressure sensor installed - never show pressure card
+    if (!hasPressureSensor) {
+      setShowPressureCard(false);
+      return;
+    }
+
+    // Show pressure card while brewing
+    if (isBrewing || shotActive) {
+      setShowPressureCard(true);
+      return;
+    }
+
+    // After brewing ends, show pressure for 30 seconds then hide
+    if (lastShotTimestamp) {
+      const timeSinceLastShot = Date.now() - lastShotTimestamp;
+      if (timeSinceLastShot < POST_BREW_PRESSURE_DISPLAY_MS) {
+        setShowPressureCard(true);
+        const timeout = setTimeout(() => {
+          setShowPressureCard(false);
+        }, POST_BREW_PRESSURE_DISPLAY_MS - timeSinceLastShot);
+        return () => clearTimeout(timeout);
+      }
+    }
+
+    // Not brewing and no recent shot - hide pressure
+    setShowPressureCard(false);
+  }, [isBrewing, shotActive, lastShotTimestamp, hasPressureSensor]);
 
   // Calculate uptime locally for smooth updates
   const [uptime, setUptime] = useState(0);
@@ -152,6 +195,24 @@ export function Dashboard() {
     return "Empty";
   }, [waterTankLevel]);
 
+  // Cleaning status helpers
+  const cleaningStatus = useMemo(() => {
+    if (cleaningReminderDue) return "warning" as const;
+    if (shotsSinceBackflush > 150) return "warning" as const;
+    return "success" as const;
+  }, [cleaningReminderDue, shotsSinceBackflush]);
+
+  const cleaningDisplayValue = useMemo(() => {
+    if (cleaningReminderDue) return "Due";
+    return `${shotsSinceBackflush} shots`;
+  }, [cleaningReminderDue, shotsSinceBackflush]);
+
+  const cleaningSubtext = useMemo(() => {
+    if (cleaningReminderDue) return "Backflush needed";
+    if (shotsSinceBackflush > 150) return "Consider backflush";
+    return "Since backflush";
+  }, [cleaningReminderDue, shotsSinceBackflush]);
+
   return (
     <>
       <div className="space-y-6">
@@ -178,8 +239,13 @@ export function Dashboard() {
           groupTemp={groupTemp}
         />
 
+        {/* Contextual Cards: Pressure during brew, Last Shot when idle */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <PressureCard pressure={pressure} />
+          {showPressureCard ? (
+            <PressureCard pressure={pressure} />
+          ) : (
+            <LastShotCard />
+          )}
           <PowerCard
             current={powerCurrent}
             todayKwh={powerTodayKwh}
@@ -187,21 +253,26 @@ export function Dashboard() {
           />
         </div>
 
-        {/* Quick Stats - Improved layout */}
+        {/* Quick Stats - Machine health at a glance */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {/* Coffee stats group */}
-          <QuickStat
-            icon={<Coffee className="w-5 h-5" />}
-            label="Shots Today"
-            value={shotsToday.toString()}
-          />
+          {/* Session uptime */}
           <QuickStat
             icon={<Clock className="w-5 h-5" />}
             label="Session"
             value={machineMode !== "standby" ? formattedUptime : "Off"}
           />
 
-          {/* Machine status group */}
+          {/* Maintenance status */}
+          <QuickStat
+            icon={<Sparkles className="w-5 h-5" />}
+            label="Cleaning"
+            value={cleaningDisplayValue}
+            status={cleaningStatus}
+            showPulse={cleaningReminderDue}
+            subtext={cleaningSubtext}
+          />
+
+          {/* Machine status */}
           <QuickStat
             icon={<Droplets className="w-5 h-5" />}
             label="Water Tank"

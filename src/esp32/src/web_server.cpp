@@ -281,6 +281,22 @@ void WebServer::setupRoutes() {
         request->send(200, "application/json", "{\"status\":\"ok\"}");
     });
     
+    // Setup complete endpoint (marks first-run wizard as done)
+    // Note: No auth required - this endpoint is only accessible on local network
+    // during initial device setup before WiFi is configured
+    _server.on("/api/setup/complete", HTTP_POST, [](AsyncWebServerRequest* request) {
+        // Only allow if not already completed (prevent re-triggering)
+        if (State.settings().system.setupComplete) {
+            request->send(200, "application/json", "{\"success\":true,\"alreadyComplete\":true}");
+            return;
+        }
+        
+        State.settings().system.setupComplete = true;
+        State.saveSystemSettings();
+        LOG_I("Setup wizard completed");
+        request->send(200, "application/json", "{\"success\":true}");
+    });
+    
     // MQTT endpoints
     _server.on("/api/mqtt/config", HTTP_GET, [this](AsyncWebServerRequest* request) {
         handleGetMQTTConfig(request);
@@ -825,6 +841,61 @@ void WebServer::setupRoutes() {
         request->send(200, "application/json", response);
     });
     
+    // Push notification preferences endpoint (GET)
+    _server.on("/api/push/preferences", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        auto& notifSettings = State.settings().notifications;
+        
+        JsonDocument doc;
+        doc["machineReady"] = notifSettings.machineReady;
+        doc["waterEmpty"] = notifSettings.waterEmpty;
+        doc["descaleDue"] = notifSettings.descaleDue;
+        doc["serviceDue"] = notifSettings.serviceDue;
+        doc["backflushDue"] = notifSettings.backflushDue;
+        doc["machineError"] = notifSettings.machineError;
+        doc["picoOffline"] = notifSettings.picoOffline;
+        doc["scheduleTriggered"] = notifSettings.scheduleTriggered;
+        doc["brewComplete"] = notifSettings.brewComplete;
+        
+        String response;
+        serializeJson(doc, response);
+        request->send(200, "application/json", response);
+    });
+    
+    // Push notification preferences endpoint (POST)
+    _server.on(
+        "/api/push/preferences",
+        HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            if (index + len == total) {
+                JsonDocument doc;
+                DeserializationError error = deserializeJson(doc, data, len);
+                
+                if (error) {
+                    request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                    return;
+                }
+                
+                auto& notifSettings = State.settings().notifications;
+                
+                if (!doc["machineReady"].isNull()) notifSettings.machineReady = doc["machineReady"];
+                if (!doc["waterEmpty"].isNull()) notifSettings.waterEmpty = doc["waterEmpty"];
+                if (!doc["descaleDue"].isNull()) notifSettings.descaleDue = doc["descaleDue"];
+                if (!doc["serviceDue"].isNull()) notifSettings.serviceDue = doc["serviceDue"];
+                if (!doc["backflushDue"].isNull()) notifSettings.backflushDue = doc["backflushDue"];
+                if (!doc["machineError"].isNull()) notifSettings.machineError = doc["machineError"];
+                if (!doc["picoOffline"].isNull()) notifSettings.picoOffline = doc["picoOffline"];
+                if (!doc["scheduleTriggered"].isNull()) notifSettings.scheduleTriggered = doc["scheduleTriggered"];
+                if (!doc["brewComplete"].isNull()) notifSettings.brewComplete = doc["brewComplete"];
+                
+                State.saveNotificationSettings();
+                
+                request->send(200, "application/json", "{\"success\":true}");
+            }
+        }
+    );
+    
     // Pairing API endpoints
     _server.on("/api/pairing/qr", HTTP_GET, [this](AsyncWebServerRequest* request) {
         // Check if cloud is enabled
@@ -967,6 +1038,9 @@ void WebServer::handleGetStatus(AsyncWebServerRequest* request) {
     
     // WebSocket clients
     doc["clients"] = getClientCount();
+    
+    // Setup status
+    doc["setupComplete"] = State.settings().system.setupComplete;
     
     String response;
     serializeJson(doc, response);
@@ -1536,6 +1610,42 @@ void WebServer::processCommand(JsonDocument& doc) {
             }
             broadcastLog("Brew-by-weight settings updated", "info");
         }
+        // Pre-infusion settings
+        else if (cmd == "set_preinfusion") {
+            bool enabled = doc["enabled"] | false;
+            uint16_t onTimeMs = doc["onTimeMs"] | 3000;
+            uint16_t pauseTimeMs = doc["pauseTimeMs"] | 5000;
+            
+            // Validate timing parameters
+            if (onTimeMs > 10000) {
+                broadcastLog("Pre-infusion on_time too long (max 10000ms)", "error");
+            } else if (pauseTimeMs > 30000) {
+                broadcastLog("Pre-infusion pause_time too long (max 30000ms)", "error");
+            } else {
+                // Build payload for Pico: [config_type, enabled, on_time_ms(2), pause_time_ms(2)]
+                uint8_t payload[6];
+                payload[0] = CONFIG_PREINFUSION;  // Config type
+                payload[1] = enabled ? 1 : 0;
+                payload[2] = onTimeMs & 0xFF;         // Low byte
+                payload[3] = (onTimeMs >> 8) & 0xFF;  // High byte
+                payload[4] = pauseTimeMs & 0xFF;      // Low byte
+                payload[5] = (pauseTimeMs >> 8) & 0xFF; // High byte
+                
+                if (_picoUart.sendCommand(MSG_CMD_CONFIG, payload, sizeof(payload))) {
+                    // Update ESP32 state for persistence
+                    auto& settings = State.settings();
+                    settings.brew.preinfusionTime = onTimeMs / 1000.0f;  // Store as seconds
+                    settings.brew.preinfusionPressure = enabled ? 1.0f : 0.0f;  // Use as enabled flag
+                    State.saveBrewSettings();
+                    
+                    broadcastLog("Pre-infusion settings saved: " + 
+                                String(enabled ? "enabled" : "disabled") + 
+                                ", on=" + String(onTimeMs) + "ms, pause=" + String(pauseTimeMs) + "ms", "info");
+                } else {
+                    broadcastLog("Failed to send pre-infusion config to Pico", "error");
+                }
+            }
+        }
         // Power settings
         else if (cmd == "set_power") {
             uint16_t voltage = doc["voltage"] | 230;
@@ -1654,18 +1764,70 @@ void WebServer::processCommand(JsonDocument& doc) {
                 startGitHubOTA(version);
             }
         }
-        // Machine info (stored in network hostname for now)
+        // Machine info
         else if (cmd == "set_machine_info" || cmd == "set_device_info") {
+            auto& machineInfo = State.settings().machineInfo;
             auto& networkSettings = State.settings().network;
             
             if (!doc["name"].isNull()) {
+                strncpy(machineInfo.deviceName, doc["name"].as<const char*>(), sizeof(machineInfo.deviceName) - 1);
+                machineInfo.deviceName[sizeof(machineInfo.deviceName) - 1] = '\0';
+                // Also update hostname for mDNS
                 strncpy(networkSettings.hostname, doc["name"].as<const char*>(), sizeof(networkSettings.hostname) - 1);
+                networkSettings.hostname[sizeof(networkSettings.hostname) - 1] = '\0';
             }
-            // Note: model and machineType would need a dedicated struct in Settings
-            // For now, we just store the device name in hostname
+            if (!doc["brand"].isNull()) {
+                strncpy(machineInfo.machineBrand, doc["brand"].as<const char*>(), sizeof(machineInfo.machineBrand) - 1);
+                machineInfo.machineBrand[sizeof(machineInfo.machineBrand) - 1] = '\0';
+            }
+            if (!doc["model"].isNull()) {
+                strncpy(machineInfo.machineModel, doc["model"].as<const char*>(), sizeof(machineInfo.machineModel) - 1);
+                machineInfo.machineModel[sizeof(machineInfo.machineModel) - 1] = '\0';
+            }
+            if (!doc["machineType"].isNull()) {
+                strncpy(machineInfo.machineType, doc["machineType"].as<const char*>(), sizeof(machineInfo.machineType) - 1);
+                machineInfo.machineType[sizeof(machineInfo.machineType) - 1] = '\0';
+            }
             
+            State.saveMachineInfoSettings();
             State.saveNetworkSettings();
-            broadcastLog("Device info updated: " + String(networkSettings.hostname), "info");
+            
+            // Broadcast device info update
+            broadcastDeviceInfo();
+            broadcastLog("Device info updated: " + String(machineInfo.deviceName), "info");
+        }
+        // User preferences (synced across devices)
+        else if (cmd == "set_preferences") {
+            auto& prefs = State.settings().preferences;
+            
+            if (!doc["firstDayOfWeek"].isNull()) {
+                const char* dow = doc["firstDayOfWeek"];
+                prefs.firstDayOfWeek = (strcmp(dow, "monday") == 0) ? 1 : 0;
+            }
+            if (!doc["use24HourTime"].isNull()) {
+                prefs.use24HourTime = doc["use24HourTime"];
+            }
+            if (!doc["temperatureUnit"].isNull()) {
+                const char* unit = doc["temperatureUnit"];
+                prefs.temperatureUnit = (strcmp(unit, "fahrenheit") == 0) ? 1 : 0;
+            }
+            if (!doc["electricityPrice"].isNull()) {
+                prefs.electricityPrice = doc["electricityPrice"];
+            }
+            if (!doc["currency"].isNull()) {
+                strncpy(prefs.currency, doc["currency"].as<const char*>(), sizeof(prefs.currency) - 1);
+                prefs.currency[sizeof(prefs.currency) - 1] = '\0';
+            }
+            if (!doc["lastHeatingStrategy"].isNull()) {
+                prefs.lastHeatingStrategy = doc["lastHeatingStrategy"];
+            }
+            
+            // Mark as initialized once browser sends first preferences
+            prefs.initialized = true;
+            
+            State.saveUserPreferences();
+            broadcastDeviceInfo();
+            broadcastLog("User preferences updated", "info");
         }
         // Maintenance records
         else if (cmd == "record_maintenance") {
@@ -1758,25 +1920,40 @@ void WebServer::broadcastFullStatus(const ui_state_t& state) {
     doc["type"] = "status";
     
     // Timestamps - track machine on time and last shot
-    static uint32_t machineOnTimestamp = 0;
-    static uint32_t lastShotTimestamp = 0;
+    // Use Unix timestamps (milliseconds) for client compatibility
+    static uint64_t machineOnTimestamp = 0;
+    static uint64_t lastShotTimestamp = 0;
     static bool wasOn = false;
     
     // Machine is "on" when in active states (heating through cooldown)
     bool isOn = state.machine_state >= UI_STATE_HEATING && state.machine_state <= UI_STATE_COOLDOWN;
     
-    // Track when machine turns on
+    // Track when machine turns on (Unix timestamp in milliseconds)
+    // Bounds: year 2020 (1577836800) to year 2100 (4102444800) for overflow protection
+    constexpr time_t MIN_VALID_TIME = 1577836800;  // Jan 1, 2020
+    constexpr time_t MAX_VALID_TIME = 4102444800;  // Jan 1, 2100
+    
     if (isOn && !wasOn) {
-        machineOnTimestamp = millis();
+        time_t now = time(nullptr);
+        // Only set timestamp if NTP is synced and within reasonable bounds
+        if (now > MIN_VALID_TIME && now < MAX_VALID_TIME) {
+            machineOnTimestamp = (uint64_t)now * 1000ULL;
+        } else {
+            machineOnTimestamp = 0;  // Time not synced or out of bounds
+        }
     } else if (!isOn) {
         machineOnTimestamp = 0;
     }
     wasOn = isOn;
     
-    // Track last shot timestamp
+    // Track last shot timestamp (Unix timestamp in milliseconds)
     static bool wasBrewing = false;
     if (wasBrewing && !state.is_brewing) {
-        lastShotTimestamp = millis();
+        time_t now = time(nullptr);
+        // Only set timestamp if NTP is synced and within reasonable bounds
+        if (now > MIN_VALID_TIME && now < MAX_VALID_TIME) {
+            lastShotTimestamp = (uint64_t)now * 1000ULL;
+        }
     }
     wasBrewing = state.is_brewing;
     
@@ -1810,14 +1987,14 @@ void WebServer::broadcastFullStatus(const ui_state_t& state) {
     machine["isBrewing"] = state.is_brewing;
     machine["heatingStrategy"] = state.heating_strategy;
     
-    // Timestamps
+    // Timestamps (Unix milliseconds for JavaScript compatibility)
     if (machineOnTimestamp > 0) {
-        machine["machineOnTimestamp"] = machineOnTimestamp;
+        machine["machineOnTimestamp"] = (double)machineOnTimestamp;  // Cast to double for JSON
     } else {
         machine["machineOnTimestamp"] = (char*)nullptr;
     }
     if (lastShotTimestamp > 0) {
-        machine["lastShotTimestamp"] = lastShotTimestamp;
+        machine["lastShotTimestamp"] = (double)lastShotTimestamp;  // Cast to double for JSON
     } else {
         machine["lastShotTimestamp"] = (char*)nullptr;
     }
@@ -1878,6 +2055,33 @@ void WebServer::broadcastFullStatus(const ui_state_t& state) {
     power["maxCurrent"] = State.settings().power.maxCurrent;
     
     // =========================================================================
+    // Stats Section - Key metrics for dashboard
+    // =========================================================================
+    JsonObject stats = doc["stats"].to<JsonObject>();
+    
+    // Get current statistics
+    BrewOS::FullStatistics fullStats;
+    Stats.getFullStatistics(fullStats);
+    
+    // Daily stats
+    JsonObject daily = stats["daily"].to<JsonObject>();
+    BrewOS::PeriodStats dailyStats;
+    Stats.getDailyStats(dailyStats);
+    daily["shotCount"] = dailyStats.shotCount;
+    daily["avgBrewTimeMs"] = dailyStats.avgBrewTimeMs;
+    daily["totalKwh"] = dailyStats.totalKwh;
+    
+    // Lifetime stats
+    JsonObject lifetime = stats["lifetime"].to<JsonObject>();
+    lifetime["totalShots"] = fullStats.lifetime.totalShots;
+    lifetime["avgBrewTimeMs"] = fullStats.lifetime.avgBrewTimeMs;
+    lifetime["totalKwh"] = fullStats.lifetime.totalKwh;
+    
+    // Session stats
+    stats["sessionShots"] = fullStats.sessionShots;
+    stats["shotsToday"] = dailyStats.shotCount;
+    
+    // =========================================================================
     // Cleaning Section
     // =========================================================================
     JsonObject cleaning = doc["cleaning"].to<JsonObject>();
@@ -1889,7 +2093,6 @@ void WebServer::broadcastFullStatus(const ui_state_t& state) {
     // =========================================================================
     JsonObject water = doc["water"].to<JsonObject>();
     water["tankLevel"] = state.water_low ? "low" : "ok";
-    water["dripTrayFull"] = false;  // TODO: Get from state
     
     // =========================================================================
     // Scale Section
@@ -1933,15 +2136,37 @@ void WebServer::broadcastDeviceInfo() {
     doc["type"] = "device_info";
     
     // Get device info from state manager
-    const auto& networkSettings = State.settings().network;
-    doc["deviceId"] = State.settings().cloud.deviceId;
-    doc["deviceName"] = networkSettings.hostname;
-    doc["machineBrand"] = "";  // TODO: Add to settings when available
-    doc["machineModel"] = "";  // TODO: Add to settings when available
+    const auto& machineInfo = State.settings().machineInfo;
+    const auto& cloudSettings = State.settings().cloud;
+    const auto& powerSettings = State.settings().power;
+    const auto& tempSettings = State.settings().temperature;
+    const auto& prefs = State.settings().preferences;
     
-    // Machine type from Pico boot message or settings
-    doc["machineType"] = "dual_boiler";  // TODO: Get from state
+    doc["deviceId"] = cloudSettings.deviceId;
+    doc["deviceName"] = machineInfo.deviceName;
+    doc["machineBrand"] = machineInfo.machineBrand;
+    doc["machineModel"] = machineInfo.machineModel;
+    doc["machineType"] = machineInfo.machineType;
     doc["firmwareVersion"] = ESP32_VERSION;
+    
+    // Include power settings
+    doc["mainsVoltage"] = powerSettings.mainsVoltage;
+    doc["maxCurrent"] = powerSettings.maxCurrent;
+    
+    // Include eco mode settings
+    doc["ecoBrewTemp"] = tempSettings.ecoBrewTemp;
+    doc["ecoTimeoutMinutes"] = tempSettings.ecoTimeoutMinutes;
+    
+    // Include pre-infusion settings
+    const auto& brewSettings = State.settings().brew;
+    // preinfusionPressure > 0 is used as the enabled flag (legacy compatibility)
+    doc["preinfusionEnabled"] = brewSettings.preinfusionPressure > 0;
+    doc["preinfusionOnMs"] = (uint16_t)(brewSettings.preinfusionTime * 1000);  // Convert seconds to ms
+    doc["preinfusionPauseMs"] = (uint16_t)(brewSettings.preinfusionPressure > 0 ? 5000 : 0);  // Default pause
+    
+    // Include user preferences (synced across devices)
+    JsonObject preferences = doc["preferences"].to<JsonObject>();
+    prefs.toJson(preferences);
     
     String json;
     serializeJson(doc, json);

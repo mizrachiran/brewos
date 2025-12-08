@@ -40,6 +40,7 @@ extern int run_cleaning_tests(void);
 extern int run_config_validation_tests(void);
 extern int run_power_meter_tests(void);
 extern int run_class_b_tests(void);
+extern int run_preinfusion_tests(void);
 
 // =============================================================================
 // Main Entry Point
@@ -76,6 +77,9 @@ int main(int argc, char** argv) {
     
     printf("Running Class B Safety Tests...\n");
     total_failures += run_class_b_tests();
+    
+    printf("Running Pre-Infusion Tests...\n");
+    total_failures += run_preinfusion_tests();
     
     // Print summary
     printf("\n");

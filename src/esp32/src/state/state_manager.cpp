@@ -133,6 +133,49 @@ void StateManager::loadSettings() {
     _settings.display.showWeight = _prefs.getBool("showWt", true);
     _settings.display.showPressure = _prefs.getBool("showPres", true);
     
+    // Machine Info
+    _prefs.getString("devName", _settings.machineInfo.deviceName, sizeof(_settings.machineInfo.deviceName));
+    _settings.machineInfo.deviceName[sizeof(_settings.machineInfo.deviceName) - 1] = '\0';
+    if (strlen(_settings.machineInfo.deviceName) == 0) {
+        strcpy(_settings.machineInfo.deviceName, "BrewOS");
+    }
+    _prefs.getString("mcBrand", _settings.machineInfo.machineBrand, sizeof(_settings.machineInfo.machineBrand));
+    _settings.machineInfo.machineBrand[sizeof(_settings.machineInfo.machineBrand) - 1] = '\0';
+    _prefs.getString("mcModel", _settings.machineInfo.machineModel, sizeof(_settings.machineInfo.machineModel));
+    _settings.machineInfo.machineModel[sizeof(_settings.machineInfo.machineModel) - 1] = '\0';
+    _prefs.getString("mcType", _settings.machineInfo.machineType, sizeof(_settings.machineInfo.machineType));
+    _settings.machineInfo.machineType[sizeof(_settings.machineInfo.machineType) - 1] = '\0';
+    if (strlen(_settings.machineInfo.machineType) == 0) {
+        strcpy(_settings.machineInfo.machineType, "dual_boiler");
+    }
+    
+    // Notification Preferences
+    _settings.notifications.machineReady = _prefs.getBool("notifReady", true);
+    _settings.notifications.waterEmpty = _prefs.getBool("notifWater", true);
+    _settings.notifications.descaleDue = _prefs.getBool("notifDescale", true);
+    _settings.notifications.serviceDue = _prefs.getBool("notifService", true);
+    _settings.notifications.backflushDue = _prefs.getBool("notifBackflush", true);
+    _settings.notifications.machineError = _prefs.getBool("notifError", true);
+    _settings.notifications.picoOffline = _prefs.getBool("notifPico", true);
+    _settings.notifications.scheduleTriggered = _prefs.getBool("notifSched", true);
+    _settings.notifications.brewComplete = _prefs.getBool("notifBrew", false);
+    
+    // System
+    _settings.system.setupComplete = _prefs.getBool("setupDone", false);
+    
+    // User Preferences
+    _settings.preferences.firstDayOfWeek = _prefs.getUChar("prefDOW", 0);
+    _settings.preferences.use24HourTime = _prefs.getBool("pref24h", false);
+    _settings.preferences.temperatureUnit = _prefs.getUChar("prefTempU", 0);
+    _settings.preferences.electricityPrice = _prefs.getFloat("prefElecP", 0.15f);
+    _prefs.getString("prefCurr", _settings.preferences.currency, sizeof(_settings.preferences.currency));
+    if (strlen(_settings.preferences.currency) == 0) {
+        strncpy(_settings.preferences.currency, "USD", sizeof(_settings.preferences.currency) - 1);
+        _settings.preferences.currency[sizeof(_settings.preferences.currency) - 1] = '\0';
+    }
+    _settings.preferences.lastHeatingStrategy = _prefs.getUChar("prefHeatS", 1);
+    _settings.preferences.initialized = _prefs.getBool("prefInit", false);
+    
     _prefs.end();
 }
 
@@ -145,6 +188,10 @@ void StateManager::saveSettings() {
     saveCloudSettings();
     saveScaleSettings();
     saveDisplaySettings();
+    saveMachineInfoSettings();
+    saveNotificationSettings();
+    saveSystemSettings();
+    saveUserPreferences();
 }
 
 void StateManager::saveTemperatureSettings() {
@@ -242,6 +289,54 @@ void StateManager::saveDisplaySettings() {
     _prefs.putBool("showTimer", _settings.display.showShotTimer);
     _prefs.putBool("showWt", _settings.display.showWeight);
     _prefs.putBool("showPres", _settings.display.showPressure);
+    _prefs.end();
+    notifySettingsChanged();
+}
+
+void StateManager::saveMachineInfoSettings() {
+    _prefs.begin(NVS_SETTINGS, false);
+    _prefs.putString("devName", _settings.machineInfo.deviceName);
+    _prefs.putString("mcBrand", _settings.machineInfo.machineBrand);
+    _prefs.putString("mcModel", _settings.machineInfo.machineModel);
+    _prefs.putString("mcType", _settings.machineInfo.machineType);
+    _prefs.end();
+    notifySettingsChanged();
+}
+
+void StateManager::saveNotificationSettings() {
+    _prefs.begin(NVS_SETTINGS, false);
+    _prefs.putBool("notifReady", _settings.notifications.machineReady);
+    _prefs.putBool("notifWater", _settings.notifications.waterEmpty);
+    _prefs.putBool("notifDescale", _settings.notifications.descaleDue);
+    _prefs.putBool("notifService", _settings.notifications.serviceDue);
+    _prefs.putBool("notifBackflush", _settings.notifications.backflushDue);
+    _prefs.putBool("notifError", _settings.notifications.machineError);
+    _prefs.putBool("notifPico", _settings.notifications.picoOffline);
+    _prefs.putBool("notifSched", _settings.notifications.scheduleTriggered);
+    _prefs.putBool("notifBrew", _settings.notifications.brewComplete);
+    _prefs.end();
+    notifySettingsChanged();
+}
+
+void StateManager::saveSystemSettings() {
+    if (_prefs.begin(NVS_SETTINGS, false)) {
+        _prefs.putBool("setupDone", _settings.system.setupComplete);
+        _prefs.end();
+        notifySettingsChanged();
+    } else {
+        Serial.println("[State] Error: Failed to initialize NVS for system settings");
+    }
+}
+
+void StateManager::saveUserPreferences() {
+    _prefs.begin(NVS_SETTINGS, false);
+    _prefs.putUChar("prefDOW", _settings.preferences.firstDayOfWeek);
+    _prefs.putBool("pref24h", _settings.preferences.use24HourTime);
+    _prefs.putUChar("prefTempU", _settings.preferences.temperatureUnit);
+    _prefs.putFloat("prefElecP", _settings.preferences.electricityPrice);
+    _prefs.putString("prefCurr", _settings.preferences.currency);
+    _prefs.putUChar("prefHeatS", _settings.preferences.lastHeatingStrategy);
+    _prefs.putBool("prefInit", _settings.preferences.initialized);
     _prefs.end();
     notifySettingsChanged();
 }
@@ -607,6 +702,18 @@ bool StateManager::applySettings(const char* section, const JsonObject& obj) {
     } else if (strcmp(section, "display") == 0) {
         _settings.display.fromJson(obj);
         saveDisplaySettings();
+    } else if (strcmp(section, "machineInfo") == 0) {
+        _settings.machineInfo.fromJson(obj);
+        saveMachineInfoSettings();
+    } else if (strcmp(section, "notifications") == 0) {
+        _settings.notifications.fromJson(obj);
+        saveNotificationSettings();
+    } else if (strcmp(section, "system") == 0) {
+        _settings.system.fromJson(obj);
+        saveSystemSettings();
+    } else if (strcmp(section, "preferences") == 0) {
+        _settings.preferences.fromJson(obj);
+        saveUserPreferences();
     } else {
         return false;
     }

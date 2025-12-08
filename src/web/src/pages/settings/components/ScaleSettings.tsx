@@ -3,13 +3,12 @@ import { useCommand } from '@/lib/useCommand';
 import { Card, CardHeader, CardTitle } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Badge } from '@/components/Badge';
+import { ScaleStatusCard } from '@/components/ScaleStatusCard';
 import {
   Scale as ScaleIcon,
   Bluetooth,
-  Battery,
   Loader2,
   Signal,
-  Check,
   X,
   ChevronRight,
   RotateCcw,
@@ -51,71 +50,35 @@ export function ScaleSettings() {
 
   return (
     <div className="space-y-6">
-      {/* Connected Scale */}
+      {/* Connected Scale - Using shared component */}
       {scale.connected && (
-        <Card className="bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border-emerald-500/30 dark:from-emerald-500/20 dark:to-emerald-500/10 dark:border-emerald-500/40">
-          <CardHeader
-            action={
-              <Badge variant="success">
-                <Check className="w-3 h-3" />
-                Connected
-              </Badge>
-            }
-          >
-            <CardTitle icon={<ScaleIcon className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />}>
-              {scale.name || 'BLE Scale'}
-            </CardTitle>
-          </CardHeader>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-            <ScaleInfoItem label="Type" value={scale.type || 'Unknown'} />
-            <ScaleInfoItem 
-              label="Weight" 
-              value={`${scale.weight.toFixed(1)} g`} 
-              highlight 
-            />
-            <ScaleInfoItem 
-              label="Flow Rate" 
-              value={`${scale.flowRate.toFixed(1)} g/s`} 
-            />
-            <ScaleInfoItem 
-              label="Battery" 
-              value={scale.battery > 0 ? `${scale.battery}%` : 'N/A'}
-              icon={<Battery className="w-4 h-4" />}
-            />
-          </div>
-
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-sm text-theme-muted">Status:</span>
-            <Badge variant={scale.stable ? 'success' : 'warning'}>
-              {scale.stable ? 'Stable' : 'Unstable'}
-            </Badge>
-          </div>
-
-          {/* Action buttons */}
-          <div className="space-y-0 border-t border-emerald-500/20">
-            <button
-              onClick={tareScale}
-              className="w-full flex items-center justify-between py-2.5 border-b border-emerald-500/20 text-left group transition-colors hover:opacity-80"
-            >
-              <div className="flex items-center gap-3">
-                <RotateCcw className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                <span className="text-sm font-medium text-emerald-900 dark:text-emerald-100">Tare Scale</span>
-              </div>
-              <ChevronRight className="w-4 h-4 text-emerald-600/50 dark:text-emerald-400/50 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
-            </button>
-            <button
-              onClick={disconnectScale}
-              className="w-full flex items-center justify-between py-2.5 text-left group transition-colors hover:opacity-80"
-            >
-              <div className="flex items-center gap-3">
-                <Unplug className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                <span className="text-sm font-medium text-emerald-900 dark:text-emerald-100">Disconnect Scale</span>
-              </div>
-              <ChevronRight className="w-4 h-4 text-emerald-600/50 dark:text-emerald-400/50 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
-            </button>
-          </div>
-        </Card>
+        <ScaleStatusCard
+          compact
+          actions={
+            <div className="space-y-0 border-t border-emerald-500/20">
+              <button
+                onClick={tareScale}
+                className="w-full flex items-center justify-between py-2.5 border-b border-emerald-500/20 text-left group transition-colors hover:opacity-80"
+              >
+                <div className="flex items-center gap-3">
+                  <RotateCcw className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-sm font-medium text-emerald-900 dark:text-emerald-100">Tare Scale</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-emerald-600/50 dark:text-emerald-400/50 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
+              </button>
+              <button
+                onClick={disconnectScale}
+                className="w-full flex items-center justify-between py-2.5 text-left group transition-colors hover:opacity-80"
+              >
+                <div className="flex items-center gap-3">
+                  <Unplug className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-sm font-medium text-emerald-900 dark:text-emerald-100">Disconnect Scale</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-emerald-600/50 dark:text-emerald-400/50 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
+              </button>
+            </div>
+          }
+        />
       )}
 
       {/* Scan for Scales */}
@@ -226,23 +189,3 @@ export function ScaleSettings() {
     </div>
   );
 }
-
-interface ScaleInfoItemProps {
-  label: string;
-  value: string;
-  highlight?: boolean;
-  icon?: React.ReactNode;
-}
-
-function ScaleInfoItem({ label, value, highlight, icon }: ScaleInfoItemProps) {
-  return (
-    <div className="p-3 bg-white/50 dark:bg-white/10 rounded-xl">
-      <div className="text-xs text-emerald-700 dark:text-emerald-300/70 mb-1">{label}</div>
-      <div className={`flex items-center gap-1.5 ${highlight ? 'text-xl font-bold' : 'font-semibold'} text-emerald-900 dark:text-emerald-100`}>
-        {icon}
-        {value}
-      </div>
-    </div>
-  );
-}
-

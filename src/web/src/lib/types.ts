@@ -34,6 +34,8 @@ export type MessageType =
   | "pico_status"
   | "scale_status"
   | "power_meter_status"
+  | "bbw_settings"
+  | "preinfusion_settings"
   | "stats"
   | "event"
   | "log"
@@ -132,7 +134,6 @@ export type WaterLevel = "ok" | "low" | "empty";
 
 export interface WaterStatus {
   tankLevel: WaterLevel;
-  dripTrayFull: boolean;
 }
 
 // Scale
@@ -160,6 +161,13 @@ export interface BBWSettings {
   doseWeight: number;
   stopOffset: number;
   autoTare: boolean;
+}
+
+// Pre-infusion
+export interface PreinfusionSettings {
+  enabled: boolean;
+  onTimeMs: number; // Pump ON time in milliseconds
+  pauseTimeMs: number; // Soak/pause time in milliseconds
 }
 
 // Shot
@@ -227,6 +235,8 @@ export interface DeviceInfo {
   machineModel: string;
   machineType: MachineType; // dual_boiler, single_boiler, heat_exchanger
   firmwareVersion: string;
+  // Optional hardware capabilities
+  hasPressureSensor: boolean; // Pressure transducer installed (optional accessory)
 }
 
 export interface ESP32Info {
@@ -695,8 +705,13 @@ export interface CloudDevice {
 export type FirstDayOfWeek = "sunday" | "monday";
 export type TemperatureUnit = "celsius" | "fahrenheit";
 
+export type Currency = 'USD' | 'EUR' | 'GBP' | 'AUD' | 'CAD' | 'JPY' | 'CHF' | 'ILS';
+
 export interface UserPreferences {
   firstDayOfWeek: FirstDayOfWeek;
   use24HourTime: boolean;
   temperatureUnit: TemperatureUnit;
+  // Electricity settings
+  electricityPrice: number;  // Price per kWh in selected currency
+  currency: Currency;
 }

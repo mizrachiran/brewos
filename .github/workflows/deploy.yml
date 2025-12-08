@@ -1,6 +1,6 @@
 # Deploy to STAGING on push to main
 # Production deploys happen via release.yml when a version tag is pushed
-name: Deploy Staging
+name: "Main → Deploy to Staging"
 
 on:
   push:
@@ -21,10 +21,10 @@ jobs:
     name: Verify Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: 'npm'

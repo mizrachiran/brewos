@@ -8,6 +8,7 @@ import {
   MachineSettings,
   TemperatureSettings,
   PowerSettings,
+  EcoModeSettings,
   PowerMeterSettings,
   NetworkSettings,
   ScaleSettings,
@@ -61,8 +62,9 @@ export function Settings() {
         <>
           <MachineSettings />
           <TemperatureSettings />
-          <PowerSettings />
+          <EcoModeSettings />
           <PowerMeterSettings />
+          <PowerSettings />
         </>
       )}
 

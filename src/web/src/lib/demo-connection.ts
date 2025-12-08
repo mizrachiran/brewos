@@ -38,6 +38,16 @@ export class DemoConnection implements IConnection {
   private scaleWeight = 0;
   private flowRate = 0;
 
+  // BBW and Pre-infusion settings (enabled by default in demo)
+  private bbwEnabled = true;
+  private bbwTargetWeight = 36;
+  private bbwDoseWeight = 18;
+  private bbwStopOffset = 2;
+  private bbwAutoTare = true;
+  private preinfusionEnabled = true;
+  private preinfusionOnMs = 3000;
+  private preinfusionPauseMs = 5000;
+
   // Machine type (for diagnostics)
   private machineType: "dual_boiler" | "single_boiler" | "heat_exchanger" =
     "dual_boiler";
@@ -72,7 +82,31 @@ export class DemoConnection implements IConnection {
       machineModel: "Synchronika",
       machineType: "dual_boiler",
       firmwareVersion: "1.0.0-demo",
+      hasPressureSensor: true, // Demo has pressure sensor installed
+      // Power settings
+      mainsVoltage: 220,
+      maxCurrent: 13,
+      // Eco mode settings
+      ecoBrewTemp: 80,
+      ecoTimeoutMinutes: 30,
+      // Pre-infusion settings (enabled by default in demo)
+      preinfusionEnabled: this.preinfusionEnabled,
+      preinfusionOnMs: this.preinfusionOnMs,
+      preinfusionPauseMs: this.preinfusionPauseMs,
+      // User preferences (synced across devices)
+      preferences: {
+        firstDayOfWeek: "sunday",
+        use24HourTime: false,
+        temperatureUnit: "celsius",
+        electricityPrice: 0.15,
+        currency: "USD",
+        lastHeatingStrategy: 1,
+        initialized: true,  // In demo, always initialized
+      },
     });
+
+    // Send initial BBW settings (enabled by default in demo)
+    this.emitBBWSettings();
 
     // Send initial unified status (machine, temps, scale, connections, etc.)
     this.emitFullStatus();
@@ -151,8 +185,26 @@ export class DemoConnection implements IConnection {
         this.emitFullStatus();
         break;
       case "set_bbw":
-        // Brew-by-weight settings - just acknowledge
-        console.log("[Demo] BBW settings received:", data);
+        // Brew-by-weight settings - store and emit
+        if (data.enabled !== undefined) this.bbwEnabled = data.enabled as boolean;
+        if (data.targetWeight !== undefined) this.bbwTargetWeight = data.targetWeight as number;
+        if (data.doseWeight !== undefined) this.bbwDoseWeight = data.doseWeight as number;
+        if (data.stopOffset !== undefined) this.bbwStopOffset = data.stopOffset as number;
+        if (data.autoTare !== undefined) this.bbwAutoTare = data.autoTare as boolean;
+        console.log("[Demo] BBW settings updated:", data);
+        this.emitBBWSettings();
+        break;
+      case "set_preinfusion":
+        // Pre-infusion settings - store and emit
+        if (data.enabled !== undefined) this.preinfusionEnabled = data.enabled as boolean;
+        if (data.onTimeMs !== undefined) this.preinfusionOnMs = data.onTimeMs as number;
+        if (data.pauseTimeMs !== undefined) this.preinfusionPauseMs = data.pauseTimeMs as number;
+        console.log("[Demo] Pre-infusion settings updated:", data);
+        this.emitPreinfusionSettings();
+        break;
+      case "set_preferences":
+        // User preferences - just log in demo mode (they're stored in localStorage)
+        console.log("[Demo] User preferences updated:", data);
         break;
       case "set_machine_info":
         // Update machine type for diagnostics
@@ -171,6 +223,11 @@ export class DemoConnection implements IConnection {
           machineModel: (data.model as string) || "Synchronika",
           machineType: (data.machineType as string) || "dual_boiler",
           firmwareVersion: "1.0.0-demo",
+          hasPressureSensor: true,
+          mainsVoltage: 220,
+          maxCurrent: 13,
+          ecoBrewTemp: 80,
+          ecoTimeoutMinutes: 30,
         });
         break;
       case "set_device_info":
@@ -183,6 +240,11 @@ export class DemoConnection implements IConnection {
           machineModel: (data.machineModel as string) || "Synchronika",
           machineType: (data.machineType as string) || "dual_boiler",
           firmwareVersion: "1.0.0-demo",
+          hasPressureSensor: true,
+          mainsVoltage: 220,
+          maxCurrent: 13,
+          ecoBrewTemp: 80,
+          ecoTimeoutMinutes: 30,
         });
         break;
       case "record_maintenance":
@@ -1025,7 +1087,6 @@ export class DemoConnection implements IConnection {
       // Water section
       water: {
         tankLevel: "ok",
-        dripTrayFull: false,
       },
       // Scale section
       scale: {
@@ -1036,6 +1097,14 @@ export class DemoConnection implements IConnection {
         flowRate: Number(this.flowRate.toFixed(1)),
         stable: !this.isBrewing || this.flowRate < 0.5,
         battery: 85,
+      },
+      // Shot section (active brew data)
+      shot: {
+        active: this.isBrewing,
+        startTime: this.shotStartTime,
+        duration: this.isBrewing ? Date.now() - this.shotStartTime : 0,
+        weight: Number(this.shotWeight.toFixed(1)),
+        flowRate: Number(this.flowRate.toFixed(1)),
       },
       // Connections section
       connections: {
@@ -1070,6 +1139,41 @@ export class DemoConnection implements IConnection {
         freeHeap: 175000 + Math.floor(Math.random() * 10000),
         uptime: Date.now(),
       },
+      // Stats section (real-time updates)
+      stats: {
+        shotsToday: this.shotsToday,
+        sessionShots: this.shotsToday, // In demo, session = today
+        daily: {
+          shotCount: this.shotsToday,
+          avgBrewTimeMs: 28500, // ~28.5 seconds average
+          totalKwh: 0.8 + this.shotsToday * 0.05,
+        },
+        lifetime: {
+          totalShots: this.totalShots,
+          avgBrewTimeMs: 28500,
+          totalKwh: 89.3,
+        },
+      },
+    });
+  }
+
+  private emitBBWSettings(): void {
+    this.emit({
+      type: "bbw_settings",
+      enabled: this.bbwEnabled,
+      targetWeight: this.bbwTargetWeight,
+      doseWeight: this.bbwDoseWeight,
+      stopOffset: this.bbwStopOffset,
+      autoTare: this.bbwAutoTare,
+    });
+  }
+
+  private emitPreinfusionSettings(): void {
+    this.emit({
+      type: "preinfusion_settings",
+      enabled: this.preinfusionEnabled,
+      onTimeMs: this.preinfusionOnMs,
+      pauseTimeMs: this.preinfusionPauseMs,
     });
   }
 

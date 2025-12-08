@@ -198,6 +198,113 @@ bool DisplaySettings::fromJson(JsonObjectConst obj) {
 }
 
 // =============================================================================
+// UserPreferences
+// =============================================================================
+
+void UserPreferences::toJson(JsonObject& obj) const {
+    obj["firstDayOfWeek"] = firstDayOfWeek == 0 ? "sunday" : "monday";
+    obj["use24HourTime"] = use24HourTime;
+    obj["temperatureUnit"] = temperatureUnit == 0 ? "celsius" : "fahrenheit";
+    obj["electricityPrice"] = electricityPrice;
+    obj["currency"] = currency;
+    obj["lastHeatingStrategy"] = lastHeatingStrategy;
+    obj["initialized"] = initialized;
+}
+
+bool UserPreferences::fromJson(JsonObjectConst obj) {
+    if (obj["firstDayOfWeek"].is<const char*>()) {
+        const char* dow = obj["firstDayOfWeek"];
+        firstDayOfWeek = (strcmp(dow, "monday") == 0) ? 1 : 0;
+    }
+    if (obj["use24HourTime"].is<bool>()) use24HourTime = obj["use24HourTime"];
+    if (obj["temperatureUnit"].is<const char*>()) {
+        const char* unit = obj["temperatureUnit"];
+        temperatureUnit = (strcmp(unit, "fahrenheit") == 0) ? 1 : 0;
+    }
+    if (obj["electricityPrice"].is<float>()) electricityPrice = obj["electricityPrice"];
+    if (obj["currency"].is<const char*>()) {
+        strncpy(currency, obj["currency"], sizeof(currency) - 1);
+        currency[sizeof(currency) - 1] = '\0';
+    }
+    if (obj["lastHeatingStrategy"].is<uint8_t>()) lastHeatingStrategy = obj["lastHeatingStrategy"];
+    if (obj["initialized"].is<bool>()) initialized = obj["initialized"];
+    return true;
+}
+
+// =============================================================================
+// SystemSettings
+// =============================================================================
+
+void SystemSettings::toJson(JsonObject& obj) const {
+    obj["setupComplete"] = setupComplete;
+}
+
+bool SystemSettings::fromJson(JsonObjectConst obj) {
+    if (obj["setupComplete"].is<bool>()) setupComplete = obj["setupComplete"];
+    return true;
+}
+
+// =============================================================================
+// MachineInfoSettings
+// =============================================================================
+
+void MachineInfoSettings::toJson(JsonObject& obj) const {
+    obj["deviceName"] = deviceName;
+    obj["machineBrand"] = machineBrand;
+    obj["machineModel"] = machineModel;
+    obj["machineType"] = machineType;
+}
+
+bool MachineInfoSettings::fromJson(JsonObjectConst obj) {
+    if (obj["deviceName"].is<const char*>()) {
+        strncpy(deviceName, obj["deviceName"] | "BrewOS", sizeof(deviceName) - 1);
+        deviceName[sizeof(deviceName) - 1] = '\0';
+    }
+    if (obj["machineBrand"].is<const char*>()) {
+        strncpy(machineBrand, obj["machineBrand"] | "", sizeof(machineBrand) - 1);
+        machineBrand[sizeof(machineBrand) - 1] = '\0';
+    }
+    if (obj["machineModel"].is<const char*>()) {
+        strncpy(machineModel, obj["machineModel"] | "", sizeof(machineModel) - 1);
+        machineModel[sizeof(machineModel) - 1] = '\0';
+    }
+    if (obj["machineType"].is<const char*>()) {
+        strncpy(machineType, obj["machineType"] | "dual_boiler", sizeof(machineType) - 1);
+        machineType[sizeof(machineType) - 1] = '\0';
+    }
+    return true;
+}
+
+// =============================================================================
+// NotificationSettings
+// =============================================================================
+
+void NotificationSettings::toJson(JsonObject& obj) const {
+    obj["machineReady"] = machineReady;
+    obj["waterEmpty"] = waterEmpty;
+    obj["descaleDue"] = descaleDue;
+    obj["serviceDue"] = serviceDue;
+    obj["backflushDue"] = backflushDue;
+    obj["machineError"] = machineError;
+    obj["picoOffline"] = picoOffline;
+    obj["scheduleTriggered"] = scheduleTriggered;
+    obj["brewComplete"] = brewComplete;
+}
+
+bool NotificationSettings::fromJson(JsonObjectConst obj) {
+    if (obj["machineReady"].is<bool>()) machineReady = obj["machineReady"];
+    if (obj["waterEmpty"].is<bool>()) waterEmpty = obj["waterEmpty"];
+    if (obj["descaleDue"].is<bool>()) descaleDue = obj["descaleDue"];
+    if (obj["serviceDue"].is<bool>()) serviceDue = obj["serviceDue"];
+    if (obj["backflushDue"].is<bool>()) backflushDue = obj["backflushDue"];
+    if (obj["machineError"].is<bool>()) machineError = obj["machineError"];
+    if (obj["picoOffline"].is<bool>()) picoOffline = obj["picoOffline"];
+    if (obj["scheduleTriggered"].is<bool>()) scheduleTriggered = obj["scheduleTriggered"];
+    if (obj["brewComplete"].is<bool>()) brewComplete = obj["brewComplete"];
+    return true;
+}
+
+// =============================================================================
 // Settings (combined)
 // =============================================================================
 
@@ -228,6 +335,15 @@ void Settings::toJson(JsonDocument& doc) const {
     
     JsonObject displayObj = doc["display"].to<JsonObject>();
     display.toJson(displayObj);
+    
+    JsonObject machineInfoObj = doc["machineInfo"].to<JsonObject>();
+    machineInfo.toJson(machineInfoObj);
+    
+    JsonObject notificationsObj = doc["notifications"].to<JsonObject>();
+    notifications.toJson(notificationsObj);
+    
+    JsonObject systemObj = doc["system"].to<JsonObject>();
+    system.toJson(systemObj);
 }
 
 bool Settings::fromJson(const JsonDocument& doc) {
@@ -284,6 +400,24 @@ bool Settings::fromJson(const JsonDocument& doc) {
     if (displayVar.is<JsonObjectConst>()) {
         JsonObjectConst obj = displayVar.as<JsonObjectConst>();
         display.fromJson(obj);
+    }
+    
+    JsonVariantConst machineInfoVar = doc["machineInfo"];
+    if (machineInfoVar.is<JsonObjectConst>()) {
+        JsonObjectConst obj = machineInfoVar.as<JsonObjectConst>();
+        machineInfo.fromJson(obj);
+    }
+    
+    JsonVariantConst notificationsVar = doc["notifications"];
+    if (notificationsVar.is<JsonObjectConst>()) {
+        JsonObjectConst obj = notificationsVar.as<JsonObjectConst>();
+        notifications.fromJson(obj);
+    }
+    
+    JsonVariantConst systemVar = doc["system"];
+    if (systemVar.is<JsonObjectConst>()) {
+        JsonObjectConst obj = systemVar.as<JsonObjectConst>();
+        system.fromJson(obj);
     }
     
     return true;
@@ -440,7 +574,6 @@ void RuntimeState::toJson(JsonObject& obj) const {
     obj["powerWatts"] = powerWatts;
     obj["voltage"] = voltage;
     obj["waterLevel"] = waterLevel;
-    obj["dripTrayFull"] = dripTrayFull;
     obj["scaleConnected"] = scaleConnected;
     obj["scaleWeight"] = scaleWeight;
     obj["scaleFlowRate"] = scaleFlowRate;

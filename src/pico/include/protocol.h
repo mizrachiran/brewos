@@ -122,6 +122,13 @@ typedef struct __attribute__((packed)) {
     float    max_current_draw;   // 10.0, 16.0, etc. (4 bytes)
 } config_environmental_t;  // 6 bytes
 
+// CONFIG_PREINFUSION (0x02) payload (for MSG_CMD_CONFIG)
+typedef struct __attribute__((packed)) {
+    uint8_t  enabled;            // 0=disabled, 1=enabled
+    uint16_t on_time_ms;         // Pump ON duration (500-10000ms typical)
+    uint16_t pause_time_ms;      // Soak/pause duration (0-30000ms typical)
+} config_preinfusion_t;  // 5 bytes
+
 // MSG_ENV_CONFIG (0x08) payload - Environmental config response
 typedef struct __attribute__((packed)) {
     uint16_t nominal_voltage;        // 120, 230, 240, etc. (V)

@@ -202,8 +202,17 @@ export function PushNotificationSettings() {
       if (response.ok) {
         const data = await response.json();
         // Merge server preferences with local firmware update preference
+        // The ESP32 returns preferences directly at the top level
         setPreferences({
-          ...data.preferences,
+          machineReady: data.machineReady ?? defaultPreferences.machineReady,
+          waterEmpty: data.waterEmpty ?? defaultPreferences.waterEmpty,
+          descaleDue: data.descaleDue ?? defaultPreferences.descaleDue,
+          serviceDue: data.serviceDue ?? defaultPreferences.serviceDue,
+          backflushDue: data.backflushDue ?? defaultPreferences.backflushDue,
+          machineError: data.machineError ?? defaultPreferences.machineError,
+          picoOffline: data.picoOffline ?? defaultPreferences.picoOffline,
+          scheduleTriggered: data.scheduleTriggered ?? defaultPreferences.scheduleTriggered,
+          brewComplete: data.brewComplete ?? defaultPreferences.brewComplete,
           firmwareUpdate: firmwareUpdateEnabled,
         });
       } else {
@@ -254,12 +263,10 @@ export function PushNotificationSettings() {
 
     try {
       const response = await fetch("/api/push/preferences", {
-        method: "PUT",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          preferences: { [key]: value },
-        }),
+        body: JSON.stringify({ [key]: value }),
       });
 
       if (!response.ok) {

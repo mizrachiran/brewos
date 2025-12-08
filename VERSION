@@ -9,5 +9,5 @@
 # Protocol version is tracked separately in src/shared/protocol_defs.h
 # Increment ECM_PROTOCOL_VERSION for breaking protocol changes
 
-FIRMWARE_VERSION=0.4.2
+FIRMWARE_VERSION=0.4.3
 PROTOCOL_VERSION=1

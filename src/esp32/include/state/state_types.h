@@ -54,6 +54,13 @@ struct NetworkSettings {
     bool fromJson(JsonObjectConst obj);
 };
 
+struct SystemSettings {
+    bool setupComplete = false;         // First-run wizard completed
+    
+    void toJson(JsonObject& obj) const;
+    bool fromJson(JsonObjectConst obj);
+};
+
 struct TimeSettings {
     bool useNTP = true;                 // Use NTP vs manual time
     char ntpServer[64] = "pool.ntp.org";
@@ -98,12 +105,58 @@ struct ScaleSettings {
     bool fromJson(JsonObjectConst obj);
 };
 
+struct MachineInfoSettings {
+    char deviceName[32] = "BrewOS";    // User-friendly device name
+    char machineBrand[32] = {0};       // e.g., "ECM", "La Marzocco"
+    char machineModel[32] = {0};       // e.g., "Synchronika", "Linea Mini"
+    char machineType[20] = "dual_boiler";  // dual_boiler, single_boiler, heat_exchanger
+    
+    void toJson(JsonObject& obj) const;
+    bool fromJson(JsonObjectConst obj);
+};
+
+struct NotificationSettings {
+    bool machineReady = true;
+    bool waterEmpty = true;
+    bool descaleDue = true;
+    bool serviceDue = true;
+    bool backflushDue = true;
+    bool machineError = true;
+    bool picoOffline = true;
+    bool scheduleTriggered = true;
+    bool brewComplete = false;
+    
+    void toJson(JsonObject& obj) const;
+    bool fromJson(JsonObjectConst obj);
+};
+
 struct DisplaySettings {
     uint8_t brightness = 200;          // 0-255
     uint8_t screenTimeout = 30;        // Seconds, 0=never
     bool showShotTimer = true;
     bool showWeight = true;
     bool showPressure = true;
+    
+    void toJson(JsonObject& obj) const;
+    bool fromJson(JsonObjectConst obj);
+};
+
+// User preferences - UI/UX settings synced across devices
+struct UserPreferences {
+    // Regional settings
+    uint8_t firstDayOfWeek = 0;        // 0=Sunday, 1=Monday
+    bool use24HourTime = false;
+    uint8_t temperatureUnit = 0;       // 0=celsius, 1=fahrenheit
+    
+    // Energy cost settings
+    float electricityPrice = 0.15f;    // Price per kWh
+    char currency[4] = "USD";          // Currency code (USD, EUR, GBP, etc.)
+    
+    // Machine behavior
+    uint8_t lastHeatingStrategy = 1;   // 0=BrewOnly, 1=Sequential, 2=Parallel, 3=SmartStagger
+    
+    // Flags
+    bool initialized = false;          // True after first setup from browser
     
     void toJson(JsonObject& obj) const;
     bool fromJson(JsonObjectConst obj);
@@ -193,6 +246,10 @@ struct Settings {
     ScaleSettings scale;
     DisplaySettings display;
     ScheduleSettings schedule;
+    MachineInfoSettings machineInfo;
+    NotificationSettings notifications;
+    SystemSettings system;
+    UserPreferences preferences;
     
     void toJson(JsonDocument& doc) const;
     bool fromJson(const JsonDocument& doc);
@@ -312,7 +369,6 @@ struct RuntimeState {
     
     // Water
     uint8_t waterLevel = 100;          // 0-100%
-    bool dripTrayFull = false;
     
     // Scale
     bool scaleConnected = false;

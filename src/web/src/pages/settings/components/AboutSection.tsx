@@ -1,27 +1,65 @@
 import { useStore } from "@/lib/store";
 import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { Logo } from "@/components/Logo";
-import { Cpu, Code, Heart, Github, ExternalLink } from "lucide-react";
+import {
+  Cpu,
+  Code,
+  Heart,
+  Github,
+  ExternalLink,
+  Bug,
+  Lightbulb,
+  MessageSquare,
+  Coffee,
+  Zap,
+  Shield,
+  Monitor,
+} from "lucide-react";
 
 export function AboutSection() {
   const esp32 = useStore((s) => s.esp32);
   const pico = useStore((s) => s.pico);
 
+  const GITHUB_REPO = "https://github.com/mizrachiran/brewos";
+
+  // Use build-time version constant
+  const uiVersion = __VERSION__;
+
   return (
     <div className="space-y-6">
       {/* Hero */}
-      <Card className="text-center bg-gradient-to-br from-coffee-800 to-coffee-900 text-white border-0">
-        <div className="py-8">
+      <Card className="relative overflow-hidden text-center bg-gradient-to-br from-coffee-800 via-coffee-900 to-coffee-950 text-white border-0">
+        {/* Decorative background pattern */}
+        <div className="absolute inset-0 opacity-20">
+          <div className="absolute top-4 left-4 w-32 h-32 border border-white/50 rounded-full" />
+          <div className="absolute bottom-4 right-4 w-24 h-24 border border-white/50 rounded-full" />
+          <div className="absolute top-1/2 left-1/4 w-16 h-16 border border-white/50 rounded-full" />
+        </div>
+
+        <div className="relative py-10">
           <div className="flex justify-center mb-6">
-            <Logo size="xl" forceLight />
+            <div className="relative">
+              <Logo size="xl" forceLight />
+              <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full animate-pulse" />
+            </div>
           </div>
-          <p className="text-cream-300 mb-4">
-            Open-source espresso machine controller
+          <h1 className="text-2xl font-bold mb-2">BrewOS</h1>
+          <p className="text-cream-300 mb-6 max-w-md mx-auto">
+            Open-source espresso machine controller for precision brewing
           </p>
-          <div className="flex items-center justify-center gap-4 text-sm text-cream-300">
-            <span>ESP32: {esp32.version || "Unknown"}</span>
-            <span>•</span>
-            <span>Pico: {pico.version || "Unknown"}</span>
+          <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
+            <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full">
+              <Monitor className="w-4 h-4 text-amber-400" />
+              <span>UI: {uiVersion}</span>
+            </div>
+            <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full">
+              <Cpu className="w-4 h-4 text-amber-400" />
+              <span>ESP32: {esp32.version || "—"}</span>
+            </div>
+            <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full">
+              <Zap className="w-4 h-4 text-amber-400" />
+              <span>Pico: {pico.version || "—"}</span>
+            </div>
           </div>
         </div>
       </Card>
@@ -32,20 +70,54 @@ export function AboutSection() {
           icon={<Cpu className="w-6 h-6" />}
           title="Dual-Core Control"
           description="ESP32-S3 for connectivity, Pico for real-time control"
+          color="amber"
         />
         <AboutFeatureCard
           icon={<Code className="w-6 h-6" />}
           title="Fully Open Source"
           description="Hardware and software designs available on GitHub"
+          color="emerald"
         />
         <AboutFeatureCard
-          icon={<Heart className="w-6 h-6" />}
-          title="Community Driven"
-          description="Built by and for the espresso community"
+          icon={<Shield className="w-6 h-6" />}
+          title="Safety First"
+          description="Class-B certified safety monitoring and controls"
+          color="blue"
         />
       </div>
 
-      {/* Links */}
+      {/* Feedback & Support */}
+      <Card>
+        <CardHeader>
+          <CardTitle icon={<MessageSquare className="w-5 h-5" />}>
+            Feedback & Support
+          </CardTitle>
+        </CardHeader>
+
+        <p className="text-theme-muted text-sm mb-4">
+          Help us improve BrewOS! Report issues or suggest new features through
+          GitHub.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FeedbackCard
+            icon={<Bug className="w-5 h-5" />}
+            title="Report a Bug"
+            description="Found something that's not working right?"
+            href={`${GITHUB_REPO}/issues/new?labels=bug&template=bug_report.md&title=%5BBug%5D%3A+`}
+            variant="bug"
+          />
+          <FeedbackCard
+            icon={<Lightbulb className="w-5 h-5" />}
+            title="Request a Feature"
+            description="Have an idea to make BrewOS better?"
+            href={`${GITHUB_REPO}/issues/new?labels=enhancement&template=feature_request.md&title=%5BFeature%5D%3A+`}
+            variant="feature"
+          />
+        </div>
+      </Card>
+
+      {/* Resources */}
       <Card>
         <CardHeader>
           <CardTitle>Resources</CardTitle>
@@ -56,7 +128,7 @@ export function AboutSection() {
             icon={<Github className="w-5 h-5" />}
             title="GitHub Repository"
             description="Source code and documentation"
-            href="https://github.com/mizrachiran/brewos"
+            href={GITHUB_REPO}
           />
           <AboutLinkCard
             icon={<ExternalLink className="w-5 h-5" />}
@@ -67,44 +139,16 @@ export function AboutSection() {
         </div>
       </Card>
 
-      {/* System Info */}
-      <Card>
-        <CardHeader>
-          <CardTitle>System Information</CardTitle>
-        </CardHeader>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-          <div>
-            <span className="text-theme-muted">ESP32 Version</span>
-            <p className="font-mono font-medium text-theme">
-              {esp32.version || "—"}
-            </p>
-          </div>
-          <div>
-            <span className="text-theme-muted">Pico Version</span>
-            <p className="font-mono font-medium text-theme">
-              {pico.version || "—"}
-            </p>
-          </div>
-          <div>
-            <span className="text-theme-muted">UI Version</span>
-            <p className="font-mono font-medium text-theme">1.0.0</p>
-          </div>
-          <div>
-            <span className="text-theme-muted">Build</span>
-            <p className="font-mono font-medium text-theme">
-              {import.meta.env.MODE === "production"
-                ? "Production"
-                : "Development"}
-            </p>
-          </div>
-        </div>
-      </Card>
-
       {/* Credits */}
-      <Card className="text-center">
+      <Card className="text-center bg-gradient-to-r from-theme-card to-theme-secondary">
+        <div className="flex items-center justify-center gap-2 mb-3">
+          <Coffee className="w-5 h-5 text-amber-600" />
+          <span className="font-medium text-theme">Community Driven</span>
+          <Coffee className="w-5 h-5 text-amber-600" />
+        </div>
         <p className="text-theme-muted mb-2">
-          Made with <Heart className="w-4 h-4 inline text-red-500" /> for
+          Made with{" "}
+          <Heart className="w-4 h-4 inline text-red-500 animate-pulse" /> for
           espresso lovers
         </p>
         <p className="text-sm text-theme-muted">
@@ -119,17 +163,80 @@ interface AboutFeatureCardProps {
   icon: React.ReactNode;
   title: string;
   description: string;
+  color?: "amber" | "emerald" | "blue";
 }
 
-function AboutFeatureCard({ icon, title, description }: AboutFeatureCardProps) {
+function AboutFeatureCard({
+  icon,
+  title,
+  description,
+  color = "amber",
+}: AboutFeatureCardProps) {
+  const colorClasses = {
+    amber: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+    emerald: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+    blue: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+  };
+
   return (
-    <Card className="text-center">
-      <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center mx-auto mb-3 text-accent">
+    <Card className="text-center hover:shadow-lg transition-shadow">
+      <div
+        className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 ${colorClasses[color]}`}
+      >
         {icon}
       </div>
-      <h3 className="font-semibold text-theme mb-1">{title}</h3>
-      <p className="text-sm text-theme-muted">{description}</p>
+      <h3 className="font-semibold text-theme mb-2">{title}</h3>
+      <p className="text-sm text-theme-muted leading-relaxed">{description}</p>
     </Card>
+  );
+}
+
+interface FeedbackCardProps {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  href: string;
+  variant: "bug" | "feature";
+}
+
+function FeedbackCard({
+  icon,
+  title,
+  description,
+  href,
+  variant,
+}: FeedbackCardProps) {
+  const variantClasses = {
+    bug: "hover:border-red-500/50 hover:bg-red-500/5 group-hover:text-red-500 group-hover:bg-red-500/10",
+    feature:
+      "hover:border-amber-500/50 hover:bg-amber-500/5 group-hover:text-amber-500 group-hover:bg-amber-500/10",
+  };
+
+  const iconBgClasses = {
+    bug: "bg-red-500/10 text-red-500",
+    feature: "bg-amber-500/10 text-amber-500",
+  };
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`group flex items-start gap-4 p-4 bg-theme-secondary rounded-xl border-2 border-transparent transition-all ${variantClasses[variant]}`}
+    >
+      <div
+        className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${iconBgClasses[variant]}`}
+      >
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <h4 className="font-semibold text-theme group-hover:text-accent transition-colors flex items-center gap-2">
+          {title}
+          <ExternalLink className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+        </h4>
+        <p className="text-sm text-theme-muted mt-0.5">{description}</p>
+      </div>
+    </a>
   );
 }
 

@@ -1,6 +1,6 @@
 # Build and publish dev firmware on every push to main
 # Creates/updates a rolling "dev-latest" prerelease for development testing
-name: Dev Release
+name: "Main → Dev Firmware Release"
 
 on:
   push:
@@ -26,7 +26,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # ===== Pico Unit Tests =====
       - name: Run Pico Unit Tests
@@ -62,7 +62,7 @@ jobs:
 
       # ===== Web UI Build for ESP32 =====
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: "npm"

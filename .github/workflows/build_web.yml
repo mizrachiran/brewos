@@ -1,5 +1,5 @@
 # Build and lint web UI and cloud service
-name: Build Web
+name: "PR: Web UI & Cloud Service Build"
 
 on:
   # Only run on PRs - push builds handled by deploy.yml and build_firmware.yml
@@ -22,10 +22,10 @@ jobs:
     
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: 'npm'
@@ -79,10 +79,10 @@ jobs:
     
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: 'npm'
