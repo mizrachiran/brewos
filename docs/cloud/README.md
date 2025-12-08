@@ -179,32 +179,23 @@ npm start
 
 ## Database
 
-The service uses **SQLite** (via sql.js) for data storage:
-
-```sql
--- Device ownership
-devices (id, owner_id, name, machine_brand, machine_model, is_online, ...)
-
--- QR code pairing tokens
-device_claim_tokens (device_id, token_hash, expires_at)
-
--- User profiles (synced from OAuth provider)
-profiles (id, email, display_name, avatar_url)
-
--- User sessions (our own tokens)
-sessions (id, user_id, access_token_hash, refresh_token_hash, 
-          access_expires_at, refresh_expires_at, user_agent, ip_address, ...)
-
--- Push notification subscriptions
-push_subscriptions (user_id, device_id, endpoint, p256dh, auth)
-
--- Notification preferences
-notification_preferences (user_id, machine_ready, water_empty, ...)
-```
+The service uses **SQLite** (via sql.js) for data storage.
 
 **Data is stored in a single file:** `brewos.db`
 
 For persistence on cloud platforms, mount a volume to `DATA_DIR`.
+
+> 📖 **See [Database_Storage.md](./Database_Storage.md)** for complete documentation on:
+> - Database schema and tables
+> - Access frequency and patterns
+> - What data is stored (and what is NOT stored)
+> - Performance considerations
+> - Backup recommendations
+
+**Quick Summary:**
+- **Stored:** User accounts, device ownership, sessions, push subscriptions
+- **NOT Stored:** Machine state, statistics, brewing data (relayed in real-time only)
+- **Access Frequency:** Session verification (every request), device status (on connect/disconnect), batched session updates (every 60s)
 
 ## API Endpoints
 
