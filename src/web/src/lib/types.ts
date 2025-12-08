@@ -161,6 +161,13 @@ export interface BBWSettings {
   autoTare: boolean;
 }
 
+// Pre-infusion
+export interface PreinfusionSettings {
+  enabled: boolean;
+  onTimeMs: number; // Pump ON time in milliseconds
+  pauseTimeMs: number; // Soak/pause time in milliseconds
+}
+
 // Shot
 export interface ShotStatus {
   active: boolean;

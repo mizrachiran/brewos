@@ -38,6 +38,16 @@ export class DemoConnection implements IConnection {
   private scaleWeight = 0;
   private flowRate = 0;
 
+  // BBW and Pre-infusion settings (enabled by default in demo)
+  private bbwEnabled = true;
+  private bbwTargetWeight = 36;
+  private bbwDoseWeight = 18;
+  private bbwStopOffset = 2;
+  private bbwAutoTare = true;
+  private preinfusionEnabled = true;
+  private preinfusionOnMs = 3000;
+  private preinfusionPauseMs = 5000;
+
   // Machine type (for diagnostics)
   private machineType: "dual_boiler" | "single_boiler" | "heat_exchanger" =
     "dual_boiler";
@@ -78,7 +88,14 @@ export class DemoConnection implements IConnection {
       // Eco mode settings
       ecoBrewTemp: 80,
       ecoTimeoutMinutes: 30,
+      // Pre-infusion settings (enabled by default in demo)
+      preinfusionEnabled: this.preinfusionEnabled,
+      preinfusionOnMs: this.preinfusionOnMs,
+      preinfusionPauseMs: this.preinfusionPauseMs,
     });
+
+    // Send initial BBW settings (enabled by default in demo)
+    this.emitBBWSettings();
 
     // Send initial unified status (machine, temps, scale, connections, etc.)
     this.emitFullStatus();
@@ -157,8 +174,22 @@ export class DemoConnection implements IConnection {
         this.emitFullStatus();
         break;
       case "set_bbw":
-        // Brew-by-weight settings - just acknowledge
-        console.log("[Demo] BBW settings received:", data);
+        // Brew-by-weight settings - store and emit
+        if (data.enabled !== undefined) this.bbwEnabled = data.enabled as boolean;
+        if (data.targetWeight !== undefined) this.bbwTargetWeight = data.targetWeight as number;
+        if (data.doseWeight !== undefined) this.bbwDoseWeight = data.doseWeight as number;
+        if (data.stopOffset !== undefined) this.bbwStopOffset = data.stopOffset as number;
+        if (data.autoTare !== undefined) this.bbwAutoTare = data.autoTare as boolean;
+        console.log("[Demo] BBW settings updated:", data);
+        this.emitBBWSettings();
+        break;
+      case "set_preinfusion":
+        // Pre-infusion settings - store and emit
+        if (data.enabled !== undefined) this.preinfusionEnabled = data.enabled as boolean;
+        if (data.onTimeMs !== undefined) this.preinfusionOnMs = data.onTimeMs as number;
+        if (data.pauseTimeMs !== undefined) this.preinfusionPauseMs = data.pauseTimeMs as number;
+        console.log("[Demo] Pre-infusion settings updated:", data);
+        this.emitPreinfusionSettings();
         break;
       case "set_machine_info":
         // Update machine type for diagnostics
@@ -1083,6 +1114,36 @@ export class DemoConnection implements IConnection {
         freeHeap: 175000 + Math.floor(Math.random() * 10000),
         uptime: Date.now(),
       },
+    });
+  }
+
+  private emitBBWSettings(): void {
+    this.emit({
+      type: "bbw_settings",
+      enabled: this.bbwEnabled,
+      targetWeight: this.bbwTargetWeight,
+      doseWeight: this.bbwDoseWeight,
+      stopOffset: this.bbwStopOffset,
+      autoTare: this.bbwAutoTare,
+    });
+  }
+
+  private emitPreinfusionSettings(): void {
+    this.emit({
+      type: "device_info",
+      deviceId: "demo-device-001",
+      deviceName: "My ECM Synchronika",
+      machineBrand: "ECM",
+      machineModel: "Synchronika",
+      machineType: "dual_boiler",
+      firmwareVersion: "1.0.0-demo",
+      mainsVoltage: 220,
+      maxCurrent: 13,
+      ecoBrewTemp: 80,
+      ecoTimeoutMinutes: 30,
+      preinfusionEnabled: this.preinfusionEnabled,
+      preinfusionOnMs: this.preinfusionOnMs,
+      preinfusionPauseMs: this.preinfusionPauseMs,
     });
   }
 

@@ -10,6 +10,7 @@ import type {
   WaterStatus,
   ScaleStatus,
   BBWSettings,
+  PreinfusionSettings,
   ShotStatus,
   WiFiStatus,
   MQTTStatus,
@@ -59,6 +60,9 @@ interface BrewOSState {
   // Brew-by-weight
   bbw: BBWSettings;
   shot: ShotStatus;
+
+  // Pre-infusion
+  preinfusion: PreinfusionSettings;
 
   // Eco mode settings
   ecoMode: EcoModeSettings;
@@ -160,6 +164,12 @@ const defaultBBW: BBWSettings = {
   doseWeight: 18,
   stopOffset: 2,
   autoTare: true,
+};
+
+const defaultPreinfusion: PreinfusionSettings = {
+  enabled: false,
+  onTimeMs: 3000,    // 3 seconds pump on
+  pauseTimeMs: 5000, // 5 seconds soak
 };
 
 const defaultShot: ShotStatus = {
@@ -337,6 +347,7 @@ export const useStore = create<BrewOSState>()(
     scanResults: [],
     bbw: defaultBBW,
     shot: defaultShot,
+    preinfusion: defaultPreinfusion,
     ecoMode: defaultEcoMode,
     wifi: defaultWifi,
     mqtt: defaultMqtt,
@@ -614,6 +625,18 @@ export const useStore = create<BrewOSState>()(
           }));
           break;
 
+        case "bbw_settings":
+          set((state) => ({
+            bbw: {
+              enabled: (data.enabled as boolean) ?? state.bbw.enabled,
+              targetWeight: (data.targetWeight as number) ?? state.bbw.targetWeight,
+              doseWeight: (data.doseWeight as number) ?? state.bbw.doseWeight,
+              stopOffset: (data.stopOffset as number) ?? state.bbw.stopOffset,
+              autoTare: (data.autoTare as boolean) ?? state.bbw.autoTare,
+            },
+          }));
+          break;
+
         case "stats": {
           const lifetimeData = data.lifetime as
             | Partial<LifetimeStats>
@@ -830,6 +853,16 @@ export const useStore = create<BrewOSState>()(
                 (data.ecoBrewTemp as number) ?? state.ecoMode.ecoBrewTemp,
               autoOffTimeout:
                 (data.ecoTimeoutMinutes as number) ?? state.ecoMode.autoOffTimeout,
+            },
+            // Update pre-infusion settings if provided
+            preinfusion: {
+              ...(state.preinfusion ?? defaultPreinfusion),
+              enabled:
+                (data.preinfusionEnabled as boolean) ?? state.preinfusion.enabled,
+              onTimeMs:
+                (data.preinfusionOnMs as number) ?? state.preinfusion.onTimeMs,
+              pauseTimeMs:
+                (data.preinfusionPauseMs as number) ?? state.preinfusion.pauseTimeMs,
             },
           }));
           break;
