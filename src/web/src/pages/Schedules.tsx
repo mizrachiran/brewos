@@ -6,6 +6,7 @@ import { Input } from "@/components/Input";
 import { Toggle } from "@/components/Toggle";
 import { PageHeader } from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
+import { useConfirmDialog } from "@/components/ConfirmDialogProvider";
 import {
   ScheduleForm,
   ScheduleItem,
@@ -21,9 +22,13 @@ export function Schedules() {
   const preferences = useStore((s) => s.preferences);
   const device = useStore((s) => s.device);
   const { success, error } = useToast();
+  const { confirm } = useConfirmDialog();
 
   const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [autoPowerOff, setAutoPowerOff] = useState({ enabled: false, minutes: 60 });
+  const [autoPowerOff, setAutoPowerOff] = useState({
+    enabled: false,
+    minutes: 60,
+  });
   const [isEditing, setIsEditing] = useState<number | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState<ScheduleFormData>(DEFAULT_SCHEDULE);
@@ -72,20 +77,20 @@ export function Schedules() {
 
   const saveSchedule = async () => {
     setSaving(true);
-    
+
     // Demo mode: simulate save locally
     if (isDemo) {
-      await new Promise(r => setTimeout(r, 300)); // Brief delay for UX
+      await new Promise((r) => setTimeout(r, 300)); // Brief delay for UX
       if (isEditing) {
-        setSchedules(prev => prev.map(s => 
-          s.id === isEditing ? { ...s, ...formData } : s
-        ));
+        setSchedules((prev) =>
+          prev.map((s) => (s.id === isEditing ? { ...s, ...formData } : s))
+        );
       } else {
         const newSchedule: Schedule = {
           id: Date.now(),
           ...formData,
         };
-        setSchedules(prev => [...prev, newSchedule]);
+        setSchedules((prev) => [...prev, newSchedule]);
       }
       resetForm();
       success(isEditing ? "Schedule updated" : "Schedule created");
@@ -117,11 +122,17 @@ export function Schedules() {
   };
 
   const deleteSchedule = async (id: number) => {
-    if (!confirm("Delete this schedule?")) return;
-    
+    const confirmed = await confirm({
+      title: "Delete Schedule?",
+      description: "This schedule will be permanently removed.",
+      variant: "danger",
+      confirmText: "Delete",
+    });
+    if (!confirmed) return;
+
     // Demo mode: delete locally
     if (isDemo) {
-      setSchedules(prev => prev.filter(s => s.id !== id));
+      setSchedules((prev) => prev.filter((s) => s.id !== id));
       success("Schedule deleted");
       return;
     }
@@ -144,9 +155,9 @@ export function Schedules() {
   const toggleSchedule = async (id: number, enabled: boolean) => {
     // Demo mode: toggle locally
     if (isDemo) {
-      setSchedules(prev => prev.map(s => 
-        s.id === id ? { ...s, enabled } : s
-      ));
+      setSchedules((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, enabled } : s))
+      );
       success(`Schedule ${enabled ? "enabled" : "disabled"}`);
       return;
     }
@@ -223,19 +234,27 @@ export function Schedules() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Schedules" subtitle="Automate your machine power cycles" />
+      <PageHeader
+        title="Schedules"
+        subtitle="Automate your machine power cycles"
+      />
 
       {/* Schedule List */}
       <Card>
         <CardHeader
           action={
-            <Button onClick={startAdding} disabled={isAdding || schedules.length >= 10}>
+            <Button
+              onClick={startAdding}
+              disabled={isAdding || schedules.length >= 10}
+            >
               <Plus className="w-4 h-4" />
               Add Schedule
             </Button>
           }
         >
-          <CardTitle icon={<Calendar className="w-5 h-5" />}>Schedules</CardTitle>
+          <CardTitle icon={<Calendar className="w-5 h-5" />}>
+            Schedules
+          </CardTitle>
         </CardHeader>
 
         <p className="text-sm text-theme-muted mb-4">
@@ -374,7 +393,11 @@ interface AutoPowerOffCardProps {
   onSave: () => void;
 }
 
-function AutoPowerOffCard({ autoPowerOff, onChange, onSave }: AutoPowerOffCardProps) {
+function AutoPowerOffCard({
+  autoPowerOff,
+  onChange,
+  onSave,
+}: AutoPowerOffCardProps) {
   return (
     <Card>
       <CardHeader
@@ -385,7 +408,9 @@ function AutoPowerOffCard({ autoPowerOff, onChange, onSave }: AutoPowerOffCardPr
           />
         }
       >
-        <CardTitle icon={<Moon className="w-5 h-5" />}>Auto Power-Off</CardTitle>
+        <CardTitle icon={<Moon className="w-5 h-5" />}>
+          Auto Power-Off
+        </CardTitle>
       </CardHeader>
 
       <p className="text-sm text-theme-muted mb-4">
@@ -400,7 +425,9 @@ function AutoPowerOffCard({ autoPowerOff, onChange, onSave }: AutoPowerOffCardPr
           max={480}
           step={5}
           value={autoPowerOff.minutes}
-          onChange={(e) => onChange({ ...autoPowerOff, minutes: parseInt(e.target.value) })}
+          onChange={(e) =>
+            onChange({ ...autoPowerOff, minutes: parseInt(e.target.value) })
+          }
           unit="minutes"
           disabled={!autoPowerOff.enabled}
         />

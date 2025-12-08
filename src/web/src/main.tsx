@@ -8,6 +8,7 @@ import { GOOGLE_CLIENT_ID } from "./lib/auth";
 import { registerServiceWorker } from "./lib/push-notifications";
 import { ToastProvider } from "./components/Toast";
 import { AlertToastBridge } from "./components/AlertToastBridge";
+import { ConfirmDialogProvider } from "./components/ConfirmDialogProvider";
 
 // Initialize dev mode detection early (checks ?dev=true in URL)
 import "./lib/dev-mode";
@@ -51,8 +52,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <BrowserRouter>
         <ToastProvider>
-          <AlertToastBridge />
-          <App />
+          <ConfirmDialogProvider>
+            <AlertToastBridge />
+            <App />
+          </ConfirmDialogProvider>
         </ToastProvider>
       </BrowserRouter>
     </GoogleOAuthProvider>

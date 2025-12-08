@@ -94,40 +94,63 @@ export function SystemSettings() {
     setShowDevWarning(false);
   };
 
-  const startOTA = (version: string) => {
+  const startOTA = async (version: string) => {
     const isDev = version === "dev-latest";
     const isBeta = version.includes("-") && !isDev;
-    const warningText = isDev
-      ? `Install DEV build? This is an automated build from main branch for developers. May be unstable. The device will restart after update.`
-      : isBeta
-      ? `Install BETA version ${version}? This is a pre-release version for testing. The device will restart after update.`
-      : `Install version ${version}? The device will restart after update.`;
 
-    sendCommandWithConfirm(
+    const title = isDev
+      ? "Install Dev Build?"
+      : isBeta
+      ? `Install Beta v${version}?`
+      : `Install v${version}?`;
+
+    const description = isDev
+      ? "This is an automated build from main branch for developers. May be unstable. The device will restart after update."
+      : isBeta
+      ? "This is a pre-release version for testing. The device will restart after update."
+      : "The device will restart after the update is installed.";
+
+    await sendCommandWithConfirm(
       "ota_start",
-      warningText,
+      description,
       { version },
-      { successMessage: `Installing version ${version}...` }
+      {
+        title,
+        variant: isDev ? "danger" : isBeta ? "warning" : "info",
+        confirmText: "Install",
+        successMessage: `Installing v${version}...`,
+      }
     );
   };
 
   const currentVersionDisplay = getVersionDisplay(esp32.version || "0.0.0");
 
-  const restartDevice = () => {
-    sendCommandWithConfirm("restart", "Restart the device?", undefined, {
-      successMessage: "Restarting device...",
-    });
+  const restartDevice = async () => {
+    await sendCommandWithConfirm(
+      "restart",
+      "The device will reboot. This only takes a few seconds.",
+      undefined,
+      {
+        title: "Restart Device?",
+        variant: "warning",
+        confirmText: "Restart",
+        successMessage: "Restarting device...",
+      }
+    );
   };
 
-  const factoryReset = () => {
-    if (confirm("This will erase all settings. Are you sure?")) {
-      sendCommandWithConfirm(
-        "factory_reset",
-        "Really? This cannot be undone!",
-        undefined,
-        { successMessage: "Factory reset initiated..." }
-      );
-    }
+  const factoryReset = async () => {
+    await sendCommandWithConfirm(
+      "factory_reset",
+      "This will erase all settings including WiFi, schedules, and preferences. This action cannot be undone.",
+      undefined,
+      {
+        title: "Factory Reset?",
+        variant: "danger",
+        confirmText: "Reset Everything",
+        successMessage: "Factory reset initiated...",
+      }
+    );
   };
 
   return (

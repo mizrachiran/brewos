@@ -149,19 +149,27 @@ async function fetchGitHubReleases(): Promise<VersionInfo[]> {
 
     const releases = await response.json();
 
-    return releases.map((release: { tag_name: string; prerelease: boolean; published_at: string; body: string; html_url: string }) => {
-      const tagName = release.tag_name;
-      const isDev = tagName === "dev-latest";
-      
-      return {
-        version: isDev ? "dev-latest" : tagName.replace(/^v/, ""),
-        channel: isDev ? "dev" : (release.prerelease ? "beta" : "stable"),
-      releaseDate: release.published_at,
-      releaseNotes: release.body,
-      downloadUrl: release.html_url,
-        isPrerelease: release.prerelease || isDev,
-      };
-    });
+    return releases.map(
+      (release: {
+        tag_name: string;
+        prerelease: boolean;
+        published_at: string;
+        body: string;
+        html_url: string;
+      }) => {
+        const tagName = release.tag_name;
+        const isDev = tagName === "dev-latest";
+
+        return {
+          version: isDev ? "dev-latest" : tagName.replace(/^v/, ""),
+          channel: isDev ? "dev" : release.prerelease ? "beta" : "stable",
+          releaseDate: release.published_at,
+          releaseNotes: release.body,
+          downloadUrl: release.html_url,
+          isPrerelease: release.prerelease || isDev,
+        };
+      }
+    );
   } catch (error) {
     console.error("Failed to fetch GitHub releases:", error);
     return [];
@@ -173,6 +181,7 @@ async function fetchGitHubReleases(): Promise<VersionInfo[]> {
  * Only used when __ENVIRONMENT__ is "development"
  */
 function getMockVersions(): VersionInfo[] {
+  const repoUrl = `https://github.com/${GITHUB_REPO}`;
   return [
     {
       version: "1.0.0",
@@ -180,7 +189,7 @@ function getMockVersions(): VersionInfo[] {
       releaseDate: "2024-11-15",
       releaseNotes:
         "## Stable Release\n- First stable release\n- All features tested and verified",
-      downloadUrl: "#",
+      downloadUrl: `${repoUrl}/releases/tag/v1.0.0`,
       isPrerelease: false,
     },
     {
@@ -189,7 +198,7 @@ function getMockVersions(): VersionInfo[] {
       releaseDate: "2024-12-01",
       releaseNotes:
         "## Beta Release\n- New cloud integration\n- Push notifications\n- UI improvements\n\n⚠️ This is a beta version for testing.",
-      downloadUrl: "#",
+      downloadUrl: `${repoUrl}/releases/tag/v1.1.0-beta.2`,
       isPrerelease: true,
     },
     {
@@ -197,15 +206,16 @@ function getMockVersions(): VersionInfo[] {
       channel: "beta",
       releaseDate: "2024-11-25",
       releaseNotes: "## Beta Release\n- Initial beta with new features",
-      downloadUrl: "#",
+      downloadUrl: `${repoUrl}/releases/tag/v1.1.0-beta.1`,
       isPrerelease: true,
     },
     {
       version: "dev-latest",
       channel: "dev",
       releaseDate: new Date().toISOString(),
-      releaseNotes: "## Dev Build\n- Latest from main branch\n- For development testing only",
-      downloadUrl: "#",
+      releaseNotes:
+        "## Dev Build\n- Latest from main branch\n- For development testing only",
+      downloadUrl: `${repoUrl}/releases/tag/dev-latest`,
       isPrerelease: true,
     },
   ];
@@ -230,12 +240,13 @@ export async function checkForUpdates(
 ): Promise<UpdateCheckResult> {
   // Use mock data in development, real GitHub API in production/staging
   const useMock = shouldUseMockData();
-  const releases = useMock
-    ? getMockVersions()
-    : await fetchGitHubReleases();
-  
+  const releases = useMock ? getMockVersions() : await fetchGitHubReleases();
+
   if (!useMock) {
-    console.log("[Updates] Fetched releases from GitHub:", releases.map(r => `${r.version} (${r.channel})`));
+    console.log(
+      "[Updates] Fetched releases from GitHub:",
+      releases.map((r) => `${r.version} (${r.channel})`)
+    );
   }
 
   // Find latest stable version
