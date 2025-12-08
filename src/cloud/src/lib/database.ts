@@ -39,6 +39,7 @@ export async function initDatabase(): Promise<SqlJsDatabase> {
       id TEXT PRIMARY KEY,
       owner_id TEXT,
       name TEXT NOT NULL DEFAULT 'My BrewOS',
+      device_key_hash TEXT,
       machine_brand TEXT,
       machine_model TEXT,
       firmware_version TEXT,
@@ -192,6 +193,12 @@ export async function initDatabase(): Promise<SqlJsDatabase> {
   } catch {
     // Column already exists
   }
+  // Add device_key_hash column for device authentication
+  try {
+    db.run(`ALTER TABLE devices ADD COLUMN device_key_hash TEXT`);
+  } catch {
+    // Column already exists
+  }
 
   // Migration: Migrate existing owner_id relationships to user_devices table
   // This preserves existing data when upgrading to the new schema
@@ -282,6 +289,7 @@ export interface Device {
   id: string;
   owner_id: string | null; // Deprecated: kept for backward compatibility, use user_devices instead
   name: string; // Deprecated: kept for backward compatibility, use user_devices.name instead
+  device_key_hash: string | null; // Hashed device key for authentication
   machine_brand: string | null;
   machine_model: string | null;
   firmware_version: string | null;

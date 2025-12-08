@@ -1,11 +1,11 @@
 import { WebSocketServer, WebSocket, RawData } from 'ws';
 import { IncomingMessage } from 'http';
 import type { DeviceMessage } from './types.js';
+import { verifyDeviceKey, updateDeviceStatus } from './services/device.js';
 
 interface DeviceConnection {
   ws: WebSocket;
   deviceId: string;
-  deviceKey: string;
   connectedAt: Date;
   lastSeen: Date;
 }
@@ -29,13 +29,33 @@ export class DeviceRelay {
     const deviceId = url.searchParams.get('id');
     const deviceKey = url.searchParams.get('key');
 
+    // Validate required parameters
     if (!deviceId || !deviceKey) {
+      console.warn(`[Device] Connection rejected: missing ID or key`);
       ws.close(4001, 'Missing device ID or key');
       return;
     }
 
-    // TODO: Validate device key against database
-    // For now, accept any device with a key
+    // Validate device ID format (BRW-XXXXXXXX)
+    if (!/^BRW-[A-F0-9]{8}$/i.test(deviceId)) {
+      console.warn(`[Device] Connection rejected: invalid ID format: ${deviceId}`);
+      ws.close(4001, 'Invalid device ID format');
+      return;
+    }
+
+    // Validate device key (base64url, 32 bytes = ~43 chars)
+    if (deviceKey.length < 32 || deviceKey.length > 64) {
+      console.warn(`[Device] Connection rejected: invalid key length for ${deviceId}`);
+      ws.close(4003, 'Invalid device key format');
+      return;
+    }
+
+    // Verify device key against database
+    if (!verifyDeviceKey(deviceId, deviceKey)) {
+      console.warn(`[Device] Connection rejected: invalid key for ${deviceId}`);
+      ws.close(4003, 'Invalid device credentials');
+      return;
+    }
 
     // Close existing connection for this device (if any)
     const existing = this.devices.get(deviceId);
@@ -47,13 +67,19 @@ export class DeviceRelay {
     const connection: DeviceConnection = {
       ws,
       deviceId,
-      deviceKey,
       connectedAt: new Date(),
       lastSeen: new Date(),
     };
 
     this.devices.set(deviceId, connection);
-    console.log(`[Device] Connected: ${deviceId}`);
+    console.log(`[Device] Connected: ${deviceId} (authenticated)`);
+
+    // Update device online status in database
+    try {
+      updateDeviceStatus(deviceId, true);
+    } catch (err) {
+      console.error(`[Device] Failed to update status for ${deviceId}:`, err);
+    }
 
     // Handle messages from device
     ws.on('message', (data: RawData) => {
@@ -70,6 +96,13 @@ export class DeviceRelay {
     ws.on('close', () => {
       this.devices.delete(deviceId);
       console.log(`[Device] Disconnected: ${deviceId}`);
+      
+      // Update device offline status in database
+      try {
+        updateDeviceStatus(deviceId, false);
+      } catch (err) {
+        console.error(`[Device] Failed to update status for ${deviceId}:`, err);
+      }
       
       // Notify handlers of disconnect
       this.notifyHandlers(deviceId, { type: 'device_offline' });

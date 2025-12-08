@@ -7,6 +7,9 @@
 /**
  * PairingManager handles device pairing with the cloud service.
  * It generates claim tokens and QR codes for users to scan.
+ * 
+ * Also manages the device key - a secret generated on first boot that
+ * authenticates WebSocket connections to the cloud.
  */
 class PairingManager {
 public:
@@ -39,6 +42,12 @@ public:
     String getDeviceId() const;
     
     /**
+     * Get the device key for cloud authentication
+     * Generated on first boot and persisted in NVS
+     */
+    String getDeviceKey() const;
+    
+    /**
      * Get the current claim token
      */
     String getCurrentToken() const;
@@ -55,6 +64,7 @@ public:
     
     /**
      * Register the claim token with the cloud service
+     * Also sends the device key for authentication setup
      * @return true if successful
      */
     bool registerTokenWithCloud();
@@ -72,12 +82,14 @@ public:
 private:
     String _cloudUrl;
     String _deviceId;
+    String _deviceKey;
     String _currentToken;
     unsigned long _tokenExpiry;
     std::function<void(const String&)> _onPairingSuccess;
     
     String generateRandomToken(size_t length = 32);
     void initDeviceId();
+    void initDeviceKey();
 };
 
 #endif // PAIRING_MANAGER_H

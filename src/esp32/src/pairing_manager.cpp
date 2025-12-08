@@ -3,13 +3,20 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <mbedtls/md.h>
+#include <Preferences.h>
+#include <esp_random.h>
 
 // Token validity duration (10 minutes)
 static const unsigned long TOKEN_VALIDITY_MS = 10 * 60 * 1000;
 
+// NVS namespace for device key
+static const char* NVS_NAMESPACE = "brewos_sec";
+static const char* NVS_KEY_DEVICE_KEY = "devKey";
+
 PairingManager::PairingManager()
     : _cloudUrl("")
     , _deviceId("")
+    , _deviceKey("")
     , _currentToken("")
     , _tokenExpiry(0)
     , _onPairingSuccess(nullptr)
@@ -19,8 +26,10 @@ PairingManager::PairingManager()
 void PairingManager::begin(const String& cloudUrl) {
     _cloudUrl = cloudUrl;
     initDeviceId();
+    initDeviceKey();
     
     Serial.printf("[Pairing] Device ID: %s\n", _deviceId.c_str());
+    Serial.printf("[Pairing] Device key initialized (length=%d)\n", _deviceKey.length());
 }
 
 void PairingManager::initDeviceId() {
@@ -29,6 +38,31 @@ void PairingManager::initDeviceId() {
     char idBuf[16];
     snprintf(idBuf, sizeof(idBuf), "BRW-%08X", (uint32_t)(chipId >> 16));
     _deviceId = String(idBuf);
+}
+
+void PairingManager::initDeviceKey() {
+    // Try to load existing key from NVS
+    Preferences prefs;
+    prefs.begin(NVS_NAMESPACE, true); // Read-only first
+    
+    String storedKey = prefs.getString(NVS_KEY_DEVICE_KEY, "");
+    prefs.end();
+    
+    if (storedKey.length() >= 32) {
+        // Use existing key
+        _deviceKey = storedKey;
+        Serial.println("[Pairing] Loaded existing device key from NVS");
+    } else {
+        // Generate new key on first boot
+        _deviceKey = generateRandomToken(43); // base64url of 32 bytes ≈ 43 chars
+        
+        // Store in NVS
+        prefs.begin(NVS_NAMESPACE, false); // Read-write
+        prefs.putString(NVS_KEY_DEVICE_KEY, _deviceKey);
+        prefs.end();
+        
+        Serial.println("[Pairing] Generated and stored new device key");
+    }
 }
 
 String PairingManager::generateRandomToken(size_t length) {
@@ -76,6 +110,10 @@ String PairingManager::getDeviceId() const {
     return _deviceId;
 }
 
+String PairingManager::getDeviceKey() const {
+    return _deviceKey;
+}
+
 String PairingManager::getCurrentToken() const {
     return _currentToken;
 }
@@ -108,10 +146,11 @@ bool PairingManager::registerTokenWithCloud() {
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
     
-    // Create request body
+    // Create request body - include device key for authentication setup
     JsonDocument doc;
     doc["deviceId"] = _deviceId;
     doc["token"] = _currentToken;
+    doc["deviceKey"] = _deviceKey;  // Send device key for cloud to store
     
     String body;
     serializeJson(doc, body);
@@ -119,7 +158,7 @@ bool PairingManager::registerTokenWithCloud() {
     int httpCode = http.POST(body);
     
     if (httpCode == 200) {
-        Serial.println("[Pairing] Token registered with cloud");
+        Serial.println("[Pairing] Token and device key registered with cloud");
         http.end();
         return true;
     } else {

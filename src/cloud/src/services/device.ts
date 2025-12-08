@@ -1,4 +1,4 @@
-import { createHash, randomUUID, timingSafeEqual } from "crypto";
+import { createHash, randomUUID, timingSafeEqual, randomBytes } from "crypto";
 import {
   getDb,
   saveDatabase,
@@ -13,6 +13,97 @@ import { nowUTC, futureUTC, isExpired } from "../lib/date.js";
  */
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
+}
+
+// ============================================================================
+// Device Key Management
+// ============================================================================
+
+/**
+ * Register or update the device key for a device
+ * Called during claim token registration (device provides its key)
+ */
+export function registerDeviceKey(deviceId: string, deviceKey: string): void {
+  const db = getDb();
+  const keyHash = hashToken(deviceKey);
+  const now = nowUTC();
+
+  // Check if device exists
+  const existing = db.exec(`SELECT id FROM devices WHERE id = ?`, [deviceId]);
+
+  if (existing.length > 0 && existing[0].values.length > 0) {
+    // Update existing device's key
+    db.run(
+      `UPDATE devices SET device_key_hash = ?, updated_at = ? WHERE id = ?`,
+      [keyHash, now, deviceId]
+    );
+  } else {
+    // Create device record with key (will be fully populated when claimed)
+    db.run(
+      `INSERT INTO devices (id, device_key_hash, created_at, updated_at) VALUES (?, ?, ?, ?)`,
+      [deviceId, keyHash, now, now]
+    );
+  }
+
+  saveDatabase();
+}
+
+/**
+ * Verify a device key against the stored hash
+ * Used during WebSocket connection to authenticate devices
+ */
+export function verifyDeviceKey(deviceId: string, deviceKey: string): boolean {
+  const db = getDb();
+  const keyHash = hashToken(deviceKey);
+
+  const result = db.exec(
+    `SELECT device_key_hash FROM devices WHERE id = ?`,
+    [deviceId]
+  );
+
+  if (result.length === 0 || result[0].values.length === 0) {
+    // Device doesn't exist - reject connection
+    console.warn(`[Device] Unknown device ${deviceId} attempting connection`);
+    return false;
+  }
+
+  const storedHash = result[0].values[0][0] as string | null;
+
+  if (!storedHash) {
+    // Device exists but has no key set - reject connection
+    console.warn(`[Device] Device ${deviceId} has no registered key`);
+    return false;
+  }
+
+  // Constant-time comparison
+  try {
+    return timingSafeEqual(
+      Buffer.from(keyHash, "hex"),
+      Buffer.from(storedHash, "hex")
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if a device has a registered key
+ */
+export function deviceHasKey(deviceId: string): boolean {
+  const db = getDb();
+  const result = db.exec(
+    `SELECT device_key_hash FROM devices WHERE id = ? AND device_key_hash IS NOT NULL`,
+    [deviceId]
+  );
+
+  return result.length > 0 && result[0].values.length > 0;
+}
+
+/**
+ * Generate a new device key (used by ESP32 on first boot)
+ */
+export function generateDeviceKey(): string {
+  return randomBytes(32).toString("base64url");
 }
 
 /**

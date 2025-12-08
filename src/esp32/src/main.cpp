@@ -534,12 +534,23 @@ void setup() {
         LOG_I("Initializing Pairing Manager...");
         pairingManager.begin(String(cloudSettings.serverUrl));
         
+        // Get device ID and key from pairing manager (it manages these securely)
+        String deviceId = pairingManager.getDeviceId();
+        String deviceKey = pairingManager.getDeviceKey();
+        
+        // Sync device ID to cloud settings if different (for display purposes)
+        if (String(cloudSettings.deviceId) != deviceId) {
+            strncpy(cloudSettings.deviceId, deviceId.c_str(), sizeof(cloudSettings.deviceId) - 1);
+            State.saveCloudSettings();
+        }
+        
         // Initialize Cloud Connection for real-time state relay
+        // Uses pairing manager's device key for secure authentication
         LOG_I("Initializing Cloud Connection...");
         cloudConnection.begin(
             String(cloudSettings.serverUrl),
-            String(cloudSettings.deviceId),
-            String(cloudSettings.deviceKey)
+            deviceId,
+            deviceKey
         );
         
         // Set up command handler - forward cloud commands to WebServer
@@ -557,7 +568,9 @@ void setup() {
     notificationManager.begin();
     
     // Set up cloud notification callback
-    notificationManager.onCloud([](const Notification& notif) {
+    // Capture device key from pairing manager for authenticated notifications
+    String cloudDeviceKey = cloudSettings.enabled ? pairingManager.getDeviceKey() : "";
+    notificationManager.onCloud([cloudDeviceKey](const Notification& notif) {
         // Check if cloud integration is enabled
         auto& cloudSettings = State.settings().cloud;
         if (!cloudSettings.enabled) {
@@ -568,7 +581,7 @@ void setup() {
         String deviceId = String(cloudSettings.deviceId);
         
         if (!cloudUrl.isEmpty() && !deviceId.isEmpty()) {
-            sendNotificationToCloud(cloudUrl, deviceId, notif);
+            sendNotificationToCloud(cloudUrl, deviceId, cloudDeviceKey, notif);
         }
     });
     

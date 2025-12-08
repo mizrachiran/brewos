@@ -9,7 +9,7 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 
-void sendNotificationToCloud(const String& cloudUrl, const String& deviceId, const Notification& notif) {
+void sendNotificationToCloud(const String& cloudUrl, const String& deviceId, const String& deviceKey, const Notification& notif) {
     if (cloudUrl.isEmpty() || deviceId.isEmpty() || !WiFi.isConnected()) {
         return;
     }
@@ -19,6 +19,11 @@ void sendNotificationToCloud(const String& cloudUrl, const String& deviceId, con
     
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
+    
+    // Add device key for authentication (required for secure notifications)
+    if (!deviceKey.isEmpty()) {
+        http.addHeader("X-Device-Key", deviceKey);
+    }
     
     // Create request body
     JsonDocument doc;

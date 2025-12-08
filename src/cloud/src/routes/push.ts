@@ -10,7 +10,7 @@ import {
   getOrCreateNotificationPreferences,
   updateNotificationPreferences,
 } from "../services/push.js";
-import { userOwnsDevice, getDevice } from "../services/device.js";
+import { userOwnsDevice, getDevice, verifyDeviceKey } from "../services/device.js";
 import { getDb } from "../lib/database.js";
 import type { NotificationType } from "../lib/database.js";
 
@@ -229,20 +229,35 @@ router.put("/preferences", writeLimiter, sessionAuthMiddleware, (req, res) => {
 
 /**
  * POST /api/push/notify
- * Send push notification from ESP32 device (no auth - device ID is the auth)
+ * Send push notification from ESP32 device
+ * Requires device key authentication (sent in X-Device-Key header)
  */
 router.post("/notify", notifyLimiter, async (req, res) => {
   try {
     const { deviceId, notification } = req.body;
+    const deviceKey = req.headers["x-device-key"] as string;
 
+    // Validate required fields
     if (!deviceId || !notification) {
       return res
         .status(400)
         .json({ error: "Missing deviceId or notification" });
     }
 
-    if (!deviceId.match(/^BRW-[A-F0-9]{8}$/)) {
+    // Validate device ID format
+    if (!/^BRW-[A-F0-9]{8}$/i.test(deviceId)) {
       return res.status(400).json({ error: "Invalid device ID format" });
+    }
+
+    // Device key is required for authentication
+    if (!deviceKey) {
+      return res.status(401).json({ error: "Missing device key" });
+    }
+
+    // Verify device key
+    if (!verifyDeviceKey(deviceId, deviceKey)) {
+      console.warn(`[Push] Invalid device key for ${deviceId}`);
+      return res.status(403).json({ error: "Invalid device credentials" });
     }
 
     const device = getDevice(deviceId);
