@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useStore } from "@/lib/store";
-import type { ExtendedStatsResponse, PowerSample, DailySummary, BrewRecord } from "@/lib/types";
+import type { ExtendedStatsResponse, PowerSample, DailySummary, BrewRecord, Statistics } from "@/lib/types";
 import { useCommand } from "@/lib/useCommand";
 import { isDemoMode } from "@/lib/demo-mode";
 import { getDemoExtendedStats } from "@/lib/demo-stats";
@@ -269,71 +269,11 @@ export function Stats() {
 
       {/* Power Tab */}
       {activeTab === "power" && (
-        <div className="space-y-6">
-          {/* Power Metrics */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard
-              icon={<Zap className="w-5 h-5" />}
-              label="Total Energy"
-              value={`${stats.totalKwh.toFixed(2)}`}
-              subtext="kWh all time"
-              color="amber"
-            />
-            <MetricCard
-              icon={<Activity className="w-5 h-5" />}
-              label="Today"
-              value={`${stats.daily?.totalKwh?.toFixed(2) ?? "0.00"}`}
-              subtext="kWh today"
-              color="emerald"
-            />
-            <MetricCard
-              icon={<Battery className="w-5 h-5" />}
-              label="This Week"
-              value={`${stats.weekly?.totalKwh?.toFixed(2) ?? "0.00"}`}
-              subtext="kWh"
-              color="blue"
-            />
-            <MetricCard
-              icon={<Flame className="w-5 h-5" />}
-              label="This Month"
-              value={`${stats.monthly?.totalKwh?.toFixed(2) ?? "0.00"}`}
-              subtext="kWh"
-              color="purple"
-            />
-          </div>
-
-          {/* Power Consumption Chart */}
-          <Card>
-            <CardHeader>
-              <CardTitle icon={<Activity className="w-5 h-5" />}>
-                Power Consumption (24h)
-              </CardTitle>
-            </CardHeader>
-            <div className="px-4 pb-4">
-              <PowerChart
-                data={powerHistory}
-                height={240}
-                emptyMessage="Power data will appear as you use your machine"
-              />
-            </div>
-          </Card>
-
-          {/* Energy Trends */}
-          <Card>
-            <CardHeader>
-              <CardTitle icon={<TrendingUp className="w-5 h-5" />}>
-                Energy Trends (30 days)
-              </CardTitle>
-            </CardHeader>
-            <div className="px-4 pb-4">
-              <EnergyTrendsChart
-                data={dailyHistory}
-                height={220}
-                emptyMessage="Energy trends will appear over time"
-              />
-            </div>
-          </Card>
-        </div>
+        <PowerTab 
+          stats={stats} 
+          powerHistory={powerHistory} 
+          dailyHistory={dailyHistory} 
+        />
       )}
 
       {/* History Tab */}
@@ -527,6 +467,189 @@ function TipRow({ title, description, frequency }: TipRowProps) {
         <span className="text-xs text-accent">{frequency}</span>
       </div>
       <p className="text-theme-muted text-sm">{description}</p>
+    </div>
+  );
+}
+
+// Currency symbols map
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  AUD: 'A$',
+  CAD: 'C$',
+  JPY: '¥',
+  CHF: 'Fr',
+  ILS: '₪',
+};
+
+interface PowerTabProps {
+  stats: Statistics;
+  powerHistory: PowerSample[];
+  dailyHistory: DailySummary[];
+}
+
+function PowerTab({ stats, powerHistory, dailyHistory }: PowerTabProps) {
+  const { electricityPrice, currency } = useStore((s) => s.preferences);
+  const currencySymbol = CURRENCY_SYMBOLS[currency] || '$';
+  
+  // Calculate costs
+  const todayCost = (stats.daily?.totalKwh ?? 0) * electricityPrice;
+  const weekCost = (stats.weekly?.totalKwh ?? 0) * electricityPrice;
+  const monthCost = (stats.monthly?.totalKwh ?? 0) * electricityPrice;
+  const lifetimeCost = stats.totalKwh * electricityPrice;
+  
+  // Calculate average cost per shot
+  const avgCostPerShot = stats.totalShots > 0 
+    ? lifetimeCost / stats.totalShots 
+    : 0;
+
+  return (
+    <div className="space-y-6">
+      {/* Energy Metrics */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricCard
+          icon={<Zap className="w-5 h-5" />}
+          label="Lifetime Energy"
+          value={`${stats.totalKwh.toFixed(2)}`}
+          subtext="kWh total"
+          color="amber"
+        />
+        <MetricCard
+          icon={<Activity className="w-5 h-5" />}
+          label="Today"
+          value={`${stats.daily?.totalKwh?.toFixed(2) ?? "0.00"}`}
+          subtext="kWh"
+          color="emerald"
+        />
+        <MetricCard
+          icon={<Battery className="w-5 h-5" />}
+          label="This Week"
+          value={`${stats.weekly?.totalKwh?.toFixed(2) ?? "0.00"}`}
+          subtext="kWh"
+          color="blue"
+        />
+        <MetricCard
+          icon={<Flame className="w-5 h-5" />}
+          label="This Month"
+          value={`${stats.monthly?.totalKwh?.toFixed(2) ?? "0.00"}`}
+          subtext="kWh"
+          color="purple"
+        />
+      </div>
+
+      {/* Cost Metrics */}
+      <Card>
+        <CardHeader>
+          <CardTitle icon={<span className="text-lg font-bold">{currencySymbol}</span>}>
+            Energy Costs
+          </CardTitle>
+        </CardHeader>
+        <p className="text-sm text-theme-muted mb-4">
+          Based on your configured rate of {currencySymbol}{electricityPrice.toFixed(2)}/kWh
+        </p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <CostCard
+            label="Today"
+            value={todayCost}
+            symbol={currencySymbol}
+            color="emerald"
+          />
+          <CostCard
+            label="This Week"
+            value={weekCost}
+            symbol={currencySymbol}
+            color="blue"
+          />
+          <CostCard
+            label="This Month"
+            value={monthCost}
+            symbol={currencySymbol}
+            color="purple"
+          />
+          <CostCard
+            label="Lifetime"
+            value={lifetimeCost}
+            symbol={currencySymbol}
+            color="amber"
+          />
+        </div>
+        
+        {/* Cost per shot insight */}
+        {stats.totalShots > 0 && (
+          <div className="mt-4 p-4 bg-theme-surface rounded-xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-theme-muted">Average Cost per Shot</div>
+                <div className="text-2xl font-bold text-theme">
+                  {currencySymbol}{avgCostPerShot.toFixed(3)}
+                </div>
+              </div>
+              <div className="text-right text-sm text-theme-muted">
+                <div>Based on {stats.totalShots.toLocaleString()} shots</div>
+                <div>and {stats.totalKwh.toFixed(2)} kWh used</div>
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* Power Consumption Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle icon={<Activity className="w-5 h-5" />}>
+            Power Consumption (24h)
+          </CardTitle>
+        </CardHeader>
+        <div className="px-4 pb-4">
+          <PowerChart
+            data={powerHistory}
+            height={240}
+            emptyMessage="Power data will appear as you use your machine"
+          />
+        </div>
+      </Card>
+
+      {/* Energy Trends */}
+      <Card>
+        <CardHeader>
+          <CardTitle icon={<TrendingUp className="w-5 h-5" />}>
+            Energy Trends (30 days)
+          </CardTitle>
+        </CardHeader>
+        <div className="px-4 pb-4">
+          <EnergyTrendsChart
+            data={dailyHistory}
+            height={220}
+            emptyMessage="Energy trends will appear over time"
+          />
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+interface CostCardProps {
+  label: string;
+  value: number;
+  symbol: string;
+  color: 'emerald' | 'blue' | 'purple' | 'amber';
+}
+
+function CostCard({ label, value, symbol, color }: CostCardProps) {
+  const colorClasses = {
+    emerald: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    blue: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    purple: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
+    amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  };
+
+  return (
+    <div className={`p-4 rounded-xl ${colorClasses[color]}`}>
+      <div className="text-xs font-medium opacity-80 mb-1">{label}</div>
+      <div className="text-2xl font-bold tabular-nums">
+        {symbol}{value.toFixed(2)}
+      </div>
     </div>
   );
 }

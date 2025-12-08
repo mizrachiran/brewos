@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
+import { useCommand } from '@/lib/useCommand';
 import { Card, CardHeader, CardTitle } from '@/components/Card';
 import { Input } from '@/components/Input';
 import { Button } from '@/components/Button';
@@ -9,7 +10,7 @@ import { useToast } from '@/components/Toast';
 import { Clock, Globe, RefreshCw, Thermometer, Settings, ChevronRight } from 'lucide-react';
 import { TIMEZONES } from '../constants/timezones';
 import { getUnitLabel } from '@/lib/temperature';
-import type { TemperatureUnit } from '@/lib/types';
+import type { TemperatureUnit, UserPreferences } from '@/lib/types';
 
 interface TimeStatus {
   synced: boolean;
@@ -241,6 +242,13 @@ export function TimeSettings() {
 export function RegionalSettings() {
   const preferences = useStore((s) => s.preferences);
   const setPreference = useStore((s) => s.setPreference);
+  const { sendCommand } = useCommand();
+  
+  // Save preference both locally and to ESP32
+  const updatePreference = <K extends keyof typeof preferences>(key: K, value: typeof preferences[K]) => {
+    setPreference(key, value);
+    sendCommand('set_preferences', { [key]: value });
+  };
 
   return (
     <Card>
@@ -258,7 +266,7 @@ export function RegionalSettings() {
           </label>
           <div className="flex gap-2">
             <button
-              onClick={() => setPreference('firstDayOfWeek', 'sunday')}
+              onClick={() => updatePreference('firstDayOfWeek', 'sunday')}
               className={`flex-1 py-2.5 px-4 rounded-xl border text-sm font-medium transition-all ${
                 preferences.firstDayOfWeek === 'sunday'
                   ? 'bg-accent text-white border-accent'
@@ -268,7 +276,7 @@ export function RegionalSettings() {
               Sunday
             </button>
             <button
-              onClick={() => setPreference('firstDayOfWeek', 'monday')}
+              onClick={() => updatePreference('firstDayOfWeek', 'monday')}
               className={`flex-1 py-2.5 px-4 rounded-xl border text-sm font-medium transition-all ${
                 preferences.firstDayOfWeek === 'monday'
                   ? 'bg-accent text-white border-accent'
@@ -288,7 +296,7 @@ export function RegionalSettings() {
             <input
               type="checkbox"
               checked={preferences.use24HourTime}
-              onChange={(e) => setPreference('use24HourTime', e.target.checked)}
+              onChange={(e) => updatePreference('use24HourTime', e.target.checked)}
               className="w-4 h-4 rounded border-theme text-accent focus:ring-accent"
             />
             <span className="text-sm text-theme-secondary">Use 24-hour time format</span>
@@ -302,19 +310,38 @@ export function RegionalSettings() {
 export function UnitsSettings() {
   const preferences = useStore((s) => s.preferences);
   const setPreference = useStore((s) => s.setPreference);
+  const { sendCommand } = useCommand();
+  
+  // Save preference both locally and to ESP32
+  const updatePreference = <K extends keyof UserPreferences>(key: K, value: UserPreferences[K]) => {
+    setPreference(key, value);
+    sendCommand('set_preferences', { [key]: value });
+  };
   
   const units: TemperatureUnit[] = ['celsius', 'fahrenheit'];
+  
+  const currencies = [
+    { code: 'USD', symbol: '$', name: 'US Dollar' },
+    { code: 'EUR', symbol: '€', name: 'Euro' },
+    { code: 'GBP', symbol: '£', name: 'British Pound' },
+    { code: 'AUD', symbol: 'A$', name: 'Australian Dollar' },
+    { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar' },
+    { code: 'JPY', symbol: '¥', name: 'Japanese Yen' },
+    { code: 'CHF', symbol: 'Fr', name: 'Swiss Franc' },
+    { code: 'ILS', symbol: '₪', name: 'Israeli Shekel' },
+  ] as const;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle icon={<Thermometer className="w-5 h-5" />}>Units</CardTitle>
+        <CardTitle icon={<Thermometer className="w-5 h-5" />}>Units & Pricing</CardTitle>
       </CardHeader>
       <p className="text-sm text-theme-muted mb-4">
-        Choose your preferred measurement units.
+        Choose your preferred measurement units and electricity pricing.
       </p>
       
-      <div className="space-y-4">
+      <div className="space-y-6">
+        {/* Temperature Unit */}
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">
             Temperature
@@ -323,7 +350,7 @@ export function UnitsSettings() {
             {units.map((unit) => (
               <button
                 key={unit}
-                onClick={() => setPreference('temperatureUnit', unit)}
+                onClick={() => updatePreference('temperatureUnit', unit)}
                 className={`flex-1 py-2.5 px-4 rounded-xl border text-sm font-medium transition-all ${
                   preferences.temperatureUnit === unit
                     ? 'bg-accent text-white border-accent'
@@ -341,6 +368,51 @@ export function UnitsSettings() {
             {preferences.temperatureUnit === 'celsius' 
               ? 'Using metric system (93°C = brew temperature)'
               : 'Using imperial system (200°F = brew temperature)'}
+          </p>
+        </div>
+
+        {/* Currency */}
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">
+            Currency
+          </label>
+          <select
+            value={preferences.currency}
+            onChange={(e) => updatePreference('currency', e.target.value as UserPreferences['currency'])}
+            className="input w-full"
+          >
+            {currencies.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.symbol} - {c.name} ({c.code})
+              </option>
+            ))}
+          </select>
+          <p className="mt-1.5 text-xs text-theme-muted">
+            Used for displaying energy cost estimates
+          </p>
+        </div>
+
+        {/* Electricity Price */}
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">
+            Electricity Price
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min="0"
+              max="10"
+              step="0.01"
+              value={preferences.electricityPrice}
+              onChange={(e) => updatePreference('electricityPrice', parseFloat(e.target.value) || 0)}
+              className="input flex-1"
+            />
+            <span className="text-sm text-theme-muted whitespace-nowrap">
+              {currencies.find(c => c.code === preferences.currency)?.symbol ?? '$'}/kWh
+            </span>
+          </div>
+          <p className="mt-1.5 text-xs text-theme-muted">
+            Your local electricity rate per kilowatt-hour. Check your utility bill for accurate pricing.
           </p>
         </div>
       </div>

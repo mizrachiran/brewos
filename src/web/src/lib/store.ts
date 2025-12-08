@@ -305,31 +305,69 @@ const defaultDiagnostics: DiagnosticReport = {
   timestamp: 0,
 };
 
-// Load preferences from localStorage
-const loadPreferences = (): UserPreferences => {
-  const defaults: UserPreferences = {
-    firstDayOfWeek: "sunday",
-    use24HourTime: false,
-    temperatureUnit: "celsius",
-  };
+// Default preferences (used as fallback)
+const defaultPreferences: UserPreferences = {
+  firstDayOfWeek: "sunday",
+  use24HourTime: false,
+  temperatureUnit: "celsius",
+  electricityPrice: 0.15,
+  currency: "USD",
+};
 
+// Load preferences from localStorage (fallback for offline/demo mode)
+const loadPreferencesFromStorage = (): UserPreferences => {
   try {
     const saved = localStorage.getItem("brewos_preferences");
     if (saved) {
-      return { ...defaults, ...JSON.parse(saved) };
+      return { ...defaultPreferences, ...JSON.parse(saved) };
     }
   } catch (e) {
-    console.warn("Failed to load preferences:", e);
+    console.warn("Failed to load preferences from storage:", e);
   }
-  return defaults;
+  return defaultPreferences;
 };
 
-const savePreferences = (prefs: UserPreferences) => {
+// Save preferences to localStorage (cache for offline use)
+const savePreferencesToStorage = (prefs: UserPreferences) => {
   try {
     localStorage.setItem("brewos_preferences", JSON.stringify(prefs));
   } catch (e) {
-    console.warn("Failed to save preferences:", e);
+    console.warn("Failed to save preferences to storage:", e);
   }
+};
+
+// Detect browser locale for initial preferences setup
+const detectBrowserPreferences = (): Partial<UserPreferences> => {
+  const detected: Partial<UserPreferences> = {};
+  
+  // Detect 24-hour time preference from locale
+  try {
+    const date = new Date();
+    const formatted = date.toLocaleTimeString(navigator.language, { hour: 'numeric' });
+    detected.use24HourTime = !formatted.includes('AM') && !formatted.includes('PM');
+  } catch {
+    detected.use24HourTime = false;
+  }
+  
+  // Detect first day of week from locale (US, Canada, Japan = Sunday; most others = Monday)
+  const sundayCountries = ['US', 'CA', 'JP', 'AU', 'NZ', 'IL', 'PH', 'TW'];
+  const locale = navigator.language || 'en-US';
+  const country = locale.split('-')[1]?.toUpperCase() || 'US';
+  detected.firstDayOfWeek = sundayCountries.includes(country) ? 'sunday' : 'monday';
+  
+  // Detect temperature unit (US, Bahamas, Cayman, Liberia, Palau = Fahrenheit)
+  const fahrenheitCountries = ['US', 'BS', 'KY', 'LR', 'PW'];
+  detected.temperatureUnit = fahrenheitCountries.includes(country) ? 'fahrenheit' : 'celsius';
+  
+  // Detect currency from locale
+  const currencyMap: Record<string, UserPreferences['currency']> = {
+    'US': 'USD', 'CA': 'CAD', 'AU': 'AUD', 'GB': 'GBP', 'UK': 'GBP',
+    'DE': 'EUR', 'FR': 'EUR', 'ES': 'EUR', 'IT': 'EUR', 'NL': 'EUR',
+    'JP': 'JPY', 'CH': 'CHF', 'IL': 'ILS',
+  };
+  detected.currency = currencyMap[country] || 'USD';
+  
+  return detected;
 };
 
 export const useStore = create<BrewOSState>()(
@@ -358,7 +396,7 @@ export const useStore = create<BrewOSState>()(
     alerts: [],
     logs: [],
     diagnostics: defaultDiagnostics,
-    preferences: loadPreferences(),
+    preferences: loadPreferencesFromStorage(),
 
     // Actions
     setConnectionState: (state) => set({ connectionState: state }),
@@ -388,6 +426,7 @@ export const useStore = create<BrewOSState>()(
           const mqttData = data.mqtt as Record<string, unknown> | undefined;
           const esp32Data = data.esp32 as Record<string, unknown> | undefined;
           const shotData = data.shot as Record<string, unknown> | undefined;
+          const statsData = data.stats as Record<string, unknown> | undefined;
 
           set((state) => ({
             // Machine state
@@ -542,6 +581,49 @@ export const useStore = create<BrewOSState>()(
                     (esp32Data.freeHeap as number) ?? state.esp32.freeHeap,
                 }
               : state.esp32,
+            // Stats from status message (real-time updates)
+            stats: statsData
+              ? {
+                  ...state.stats,
+                  shotsToday:
+                    (statsData.shotsToday as number) ?? state.stats.shotsToday,
+                  sessionShots:
+                    (statsData.sessionShots as number) ??
+                    state.stats.sessionShots,
+                  daily: statsData.daily
+                    ? {
+                        ...state.stats.daily,
+                        shotCount:
+                          ((statsData.daily as Record<string, unknown>)
+                            .shotCount as number) ?? state.stats.daily.shotCount,
+                        avgBrewTimeMs:
+                          ((statsData.daily as Record<string, unknown>)
+                            .avgBrewTimeMs as number) ??
+                          state.stats.daily.avgBrewTimeMs,
+                        totalKwh:
+                          ((statsData.daily as Record<string, unknown>)
+                            .totalKwh as number) ?? state.stats.daily.totalKwh,
+                      }
+                    : state.stats.daily,
+                  lifetime: statsData.lifetime
+                    ? {
+                        ...state.stats.lifetime,
+                        totalShots:
+                          ((statsData.lifetime as Record<string, unknown>)
+                            .totalShots as number) ??
+                          state.stats.lifetime.totalShots,
+                        avgBrewTimeMs:
+                          ((statsData.lifetime as Record<string, unknown>)
+                            .avgBrewTimeMs as number) ??
+                          state.stats.lifetime.avgBrewTimeMs,
+                        totalKwh:
+                          ((statsData.lifetime as Record<string, unknown>)
+                            .totalKwh as number) ??
+                          state.stats.lifetime.totalKwh,
+                      }
+                    : state.stats.lifetime,
+                }
+              : state.stats,
           }));
           break;
         }
@@ -846,7 +928,11 @@ export const useStore = create<BrewOSState>()(
           addAlert("error", data.message as string, set, get);
           break;
 
-        case "device_info":
+        case "device_info": {
+          // Process preferences from ESP32 if provided
+          const prefsData = data.preferences as Record<string, unknown> | undefined;
+          const prefsInitialized = prefsData?.initialized as boolean | undefined;
+          
           set((state) => ({
             device: {
               deviceId: (data.deviceId as string) || state.device.deviceId,
@@ -893,8 +979,41 @@ export const useStore = create<BrewOSState>()(
               pauseTimeMs:
                 (data.preinfusionPauseMs as number) ?? state.preinfusion.pauseTimeMs,
             },
+            // Update preferences from ESP32 (synced across devices)
+            preferences: prefsData
+              ? {
+                  firstDayOfWeek:
+                    (prefsData.firstDayOfWeek as UserPreferences["firstDayOfWeek"]) ??
+                    state.preferences.firstDayOfWeek,
+                  use24HourTime:
+                    (prefsData.use24HourTime as boolean) ?? state.preferences.use24HourTime,
+                  temperatureUnit:
+                    (prefsData.temperatureUnit as UserPreferences["temperatureUnit"]) ??
+                    state.preferences.temperatureUnit,
+                  electricityPrice:
+                    (prefsData.electricityPrice as number) ?? state.preferences.electricityPrice,
+                  currency:
+                    (prefsData.currency as UserPreferences["currency"]) ?? state.preferences.currency,
+                }
+              : state.preferences,
           }));
+          
+          // Also cache preferences locally
+          if (prefsData) {
+            const state = get();
+            savePreferencesToStorage(state.preferences);
+          }
+          
+          // If preferences not initialized on ESP32, send browser-detected defaults
+          // This is dispatched as a custom event to be handled by the connection manager
+          if (prefsData && prefsInitialized === false) {
+            const browserPrefs = detectBrowserPreferences();
+            window.dispatchEvent(new CustomEvent('brewos:init-preferences', { 
+              detail: { ...defaultPreferences, ...browserPrefs }
+            }));
+          }
           break;
+        }
 
         case "power_meter_status": {
           const meterData = data as Record<string, unknown>;
@@ -997,9 +1116,13 @@ export const useStore = create<BrewOSState>()(
     setPreference: (key, value) => {
       set((state) => {
         const newPrefs = { ...state.preferences, [key]: value };
-        savePreferences(newPrefs);
+        // Cache locally for offline use
+        savePreferencesToStorage(newPrefs);
         return { preferences: newPrefs };
       });
+      
+      // Note: The actual save to ESP32 happens via sendCommand('set_preferences', ...)
+      // This is handled in the UI components that call setPreference
     },
 
     setDiagnosticsRunning: (running) => {

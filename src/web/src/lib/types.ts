@@ -705,8 +705,13 @@ export interface CloudDevice {
 export type FirstDayOfWeek = "sunday" | "monday";
 export type TemperatureUnit = "celsius" | "fahrenheit";
 
+export type Currency = 'USD' | 'EUR' | 'GBP' | 'AUD' | 'CAD' | 'JPY' | 'CHF' | 'ILS';
+
 export interface UserPreferences {
   firstDayOfWeek: FirstDayOfWeek;
   use24HourTime: boolean;
   temperatureUnit: TemperatureUnit;
+  // Electricity settings
+  electricityPrice: number;  // Price per kWh in selected currency
+  currency: Currency;
 }

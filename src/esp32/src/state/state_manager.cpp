@@ -163,6 +163,18 @@ void StateManager::loadSettings() {
     // System
     _settings.system.setupComplete = _prefs.getBool("setupDone", false);
     
+    // User Preferences
+    _settings.preferences.firstDayOfWeek = _prefs.getUChar("prefDOW", 0);
+    _settings.preferences.use24HourTime = _prefs.getBool("pref24h", false);
+    _settings.preferences.temperatureUnit = _prefs.getUChar("prefTempU", 0);
+    _settings.preferences.electricityPrice = _prefs.getFloat("prefElecP", 0.15f);
+    _prefs.getString("prefCurr", _settings.preferences.currency, sizeof(_settings.preferences.currency));
+    if (strlen(_settings.preferences.currency) == 0) {
+        strcpy(_settings.preferences.currency, "USD");
+    }
+    _settings.preferences.lastHeatingStrategy = _prefs.getUChar("prefHeatS", 1);
+    _settings.preferences.initialized = _prefs.getBool("prefInit", false);
+    
     _prefs.end();
 }
 
@@ -178,6 +190,7 @@ void StateManager::saveSettings() {
     saveMachineInfoSettings();
     saveNotificationSettings();
     saveSystemSettings();
+    saveUserPreferences();
 }
 
 void StateManager::saveTemperatureSettings() {
@@ -312,6 +325,19 @@ void StateManager::saveSystemSettings() {
     } else {
         Serial.println("[State] Error: Failed to initialize NVS for system settings");
     }
+}
+
+void StateManager::saveUserPreferences() {
+    _prefs.begin(NVS_SETTINGS, false);
+    _prefs.putUChar("prefDOW", _settings.preferences.firstDayOfWeek);
+    _prefs.putBool("pref24h", _settings.preferences.use24HourTime);
+    _prefs.putUChar("prefTempU", _settings.preferences.temperatureUnit);
+    _prefs.putFloat("prefElecP", _settings.preferences.electricityPrice);
+    _prefs.putString("prefCurr", _settings.preferences.currency);
+    _prefs.putUChar("prefHeatS", _settings.preferences.lastHeatingStrategy);
+    _prefs.putBool("prefInit", _settings.preferences.initialized);
+    _prefs.end();
+    notifySettingsChanged();
 }
 
 void StateManager::resetSettings() {
@@ -684,6 +710,9 @@ bool StateManager::applySettings(const char* section, const JsonObject& obj) {
     } else if (strcmp(section, "system") == 0) {
         _settings.system.fromJson(obj);
         saveSystemSettings();
+    } else if (strcmp(section, "preferences") == 0) {
+        _settings.preferences.fromJson(obj);
+        saveUserPreferences();
     } else {
         return false;
     }
