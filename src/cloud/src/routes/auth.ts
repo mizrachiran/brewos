@@ -45,6 +45,26 @@ const authStrictLimiter = rateLimit({
   message: { error: "Too many login attempts, please try again later" },
 });
 
+// Moderate limiter for authenticated endpoints - prevents abuse
+// 30 requests per 15 minutes per IP
+const authenticatedLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+
+// Strict limiter for sensitive operations (logout-all, session revocation)
+// 10 requests per 15 minutes per IP
+const sensitiveOperationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+
 // Apply general rate limiting to ALL routes in this router
 router.use(generalLimiter);
 
@@ -72,6 +92,11 @@ router.post(
 
       if (!credential) {
         return res.status(400).json({ error: "Missing credential" });
+      }
+
+      // Validate credential is a string and reasonable length (JWT tokens are typically < 2KB)
+      if (typeof credential !== "string" || credential.length > 4096) {
+        return res.status(400).json({ error: "Invalid credential format" });
       }
 
       if (!GOOGLE_CLIENT_ID) {
@@ -139,6 +164,11 @@ router.post("/refresh", authStrictLimiter, (req: Request, res: Response) => {
       return res.status(400).json({ error: "Missing refresh token" });
     }
 
+    // Validate refresh token is a string and reasonable length (base64url encoded 32 bytes = ~43 chars)
+    if (typeof refreshToken !== "string" || refreshToken.length > 256) {
+      return res.status(400).json({ error: "Invalid refresh token format" });
+    }
+
     console.log(
       "[Auth] Refresh attempt with token prefix:",
       refreshToken?.substring(0, 8) + "..."
@@ -170,28 +200,35 @@ router.post("/refresh", authStrictLimiter, (req: Request, res: Response) => {
  *
  * Revoke current session.
  */
-router.post("/logout", sessionAuthMiddleware, (req: Request, res: Response) => {
-  try {
-    const sessionId = req.session?.id;
+router.post(
+  "/logout",
+  authenticatedLimiter,
+  sessionAuthMiddleware,
+  (req: Request, res: Response) => {
+    try {
+      const sessionId = req.session?.id;
 
-    if (sessionId) {
-      revokeSession(sessionId);
+      if (sessionId) {
+        revokeSession(sessionId);
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Auth] Logout error:", error);
+      res.status(500).json({ error: "Failed to logout" });
     }
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error("[Auth] Logout error:", error);
-    res.status(500).json({ error: "Failed to logout" });
   }
-});
+);
 
 /**
  * POST /api/auth/logout-all
  *
  * Revoke all sessions for the current user.
+ * Extra rate limiting for this sensitive operation.
  */
 router.post(
   "/logout-all",
+  sensitiveOperationLimiter,
   sessionAuthMiddleware,
   (req: Request, res: Response) => {
     try {
@@ -217,6 +254,7 @@ router.post(
  */
 router.get(
   "/sessions",
+  authenticatedLimiter,
   sessionAuthMiddleware,
   (req: Request, res: Response) => {
     try {
@@ -250,9 +288,11 @@ router.get(
  * DELETE /api/auth/sessions/:id
  *
  * Revoke a specific session.
+ * Extra rate limiting for this sensitive operation.
  */
 router.delete(
   "/sessions/:id",
+  sensitiveOperationLimiter,
   sessionAuthMiddleware,
   (req: Request, res: Response) => {
     try {
@@ -261,6 +301,11 @@ router.delete(
 
       if (!userId) {
         return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      // Validate session ID format (hex string, 32 chars)
+      if (!id || typeof id !== "string" || !/^[a-f0-9]{32}$/i.test(id)) {
+        return res.status(400).json({ error: "Invalid session ID format" });
       }
 
       const sessions = getUserSessions(userId);
@@ -284,26 +329,31 @@ router.delete(
  *
  * Get current user info.
  */
-router.get("/me", sessionAuthMiddleware, (req: Request, res: Response) => {
-  try {
-    const user = req.user;
+router.get(
+  "/me",
+  authenticatedLimiter,
+  sessionAuthMiddleware,
+  (req: Request, res: Response) => {
+    try {
+      const user = req.user;
 
-    if (!user) {
-      return res.status(401).json({ error: "Not authenticated" });
+      if (!user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      res.json({
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.displayName,
+          picture: user.avatarUrl,
+        },
+      });
+    } catch (error) {
+      console.error("[Auth] Get user error:", error);
+      res.status(500).json({ error: "Failed to get user" });
     }
-
-    res.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.displayName,
-        picture: user.avatarUrl,
-      },
-    });
-  } catch (error) {
-    console.error("[Auth] Get user error:", error);
-    res.status(500).json({ error: "Failed to get user" });
   }
-});
+);
 
 export default router;
