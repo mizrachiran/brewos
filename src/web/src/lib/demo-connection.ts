@@ -1130,20 +1130,10 @@ export class DemoConnection implements IConnection {
 
   private emitPreinfusionSettings(): void {
     this.emit({
-      type: "device_info",
-      deviceId: "demo-device-001",
-      deviceName: "My ECM Synchronika",
-      machineBrand: "ECM",
-      machineModel: "Synchronika",
-      machineType: "dual_boiler",
-      firmwareVersion: "1.0.0-demo",
-      mainsVoltage: 220,
-      maxCurrent: 13,
-      ecoBrewTemp: 80,
-      ecoTimeoutMinutes: 30,
-      preinfusionEnabled: this.preinfusionEnabled,
-      preinfusionOnMs: this.preinfusionOnMs,
-      preinfusionPauseMs: this.preinfusionPauseMs,
+      type: "preinfusion_settings",
+      enabled: this.preinfusionEnabled,
+      onTimeMs: this.preinfusionOnMs,
+      pauseTimeMs: this.preinfusionPauseMs,
     });
   }
 

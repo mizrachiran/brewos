@@ -637,6 +637,16 @@ export const useStore = create<BrewOSState>()(
           }));
           break;
 
+        case "preinfusion_settings":
+          set((state) => ({
+            preinfusion: {
+              enabled: (data.enabled as boolean) ?? state.preinfusion.enabled,
+              onTimeMs: (data.onTimeMs as number) ?? state.preinfusion.onTimeMs,
+              pauseTimeMs: (data.pauseTimeMs as number) ?? state.preinfusion.pauseTimeMs,
+            },
+          }));
+          break;
+
         case "stats": {
           const lifetimeData = data.lifetime as
             | Partial<LifetimeStats>
