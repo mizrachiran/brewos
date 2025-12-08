@@ -280,8 +280,8 @@ export class DemoConnection implements IConnection {
     // Simulate scanning different baud rates with progress
     const steps = [
       { step: 1, progress: "Scanning UART1..." },
-      { step: 2, progress: "Trying 9600 baud (PZEM)..." },
-      { step: 3, progress: "Trying 4800 baud (JSY)..." },
+      { step: 2, progress: "Trying 9600 baud (PZEM-004T, JSY, Eastron)..." },
+      { step: 3, progress: "Trying 4800 baud (JSY, Eastron)..." },
       { step: 4, progress: "Trying 2400 baud (Eastron)..." },
     ];
 
