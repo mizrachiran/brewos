@@ -464,3 +464,39 @@ void config_persistence_get_eco(bool* enabled, int16_t* brew_temp, uint16_t* tim
     }
 }
 
+bool config_persistence_save_power_meter(const power_meter_config_t* config) {
+    if (!config) {
+        return false;
+    }
+    
+    // Compare-before-write: Skip flash write if nothing changed
+    if (memcmp(&g_persisted_config.power_meter, config, sizeof(power_meter_config_t)) == 0) {
+        DEBUG_PRINT("Config: Power meter settings unchanged, skipping flash write\n");
+        return true;
+    }
+    
+    // Update power meter values in persisted config
+    g_persisted_config.power_meter = *config;
+    
+    // Ensure magic and version are set
+    g_persisted_config.magic = CONFIG_MAGIC;
+    g_persisted_config.version = CONFIG_VERSION;
+    
+    // Save to flash
+    if (flash_write_config(&g_persisted_config)) {
+        g_config_loaded = true;
+        DEBUG_PRINT("Config: Saved power meter settings (enabled=%d, index=%d)\n",
+                   config->enabled, config->meter_index);
+        return true;
+    }
+    
+    DEBUG_PRINT("Config: Failed to save power meter settings to flash\n");
+    return false;
+}
+
+void config_persistence_get_power_meter(power_meter_config_t* config) {
+    if (config) {
+        *config = g_persisted_config.power_meter;
+    }
+}
+

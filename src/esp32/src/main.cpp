@@ -61,6 +61,43 @@ PairingManager pairingManager;
 CloudConnection cloudConnection;
 WebServer webServer(wifiManager, picoUart, mqttClient, &pairingManager);
 
+// =============================================================================
+// LOG LEVEL CONTROL
+// =============================================================================
+LogLevel g_log_level = LOG_LEVEL_INFO;  // Default to INFO level
+
+void setLogLevel(LogLevel level) {
+    g_log_level = level;
+    Serial.printf("[Log] Level set to: %s (%d)\n", logLevelToString(level), level);
+}
+
+LogLevel getLogLevel() {
+    return g_log_level;
+}
+
+const char* logLevelToString(LogLevel level) {
+    switch (level) {
+        case LOG_LEVEL_ERROR: return "error";
+        case LOG_LEVEL_WARN:  return "warn";
+        case LOG_LEVEL_INFO:  return "info";
+        case LOG_LEVEL_DEBUG: return "debug";
+        default: return "unknown";
+    }
+}
+
+LogLevel stringToLogLevel(const char* str) {
+    if (!str) return LOG_LEVEL_INFO;
+    if (strcasecmp(str, "error") == 0) return LOG_LEVEL_ERROR;
+    if (strcasecmp(str, "warn") == 0) return LOG_LEVEL_WARN;
+    if (strcasecmp(str, "warning") == 0) return LOG_LEVEL_WARN;
+    if (strcasecmp(str, "info") == 0) return LOG_LEVEL_INFO;
+    if (strcasecmp(str, "debug") == 0) return LOG_LEVEL_DEBUG;
+    // Try numeric
+    int level = atoi(str);
+    if (level >= 0 && level <= 3) return (LogLevel)level;
+    return LOG_LEVEL_INFO;
+}
+
 // Scale state
 static bool scaleEnabled = true;  // Can be disabled to save power
 
@@ -229,18 +266,45 @@ void setup() {
         
         // Handle specific message types
         switch (packet.type) {
-            case MSG_BOOT:
+            case MSG_BOOT: {
                 LOG_I("Pico booted!");
                 webServer.broadcastLog("Pico booted", "info");
                 ui.showNotification("Pico Connected", 2000);
                 machineState.pico_connected = true;
-                // Parse boot payload for machine type
+                
+                // Parse boot payload (boot_payload_t structure)
+                // version_major(1), version_minor(1), version_patch(1), machine_type(1), 
+                // pcb_type(1), pcb_version_major(1), pcb_version_minor(1), reset_reason(4)
                 if (packet.length >= 4) {
-                    // Boot payload: version_major, version_minor, version_patch, machine_type, ...
+                    uint8_t ver_major = packet.payload[0];
+                    uint8_t ver_minor = packet.payload[1];
+                    uint8_t ver_patch = packet.payload[2];
                     machineState.machine_type = packet.payload[3];
-                    LOG_I("Machine type: %d", machineState.machine_type);
+                    
+                    // Store in StateManager
+                    State.setPicoVersion(ver_major, ver_minor, ver_patch);
+                    State.setMachineType(machineState.machine_type);
+                    
+                    LOG_I("Pico version: %d.%d.%d, Machine type: %d", 
+                          ver_major, ver_minor, ver_patch, machineState.machine_type);
+                    
+                    // Parse reset reason if available (offset 7-10, uint32_t but we use uint8_t)
+                    if (packet.length >= 11) {
+                        uint8_t reset_reason = packet.payload[7];  // First byte of reset_reason
+                        State.setPicoResetReason(reset_reason);
+                    }
+                    
+                    // Check for version mismatch (internal - don't expose to user)
+                    char picoVerStr[16];
+                    snprintf(picoVerStr, sizeof(picoVerStr), "%d.%d.%d", ver_major, ver_minor, ver_patch);
+                    if (strcmp(picoVerStr, ESP32_VERSION) != 0) {
+                        LOG_W("Internal version mismatch: %s vs %s", ESP32_VERSION, picoVerStr);
+                        // Silently suggest update - user doesn't need to know about internal modules
+                        webServer.broadcastLog("Firmware update recommended", "warning");
+                    }
                 }
                 break;
+            }
                 
             case MSG_STATUS:
                 // Parse status and update UI

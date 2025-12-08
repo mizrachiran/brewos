@@ -77,6 +77,12 @@
 #define GITHUB_OWNER            "mizrachiran"
 #define GITHUB_REPO             "brewos"
 #define GITHUB_ESP32_ASSET      "brewos_esp32.bin"
+
+// Pico firmware assets by machine type (UF2 format)
+#define GITHUB_PICO_DUAL_BOILER_ASSET     "brewos_dual_boiler.uf2"
+#define GITHUB_PICO_SINGLE_BOILER_ASSET   "brewos_single_boiler.uf2"
+#define GITHUB_PICO_HEAT_EXCHANGER_ASSET  "brewos_heat_exchanger.uf2"
+
 // GitHub API URL template: https://api.github.com/repos/OWNER/REPO/releases/tags/TAG
 // Asset download URL: https://github.com/OWNER/REPO/releases/download/TAG/ASSET
 
@@ -86,11 +92,28 @@
 #define DEBUG_SERIAL            Serial
 #define DEBUG_BAUD              115200
 
-// Log macros
+// Log levels (0=ERROR only, 1=+WARN, 2=+INFO, 3=+DEBUG)
+enum LogLevel {
+    LOG_LEVEL_ERROR = 0,
+    LOG_LEVEL_WARN = 1,
+    LOG_LEVEL_INFO = 2,
+    LOG_LEVEL_DEBUG = 3
+};
+
+// Global log level - declared extern, defined in main.cpp
+extern LogLevel g_log_level;
+
+// Log level control functions
+void setLogLevel(LogLevel level);
+LogLevel getLogLevel();
+const char* logLevelToString(LogLevel level);
+LogLevel stringToLogLevel(const char* str);
+
+// Log macros with level checking
 #define LOG_TAG                 "BrewOS"
-#define LOG_I(fmt, ...)         Serial.printf("[%lu] I: " fmt "\n", millis(), ##__VA_ARGS__)
-#define LOG_D(fmt, ...)         Serial.printf("[%lu] D: " fmt "\n", millis(), ##__VA_ARGS__)
-#define LOG_W(fmt, ...)         Serial.printf("[%lu] W: " fmt "\n", millis(), ##__VA_ARGS__)
 #define LOG_E(fmt, ...)         Serial.printf("[%lu] E: " fmt "\n", millis(), ##__VA_ARGS__)
+#define LOG_W(fmt, ...)         do { if (g_log_level >= LOG_LEVEL_WARN) Serial.printf("[%lu] W: " fmt "\n", millis(), ##__VA_ARGS__); } while(0)
+#define LOG_I(fmt, ...)         do { if (g_log_level >= LOG_LEVEL_INFO) Serial.printf("[%lu] I: " fmt "\n", millis(), ##__VA_ARGS__); } while(0)
+#define LOG_D(fmt, ...)         do { if (g_log_level >= LOG_LEVEL_DEBUG) Serial.printf("[%lu] D: " fmt "\n", millis(), ##__VA_ARGS__); } while(0)
 
 #endif // CONFIG_H

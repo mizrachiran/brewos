@@ -100,6 +100,14 @@ public:
     void updatePower(float watts, float voltage);
     void updateScale(float weight, float flowRate, bool stable);
     
+    // Pico firmware info
+    void setPicoVersion(uint8_t major, uint8_t minor, uint8_t patch);
+    void setPicoResetReason(uint8_t reason);
+    void setMachineType(uint8_t type);
+    const char* getPicoVersion() const { return _state.picoVersion; }
+    uint8_t getPicoResetReason() const { return _state.picoResetReason; }
+    uint8_t getMachineType() const { return _state.machineType; }
+    
     // Shot tracking
     void startShot();
     void endShot();

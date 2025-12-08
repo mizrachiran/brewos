@@ -8,7 +8,12 @@
 #include "power_meter/power_meter_manager.h"
 #include "power_meter/mqtt_power_meter.h"
 #include "config.h"
+#include "pico_uart.h"
 #include <Preferences.h>
+#include <time.h>
+
+// External reference to PicoUART for sending commands
+extern PicoUART picoUart;
 
 // NVS namespace for power meter config
 #define NVS_NAMESPACE "power_meter"
@@ -54,6 +59,27 @@ void PowerMeterManager::loop() {
     }
     
     // Hardware meter readings come from Pico via onPicoPowerData callback
+    
+    // Check for daily reset
+    time_t now = time(nullptr);
+    if (now > 1000000) {  // Time is valid (NTP synced)
+        struct tm* tm_now = localtime(&now);
+        uint8_t currentDayOfYear = tm_now->tm_yday;
+        
+        // Initialize day start on first valid reading
+        if (!_dayStartSet && _lastReading.valid) {
+            _dayStartKwh = _lastReading.energy_import;
+            _dayStartSet = true;
+            _lastDayOfYear = currentDayOfYear;
+            LOG_I("Initialized day start energy: %.3f kWh", _dayStartKwh);
+        }
+        
+        // Reset at midnight (day changed)
+        if (_dayStartSet && currentDayOfYear != _lastDayOfYear) {
+            resetDailyEnergy();
+            _lastDayOfYear = currentDayOfYear;
+        }
+    }
 }
 
 bool PowerMeterManager::setSource(PowerMeterSource source) {
@@ -141,7 +167,14 @@ void PowerMeterManager::startAutoDiscovery() {
     _discoveryStep = 0;
     _discoveryStepStartTime = millis();
     
-    // TODO: Send MSG_CMD_POWER_METER_DISCOVER command to Pico
+    // Send MSG_CMD_POWER_METER_DISCOVER command to Pico
+    // No payload needed - Pico will try all known meter types
+    if (picoUart.sendCommand(MSG_CMD_POWER_METER_DISCOVER, nullptr, 0)) {
+        LOG_I("Power meter discovery command sent to Pico");
+    } else {
+        LOG_E("Failed to send power meter discovery command to Pico");
+        _autoDiscovering = false;  // Reset state on failure
+    }
 }
 
 DiscoveryStatus PowerMeterManager::getDiscoveryStatus() const {
@@ -295,6 +328,29 @@ void PowerMeterManager::cleanupMeter() {
         delete _mqttMeter;
         _mqttMeter = nullptr;
     }
+}
+
+float PowerMeterManager::getTodayKwh() const {
+    if (!_lastReading.valid || !_dayStartSet) {
+        return 0.0f;
+    }
+    
+    // Today's energy = current reading - day start reading
+    float today = _lastReading.energy_import - _dayStartKwh;
+    
+    // Handle meter reset or rollover
+    if (today < 0.0f) {
+        today = _lastReading.energy_import;  // Meter was reset, use current value
+    }
+    
+    return today;
+}
+
+void PowerMeterManager::resetDailyEnergy() {
+    // Call at midnight to reset daily tracking
+    _dayStartKwh = _lastReading.valid ? _lastReading.energy_import : 0.0f;
+    _dayStartSet = true;
+    LOG_I("Daily energy reset: day start = %.3f kWh", _dayStartKwh);
 }
 
 // Global instance
