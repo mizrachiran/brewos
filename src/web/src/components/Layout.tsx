@@ -165,8 +165,8 @@ export function Layout({ onExitDemo }: LayoutProps) {
         <DeviceOfflineBanner deviceName={selectedDevice.name} />
       )}
 
-      {/* Install App Banner - shown to mobile users only */}
-      {showInstallBanner && isMobile && (
+      {/* Install App Banner - shown to mobile users only, not in demo mode */}
+      {showInstallBanner && isMobile && !isDemo && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
           <InstallPrompt
             variant="banner"
