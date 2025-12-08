@@ -135,12 +135,16 @@ void StateManager::loadSettings() {
     
     // Machine Info
     _prefs.getString("devName", _settings.machineInfo.deviceName, sizeof(_settings.machineInfo.deviceName));
+    _settings.machineInfo.deviceName[sizeof(_settings.machineInfo.deviceName) - 1] = '\0';
     if (strlen(_settings.machineInfo.deviceName) == 0) {
         strcpy(_settings.machineInfo.deviceName, "BrewOS");
     }
     _prefs.getString("mcBrand", _settings.machineInfo.machineBrand, sizeof(_settings.machineInfo.machineBrand));
+    _settings.machineInfo.machineBrand[sizeof(_settings.machineInfo.machineBrand) - 1] = '\0';
     _prefs.getString("mcModel", _settings.machineInfo.machineModel, sizeof(_settings.machineInfo.machineModel));
+    _settings.machineInfo.machineModel[sizeof(_settings.machineInfo.machineModel) - 1] = '\0';
     _prefs.getString("mcType", _settings.machineInfo.machineType, sizeof(_settings.machineInfo.machineType));
+    _settings.machineInfo.machineType[sizeof(_settings.machineInfo.machineType) - 1] = '\0';
     if (strlen(_settings.machineInfo.machineType) == 0) {
         strcpy(_settings.machineInfo.machineType, "dual_boiler");
     }

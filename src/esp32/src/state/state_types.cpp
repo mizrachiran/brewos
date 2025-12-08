@@ -209,10 +209,22 @@ void MachineInfoSettings::toJson(JsonObject& obj) const {
 }
 
 bool MachineInfoSettings::fromJson(JsonObjectConst obj) {
-    if (obj["deviceName"].is<const char*>()) strncpy(deviceName, obj["deviceName"] | "BrewOS", sizeof(deviceName) - 1);
-    if (obj["machineBrand"].is<const char*>()) strncpy(machineBrand, obj["machineBrand"] | "", sizeof(machineBrand) - 1);
-    if (obj["machineModel"].is<const char*>()) strncpy(machineModel, obj["machineModel"] | "", sizeof(machineModel) - 1);
-    if (obj["machineType"].is<const char*>()) strncpy(machineType, obj["machineType"] | "dual_boiler", sizeof(machineType) - 1);
+    if (obj["deviceName"].is<const char*>()) {
+        strncpy(deviceName, obj["deviceName"] | "BrewOS", sizeof(deviceName) - 1);
+        deviceName[sizeof(deviceName) - 1] = '\0';
+    }
+    if (obj["machineBrand"].is<const char*>()) {
+        strncpy(machineBrand, obj["machineBrand"] | "", sizeof(machineBrand) - 1);
+        machineBrand[sizeof(machineBrand) - 1] = '\0';
+    }
+    if (obj["machineModel"].is<const char*>()) {
+        strncpy(machineModel, obj["machineModel"] | "", sizeof(machineModel) - 1);
+        machineModel[sizeof(machineModel) - 1] = '\0';
+    }
+    if (obj["machineType"].is<const char*>()) {
+        strncpy(machineType, obj["machineType"] | "dual_boiler", sizeof(machineType) - 1);
+        machineType[sizeof(machineType) - 1] = '\0';
+    }
     return true;
 }
 

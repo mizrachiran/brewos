@@ -1716,17 +1716,22 @@ void WebServer::processCommand(JsonDocument& doc) {
             
             if (!doc["name"].isNull()) {
                 strncpy(machineInfo.deviceName, doc["name"].as<const char*>(), sizeof(machineInfo.deviceName) - 1);
+                machineInfo.deviceName[sizeof(machineInfo.deviceName) - 1] = '\0';
                 // Also update hostname for mDNS
                 strncpy(networkSettings.hostname, doc["name"].as<const char*>(), sizeof(networkSettings.hostname) - 1);
+                networkSettings.hostname[sizeof(networkSettings.hostname) - 1] = '\0';
             }
             if (!doc["brand"].isNull()) {
                 strncpy(machineInfo.machineBrand, doc["brand"].as<const char*>(), sizeof(machineInfo.machineBrand) - 1);
+                machineInfo.machineBrand[sizeof(machineInfo.machineBrand) - 1] = '\0';
             }
             if (!doc["model"].isNull()) {
                 strncpy(machineInfo.machineModel, doc["model"].as<const char*>(), sizeof(machineInfo.machineModel) - 1);
+                machineInfo.machineModel[sizeof(machineInfo.machineModel) - 1] = '\0';
             }
             if (!doc["machineType"].isNull()) {
                 strncpy(machineInfo.machineType, doc["machineType"].as<const char*>(), sizeof(machineInfo.machineType) - 1);
+                machineInfo.machineType[sizeof(machineInfo.machineType) - 1] = '\0';
             }
             
             State.saveMachineInfoSettings();

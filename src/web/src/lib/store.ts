@@ -833,9 +833,9 @@ export const useStore = create<BrewOSState>()(
             ecoMode: {
               ...(state.ecoMode ?? defaultEcoMode),
               ecoBrewTemp:
-                (data.ecoBrewTemp as number) ?? state.ecoMode?.ecoBrewTemp ?? defaultEcoMode.ecoBrewTemp,
+                (data.ecoBrewTemp as number) ?? state.ecoMode.ecoBrewTemp,
               autoOffTimeout:
-                (data.ecoTimeoutMinutes as number) ?? state.ecoMode?.autoOffTimeout ?? defaultEcoMode.autoOffTimeout,
+                (data.ecoTimeoutMinutes as number) ?? state.ecoMode.autoOffTimeout,
             },
           }));
           break;
