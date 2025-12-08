@@ -452,7 +452,7 @@ Authorization: Bearer <session_token>
 ### Rate Limiting
 
 | Endpoint                      | Limit                      |
-| ----------------------------- | -------------------------- |
+||-----------------------------|--------------------------|
 | `/api/devices/register-claim` | 5 requests/minute (strict) |
 | `/api/devices/claim`          | 5 requests/minute (strict) |
 | `/api/devices/claim-share`    | 5 requests/minute (strict) |
