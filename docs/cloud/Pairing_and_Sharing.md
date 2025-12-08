@@ -343,7 +343,7 @@ Content-Type: application/json
 ## Comparison: QR Pairing vs Sharing
 
 | Aspect              | ESP32 QR Pairing       | User-to-User Sharing           |
-| ------------------- | ---------------------- | ------------------------------ |
+||-------------------|----------------------|------------------------------|
 | **Token Source**    | ESP32 device           | Cloud server                   |
 | **Token Expiry**    | 10 minutes             | 24 hours                       |
 | **Physical Access** | Required               | Not required                   |
