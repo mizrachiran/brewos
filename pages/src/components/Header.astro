@@ -31,11 +31,6 @@ const navLinks = [
         </li>
       ))}
       <li>
-        <a href="#" class="nav-install" id="installBtn" onclick="handleInstallClick(event)">
-          Install App
-        </a>
-      </li>
-      <li>
         <a href="/getting-started" class="nav-cta">Get Started</a>
       </li>
       <li>
@@ -102,14 +97,6 @@ const navLinks = [
       </a>
       <a href="https://cloud.brewos.io" class="mobile-btn mobile-btn-secondary" target="_blank">
         Sign In
-      </a>
-      <a href="#" class="mobile-btn mobile-btn-install" id="installBtnMobile" onclick="handleInstallClick(event)">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-          <polyline points="7 10 12 15 17 10"/>
-          <line x1="12" y1="15" x2="12" y2="3"/>
-        </svg>
-        Install App
       </a>
     </div>
   </nav>
@@ -226,21 +213,6 @@ const navLinks = [
 
   .nav-demo:hover::before {
     left: 100%;
-  }
-
-  .nav-install {
-    display: none;
-    color: var(--accent) !important;
-    border: 1.5px solid var(--accent);
-  }
-
-  .nav-install:hover {
-    opacity: 0.9;
-    transform: translateY(-1px);
-  }
-
-  :global(.nav-install.visible) {
-    display: inline-flex;
   }
 
   .mobile-menu-btn {
@@ -433,7 +405,7 @@ const navLinks = [
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
-    margin-top: auto;
+    margin-top: 32px;
     padding-top: 24px;
     border-top: 1px solid var(--cream-300);
   }
@@ -506,23 +478,11 @@ const navLinks = [
     background: var(--cream-200);
   }
 
-  .mobile-btn-install {
-    display: none;
-    background: transparent;
-    color: var(--accent);
-    border: 2px solid var(--accent);
-  }
-
-  :global(.mobile-btn-install.visible) {
-    display: flex;
-  }
-
-  .mobile-btn-install:hover {
-    background: var(--accent);
-    color: var(--white);
-  }
-
   @media (max-width: 1024px) {
+    nav {
+      padding: 16px 20px;
+    }
+
     .nav-links {
       display: none;
     }
