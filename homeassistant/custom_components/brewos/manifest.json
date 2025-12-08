@@ -1,0 +1,16 @@
+{
+  "domain": "brewos",
+  "name": "BrewOS Espresso Machine",
+  "codeowners": ["@brewos"],
+  "config_flow": true,
+  "dependencies": ["mqtt"],
+  "documentation": "https://github.com/brewos/brewos",
+  "integration_type": "device",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/brewos/brewos/issues",
+  "loggers": ["brewos"],
+  "mqtt": ["brewos/#"],
+  "requirements": [],
+  "version": "1.0.0"
+}
+

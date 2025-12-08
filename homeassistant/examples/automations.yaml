@@ -1,0 +1,268 @@
+# BrewOS Home Assistant Automations
+# Copy these to your automations.yaml file
+
+# =============================================================================
+# MORNING COFFEE ROUTINE
+# =============================================================================
+
+# Turn on machine at 6:30 AM on weekdays with Sequential heating
+- id: brewos_morning_on
+  alias: "☕ Morning Coffee - Turn On Machine"
+  description: "Turn on the espresso machine on weekday mornings"
+  trigger:
+    - platform: time
+      at: "06:30:00"
+  condition:
+    - condition: time
+      weekday:
+        - mon
+        - tue
+        - wed
+        - thu
+        - fri
+  action:
+    - service: select.select_option
+      target:
+        entity_id: select.brewos_heating_strategy
+      data:
+        option: sequential
+    - service: switch.turn_on
+      target:
+        entity_id: switch.brewos_power
+
+# Notify when machine is ready
+- id: brewos_ready_notification
+  alias: "☕ Coffee Machine Ready"
+  description: "Send notification when machine reaches target temperature"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.brewos_ready
+      from: "off"
+      to: "on"
+  condition:
+    - condition: time
+      after: "06:00:00"
+      before: "10:00:00"
+  action:
+    - service: notify.mobile_app_phone
+      data:
+        title: "☕ Coffee Time!"
+        message: "Your espresso machine is ready at {{ states('sensor.brewos_brew_temp') }}°C"
+        data:
+          tag: "brewos_ready"
+          actions:
+            - action: "DISMISS"
+              title: "Dismiss"
+
+# =============================================================================
+# AUTO POWER OFF
+# =============================================================================
+
+# Turn off after 1 hour of no brewing
+- id: brewos_auto_off
+  alias: "☕ Auto Power Off"
+  description: "Turn off machine after 1 hour of inactivity"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.brewos_brewing
+      to: "off"
+      for:
+        hours: 1
+  condition:
+    - condition: state
+      entity_id: switch.brewos_power
+      state: "on"
+    - condition: state
+      entity_id: binary_sensor.brewos_brewing
+      state: "off"
+  action:
+    - service: switch.turn_off
+      target:
+        entity_id: switch.brewos_power
+    - service: notify.mobile_app_phone
+      data:
+        message: "☕ Espresso machine turned off after 1 hour idle"
+
+# =============================================================================
+# WATER LOW WARNING
+# =============================================================================
+
+- id: brewos_water_low
+  alias: "☕ Water Low Warning"
+  description: "Alert when water tank needs refilling"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.brewos_water_low
+      to: "on"
+  action:
+    - service: notify.mobile_app_phone
+      data:
+        title: "🚰 Water Tank Low"
+        message: "Your espresso machine water tank needs refilling"
+        data:
+          tag: "brewos_water"
+          priority: high
+
+# =============================================================================
+# SHOT TRACKING
+# =============================================================================
+
+# Log each shot
+- id: brewos_log_shot
+  alias: "☕ Log Espresso Shot"
+  description: "Create logbook entry for each shot"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.brewos_brewing
+      from: "on"
+      to: "off"
+  action:
+    - service: logbook.log
+      data:
+        name: "Espresso Shot"
+        message: >
+          Shot pulled: {{ states('sensor.brewos_shot_weight') }}g in 
+          {{ states('sensor.brewos_shot_duration') }}s
+        entity_id: sensor.brewos_shot_weight
+        domain: brewos
+
+# Daily shot summary
+- id: brewos_daily_summary
+  alias: "☕ Daily Shot Summary"
+  description: "Send daily summary of coffee consumption"
+  trigger:
+    - platform: time
+      at: "21:00:00"
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.brewos_shots_today') | int > 0 }}"
+  action:
+    - service: notify.mobile_app_phone
+      data:
+        title: "☕ Daily Coffee Summary"
+        message: >
+          You pulled {{ states('sensor.brewos_shots_today') }} shots today.
+          Energy used: {{ states('sensor.brewos_kwh_today') }} kWh
+
+# =============================================================================
+# TEMPERATURE BASED ACTIONS
+# =============================================================================
+
+# Warn if brew temp too high
+- id: brewos_temp_high
+  alias: "☕ Temperature High Warning"
+  description: "Alert if brew temperature exceeds setpoint significantly"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.brewos_brew_temp
+      above: 97
+  action:
+    - service: notify.mobile_app_phone
+      data:
+        title: "⚠️ Brew Temperature High"
+        message: "Brew boiler at {{ states('sensor.brewos_brew_temp') }}°C - check your machine"
+
+# =============================================================================
+# ECO MODE AUTOMATION
+# =============================================================================
+
+# Enter eco mode when leaving home
+- id: brewos_eco_when_away
+  alias: "☕ Eco Mode When Away"
+  description: "Switch to eco mode when everyone leaves"
+  trigger:
+    - platform: state
+      entity_id: group.family
+      to: "not_home"
+      for:
+        minutes: 10
+  condition:
+    - condition: state
+      entity_id: switch.brewos_power
+      state: "on"
+  action:
+    - service: button.press
+      target:
+        entity_id: button.brewos_enter_eco
+
+# Exit eco mode when arriving home
+- id: brewos_wake_when_home
+  alias: "☕ Wake Machine When Home"
+  description: "Exit eco mode when someone arrives home"
+  trigger:
+    - platform: state
+      entity_id: group.family
+      to: "home"
+  condition:
+    - condition: state
+      entity_id: select.brewos_mode
+      state: "eco"
+  action:
+    - service: button.press
+      target:
+        entity_id: button.brewos_exit_eco
+
+# =============================================================================
+# WEEKEND ROUTINE
+# =============================================================================
+
+# Later start on weekends with Parallel heating (faster warm-up)
+- id: brewos_weekend_on
+  alias: "☕ Weekend Coffee - Turn On Machine"
+  description: "Turn on the espresso machine later on weekends"
+  trigger:
+    - platform: time
+      at: "08:00:00"
+  condition:
+    - condition: time
+      weekday:
+        - sat
+        - sun
+  action:
+    - service: select.select_option
+      target:
+        entity_id: select.brewos_heating_strategy
+      data:
+        option: parallel
+    - service: switch.turn_on
+      target:
+        entity_id: switch.brewos_power
+
+# =============================================================================
+# HEATING STRATEGY AUTOMATION
+# =============================================================================
+
+# Use brew-only when only making espresso (no milk drinks)
+- id: brewos_strategy_brew_only
+  alias: "☕ Quick Espresso Mode"
+  description: "Switch to brew-only heating for espresso shots"
+  trigger:
+    - platform: state
+      entity_id: input_boolean.espresso_only_mode
+      to: "on"
+  condition:
+    - condition: state
+      entity_id: switch.brewos_power
+      state: "on"
+  action:
+    - service: select.select_option
+      target:
+        entity_id: select.brewos_heating_strategy
+      data:
+        option: brew_only
+
+# Use parallel heating when in a hurry
+- id: brewos_strategy_fast_heat
+  alias: "☕ Fast Heat Mode"
+  description: "Use parallel heating for fastest warm-up"
+  trigger:
+    - platform: state
+      entity_id: input_boolean.fast_heat_mode
+      to: "on"
+  action:
+    - service: select.select_option
+      target:
+        entity_id: select.brewos_heating_strategy
+      data:
+        option: parallel
+

@@ -1,0 +1,166 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up BrewOS",
+        "description": "Configure your BrewOS espresso machine connection. Enter the MQTT topic prefix configured in your BrewOS device settings.",
+        "data": {
+          "name": "Device Name",
+          "topic_prefix": "MQTT Topic Prefix",
+          "device_id": "Device ID (optional)"
+        },
+        "data_description": {
+          "name": "A friendly name for your espresso machine",
+          "topic_prefix": "The MQTT topic prefix configured in BrewOS (default: brewos)",
+          "device_id": "The unique device ID from your BrewOS device (leave empty if using single device)"
+        }
+      },
+      "mqtt_confirm": {
+        "title": "Confirm BrewOS Device",
+        "description": "A BrewOS device was discovered via MQTT.\n\nDevice ID: {device_id}",
+        "data": {
+          "name": "Device Name"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to MQTT broker",
+      "invalid_topic": "Invalid MQTT topic prefix"
+    },
+    "abort": {
+      "already_configured": "This BrewOS device is already configured",
+      "invalid_discovery_info": "Invalid MQTT discovery information"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "brew_temp": {
+        "name": "Brew Temperature"
+      },
+      "brew_setpoint": {
+        "name": "Brew Setpoint"
+      },
+      "steam_temp": {
+        "name": "Steam Temperature"
+      },
+      "steam_setpoint": {
+        "name": "Steam Setpoint"
+      },
+      "pressure": {
+        "name": "Brew Pressure"
+      },
+      "scale_weight": {
+        "name": "Scale Weight"
+      },
+      "flow_rate": {
+        "name": "Flow Rate"
+      },
+      "shot_duration": {
+        "name": "Shot Duration"
+      },
+      "shot_weight": {
+        "name": "Shot Weight"
+      },
+      "target_weight": {
+        "name": "Target Weight"
+      },
+      "shots_today": {
+        "name": "Shots Today"
+      },
+      "total_shots": {
+        "name": "Total Shots"
+      },
+      "kwh_today": {
+        "name": "Energy Today"
+      },
+      "power": {
+        "name": "Power"
+      },
+      "voltage": {
+        "name": "Voltage"
+      },
+      "current": {
+        "name": "Current"
+      },
+      "state": {
+        "name": "Machine State"
+      }
+    },
+    "binary_sensor": {
+      "is_brewing": {
+        "name": "Brewing"
+      },
+      "is_heating": {
+        "name": "Heating"
+      },
+      "ready": {
+        "name": "Machine Ready"
+      },
+      "water_low": {
+        "name": "Water Low"
+      },
+      "alarm_active": {
+        "name": "Alarm"
+      },
+      "pico_connected": {
+        "name": "Pico Connected"
+      },
+      "scale_connected": {
+        "name": "Scale Connected"
+      }
+    },
+    "switch": {
+      "power": {
+        "name": "Power"
+      }
+    },
+    "button": {
+      "start_brew": {
+        "name": "Start Brew"
+      },
+      "stop_brew": {
+        "name": "Stop Brew"
+      },
+      "tare_scale": {
+        "name": "Tare Scale"
+      },
+      "enter_eco": {
+        "name": "Enter Eco Mode"
+      },
+      "exit_eco": {
+        "name": "Exit Eco Mode"
+      }
+    },
+    "number": {
+      "brew_setpoint": {
+        "name": "Brew Temperature Target"
+      },
+      "steam_setpoint": {
+        "name": "Steam Temperature Target"
+      },
+      "target_weight": {
+        "name": "Target Weight"
+      }
+    },
+    "select": {
+      "mode": {
+        "name": "Machine Mode",
+        "state": {
+          "standby": "Standby",
+          "on": "On",
+          "eco": "Eco"
+        }
+      },
+      "heating_strategy": {
+        "name": "Heating Strategy",
+        "state": {
+          "brew_only": "Brew Only",
+          "sequential": "Sequential",
+          "parallel": "Parallel",
+          "smart_stagger": "Smart Stagger"
+        }
+      }
+    }
+  }
+}
+

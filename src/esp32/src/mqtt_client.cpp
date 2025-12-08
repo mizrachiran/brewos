@@ -14,9 +14,11 @@ MQTTClient* MQTTClient::_instance = nullptr;
 // MQTT buffer size - must be large enough for HA discovery messages (~600 bytes)
 static const uint16_t MQTT_BUFFER_SIZE = 1024;
 
-// Total number of sensors published to Home Assistant
-// 5 value sensors + 5 binary sensors + 7 power meter sensors = 17
-static const uint8_t HA_TOTAL_SENSOR_COUNT = 17;
+// Total number of entities published to Home Assistant
+// Sensors: 5 temps + 7 power + 5 shot/scale + 3 stats = 20
+// Binary: 7 status sensors
+// Controls: 1 switch + 3 buttons + 3 numbers + 1 select = 8
+static const uint8_t HA_TOTAL_ENTITY_COUNT = 35;
 
 // =============================================================================
 // MQTT Client Implementation
@@ -227,21 +229,55 @@ void MQTTClient::disconnect() {
 void MQTTClient::publishStatus(const ui_state_t& state) {
     if (!_connected) return;
     
-    // Build status JSON using ArduinoJson for proper formatting
+    // Build comprehensive status JSON
     JsonDocument doc;
-    doc["state"] = state.machine_state;
+    
+    // Machine state - convert to string for HA templates
+    const char* stateStr = "unknown";
+    const char* modeStr = "standby";
+    switch (state.machine_state) {
+        case UI_STATE_INIT: stateStr = "init"; modeStr = "standby"; break;
+        case UI_STATE_IDLE: stateStr = "standby"; modeStr = "standby"; break;
+        case UI_STATE_HEATING: stateStr = "heating"; modeStr = "on"; break;
+        case UI_STATE_READY: stateStr = "ready"; modeStr = "on"; break;
+        case UI_STATE_BREWING: stateStr = "brewing"; modeStr = "on"; break;
+        case UI_STATE_STEAMING: stateStr = "steaming"; modeStr = "on"; break;
+        case UI_STATE_COOLDOWN: stateStr = "cooldown"; modeStr = "on"; break;
+        case UI_STATE_FAULT: stateStr = "fault"; modeStr = "standby"; break;
+        case UI_STATE_SAFE: stateStr = "safe"; modeStr = "standby"; break;
+    }
+    doc["state"] = stateStr;
+    doc["mode"] = modeStr;
+    doc["heating_strategy"] = state.heating_strategy;  // 0-3 for HA template
+    
+    // Temperature readings
     doc["brew_temp"] = serialized(String(state.brew_temp, 1));
     doc["brew_setpoint"] = serialized(String(state.brew_setpoint, 1));
     doc["steam_temp"] = serialized(String(state.steam_temp, 1));
     doc["steam_setpoint"] = serialized(String(state.steam_setpoint, 1));
+    
+    // Pressure
     doc["pressure"] = serialized(String(state.pressure, 2));
+    
+    // Scale data - use brew_weight as scale weight when brewing
+    doc["scale_weight"] = serialized(String(state.brew_weight, 1));
+    doc["flow_rate"] = serialized(String(state.flow_rate, 1));
+    doc["scale_connected"] = state.scale_connected;
+    
+    // Active shot data
+    doc["shot_duration"] = state.brew_time_ms / 1000.0f;
+    doc["shot_weight"] = serialized(String(state.brew_weight, 1));
     doc["is_brewing"] = state.is_brewing;
+    
+    // Target weight (for BBW)
+    doc["target_weight"] = serialized(String(state.target_weight, 1));
+    
+    // Status flags
     doc["is_heating"] = state.is_heating;
     doc["water_low"] = state.water_low;
     doc["alarm_active"] = state.alarm_active;
     doc["pico_connected"] = state.pico_connected;
     doc["wifi_connected"] = state.wifi_connected;
-    doc["scale_connected"] = state.scale_connected;
     
     String status;
     serializeJson(doc, status);
@@ -262,11 +298,30 @@ void MQTTClient::publishShot(const char* shot_json) {
     }
 }
 
-void MQTTClient::publishStatistics(const char* stats_json) {
+void MQTTClient::publishStatisticsJson(const char* stats_json) {
     if (!_connected) return;
     
     String statsTopic = topic("statistics");
     if (!_client.publish(statsTopic.c_str(), (const uint8_t*)stats_json, strlen(stats_json), true)) {
+        LOG_W("Failed to publish statistics");
+    }
+}
+
+void MQTTClient::publishStatistics(uint16_t shotsToday, uint32_t totalShots, float kwhToday) {
+    if (!_connected) return;
+    
+    // Build stats JSON and add to status topic for HA sensors
+    JsonDocument doc;
+    doc["shots_today"] = shotsToday;
+    doc["total_shots"] = totalShots;
+    doc["kwh_today"] = serialized(String(kwhToday, 3));
+    
+    String stats;
+    serializeJson(doc, stats);
+    
+    // Publish to statistics topic (retained)
+    String statsTopic = topic("statistics");
+    if (!_client.publish(statsTopic.c_str(), (const uint8_t*)stats.c_str(), stats.length(), true)) {
         LOG_W("Failed to publish statistics");
     }
 }
@@ -315,29 +370,37 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     String deviceId = String(_config.ha_device_id);
     String statusTopic = topic("status");
     String availTopic = topic("availability");
+    String commandTopic = topic("command");
+    String powerTopic = topic("power");
+    String shotTopic = topic("shot");
     
-    // Helper to publish a sensor discovery message
-    auto publishSensor = [&](const char* name, const char* sensorId, const char* valueTemplate, 
-                             const char* unit, const char* deviceClass, const char* stateClass) {
-        JsonDocument doc;
-        
-        // Device info (shared across all entities)
+    // Device info helper - returns a consistent device object
+    auto addDeviceInfo = [&](JsonDocument& doc) {
         JsonObject device = doc["device"].to<JsonObject>();
         device["identifiers"].to<JsonArray>().add("brewos_" + deviceId);
         device["name"] = "BrewOS Coffee Machine";
         device["model"] = "ECM Controller";
         device["manufacturer"] = "BrewOS";
         device["sw_version"] = ESP32_VERSION;
+        device["configuration_url"] = "http://" + WiFi.localIP().toString();
+    };
+    
+    // Helper to publish a sensor discovery message
+    auto publishSensor = [&](const char* name, const char* sensorId, const char* valueTemplate, 
+                             const char* unit, const char* deviceClass, const char* stateClass,
+                             const char* stateTopic = nullptr, const char* icon = nullptr) {
+        JsonDocument doc;
+        addDeviceInfo(doc);
         
-        // Entity config
         doc["name"] = name;
         doc["unique_id"] = "brewos_" + deviceId + "_" + String(sensorId);
         doc["object_id"] = "brewos_" + String(sensorId);
-        doc["state_topic"] = statusTopic;
+        doc["state_topic"] = stateTopic ? stateTopic : statusTopic.c_str();
         doc["value_template"] = valueTemplate;
-        doc["unit_of_measurement"] = unit;
-        doc["device_class"] = deviceClass;
-        doc["state_class"] = stateClass;
+        if (unit && strlen(unit) > 0) doc["unit_of_measurement"] = unit;
+        if (deviceClass && strlen(deviceClass) > 0) doc["device_class"] = deviceClass;
+        if (stateClass && strlen(stateClass) > 0) doc["state_class"] = stateClass;
+        if (icon) doc["icon"] = icon;
         doc["availability_topic"] = availTopic;
         doc["payload_available"] = "online";
         doc["payload_not_available"] = "offline";
@@ -352,32 +415,21 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         }
     };
     
-    // Publish sensor discoveries
-    publishSensor("Brew Temperature", "brew_temp", "{{ value_json.brew_temp }}", "°C", "temperature", "measurement");
-    publishSensor("Steam Temperature", "steam_temp", "{{ value_json.steam_temp }}", "°C", "temperature", "measurement");
-    publishSensor("Brew Pressure", "pressure", "{{ value_json.pressure }}", "bar", "pressure", "measurement");
-    publishSensor("Brew Setpoint", "brew_setpoint", "{{ value_json.brew_setpoint }}", "°C", "temperature", "measurement");
-    publishSensor("Steam Setpoint", "steam_setpoint", "{{ value_json.steam_setpoint }}", "°C", "temperature", "measurement");
-    
     // Publish binary sensors for status
     auto publishBinarySensor = [&](const char* name, const char* sensorId, const char* valueTemplate, 
-                                   const char* deviceClass) {
+                                   const char* deviceClass, const char* icon = nullptr) {
         JsonDocument doc;
-        
-        JsonObject device = doc["device"].to<JsonObject>();
-        device["identifiers"].to<JsonArray>().add("brewos_" + deviceId);
-        device["name"] = "BrewOS Coffee Machine";
-        device["model"] = "ECM Controller";
-        device["manufacturer"] = "BrewOS";
+        addDeviceInfo(doc);
         
         doc["name"] = name;
         doc["unique_id"] = "brewos_" + deviceId + "_" + String(sensorId);
         doc["object_id"] = "brewos_" + String(sensorId);
         doc["state_topic"] = statusTopic;
         doc["value_template"] = valueTemplate;
-        if (deviceClass) {
+        if (deviceClass && strlen(deviceClass) > 0) {
             doc["device_class"] = deviceClass;
         }
+        if (icon) doc["icon"] = icon;
         doc["payload_on"] = "True";
         doc["payload_off"] = "False";
         doc["availability_topic"] = availTopic;
@@ -389,24 +441,212 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         _client.publish(configTopic.c_str(), (const uint8_t*)payload.c_str(), payload.length(), true);
     };
     
-    publishBinarySensor("Brewing", "is_brewing", "{{ value_json.is_brewing }}", "running");
-    publishBinarySensor("Heating", "is_heating", "{{ value_json.is_heating }}", "heat");
-    publishBinarySensor("Water Low", "water_low", "{{ value_json.water_low }}", "problem");
-    publishBinarySensor("Alarm", "alarm_active", "{{ value_json.alarm_active }}", "problem");
-    publishBinarySensor("Pico Connected", "pico_connected", "{{ value_json.pico_connected }}", "connectivity");
+    // Helper to publish a switch
+    auto publishSwitch = [&](const char* name, const char* switchId, const char* icon,
+                             const char* payloadOn, const char* payloadOff, 
+                             const char* stateTemplate) {
+        JsonDocument doc;
+        addDeviceInfo(doc);
+        
+        doc["name"] = name;
+        doc["unique_id"] = "brewos_" + deviceId + "_" + String(switchId);
+        doc["object_id"] = "brewos_" + String(switchId);
+        doc["state_topic"] = statusTopic;
+        doc["command_topic"] = commandTopic;
+        doc["value_template"] = stateTemplate;
+        doc["payload_on"] = payloadOn;
+        doc["payload_off"] = payloadOff;
+        doc["state_on"] = "ON";
+        doc["state_off"] = "OFF";
+        doc["icon"] = icon;
+        doc["availability_topic"] = availTopic;
+        
+        String payload;
+        serializeJson(doc, payload);
+        
+        String configTopic = "homeassistant/switch/brewos_" + deviceId + "/" + String(switchId) + "/config";
+        _client.publish(configTopic.c_str(), (const uint8_t*)payload.c_str(), payload.length(), true);
+    };
     
-    // Power meter sensors (published to separate power topic)
-    String powerTopic = topic("power");
+    // Helper to publish a button
+    auto publishButton = [&](const char* name, const char* buttonId, const char* icon,
+                             const char* payload) {
+        JsonDocument doc;
+        addDeviceInfo(doc);
+        
+        doc["name"] = name;
+        doc["unique_id"] = "brewos_" + deviceId + "_" + String(buttonId);
+        doc["object_id"] = "brewos_" + String(buttonId);
+        doc["command_topic"] = commandTopic;
+        doc["payload_press"] = payload;
+        doc["icon"] = icon;
+        doc["availability_topic"] = availTopic;
+        
+        String jsonPayload;
+        serializeJson(doc, jsonPayload);
+        
+        String configTopic = "homeassistant/button/brewos_" + deviceId + "/" + String(buttonId) + "/config";
+        _client.publish(configTopic.c_str(), (const uint8_t*)jsonPayload.c_str(), jsonPayload.length(), true);
+    };
     
-    publishSensor("Voltage", "voltage", "{{ value_json.voltage }}", "V", "voltage", "measurement");
-    publishSensor("Current", "current", "{{ value_json.current }}", "A", "current", "measurement");
-    publishSensor("Power", "power", "{{ value_json.power }}", "W", "power", "measurement");
-    publishSensor("Energy Import", "energy_import", "{{ value_json.energy_import }}", "kWh", "energy", "total_increasing");
-    publishSensor("Energy Export", "energy_export", "{{ value_json.energy_export }}", "kWh", "energy", "total_increasing");
-    publishSensor("Frequency", "frequency", "{{ value_json.frequency }}", "Hz", "frequency", "measurement");
-    publishSensor("Power Factor", "power_factor", "{{ value_json.power_factor }}", "", "power_factor", "measurement");
+    // Helper to publish a number entity
+    auto publishNumber = [&](const char* name, const char* numberId, const char* icon,
+                             float min, float max, float step, const char* unit,
+                             const char* valueTemplate, const char* commandTemplate) {
+        JsonDocument doc;
+        addDeviceInfo(doc);
+        
+        doc["name"] = name;
+        doc["unique_id"] = "brewos_" + deviceId + "_" + String(numberId);
+        doc["object_id"] = "brewos_" + String(numberId);
+        doc["state_topic"] = statusTopic;
+        doc["command_topic"] = commandTopic;
+        doc["value_template"] = valueTemplate;
+        doc["command_template"] = commandTemplate;
+        doc["min"] = min;
+        doc["max"] = max;
+        doc["step"] = step;
+        doc["unit_of_measurement"] = unit;
+        doc["icon"] = icon;
+        doc["mode"] = "slider";
+        doc["availability_topic"] = availTopic;
+        
+        String payload;
+        serializeJson(doc, payload);
+        
+        String configTopic = "homeassistant/number/brewos_" + deviceId + "/" + String(numberId) + "/config";
+        _client.publish(configTopic.c_str(), (const uint8_t*)payload.c_str(), payload.length(), true);
+    };
     
-    LOG_I("Home Assistant discovery published (%d sensors)", HA_TOTAL_SENSOR_COUNT);
+    // Helper to publish a select entity
+    auto publishSelect = [&](const char* name, const char* selectId, const char* icon,
+                             const std::vector<String>& options, const char* valueTemplate,
+                             const char* commandTemplate) {
+        JsonDocument doc;
+        addDeviceInfo(doc);
+        
+        doc["name"] = name;
+        doc["unique_id"] = "brewos_" + deviceId + "_" + String(selectId);
+        doc["object_id"] = "brewos_" + String(selectId);
+        doc["state_topic"] = statusTopic;
+        doc["command_topic"] = commandTopic;
+        doc["value_template"] = valueTemplate;
+        doc["command_template"] = commandTemplate;
+        doc["icon"] = icon;
+        doc["availability_topic"] = availTopic;
+        
+        JsonArray optionsArr = doc["options"].to<JsonArray>();
+        for (const auto& opt : options) {
+            optionsArr.add(opt);
+        }
+        
+        String payload;
+        serializeJson(doc, payload);
+        
+        String configTopic = "homeassistant/select/brewos_" + deviceId + "/" + String(selectId) + "/config";
+        _client.publish(configTopic.c_str(), (const uint8_t*)payload.c_str(), payload.length(), true);
+    };
+    
+    // ==========================================================================
+    // TEMPERATURE SENSORS
+    // ==========================================================================
+    publishSensor("Brew Temperature", "brew_temp", "{{ value_json.brew_temp }}", "°C", "temperature", "measurement");
+    publishSensor("Steam Temperature", "steam_temp", "{{ value_json.steam_temp }}", "°C", "temperature", "measurement");
+    publishSensor("Brew Setpoint", "brew_setpoint", "{{ value_json.brew_setpoint }}", "°C", "temperature", "measurement");
+    publishSensor("Steam Setpoint", "steam_setpoint", "{{ value_json.steam_setpoint }}", "°C", "temperature", "measurement");
+    publishSensor("Brew Pressure", "pressure", "{{ value_json.pressure }}", "bar", "pressure", "measurement");
+    
+    // ==========================================================================
+    // SCALE & SHOT SENSORS
+    // ==========================================================================
+    publishSensor("Scale Weight", "scale_weight", "{{ value_json.scale_weight | default(0) }}", "g", "weight", "measurement", nullptr, "mdi:scale");
+    publishSensor("Flow Rate", "flow_rate", "{{ value_json.flow_rate | default(0) }}", "g/s", nullptr, "measurement", nullptr, "mdi:water-outline");
+    publishSensor("Shot Duration", "shot_duration", "{{ value_json.shot_duration | default(0) }}", "s", "duration", "measurement", nullptr, "mdi:timer");
+    publishSensor("Shot Weight", "shot_weight", "{{ value_json.shot_weight | default(0) }}", "g", "weight", "measurement", nullptr, "mdi:coffee");
+    publishSensor("Target Weight", "target_weight", "{{ value_json.target_weight | default(36) }}", "g", "weight", nullptr, nullptr, "mdi:target");
+    
+    // ==========================================================================
+    // STATISTICS SENSORS (use statistics topic)
+    // ==========================================================================
+    String statisticsTopic = topic("statistics");
+    publishSensor("Shots Today", "shots_today", "{{ value_json.shots_today | default(0) }}", "shots", nullptr, "total_increasing", statisticsTopic.c_str(), "mdi:counter");
+    publishSensor("Total Shots", "total_shots", "{{ value_json.total_shots | default(0) }}", "shots", nullptr, "total_increasing", statisticsTopic.c_str(), "mdi:coffee-maker");
+    publishSensor("Energy Today", "energy_today", "{{ value_json.kwh_today | default(0) }}", "kWh", "energy", "total_increasing", statisticsTopic.c_str(), nullptr);
+    
+    // ==========================================================================
+    // BINARY SENSORS
+    // ==========================================================================
+    publishBinarySensor("Brewing", "is_brewing", "{{ value_json.is_brewing }}", "running", "mdi:coffee");
+    publishBinarySensor("Heating", "is_heating", "{{ value_json.is_heating }}", "heat", nullptr);
+    publishBinarySensor("Machine Ready", "ready", "{{ 'True' if value_json.state == 'ready' else 'False' }}", nullptr, "mdi:check-circle");
+    publishBinarySensor("Water Low", "water_low", "{{ value_json.water_low }}", "problem", nullptr);
+    publishBinarySensor("Alarm", "alarm_active", "{{ value_json.alarm_active }}", "problem", nullptr);
+    publishBinarySensor("Pico Connected", "pico_connected", "{{ value_json.pico_connected }}", "connectivity", nullptr);
+    publishBinarySensor("Scale Connected", "scale_connected", "{{ value_json.scale_connected }}", "connectivity", "mdi:bluetooth");
+    
+    // ==========================================================================
+    // POWER METER SENSORS
+    // ==========================================================================
+    publishSensor("Voltage", "voltage", "{{ value_json.voltage }}", "V", "voltage", "measurement", powerTopic.c_str());
+    publishSensor("Current", "current", "{{ value_json.current }}", "A", "current", "measurement", powerTopic.c_str());
+    publishSensor("Power", "power", "{{ value_json.power }}", "W", "power", "measurement", powerTopic.c_str());
+    publishSensor("Energy Import", "energy_import", "{{ value_json.energy_import }}", "kWh", "energy", "total_increasing", powerTopic.c_str());
+    publishSensor("Energy Export", "energy_export", "{{ value_json.energy_export }}", "kWh", "energy", "total_increasing", powerTopic.c_str());
+    publishSensor("Frequency", "frequency", "{{ value_json.frequency }}", "Hz", "frequency", "measurement", powerTopic.c_str());
+    publishSensor("Power Factor", "power_factor", "{{ value_json.power_factor }}", "", "power_factor", "measurement", powerTopic.c_str());
+    
+    // ==========================================================================
+    // SWITCH - Machine Power
+    // ==========================================================================
+    publishSwitch("Power", "power_switch", "mdi:power",
+                  "{\"cmd\":\"set_mode\",\"mode\":\"on\"}",
+                  "{\"cmd\":\"set_mode\",\"mode\":\"standby\"}",
+                  "{{ 'ON' if value_json.state != 'standby' else 'OFF' }}");
+    
+    // ==========================================================================
+    // BUTTONS - Actions
+    // ==========================================================================
+    publishButton("Start Brew", "start_brew", "mdi:coffee", "{\"cmd\":\"brew_start\"}");
+    publishButton("Stop Brew", "stop_brew", "mdi:stop", "{\"cmd\":\"brew_stop\"}");
+    publishButton("Tare Scale", "tare_scale", "mdi:scale-balance", "{\"cmd\":\"tare\"}");
+    publishButton("Enter Eco Mode", "enter_eco", "mdi:leaf", "{\"cmd\":\"enter_eco\"}");
+    publishButton("Exit Eco Mode", "exit_eco", "mdi:lightning-bolt", "{\"cmd\":\"exit_eco\"}");
+    
+    // ==========================================================================
+    // NUMBER - Configurable values
+    // ==========================================================================
+    publishNumber("Brew Temperature Target", "brew_temp_target", "mdi:thermometer",
+                  85.0, 100.0, 0.5, "°C",
+                  "{{ value_json.brew_setpoint }}",
+                  "{\"cmd\":\"set_temp\",\"boiler\":\"brew\",\"temp\":{{ value }}}");
+    
+    publishNumber("Steam Temperature Target", "steam_temp_target", "mdi:thermometer-high",
+                  120.0, 160.0, 1.0, "°C",
+                  "{{ value_json.steam_setpoint }}",
+                  "{\"cmd\":\"set_temp\",\"boiler\":\"steam\",\"temp\":{{ value }}}");
+    
+    publishNumber("Target Weight", "bbw_target", "mdi:target",
+                  18.0, 100.0, 0.5, "g",
+                  "{{ value_json.target_weight | default(36) }}",
+                  "{\"cmd\":\"set_target_weight\",\"weight\":{{ value }}}");
+    
+    // ==========================================================================
+    // SELECT - Machine Mode
+    // ==========================================================================
+    publishSelect("Machine Mode", "mode_select", "mdi:coffee-maker-outline",
+                  {"standby", "on", "eco"},
+                  "{{ value_json.mode | default('standby') }}",
+                  "{\"cmd\":\"set_mode\",\"mode\":\"{{ value }}\"}");
+    
+    // ==========================================================================
+    // SELECT - Heating Strategy
+    // ==========================================================================
+    publishSelect("Heating Strategy", "heating_strategy", "mdi:fire",
+                  {"brew_only", "sequential", "parallel", "smart_stagger"},
+                  "{% set strategies = ['brew_only', 'sequential', 'parallel', 'smart_stagger'] %}{{ strategies[value_json.heating_strategy | int] | default('sequential') }}",
+                  "{% set strategies = {'brew_only': 0, 'sequential': 1, 'parallel': 2, 'smart_stagger': 3} %}{\"cmd\":\"set_heating_strategy\",\"strategy\":{{ strategies[value] | default(1) }}}");
+    
+    LOG_I("Home Assistant discovery published (%d entities)", HA_TOTAL_ENTITY_COUNT);
 }
 
 void MQTTClient::onMessage(char* topicName, byte* payload, unsigned int length) {
@@ -491,6 +731,32 @@ void MQTTClient::onMessage(char* topicName, byte* payload, unsigned int length) 
                 _commandCallback(cmd.c_str(), doc);
             }
             LOG_I("MQTT: %s", cmd.c_str());
+        }
+        else if (cmd == "brew_start") {
+            // Start brewing: {"cmd":"brew_start"}
+            if (_commandCallback) {
+                _commandCallback(cmd.c_str(), doc);
+            }
+            LOG_I("MQTT: brew_start");
+        }
+        else if (cmd == "brew_stop") {
+            // Stop brewing: {"cmd":"brew_stop"}
+            if (_commandCallback) {
+                _commandCallback(cmd.c_str(), doc);
+            }
+            LOG_I("MQTT: brew_stop");
+        }
+        else if (cmd == "set_heating_strategy") {
+            // Set heating strategy: {"cmd":"set_heating_strategy","strategy":1}
+            uint8_t strategy = doc["strategy"] | 1;
+            if (strategy <= 3) {
+                if (_commandCallback) {
+                    _commandCallback(cmd.c_str(), doc);
+                }
+                LOG_I("MQTT: set_heating_strategy to %d", strategy);
+            } else {
+                LOG_W("MQTT: Invalid heating strategy: %d", strategy);
+            }
         }
         else {
             LOG_W("MQTT: Unknown command: %s", cmd.c_str());

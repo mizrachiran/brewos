@@ -101,14 +101,22 @@ public:
     void publishShot(const char* shot_json);
     
     /**
-     * Publish statistics
+     * Publish statistics as raw JSON (legacy)
      */
-    void publishStatistics(const char* stats_json);
+    void publishStatisticsJson(const char* stats_json);
     
     /**
      * Publish power meter data
      */
     void publishPowerMeter(const PowerMeterReading& reading);
+    
+    /**
+     * Publish statistics (shots, energy, etc.)
+     * @param shotsToday Daily shot count
+     * @param totalShots Lifetime shot count
+     * @param kwhToday Daily energy usage
+     */
+    void publishStatistics(uint16_t shotsToday, uint32_t totalShots, float kwhToday);
     
     /**
      * Get connection status string

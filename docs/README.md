@@ -54,6 +54,12 @@ docs/
     ├── Test_Procedures.md
     ├── CHANGELOG.md
     └── schematics/        # Schematics and component reference
+
+homeassistant/             # Home Assistant integration
+├── README.md              # Integration documentation
+├── custom_components/     # Native HA integration
+├── lovelace/              # Custom dashboard card
+└── examples/              # Automations and dashboard configs
 ```
 
 ## Quick Links
@@ -95,7 +101,8 @@ docs/
 
 ### Integrations
 
-- [MQTT / Home Assistant](esp32/integrations/MQTT.md) - MQTT setup and auto-discovery
+- [Home Assistant](../homeassistant/README.md) ⭐ _Custom card, native integration, automations_
+- [MQTT](esp32/integrations/MQTT.md) - MQTT setup and auto-discovery
 - [BLE Scales](esp32/integrations/BLE_Scales.md) - Bluetooth scale integration
 - [Brew-by-Weight](esp32/integrations/Brew_By_Weight.md) - Auto-stop at target weight
 - [Power Metering](web/Power_Metering.md) - Power monitoring (hardware modules + MQTT smart plugs)

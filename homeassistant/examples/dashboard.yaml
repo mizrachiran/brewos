@@ -1,0 +1,193 @@
+# BrewOS Home Assistant Dashboard
+# This is an example dashboard configuration using the BrewOS Card
+# Add this to your Lovelace dashboard
+
+title: BrewOS
+views:
+  - title: Espresso
+    path: espresso
+    icon: mdi:coffee
+    cards:
+      # Main BrewOS Card (custom card)
+      - type: custom:brewos-card
+        entity_prefix: brewos
+        name: "ECM Synchronika"
+        show_name: true
+        show_stats: true
+        show_actions: true
+
+      # Alternative: Standard entities card
+      - type: entities
+        title: Machine Status
+        entities:
+          - entity: switch.brewos_power
+            name: Power
+          - entity: select.brewos_mode
+            name: Mode
+          - entity: binary_sensor.brewos_ready
+            name: Ready
+          - entity: binary_sensor.brewos_brewing
+            name: Brewing
+          - entity: binary_sensor.brewos_heating
+            name: Heating
+          - entity: binary_sensor.brewos_water_low
+            name: Water Low
+
+      # Temperature Gauges
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.brewos_brew_temp
+            name: Brew
+            min: 0
+            max: 105
+            severity:
+              green: 92
+              yellow: 85
+              red: 0
+            needle: true
+          - type: gauge
+            entity: sensor.brewos_steam_temp
+            name: Steam
+            min: 0
+            max: 160
+            severity:
+              green: 140
+              yellow: 120
+              red: 0
+            needle: true
+
+      # Temperature Settings
+      - type: entities
+        title: Temperature Control
+        entities:
+          - entity: number.brewos_brew_setpoint
+            name: Brew Target
+          - entity: number.brewos_steam_setpoint
+            name: Steam Target
+
+      # Pressure Graph
+      - type: history-graph
+        title: Brew Pressure
+        hours_to_show: 1
+        entities:
+          - entity: sensor.brewos_pressure
+            name: Pressure
+
+      # Shot Statistics
+      - type: statistics-graph
+        title: Shot Duration (Last 7 Days)
+        entities:
+          - sensor.brewos_shot_duration
+        stat_types:
+          - mean
+          - min
+          - max
+        days_to_show: 7
+
+      # Scale and BBW
+      - type: entities
+        title: Scale & Brew-by-Weight
+        entities:
+          - entity: binary_sensor.brewos_scale_connected
+            name: Scale Connected
+          - entity: sensor.brewos_scale_weight
+            name: Current Weight
+          - entity: number.brewos_target_weight
+            name: Target Weight
+          - entity: sensor.brewos_flow_rate
+            name: Flow Rate
+          - entity: button.brewos_tare_scale
+            name: Tare Scale
+
+      # Quick Actions
+      - type: horizontal-stack
+        cards:
+          - type: button
+            entity: button.brewos_start_brew
+            name: Start Brew
+            icon: mdi:coffee
+            tap_action:
+              action: call-service
+              service: button.press
+              target:
+                entity_id: button.brewos_start_brew
+          - type: button
+            entity: button.brewos_stop_brew
+            name: Stop Brew
+            icon: mdi:stop
+            icon_height: 40px
+            tap_action:
+              action: call-service
+              service: button.press
+              target:
+                entity_id: button.brewos_stop_brew
+
+      # Power Consumption
+      - type: entities
+        title: Power
+        entities:
+          - entity: sensor.brewos_power
+            name: Current Power
+          - entity: sensor.brewos_voltage
+            name: Voltage
+          - entity: sensor.brewos_current
+            name: Current
+          - entity: sensor.brewos_kwh_today
+            name: Energy Today
+
+      # Statistics Summary
+      - type: glance
+        title: Statistics
+        entities:
+          - entity: sensor.brewos_shots_today
+            name: Today
+          - entity: sensor.brewos_total_shots
+            name: Total
+          - entity: sensor.brewos_kwh_today
+            name: kWh Today
+
+      # Connection Status
+      - type: entities
+        title: Connectivity
+        entities:
+          - entity: binary_sensor.brewos_pico_connected
+            name: Pico Controller
+          - entity: binary_sensor.brewos_scale_connected
+            name: Bluetooth Scale
+
+  # Statistics View
+  - title: Stats
+    path: espresso-stats
+    icon: mdi:chart-line
+    cards:
+      - type: statistics-graph
+        title: Daily Shots (30 Days)
+        entities:
+          - sensor.brewos_shots_today
+        stat_types:
+          - mean
+          - max
+        days_to_show: 30
+        period: day
+
+      - type: history-graph
+        title: Temperature History
+        hours_to_show: 24
+        entities:
+          - entity: sensor.brewos_brew_temp
+            name: Brew
+          - entity: sensor.brewos_steam_temp
+            name: Steam
+
+      - type: history-graph
+        title: Power Usage
+        hours_to_show: 24
+        entities:
+          - entity: sensor.brewos_power
+            name: Power (W)
+
+      - type: energy-distribution
+        title: Energy
+        link_dashboard: true
+
