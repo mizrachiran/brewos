@@ -282,7 +282,15 @@ void WebServer::setupRoutes() {
     });
     
     // Setup complete endpoint (marks first-run wizard as done)
+    // Note: No auth required - this endpoint is only accessible on local network
+    // during initial device setup before WiFi is configured
     _server.on("/api/setup/complete", HTTP_POST, [](AsyncWebServerRequest* request) {
+        // Only allow if not already completed (prevent re-triggering)
+        if (State.settings().system.setupComplete) {
+            request->send(200, "application/json", "{\"success\":true,\"alreadyComplete\":true}");
+            return;
+        }
+        
         State.settings().system.setupComplete = true;
         State.saveSystemSettings();
         LOG_I("Setup wizard completed");

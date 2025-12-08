@@ -305,10 +305,13 @@ void StateManager::saveNotificationSettings() {
 }
 
 void StateManager::saveSystemSettings() {
-    _prefs.begin(NVS_SETTINGS, false);
-    _prefs.putBool("setupDone", _settings.system.setupComplete);
-    _prefs.end();
-    notifySettingsChanged();
+    if (_prefs.begin(NVS_SETTINGS, false)) {
+        _prefs.putBool("setupDone", _settings.system.setupComplete);
+        _prefs.end();
+        notifySettingsChanged();
+    } else {
+        Serial.println("[State] Error: Failed to initialize NVS for system settings");
+    }
 }
 
 void StateManager::resetSettings() {
