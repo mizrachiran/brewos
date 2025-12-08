@@ -64,15 +64,15 @@ WebServer webServer(wifiManager, picoUart, mqttClient, &pairingManager);
 // =============================================================================
 // LOG LEVEL CONTROL
 // =============================================================================
-BrewOSLogLevel g_log_level = BREWOS_LOG_INFO;  // Default to INFO level
+BrewOSLogLevel g_brewos_log_level = BREWOS_LOG_INFO;  // Default to INFO level
 
 void setLogLevel(BrewOSLogLevel level) {
-    g_log_level = level;
+    g_brewos_log_level = level;
     Serial.printf("[Log] Level set to: %s (%d)\n", logLevelToString(level), level);
 }
 
 BrewOSLogLevel getLogLevel() {
-    return g_log_level;
+    return g_brewos_log_level;
 }
 
 const char* logLevelToString(BrewOSLogLevel level) {

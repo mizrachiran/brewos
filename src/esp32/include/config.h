@@ -102,7 +102,7 @@ enum BrewOSLogLevel {
 };
 
 // Global log level - declared extern, defined in main.cpp
-extern BrewOSLogLevel g_log_level;
+extern BrewOSLogLevel g_brewos_log_level;
 
 // Log level control functions
 void setLogLevel(BrewOSLogLevel level);
@@ -113,8 +113,8 @@ BrewOSLogLevel stringToLogLevel(const char* str);
 // Log macros with level checking
 #define LOG_TAG                 "BrewOS"
 #define LOG_E(fmt, ...)         Serial.printf("[%lu] E: " fmt "\n", millis(), ##__VA_ARGS__)
-#define LOG_W(fmt, ...)         do { if (g_log_level >= BREWOS_LOG_WARN) Serial.printf("[%lu] W: " fmt "\n", millis(), ##__VA_ARGS__); } while(0)
-#define LOG_I(fmt, ...)         do { if (g_log_level >= BREWOS_LOG_INFO) Serial.printf("[%lu] I: " fmt "\n", millis(), ##__VA_ARGS__); } while(0)
-#define LOG_D(fmt, ...)         do { if (g_log_level >= BREWOS_LOG_DEBUG) Serial.printf("[%lu] D: " fmt "\n", millis(), ##__VA_ARGS__); } while(0)
+#define LOG_W(fmt, ...)         do { if (g_brewos_log_level >= BREWOS_LOG_WARN) Serial.printf("[%lu] W: " fmt "\n", millis(), ##__VA_ARGS__); } while(0)
+#define LOG_I(fmt, ...)         do { if (g_brewos_log_level >= BREWOS_LOG_INFO) Serial.printf("[%lu] I: " fmt "\n", millis(), ##__VA_ARGS__); } while(0)
+#define LOG_D(fmt, ...)         do { if (g_brewos_log_level >= BREWOS_LOG_DEBUG) Serial.printf("[%lu] D: " fmt "\n", millis(), ##__VA_ARGS__); } while(0)
 
 #endif // CONFIG_H
