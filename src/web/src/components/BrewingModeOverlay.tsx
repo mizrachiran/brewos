@@ -10,7 +10,6 @@ import {
   Gauge,
   Thermometer,
   Coffee,
-  Timer,
 } from 'lucide-react';
 
 const MAX_PRESSURE = 12; // bar - typical max for espresso
@@ -200,18 +199,7 @@ export const BrewingModeOverlay = memo(function BrewingModeOverlay() {
               </div>
             )}
           </>
-        ) : (
-          /* Time-based extraction indicator when no scale */
-          <div className="w-full max-w-lg">
-            <div className="bg-theme-secondary rounded-2xl p-4 sm:p-6 border border-theme text-center">
-              <Timer className="w-8 h-8 sm:w-10 sm:h-10 text-amber-500 mx-auto mb-2 sm:mb-3" />
-              <div className="text-base sm:text-lg font-medium text-theme">Time-Based Extraction</div>
-              <div className="text-xs sm:text-sm text-theme-muted mt-1">
-                Connect a scale for weight tracking
-              </div>
-            </div>
-          </div>
-        )}
+        ) : null /* No scale: timer display at top is sufficient */}
 
         {/* Pressure and Temperature */}
         <div className={cn('grid gap-3 sm:gap-6 w-full max-w-lg', hasPressureSensor ? 'grid-cols-2' : 'grid-cols-1')}>

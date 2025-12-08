@@ -23,6 +23,8 @@ export function BrewingPreview() {
   const { sendCommand } = useCommand();
 
   // Local simulation controls (not synced to store until "Apply" is clicked)
+  const [scaleConnected, setScaleConnected] = useState(true);
+  const [enableBBW, setEnableBBW] = useState(true);
   const [targetWeight, setTargetWeight] = useState(36);
   const [simulatePreinfusion, setSimulatePreinfusion] = useState(true);
   const [preinfusionOnMs, setPreinfusionOnMs] = useState(3000);
@@ -32,19 +34,22 @@ export function BrewingPreview() {
 
   // Apply settings manually (not on every change)
   const applySettings = useCallback(() => {
+    // Set scale connection status (for demo mode simulation)
+    sendCommand('set_scale_connected', { connected: scaleConnected });
+    
     sendCommand('set_preinfusion', {
       enabled: simulatePreinfusion,
       onTimeMs: preinfusionOnMs,
       pauseTimeMs: preinfusionPauseMs,
     });
     sendCommand('set_bbw', {
-      enabled: true,
+      enabled: enableBBW && scaleConnected, // BBW requires scale
       targetWeight,
       doseWeight: 18,
       stopOffset: 2,
       autoTare: true,
     });
-  }, [simulatePreinfusion, preinfusionOnMs, preinfusionPauseMs, targetWeight, sendCommand]);
+  }, [scaleConnected, simulatePreinfusion, preinfusionOnMs, preinfusionPauseMs, enableBBW, targetWeight, sendCommand]);
 
   const turnMachineOn = useCallback(() => {
     sendCommand('set_mode', { mode: 'on', strategy: 1 });
@@ -159,22 +164,51 @@ export function BrewingPreview() {
           <h2 className="text-lg font-semibold text-theme mb-4">Simulation Settings</h2>
           
           <div className="space-y-4">
-            {/* Target Weight */}
+            {/* Scale Connection Toggle */}
             <div>
-              <label className="text-sm font-medium text-theme-secondary mb-1 block">
-                Target Weight (g)
-              </label>
-              <Input
-                type="number"
-                value={targetWeight}
-                onChange={(e) => setTargetWeight(Number(e.target.value))}
-                min={10}
-                max={100}
+              <Toggle
+                checked={scaleConnected}
+                onChange={setScaleConnected}
+                label="Scale Connected"
               />
               <p className="text-xs text-theme-muted mt-1">
-                Brew will auto-stop when this weight is reached
+                Simulate whether a Bluetooth scale is connected
               </p>
             </div>
+
+            {/* Brew-by-Weight Toggle - only available when scale is connected */}
+            <div className={!scaleConnected ? 'opacity-50' : ''}>
+              <Toggle
+                checked={enableBBW && scaleConnected}
+                onChange={setEnableBBW}
+                label="Enable Brew-by-Weight"
+                disabled={!scaleConnected}
+              />
+              <p className="text-xs text-theme-muted mt-1">
+                {scaleConnected 
+                  ? 'When disabled, extraction is time-based only'
+                  : 'Requires scale connection'}
+              </p>
+            </div>
+
+            {/* Target Weight - only shown when BBW is enabled */}
+            {enableBBW && (
+              <div className="pl-4 border-l-2 border-accent/30">
+                <label className="text-sm font-medium text-theme-secondary mb-1 block">
+                  Target Weight (g)
+                </label>
+                <Input
+                  type="number"
+                  value={targetWeight}
+                  onChange={(e) => setTargetWeight(Number(e.target.value))}
+                  min={10}
+                  max={100}
+                />
+                <p className="text-xs text-theme-muted mt-1">
+                  Brew will auto-stop when this weight is reached
+                </p>
+              </div>
+            )}
 
             {/* Pre-infusion Toggle */}
             <div className="pt-4 border-t border-theme">
@@ -250,7 +284,7 @@ export function BrewingPreview() {
             Debug: Current Store State
           </summary>
           <pre className="mt-2 p-3 bg-theme-secondary rounded-lg overflow-auto">
-            {JSON.stringify({ shot, preinfusion, bbw }, null, 2)}
+            {JSON.stringify({ shot, preinfusion, bbw, localSettings: { scaleConnected, enableBBW, targetWeight } }, null, 2)}
           </pre>
         </details>
       </div>

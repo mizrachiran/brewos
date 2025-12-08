@@ -206,6 +206,15 @@ export class DemoConnection implements IConnection {
         // User preferences - just log in demo mode (they're stored in localStorage)
         console.log("[Demo] User preferences updated:", data);
         break;
+      case "set_scale_connected":
+        // Simulate scale connection/disconnection for dev testing
+        if (data.connected !== undefined) {
+          this.scaleConnected = data.connected as boolean;
+          console.log("[Demo] Scale connection set to:", this.scaleConnected);
+          // Emit updated status immediately
+          this.emitFullStatus();
+        }
+        break;
       case "set_machine_info":
         // Update machine type for diagnostics
         if (data.machineType) {
@@ -1034,13 +1043,20 @@ export class DemoConnection implements IConnection {
       this.flowRate = 2 + (Math.random() - 0.5) * 0.3;
     }
 
-    // Weight accumulation
-    this.shotWeight += this.flowRate * 0.5;
-    this.scaleWeight = this.shotWeight;
+    // Weight accumulation - only if scale is connected
+    if (this.scaleConnected) {
+      this.shotWeight += this.flowRate * 0.5;
+      this.scaleWeight = this.shotWeight;
 
-    // Auto-stop at ~36g (typical double shot)
-    if (this.shotWeight >= 36) {
-      this.stopBrewing();
+      // Auto-stop at target weight (BBW) - only if scale connected and BBW enabled
+      if (this.bbwEnabled && this.shotWeight >= this.bbwTargetWeight) {
+        this.stopBrewing();
+      }
+    } else {
+      // No scale = no weight tracking, time-based extraction only
+      this.shotWeight = 0;
+      this.scaleWeight = 0;
+      this.flowRate = 0;
     }
   }
 
@@ -1103,8 +1119,9 @@ export class DemoConnection implements IConnection {
         active: this.isBrewing,
         startTime: this.shotStartTime,
         duration: this.isBrewing ? Date.now() - this.shotStartTime : 0,
-        weight: Number(this.shotWeight.toFixed(1)),
-        flowRate: Number(this.flowRate.toFixed(1)),
+        // Weight/flow only available when scale is connected
+        weight: this.scaleConnected ? Number(this.shotWeight.toFixed(1)) : 0,
+        flowRate: this.scaleConnected ? Number(this.flowRate.toFixed(1)) : 0,
       },
       // Connections section
       connections: {
