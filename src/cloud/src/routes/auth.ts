@@ -95,7 +95,7 @@ router.post(
       }
 
       // Validate credential is a string and reasonable length (JWT tokens are typically < 2KB)
-      if (typeof credential !== "string" || credential.length > 4096) {
+      if (typeof credential !== "string" || credential.length > 2048) {
         return res.status(400).json({ error: "Invalid credential format" });
       }
 
@@ -165,7 +165,7 @@ router.post("/refresh", authStrictLimiter, (req: Request, res: Response) => {
     }
 
     // Validate refresh token is a string and reasonable length (base64url encoded 32 bytes = ~43 chars)
-    if (typeof refreshToken !== "string" || refreshToken.length > 256) {
+    if (typeof refreshToken !== "string" || refreshToken.length > 64) {
       return res.status(400).json({ error: "Invalid refresh token format" });
     }
 

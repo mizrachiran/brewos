@@ -31,12 +31,18 @@ if (!corsOrigin && process.env.NODE_ENV === "production") {
     "[Security] CORS_ORIGIN not set in production! Defaulting to restrictive policy."
   );
 }
+
+// Determine allowed origins based on environment
+const DEV_ORIGINS = ["http://localhost:5173", "http://localhost:3001", "http://127.0.0.1:5173"];
+const getAllowedOrigins = (): string | string[] | false => {
+  if (corsOrigin) return corsOrigin;
+  if (process.env.NODE_ENV === "production") return false; // Reject all if not configured
+  return DEV_ORIGINS;
+};
+
 app.use(
   cors({
-    // In production, require explicit CORS_ORIGIN; in development, allow localhost
-    origin: corsOrigin || (process.env.NODE_ENV === "production" 
-      ? false  // Reject all cross-origin requests if not configured
-      : ["http://localhost:5173", "http://localhost:3001", "http://127.0.0.1:5173"]),
+    origin: getAllowedOrigins(),
     credentials: true,
   })
 );
