@@ -24,7 +24,6 @@
 
 #define SAFETY_BREW_MAX_TEMP_C        130.0f   // SAF-020: Brew boiler max
 #define SAFETY_STEAM_MAX_TEMP_C       165.0f   // SAF-021: Steam boiler max
-#define SAFETY_GROUP_MAX_TEMP_C       110.0f   // SAF-022: Group head max
 #define SAFETY_NTC_OPEN_CIRCUIT_C     150.0f   // SAF-023: NTC open circuit threshold
 #define SAFETY_NTC_SHORT_CIRCUIT_C    -20.0f   // SAF-024: NTC short circuit threshold
 #define SAFETY_TEMP_HYSTERESIS_C      10.0f    // SAF-025: Re-enable 10°C below max
@@ -62,7 +61,6 @@ static bool g_steam_level_state = true;
 // Over-temperature state (for hysteresis)
 static bool g_brew_over_temp = false;
 static bool g_steam_over_temp = false;
-static bool g_group_over_temp = false;
 
 // SSR monitoring (SAF-031)
 static uint32_t g_brew_ssr_on_time = 0;
@@ -223,7 +221,6 @@ void safety_init(void) {
     // Initialize over-temp state
     g_brew_over_temp = false;
     g_steam_over_temp = false;
-    g_group_over_temp = false;
     
     // Initialize SSR monitoring
     g_brew_ssr_on_time = 0;
@@ -264,7 +261,6 @@ safety_state_t safety_check(void) {
     
     float brew_temp_c = data.brew_temp / 10.0f;
     float steam_temp_c = data.steam_temp / 10.0f;
-    float group_temp_c = data.group_temp / 10.0f;
     
     // =========================================================================
     // SAF-010, SAF-011, SAF-012: Water Level Interlocks
@@ -391,24 +387,8 @@ safety_state_t safety_check(void) {
         }
     }
     
-    // Check group head temperature (SAF-022) - only if machine has group thermocouple
-    if (features && machine_has_group_thermocouple()) {
-        if (!isnan(group_temp_c) && !isinf(group_temp_c)) {
-            if (group_temp_c >= SAFETY_GROUP_MAX_TEMP_C) {
-                g_group_over_temp = true;
-                g_safety_flags |= SAFETY_FLAG_OVER_TEMP;
-                if (g_last_alarm == ALARM_NONE) {
-                    g_last_alarm = ALARM_OVER_TEMP;
-                }
-                if (result < SAFETY_FAULT) {
-                    result = SAFETY_FAULT;  // Warning, not critical
-                }
-                DEBUG_PRINT("SAFETY: Group head over temperature: %.1fC\n", group_temp_c);
-            } else if (group_temp_c <= (SAFETY_GROUP_MAX_TEMP_C - SAFETY_TEMP_HYSTERESIS_C)) {
-                g_group_over_temp = false;
-            }
-        }
-    }
+    // Note: Group head thermocouple (SAF-022) removed in v2.24.3
+    // Boiler NTC sensors provide sufficient over-temperature protection
     
     // =========================================================================
     // SAF-023, SAF-024: NTC Sensor Fault Detection

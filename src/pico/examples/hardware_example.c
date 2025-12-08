@@ -55,41 +55,13 @@ int main(void) {
     printf("\n");
     
     // =========================================================================
-    // MAX31855 Thermocouple Example
+    // MAX31855 Thermocouple - REMOVED (v2.24.3)
     // =========================================================================
-    printf("--- MAX31855 Thermocouple Test ---\n");
-    
-    uint32_t max31855_data;
-    if (hw_spi_read_max31855(&max31855_data)) {
-        printf("MAX31855 data: 0x%08X\n", max31855_data);
-        
-        if (hw_max31855_is_fault(max31855_data)) {
-            uint8_t fault = hw_max31855_get_fault(max31855_data);
-            printf("FAULT detected: code=%d\n", fault);
-        } else {
-            float temp_c;
-            if (hw_max31855_to_temp(max31855_data, &temp_c)) {
-                printf("Temperature: %.2f°C\n", temp_c);
-            }
-        }
-    } else {
-        printf("Failed to read MAX31855\n");
-    }
-    
-    // In simulation mode, set a temperature
-    if (hw_is_simulation_mode()) {
-        printf("\nSetting simulated temperature to 95.0°C...\n");
-        // Format: 95.0C = 380 in 0.25C units, shifted to bits 18-31
-        uint32_t sim_data = ((380 << 18) & 0xFFFC0000);
-        hw_sim_set_max31855(sim_data);
-        
-        if (hw_spi_read_max31855(&max31855_data)) {
-            float temp_c;
-            if (hw_max31855_to_temp(max31855_data, &temp_c)) {
-                printf("Simulated temperature: %.2f°C\n", temp_c);
-            }
-        }
-    }
+    // Note: MAX31855 thermocouple support was removed in v2.24.3.
+    // Boiler NTC sensors provide sufficient temperature control.
+    // The hw_spi_read_max31855() API is retained for compatibility but always returns false.
+    printf("--- MAX31855 Thermocouple (REMOVED) ---\n");
+    printf("Note: MAX31855 support removed in v2.24.3\n");
     
     printf("\n");
     

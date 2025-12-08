@@ -88,7 +88,7 @@ void apply_hardware_outputs(uint8_t brew_heater, uint8_t steam_heater, uint8_t p
 bool init_hardware_outputs(void);
 
 /**
- * Estimate power consumption (fallback when PZEM unavailable)
+ * Estimate power consumption (fallback when power meter unavailable)
  */
 uint16_t estimate_power_watts(uint8_t brew_duty, uint8_t steam_duty);
 

@@ -25,7 +25,7 @@
 #include "pcb_config.h"
 #include "safety.h"
 #include "state.h"
-#include "pzem.h"
+#include "power_meter.h"
 #include <math.h>
 #include <string.h>
 
@@ -563,11 +563,10 @@ void control_init(void) {
     DEBUG_PRINT("Control initialized. Brew SP=%.1fC, Steam SP=%.1fC\n",
                 g_brew_pid.setpoint, g_steam_pid.setpoint);
     
-    // Initialize PZEM if available
-    if (pzem_is_available()) {
-        if (pzem_init(PZEM_DEFAULT_ADDRESS)) {
-            DEBUG_PRINT("PZEM: Power meter initialized\n");
-        }
+    // Initialize power meter if configured (PZEM, JSY, Eastron, etc.)
+    if (power_meter_init(NULL)) {
+        const char* meter_name = power_meter_get_name();
+        DEBUG_PRINT("Power meter initialized: %s\n", meter_name);
     }
 }
 
@@ -619,9 +618,9 @@ void control_update(void) {
     sensors_sim_set_heating(g_outputs.brew_heater > 0 || g_outputs.steam_heater > 0);
     
     // Power measurement
-    pzem_data_t pzem_data;
-    if (pzem_is_available() && pzem_get_data(&pzem_data) && pzem_data.valid) {
-        g_outputs.power_watts = pzem_data.power;
+    power_meter_reading_t power_reading;
+    if (power_meter_is_connected() && power_meter_get_reading(&power_reading) && power_reading.valid) {
+        g_outputs.power_watts = (uint16_t)power_reading.power;
     } else {
         g_outputs.power_watts = estimate_power_watts(g_outputs.brew_heater, g_outputs.steam_heater);
     }

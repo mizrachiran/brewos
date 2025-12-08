@@ -82,10 +82,10 @@ void gpio_init_spi(void) {
     if (PIN_VALID(pins->spi_miso)) {
         gpio_set_function(pins->spi_miso, GPIO_FUNC_SPI);
     }
-    if (PIN_VALID(pins->spi_cs_thermocouple)) {
-        gpio_init(pins->spi_cs_thermocouple);
-        gpio_set_dir(pins->spi_cs_thermocouple, GPIO_OUT);
-        gpio_put(pins->spi_cs_thermocouple, 1);  // CS high (inactive)
+    if (PIN_VALID(pins->spi_cs)) {
+        gpio_init(pins->spi_cs);
+        gpio_set_dir(pins->spi_cs, GPIO_OUT);
+        gpio_put(pins->spi_cs, 1);  // CS high (inactive)
     }
 }
 

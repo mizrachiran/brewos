@@ -29,7 +29,7 @@
 #include "config_persistence.h"
 #include "cleaning.h"
 #include "bootloader.h"
-#include "pzem.h"
+#include "power_meter.h"
 #include "diagnostics.h"
 #include "flash_safe.h"
 #include "class_b.h"
@@ -618,8 +618,8 @@ int main(void) {
             features->type == MACHINE_TYPE_SINGLE_BOILER ? "Single Boiler" :
             features->type == MACHINE_TYPE_HEAT_EXCHANGER ? "Heat Exchanger" : "Unknown");
         DEBUG_PRINT("  Boilers: %d, SSRs: %d\n", features->num_boilers, features->num_ssrs);
-        DEBUG_PRINT("  Sensors: brew_ntc=%d steam_ntc=%d group_tc=%d\n",
-                   features->has_brew_ntc, features->has_steam_ntc, features->has_group_thermocouple);
+        DEBUG_PRINT("  Sensors: brew_ntc=%d steam_ntc=%d\n",
+                   features->has_brew_ntc, features->has_steam_ntc);
     } else {
         DEBUG_PRINT("ERROR: Machine configuration not available!\n");
     }

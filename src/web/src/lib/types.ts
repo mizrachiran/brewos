@@ -1,12 +1,12 @@
 // Connection types
-export type ConnectionState = 
-  | 'disconnected' 
-  | 'connecting' 
-  | 'connected' 
-  | 'reconnecting' 
-  | 'error';
+export type ConnectionState =
+  | "disconnected"
+  | "connecting"
+  | "connected"
+  | "reconnecting"
+  | "error";
 
-export type ConnectionMode = 'local' | 'cloud' | 'demo';
+export type ConnectionMode = "local" | "cloud" | "demo";
 
 export interface ConnectionConfig {
   mode: ConnectionMode;
@@ -28,21 +28,21 @@ export interface IConnection {
 }
 
 // Message types from ESP32
-export type MessageType = 
-  | 'status'
-  | 'esp_status'
-  | 'pico_status'
-  | 'scale_status'
-  | 'power_meter_status'
-  | 'stats'
-  | 'event'
-  | 'log'
-  | 'error'
-  | 'scan_result'
-  | 'scan_complete'
-  | 'device_info'
-  | 'diagnostics_header'
-  | 'diagnostics_result';
+export type MessageType =
+  | "status"
+  | "esp_status"
+  | "pico_status"
+  | "scale_status"
+  | "power_meter_status"
+  | "stats"
+  | "event"
+  | "log"
+  | "error"
+  | "scan_result"
+  | "scan_complete"
+  | "device_info"
+  | "diagnostics_header"
+  | "diagnostics_result";
 
 export interface WebSocketMessage {
   type: MessageType;
@@ -50,18 +50,18 @@ export interface WebSocketMessage {
 }
 
 // Machine state
-export type MachineState = 
-  | 'unknown'
-  | 'init'
-  | 'idle'
-  | 'heating'
-  | 'ready'
-  | 'brewing'
-  | 'steaming'
-  | 'cooldown'
-  | 'fault';
+export type MachineState =
+  | "unknown"
+  | "init"
+  | "idle"
+  | "heating"
+  | "ready"
+  | "brewing"
+  | "steaming"
+  | "cooldown"
+  | "fault";
 
-export type MachineMode = 'standby' | 'on' | 'eco';
+export type MachineMode = "standby" | "on" | "eco";
 
 export type HeatingStrategy = 0 | 1 | 2 | 3; // 0=Brew Only, 1=Sequential, 2=Parallel, 3=Smart Stagger
 
@@ -85,7 +85,7 @@ export interface BoilerTemp {
 export interface Temperatures {
   brew: BoilerTemp;
   steam: BoilerTemp;
-  group: number;  // Group head temp for HX machines (°C)
+  group: number; // Group head temp (°C) - kept for protocol compatibility
 }
 
 // Power Meter
@@ -115,20 +115,20 @@ export interface PowerMeterStatus {
 export interface PowerStatus {
   current: number;
   voltage: number;
-  maxCurrent: number;  // Max current limit (Amps) - from device settings
+  maxCurrent: number; // Max current limit (Amps) - from device settings
   todayKwh: number;
   totalKwh: number;
-  meter?: PowerMeterStatus;  // Optional power meter status
+  meter?: PowerMeterStatus; // Optional power meter status
 }
 
 // Cleaning
 export interface CleaningStatus {
-  brewCount: number;     // Brews since last cleaning
-  reminderDue: boolean;  // True when cleaning is recommended
+  brewCount: number; // Brews since last cleaning
+  reminderDue: boolean; // True when cleaning is recommended
 }
 
 // Water
-export type WaterLevel = 'ok' | 'low' | 'empty';
+export type WaterLevel = "ok" | "low" | "empty";
 
 export interface WaterStatus {
   tankLevel: WaterLevel;
@@ -213,7 +213,11 @@ export interface CloudConfig {
 }
 
 // Machine type enum for type-safe comparisons
-export type MachineType = 'dual_boiler' | 'single_boiler' | 'heat_exchanger' | '';
+export type MachineType =
+  | "dual_boiler"
+  | "single_boiler"
+  | "heat_exchanger"
+  | "";
 
 // Device info
 export interface DeviceInfo {
@@ -221,7 +225,7 @@ export interface DeviceInfo {
   deviceName: string;
   machineBrand: string;
   machineModel: string;
-  machineType: MachineType;  // dual_boiler, single_boiler, heat_exchanger
+  machineType: MachineType; // dual_boiler, single_boiler, heat_exchanger
   firmwareVersion: string;
 }
 
@@ -243,38 +247,38 @@ export interface PicoInfo {
  * Individual brew record with detailed metrics
  */
 export interface BrewRecord {
-  timestamp: number;           // Unix timestamp
-  durationMs: number;          // Brew duration in milliseconds
-  yieldWeight: number;         // Output weight (g)
-  doseWeight: number;          // Input dose (g)
-  peakPressure: number;        // Maximum pressure during brew
-  avgTemperature: number;      // Average brew temperature
-  avgFlowRate: number;         // Average flow rate (g/s)
-  rating: number;              // User rating (0-5, 0=unrated)
-  ratio?: number;              // Brew ratio (yield/dose)
+  timestamp: number; // Unix timestamp
+  durationMs: number; // Brew duration in milliseconds
+  yieldWeight: number; // Output weight (g)
+  doseWeight: number; // Input dose (g)
+  peakPressure: number; // Maximum pressure during brew
+  avgTemperature: number; // Average brew temperature
+  avgFlowRate: number; // Average flow rate (g/s)
+  rating: number; // User rating (0-5, 0=unrated)
+  ratio?: number; // Brew ratio (yield/dose)
 }
 
 /**
  * Power consumption sample
  */
 export interface PowerSample {
-  timestamp: number;           // Unix timestamp
-  avgWatts: number;            // Average power during interval
-  maxWatts: number;            // Peak power during interval
-  kwhConsumed: number;         // Energy consumed during interval
+  timestamp: number; // Unix timestamp
+  avgWatts: number; // Average power during interval
+  maxWatts: number; // Peak power during interval
+  kwhConsumed: number; // Energy consumed during interval
 }
 
 /**
  * Daily summary for trend analysis
  */
 export interface DailySummary {
-  date: number;                // Unix timestamp at midnight
-  shotCount: number;           // Shots that day
-  totalBrewTimeMs: number;     // Total brew time
-  totalKwh: number;            // Total energy consumed
-  onTimeMinutes: number;       // Minutes machine was on
-  steamCycles: number;         // Steam cycle count
-  avgBrewTimeMs: number;       // Average brew time
+  date: number; // Unix timestamp at midnight
+  shotCount: number; // Shots that day
+  totalBrewTimeMs: number; // Total brew time
+  totalKwh: number; // Total energy consumed
+  onTimeMinutes: number; // Minutes machine was on
+  steamCycles: number; // Steam cycle count
+  avgBrewTimeMs: number; // Average brew time
 }
 
 /**
@@ -322,19 +326,19 @@ export interface MaintenanceStats {
 export interface Statistics {
   // Lifetime stats
   lifetime: LifetimeStats;
-  
+
   // Period stats (calculated from history)
   daily: PeriodStats;
   weekly: PeriodStats;
   monthly: PeriodStats;
-  
+
   // Maintenance
   maintenance: MaintenanceStats;
-  
+
   // Session
   sessionShots: number;
   sessionStartTimestamp: number;
-  
+
   // Legacy compatibility fields (derived from new structure)
   totalShots: number;
   totalSteamCycles: number;
@@ -377,37 +381,42 @@ export interface ExtendedStatsResponse {
  * Diagnostic test IDs - matches protocol_defs.h DIAG_TEST_*
  */
 export type DiagnosticTestId =
-  | 0x00  // ALL - run all tests
-  | 0x01  // BREW_NTC
-  | 0x02  // STEAM_NTC
-  | 0x03  // GROUP_TC
-  | 0x04  // PRESSURE
-  | 0x05  // WATER_LEVEL
-  | 0x06  // SSR_BREW
-  | 0x07  // SSR_STEAM
-  | 0x08  // RELAY_PUMP
-  | 0x09  // RELAY_SOLENOID
-  | 0x0A  // PZEM
-  | 0x0B  // ESP32_COMM
-  | 0x0C  // BUZZER
-  | 0x0D; // LED
+  | 0x00 // ALL - run all tests
+  | 0x01 // BREW_NTC
+  | 0x02 // STEAM_NTC
+  | 0x04 // PRESSURE
+  | 0x05 // WATER_LEVEL
+  | 0x06 // SSR_BREW
+  | 0x07 // SSR_STEAM
+  | 0x08 // RELAY_PUMP
+  | 0x09 // RELAY_SOLENOID
+  | 0x0a // POWER_METER
+  | 0x0b // ESP32_COMM
+  | 0x0c // BUZZER
+  | 0x0d; // LED
 
 /**
  * Diagnostic result status - matches protocol_defs.h DIAG_STATUS_*
  */
-export type DiagnosticStatus = 'pass' | 'fail' | 'warn' | 'skip' | 'running';
+export type DiagnosticStatus = "pass" | "fail" | "warn" | "skip" | "running";
 
 /**
  * Map status code to DiagnosticStatus
  */
 export function diagStatusFromCode(code: number): DiagnosticStatus {
   switch (code) {
-    case 0x00: return 'pass';
-    case 0x01: return 'fail';
-    case 0x02: return 'warn';
-    case 0x03: return 'skip';
-    case 0x04: return 'running';
-    default: return 'fail';
+    case 0x00:
+      return "pass";
+    case 0x01:
+      return "fail";
+    case 0x02:
+      return "warn";
+    case 0x03:
+      return "skip";
+    case 0x04:
+      return "running";
+    default:
+      return "fail";
   }
 }
 
@@ -416,12 +425,12 @@ export function diagStatusFromCode(code: number): DiagnosticStatus {
  */
 export interface DiagnosticResult {
   testId: DiagnosticTestId;
-  name: string;           // Human-readable test name
+  name: string; // Human-readable test name
   status: DiagnosticStatus;
-  rawValue: number;       // Raw sensor value
-  expectedMin: number;    // Expected minimum
-  expectedMax: number;    // Expected maximum
-  message: string;        // Result message
+  rawValue: number; // Raw sensor value
+  expectedMin: number; // Expected minimum
+  expectedMax: number; // Expected maximum
+  message: string; // Result message
 }
 
 /**
@@ -459,12 +468,12 @@ export interface DiagnosticTestMeta {
   /** Whether this test is optional (user can skip/disable) */
   optional: boolean;
   /** Category for grouping in UI */
-  category: 'sensors' | 'outputs' | 'communication' | 'peripheral';
+  category: "sensors" | "outputs" | "communication" | "peripheral";
 }
 
 /**
  * All diagnostic tests with metadata
- * 
+ *
  * Based on ECM_Control_Board_Specification_v2.20:
  * - Section 3.1: Inputs (S1-S4 switches, T1-T3 temp sensors, P1 pressure)
  * - Section 3.2: Outputs (K1-K3 relays, SSR1-SSR2 heaters)
@@ -477,168 +486,163 @@ export const DIAGNOSTIC_TESTS: DiagnosticTestMeta[] = [
   // ==========================================================================
   {
     id: 0x01,
-    name: 'Brew Boiler Temperature Sensor (NTC)',
-    description: 'T1: 50kΩ NTC thermistor on ADC0 (GPIO26) with 3.3kΩ pull-up',
-    machineTypes: ['dual_boiler', 'single_boiler'],
+    name: "Brew Boiler Temperature Sensor (NTC)",
+    description: "T1: 50kΩ NTC thermistor on ADC0 (GPIO26) with 3.3kΩ pull-up",
+    machineTypes: ["dual_boiler", "single_boiler"],
     optional: false,
-    category: 'sensors',
+    category: "sensors",
   },
   {
     id: 0x02,
-    name: 'Steam Boiler Temperature Sensor (NTC)',
-    description: 'T2: 50kΩ NTC thermistor on ADC1 (GPIO27) with 1.2kΩ pull-up',
-    machineTypes: ['dual_boiler', 'heat_exchanger'],
+    name: "Steam Boiler Temperature Sensor (NTC)",
+    description: "T2: 50kΩ NTC thermistor on ADC1 (GPIO27) with 1.2kΩ pull-up",
+    machineTypes: ["dual_boiler", "heat_exchanger"],
     optional: false,
-    category: 'sensors',
+    category: "sensors",
   },
-  {
-    id: 0x03,
-    name: 'Group Head Thermocouple (MAX31855)',
-    description: 'T3: K-type thermocouple via SPI (GPIO16-18)',
-    machineTypes: [], // All machine types can optionally install
-    optional: true,   // Not everyone installs group head temp sensor
-    category: 'sensors',
-  },
-  
+
   // ==========================================================================
   // PRESSURE SENSOR
   // ==========================================================================
   {
     id: 0x04,
-    name: 'Pump Pressure Transducer',
-    description: 'P1: YD4060 0-16bar, 0.5-4.5V on ADC2 (GPIO28)',
+    name: "Pump Pressure Transducer",
+    description: "P1: YD4060 0-16bar, 0.5-4.5V on ADC2 (GPIO28)",
     machineTypes: [], // All machine types can optionally install
-    optional: true,   // Some users don't install pressure sensor
-    category: 'sensors',
+    optional: true, // Some users don't install pressure sensor
+    category: "sensors",
   },
-  
+
   // ==========================================================================
   // WATER LEVEL SENSORS (S1, S2, S3)
   // ==========================================================================
   {
     id: 0x05,
-    name: 'Water Reservoir & Tank Level Sensors',
-    description: 'S1: Reservoir switch (GPIO2), S2: Tank float sensor (GPIO3)',
+    name: "Water Reservoir & Tank Level Sensors",
+    description: "S1: Reservoir switch (GPIO2), S2: Tank float sensor (GPIO3)",
     machineTypes: [], // All machine types
     optional: false,
-    category: 'sensors',
+    category: "sensors",
   },
   {
-    id: 0x0E,
-    name: 'Steam Boiler Level Probe',
-    description: 'S3: Conductivity probe via OPA342/TLV3201 AC sensing (GPIO4)',
-    machineTypes: ['dual_boiler', 'heat_exchanger'], // Only machines with steam boilers
+    id: 0x0e,
+    name: "Steam Boiler Level Probe",
+    description: "S3: Conductivity probe via OPA342/TLV3201 AC sensing (GPIO4)",
+    machineTypes: ["dual_boiler", "heat_exchanger"], // Only machines with steam boilers
     optional: false,
-    category: 'sensors',
+    category: "sensors",
   },
-  
+
   // ==========================================================================
   // BREW CONTROL INPUT
   // ==========================================================================
   {
-    id: 0x0F,
-    name: 'Brew Lever/Handle Switch',
-    description: 'S4: Brew handle microswitch (GPIO5), active low',
+    id: 0x0f,
+    name: "Brew Lever/Handle Switch",
+    description: "S4: Brew handle microswitch (GPIO5), active low",
     machineTypes: [], // All machine types
     optional: false,
-    category: 'sensors',
+    category: "sensors",
   },
-  
+
   // ==========================================================================
   // HEATER OUTPUTS (SSRs)
   // ==========================================================================
   {
     id: 0x06,
-    name: 'Brew Heater (SSR)',
-    description: 'SSR1: Solid-state relay trigger on GPIO13',
-    machineTypes: ['dual_boiler', 'single_boiler'],
+    name: "Brew Heater (SSR)",
+    description: "SSR1: Solid-state relay trigger on GPIO13",
+    machineTypes: ["dual_boiler", "single_boiler"],
     optional: false,
-    category: 'outputs',
+    category: "outputs",
   },
   {
     id: 0x07,
-    name: 'Steam Heater (SSR)',
-    description: 'SSR2: Solid-state relay trigger on GPIO14',
-    machineTypes: ['dual_boiler', 'heat_exchanger'],
+    name: "Steam Heater (SSR)",
+    description: "SSR2: Solid-state relay trigger on GPIO14",
+    machineTypes: ["dual_boiler", "heat_exchanger"],
     optional: false,
-    category: 'outputs',
+    category: "outputs",
   },
-  
+
   // ==========================================================================
   // RELAY OUTPUTS (K1, K2, K3)
   // ==========================================================================
   {
     id: 0x10,
-    name: 'Water Status LED Relay',
-    description: 'K1: Water indicator LED relay on GPIO10',
+    name: "Water Status LED Relay",
+    description: "K1: Water indicator LED relay on GPIO10",
     machineTypes: [], // Machine-specific
-    optional: true,   // Not all machines have this indicator
-    category: 'outputs',
+    optional: true, // Not all machines have this indicator
+    category: "outputs",
   },
   {
     id: 0x08,
-    name: 'Water Pump Relay',
-    description: 'K2: Ulka pump relay (16A) on GPIO11',
+    name: "Water Pump Relay",
+    description: "K2: Ulka pump relay (16A) on GPIO11",
     machineTypes: [], // All machine types
     optional: false,
-    category: 'outputs',
+    category: "outputs",
   },
   {
     id: 0x09,
-    name: 'Brew Solenoid Valve Relay',
-    description: 'K3: 3-way solenoid valve relay on GPIO12',
+    name: "Brew Solenoid Valve Relay",
+    description: "K3: 3-way solenoid valve relay on GPIO12",
     machineTypes: [], // All machine types
     optional: false,
-    category: 'outputs',
+    category: "outputs",
   },
-  
+
   // ==========================================================================
   // COMMUNICATION
   // ==========================================================================
   {
-    id: 0x0B,
-    name: 'ESP32 Communication',
-    description: 'UART0 link on GPIO0/1 (921600 baud)',
+    id: 0x0b,
+    name: "ESP32 Communication",
+    description: "UART0 link on GPIO0/1 (921600 baud)",
     machineTypes: [], // All machine types
     optional: false,
-    category: 'communication',
+    category: "communication",
   },
   {
-    id: 0x0A,
-    name: 'Power Meter (PZEM-004T)',
-    description: 'Modbus RTU via UART1 on GPIO6/7 (9600 baud)',
+    id: 0x0a,
+    name: "Hardware Power Meter",
+    description: "Modbus RTU via UART1 on GPIO6/7 (PZEM, JSY, Eastron meters)",
     machineTypes: [], // All machine types
-    optional: true,   // Optional power monitoring add-on
-    category: 'communication',
+    optional: true, // Optional power monitoring add-on
+    category: "communication",
   },
-  
+
   // ==========================================================================
   // USER INTERFACE
   // ==========================================================================
   {
-    id: 0x0C,
-    name: 'Buzzer / Piezo Speaker',
-    description: 'Passive piezo buzzer on GPIO19 (PWM)',
+    id: 0x0c,
+    name: "Buzzer / Piezo Speaker",
+    description: "Passive piezo buzzer on GPIO19 (PWM)",
     machineTypes: [], // All machine types
     optional: false,
-    category: 'peripheral',
+    category: "peripheral",
   },
   {
-    id: 0x0D,
-    name: 'Status LED',
-    description: 'Green indicator LED on GPIO15',
+    id: 0x0d,
+    name: "Status LED",
+    description: "Green indicator LED on GPIO15",
     machineTypes: [], // All machine types
     optional: false,
-    category: 'peripheral',
+    category: "peripheral",
   },
 ];
 
 /**
  * Get tests applicable to a specific machine type
  */
-export function getTestsForMachineType(machineType: MachineType): DiagnosticTestMeta[] {
-  return DIAGNOSTIC_TESTS.filter(test => 
-    test.machineTypes.length === 0 || test.machineTypes.includes(machineType)
+export function getTestsForMachineType(
+  machineType: MachineType
+): DiagnosticTestMeta[] {
+  return DIAGNOSTIC_TESTS.filter(
+    (test) =>
+      test.machineTypes.length === 0 || test.machineTypes.includes(machineType)
   );
 }
 
@@ -646,21 +650,24 @@ export function getTestsForMachineType(machineType: MachineType): DiagnosticTest
  * Get human-readable name for a diagnostic test
  */
 export function getDiagnosticTestName(testId: number): string {
-  const test = DIAGNOSTIC_TESTS.find(t => t.id === testId);
+  const test = DIAGNOSTIC_TESTS.find((t) => t.id === testId);
   if (test) return test.name;
-  
+
   // Fallback for test IDs not in DIAGNOSTIC_TESTS
   const fallbackNames: Record<number, string> = {
-    0x00: 'All Tests',
+    0x00: "All Tests",
   };
-  return fallbackNames[testId] || `Unknown Test (0x${testId.toString(16).padStart(2, '0').toUpperCase()})`;
+  return (
+    fallbackNames[testId] ||
+    `Unknown Test (0x${testId.toString(16).padStart(2, "0").toUpperCase()})`
+  );
 }
 
 // Alerts & Logs
 export interface Alert {
   id: number;
   time: string;
-  level: 'info' | 'warning' | 'error';
+  level: "info" | "warning" | "error";
   message: string;
   dismissed: boolean;
 }
@@ -685,8 +692,8 @@ export interface CloudDevice {
 }
 
 // User preferences (stored in localStorage)
-export type FirstDayOfWeek = 'sunday' | 'monday';
-export type TemperatureUnit = 'celsius' | 'fahrenheit';
+export type FirstDayOfWeek = "sunday" | "monday";
+export type TemperatureUnit = "celsius" | "fahrenheit";
 
 export interface UserPreferences {
   firstDayOfWeek: FirstDayOfWeek;

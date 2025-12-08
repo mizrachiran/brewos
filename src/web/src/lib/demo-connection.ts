@@ -42,6 +42,12 @@ export class DemoConnection implements IConnection {
   private machineType: "dual_boiler" | "single_boiler" | "heat_exchanger" =
     "dual_boiler";
 
+  // Power meter simulation - configured by default in demo mode
+  private powerMeterEnabled = true;
+  private powerMeterSource: "none" | "hardware" | "mqtt" = "hardware";
+  private powerMeterType: string | null = "PZEM-004T V3";
+  private powerMeterConnected = true;
+
   async connect(): Promise<void> {
     this.isDisconnected = false;
     this.setState("connecting");
@@ -70,6 +76,9 @@ export class DemoConnection implements IConnection {
 
     // Send initial unified status (machine, temps, scale, connections, etc.)
     this.emitFullStatus();
+
+    // Send initial power meter status
+    this.emitPowerMeterStatus();
 
     // Send initial stats
     this.emitStats();
@@ -183,6 +192,12 @@ export class DemoConnection implements IConnection {
       case "run_diagnostics":
         this.simulateDiagnostics();
         break;
+      case "configure_power_meter":
+        this.handleConfigurePowerMeter(data);
+        break;
+      case "start_power_meter_discovery":
+        this.simulatePowerMeterDiscovery();
+        break;
       case "set_power":
       case "set_eco":
       case "mqtt_config":
@@ -230,6 +245,154 @@ export class DemoConnection implements IConnection {
     }, 3000);
   }
 
+  private handleConfigurePowerMeter(data: Record<string, unknown>): void {
+    const source = data.source as "none" | "hardware" | "mqtt";
+    this.powerMeterSource = source;
+    
+    if (source === "hardware") {
+      const meterType = data.meterType as string;
+      this.powerMeterType = meterType === "auto" ? null : meterType;
+      this.powerMeterEnabled = true;
+      this.powerMeterConnected = this.powerMeterType !== null;
+      
+      console.log("[Demo] Power meter configured:", {
+        source,
+        meterType: this.powerMeterType,
+      });
+    } else if (source === "mqtt") {
+      this.powerMeterType = "MQTT";
+      this.powerMeterEnabled = true;
+      this.powerMeterConnected = true;
+    } else {
+      this.powerMeterEnabled = false;
+      this.powerMeterConnected = false;
+      this.powerMeterType = null;
+    }
+    
+    // Emit updated power meter status
+    this.emitPowerMeterStatus();
+  }
+
+  private simulatePowerMeterDiscovery(): void {
+    // Simulate auto-detection of power meter
+    console.log("[Demo] Starting power meter auto-discovery...");
+    
+    // Simulate scanning different baud rates with progress
+    const steps = [
+      { step: 1, progress: "Scanning UART1..." },
+      { step: 2, progress: "Trying 9600 baud (PZEM)..." },
+      { step: 3, progress: "Trying 4800 baud (JSY)..." },
+      { step: 4, progress: "Trying 2400 baud (Eastron)..." },
+    ];
+
+    // Emit each step with delays
+    steps.forEach(({ step, progress }, index) => {
+      setTimeout(() => {
+        this.emit({
+          type: "power_meter_status",
+          source: "hardware",
+          connected: false,
+          meterType: null,
+          lastUpdate: null,
+          reading: null,
+          error: null,
+          discovering: true,
+          discoveryProgress: progress,
+          discoveryStep: step,
+          discoveryTotal: 4,
+        });
+      }, index * 600);
+    });
+
+    // Final result after all steps
+    setTimeout(() => {
+      // Discovery complete - simulate finding a PZEM-004T
+      this.powerMeterType = "PZEM-004T V3";
+      this.powerMeterEnabled = true;
+      this.powerMeterConnected = true;
+      this.powerMeterSource = "hardware";
+      
+      this.emit({
+        type: "power_meter_status",
+        source: "hardware",
+        connected: true,
+        meterType: "PZEM-004T V3",
+        lastUpdate: Date.now(),
+        reading: this.generatePowerMeterReading(),
+        error: null,
+        discovering: false,
+      });
+    }, steps.length * 600 + 400);
+  }
+
+  private generatePowerMeterReading(): {
+    voltage: number;
+    current: number;
+    power: number;
+    energy: number;
+    frequency: number;
+    powerFactor: number;
+  } {
+    // Generate realistic power readings based on machine state
+    const baseVoltage = 230 + (Math.random() - 0.5) * 4; // 228-232V
+    const frequency = 50 + (Math.random() - 0.5) * 0.2; // 49.9-50.1Hz
+    
+    let current: number;
+    let power: number;
+    let powerFactor: number;
+    
+    if (this.isHeating) {
+      // Heating - high power draw
+      current = 6.0 + Math.random() * 0.5; // ~1400W heater
+      power = Math.round(baseVoltage * current * 0.98);
+      powerFactor = 0.98;
+    } else if (this.isBrewing) {
+      // Brewing - pump running
+      current = 0.2 + Math.random() * 0.1;
+      power = Math.round(baseVoltage * current * 0.85);
+      powerFactor = 0.85;
+    } else {
+      // Idle - just control boards
+      current = 0.02 + Math.random() * 0.01;
+      power = Math.round(baseVoltage * current * 0.6);
+      powerFactor = 0.6;
+    }
+    
+    return {
+      voltage: Number(baseVoltage.toFixed(1)),
+      current: Number(current.toFixed(3)),
+      power,
+      energy: 89.3 + this.shotsToday * 0.05, // Cumulative kWh
+      frequency: Number(frequency.toFixed(1)),
+      powerFactor: Number(powerFactor.toFixed(2)),
+    };
+  }
+
+  private emitPowerMeterStatus(): void {
+    if (!this.powerMeterEnabled || this.powerMeterSource === "none") {
+      this.emit({
+        type: "power_meter_status",
+        source: "none",
+        connected: false,
+        meterType: null,
+        lastUpdate: null,
+        reading: null,
+        error: null,
+      });
+      return;
+    }
+    
+    this.emit({
+      type: "power_meter_status",
+      source: this.powerMeterSource,
+      connected: this.powerMeterConnected,
+      meterType: this.powerMeterType,
+      lastUpdate: this.powerMeterConnected ? Date.now() : null,
+      reading: this.powerMeterConnected ? this.generatePowerMeterReading() : null,
+      error: this.powerMeterConnected ? null : "No response from meter",
+    });
+  }
+
   private simulateDiagnostics(): void {
     // Get current machine type from the last emitted device info
     const machineType = this.machineType;
@@ -246,7 +409,7 @@ export class DemoConnection implements IConnection {
         message: string;
       }
     > = {
-      // Temperature Sensors (T1, T2, T3)
+      // Temperature Sensors (T1, T2)
       0x01: {
         status: 0,
         rawValue: 2450,
@@ -261,13 +424,6 @@ export class DemoConnection implements IConnection {
         max: 3000,
         message: "26.1°C - NTC sensor OK",
       },
-      0x03: {
-        status: 3,
-        rawValue: 0,
-        min: 0,
-        max: 10000,
-        message: "Not installed",
-      }, // Optional
 
       // Pressure Sensor (P1)
       0x04: {
@@ -350,13 +506,14 @@ export class DemoConnection implements IConnection {
         max: 1,
         message: "UART link 921600 baud OK",
       },
+      // Power meter test - will be set dynamically based on configuration
       0x0a: {
         status: 3,
         rawValue: 0,
         min: 0,
         max: 0,
-        message: "Not installed",
-      }, // Optional PZEM
+        message: "Not configured",
+      },
 
       // User Interface
       0x0c: {
@@ -387,9 +544,6 @@ export class DemoConnection implements IConnection {
     } else if (machineType === "heat_exchanger") {
       testsToRun.push(0x02); // Steam NTC only (HX uses steam boiler temp)
     }
-
-    // Optional group head thermocouple
-    testsToRun.push(0x03);
 
     // Pressure sensor (optional - let's say this user has it installed)
     testsToRun.push(0x04);
@@ -429,7 +583,40 @@ export class DemoConnection implements IConnection {
 
     // Communication
     testsToRun.push(0x0b); // ESP32
-    testsToRun.push(0x0a); // PZEM (optional)
+    testsToRun.push(0x0a); // Power meter (optional)
+
+    // Update power meter test based on configuration
+    if (this.powerMeterEnabled && this.powerMeterSource === "hardware") {
+      if (this.powerMeterConnected && this.powerMeterType) {
+        // Power meter configured and working
+        const reading = this.generatePowerMeterReading();
+        allTests[0x0a] = {
+          status: 0, // Pass
+          rawValue: Math.round(reading.voltage * 10), // Voltage * 10
+          min: 2000, // 200V
+          max: 2600, // 260V
+          message: `${reading.voltage}V ${reading.current}A - ${this.powerMeterType} OK`,
+        };
+      } else {
+        // Power meter configured but not responding
+        allTests[0x0a] = {
+          status: 1, // Fail
+          rawValue: 0,
+          min: 0,
+          max: 0,
+          message: "No response from meter",
+        };
+      }
+    } else {
+      // Power meter not configured - skip
+      allTests[0x0a] = {
+        status: 3, // Skip
+        rawValue: 0,
+        min: 0,
+        max: 0,
+        message: "Not configured",
+      };
+    }
 
     // User interface
     testsToRun.push(0x0c); // Buzzer
@@ -612,10 +799,14 @@ export class DemoConnection implements IConnection {
       this.simulateStep();
     }, 500);
 
-    // Stats update - runs every 5 seconds
+    // Stats and power meter update - runs every 5 seconds
     // Note: ESP32 info and connection status are included in unified status
     this.statsInterval = setInterval(() => {
       this.emitStats();
+      // Update power meter reading if configured
+      if (this.powerMeterEnabled && this.powerMeterConnected) {
+        this.emitPowerMeterStatus();
+      }
     }, 5000);
   }
 
