@@ -2,38 +2,51 @@ import { memo, useMemo } from 'react';
 import { useStore } from '@/lib/store';
 import { Card, CardHeader, CardTitle } from '@/components/Card';
 import { Badge } from '@/components/Badge';
-import { Coffee, Clock, TrendingUp, History, Award, Target } from 'lucide-react';
+import { Coffee, TrendingUp, Award, Clock } from 'lucide-react';
 
 /**
  * Last Shot Card - Shows information about the last shot and session stats.
  * Displayed on Dashboard when idle (not brewing).
  * Replaces the Pressure card which shows 0 when not brewing.
+ * 
+ * E2E Data Sources (all verified):
+ * - shotsToday: ✅ ESP32 stats.daily.shotCount via status message
+ * - sessionShots: ✅ ESP32 stats.sessionShots via status message
+ * - totalShots: ✅ ESP32 stats.lifetime.totalShots, persisted in NVS
+ * - avgBrewTimeMs: ✅ ESP32 stats.daily.avgBrewTimeMs via status message
+ * - lastShotTimestamp: ✅ ESP32 Unix timestamp (ms) via machine.lastShotTimestamp
  */
 export const LastShotCard = memo(function LastShotCard() {
-  const lastShotTimestamp = useStore((s) => s.machine.lastShotTimestamp);
   const shotsToday = useStore((s) => s.stats.shotsToday);
   const sessionShots = useStore((s) => s.stats.sessionShots);
   const daily = useStore((s) => s.stats.daily);
   const lifetime = useStore((s) => s.stats.lifetime);
+  const lastShotTimestamp = useStore((s) => s.machine.lastShotTimestamp);
   const machineMode = useStore((s) => s.machine.mode);
 
+  // Calculate time since last shot
   const timeSinceLastShot = useMemo(() => {
     if (!lastShotTimestamp) return null;
-    // Calculate time distance
+    
     const now = Date.now();
     const diff = now - lastShotTimestamp;
+    
+    // Sanity check - if timestamp is in the future or too old (> 30 days), skip
+    if (diff < 0 || diff > 30 * 24 * 60 * 60 * 1000) return null;
+    
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
     
     if (minutes < 1) return 'just now';
-    if (minutes < 60) return `${minutes}m`;
-    if (hours < 24) return `${hours}h`;
-    if (days === 1) return '1 day';
-    return `${days} days`;
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days === 1) return '1 day ago';
+    return `${days} days ago`;
   }, [lastShotTimestamp]);
 
-  const averageBrewTime = useMemo(() => {
+  // Get average brew time (prefer daily, fallback to lifetime)
+  const avgBrewTimeSec = useMemo(() => {
     if (daily.avgBrewTimeMs > 0) {
       return (daily.avgBrewTimeMs / 1000).toFixed(1);
     }
@@ -44,7 +57,7 @@ export const LastShotCard = memo(function LastShotCard() {
   }, [daily.avgBrewTimeMs, lifetime.avgBrewTimeMs]);
 
   // No shots ever
-  if (!lastShotTimestamp && lifetime.totalShots === 0) {
+  if (lifetime.totalShots === 0) {
     return (
       <Card>
         <CardHeader>
@@ -69,10 +82,10 @@ export const LastShotCard = memo(function LastShotCard() {
     <Card>
       <CardHeader
         action={
-          lastShotTimestamp && (
+          timeSinceLastShot && (
             <Badge variant="info" className="text-xs">
               <Clock className="w-3 h-3 mr-1" />
-              {timeSinceLastShot} ago
+              {timeSinceLastShot}
             </Badge>
           )
         }
@@ -81,7 +94,7 @@ export const LastShotCard = memo(function LastShotCard() {
       </CardHeader>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
+      <div className="grid grid-cols-2 gap-3">
         <StatItem
           icon={<Coffee className="w-4 h-4" />}
           label="Today"
@@ -91,15 +104,15 @@ export const LastShotCard = memo(function LastShotCard() {
         />
         <StatItem
           icon={<TrendingUp className="w-4 h-4" />}
-          label="This Session"
+          label="Session"
           value={sessionShots.toString()}
           subtext={sessionShots === 1 ? 'shot' : 'shots'}
         />
-        {averageBrewTime && (
+        {avgBrewTimeSec && (
           <StatItem
             icon={<Clock className="w-4 h-4" />}
             label="Avg Time"
-            value={averageBrewTime}
+            value={avgBrewTimeSec}
             subtext="seconds"
           />
         )}
@@ -110,9 +123,6 @@ export const LastShotCard = memo(function LastShotCard() {
           subtext="total shots"
         />
       </div>
-
-      {/* Quick insight or tip */}
-      <QuickInsight shotsToday={shotsToday} daily={daily} />
     </Card>
   );
 });
@@ -136,58 +146,6 @@ function StatItem({ icon, label, value, subtext, highlight }: StatItemProps) {
         {value}
       </div>
       {subtext && <div className="text-xs text-theme-muted">{subtext}</div>}
-    </div>
-  );
-}
-
-interface QuickInsightProps {
-  shotsToday: number;
-  daily: { avgBrewTimeMs: number; shotCount: number };
-}
-
-function QuickInsight({ shotsToday, daily }: QuickInsightProps) {
-  // Generate a contextual insight
-  const getInsight = () => {
-    const hour = new Date().getHours();
-
-    if (shotsToday === 0) {
-      if (hour < 12) {
-        return { icon: Coffee, text: 'Good morning! Ready for your first cup?', type: 'greeting' };
-      } else if (hour < 17) {
-        return { icon: Coffee, text: 'Afternoon pick-me-up time?', type: 'greeting' };
-      } else {
-        return { icon: Coffee, text: 'Evening espresso? Why not!', type: 'greeting' };
-      }
-    }
-
-    if (shotsToday >= 5) {
-      return { icon: Award, text: 'Productive day! 5+ shots pulled', type: 'achievement' };
-    }
-
-    if (daily.avgBrewTimeMs > 0) {
-      const avgSeconds = daily.avgBrewTimeMs / 1000;
-      if (avgSeconds >= 25 && avgSeconds <= 35) {
-        return { icon: Target, text: 'Great extraction times today!', type: 'success' };
-      }
-    }
-
-    return { icon: History, text: 'View your shot history for detailed stats', type: 'info' };
-  };
-
-  const insight = getInsight();
-  const Icon = insight.icon;
-
-  const bgClass = {
-    greeting: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
-    achievement: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-    success: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-    info: 'bg-theme-secondary text-theme-muted',
-  }[insight.type];
-
-  return (
-    <div className={`flex items-center gap-2 p-3 rounded-xl ${bgClass}`}>
-      <Icon className="w-4 h-4 flex-shrink-0" />
-      <span className="text-sm">{insight.text}</span>
     </div>
   );
 }

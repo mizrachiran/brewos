@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { X, Flame, Wind, Zap, Brain, Check, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
+import { useCommand } from "@/lib/useCommand";
 import { getMachineByBrandModel } from "@/lib/machines";
 import {
   validateHeatingStrategy,
@@ -64,6 +65,8 @@ export function HeatingStrategyModal({
   onSelect,
   defaultStrategy,
 }: HeatingStrategyModalProps) {
+  const { sendCommand } = useCommand();
+  
   // Get power settings and machine info from store
   const voltage = useStore((s) => s.power.voltage) || 220;
   const maxCurrent = useStore((s) => s.power.maxCurrent) || 13;
@@ -137,6 +140,8 @@ export function HeatingStrategyModal({
         e.preventDefault();
         // Confirm with currently selected strategy
         localStorage.setItem(STORAGE_KEY, selectedStrategy.toString());
+        // Also save to ESP32 for syncing across devices
+        sendCommand('set_preferences', { lastHeatingStrategy: selectedStrategy });
         onSelect(selectedStrategy);
         onClose();
       }
@@ -201,6 +206,8 @@ export function HeatingStrategyModal({
                       STORAGE_KEY,
                       strategy.value.toString()
                     );
+                    // Also save to ESP32 for syncing across devices
+                    sendCommand('set_preferences', { lastHeatingStrategy: strategy.value });
                     onSelect(strategy.value);
                     onClose();
                   }}

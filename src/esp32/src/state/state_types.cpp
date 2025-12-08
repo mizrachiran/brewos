@@ -198,6 +198,40 @@ bool DisplaySettings::fromJson(JsonObjectConst obj) {
 }
 
 // =============================================================================
+// UserPreferences
+// =============================================================================
+
+void UserPreferences::toJson(JsonObject& obj) const {
+    obj["firstDayOfWeek"] = firstDayOfWeek == 0 ? "sunday" : "monday";
+    obj["use24HourTime"] = use24HourTime;
+    obj["temperatureUnit"] = temperatureUnit == 0 ? "celsius" : "fahrenheit";
+    obj["electricityPrice"] = electricityPrice;
+    obj["currency"] = currency;
+    obj["lastHeatingStrategy"] = lastHeatingStrategy;
+    obj["initialized"] = initialized;
+}
+
+bool UserPreferences::fromJson(JsonObjectConst obj) {
+    if (obj["firstDayOfWeek"].is<const char*>()) {
+        const char* dow = obj["firstDayOfWeek"];
+        firstDayOfWeek = (strcmp(dow, "monday") == 0) ? 1 : 0;
+    }
+    if (obj["use24HourTime"].is<bool>()) use24HourTime = obj["use24HourTime"];
+    if (obj["temperatureUnit"].is<const char*>()) {
+        const char* unit = obj["temperatureUnit"];
+        temperatureUnit = (strcmp(unit, "fahrenheit") == 0) ? 1 : 0;
+    }
+    if (obj["electricityPrice"].is<float>()) electricityPrice = obj["electricityPrice"];
+    if (obj["currency"].is<const char*>()) {
+        strncpy(currency, obj["currency"], sizeof(currency) - 1);
+        currency[sizeof(currency) - 1] = '\0';
+    }
+    if (obj["lastHeatingStrategy"].is<uint8_t>()) lastHeatingStrategy = obj["lastHeatingStrategy"];
+    if (obj["initialized"].is<bool>()) initialized = obj["initialized"];
+    return true;
+}
+
+// =============================================================================
 // SystemSettings
 // =============================================================================
 

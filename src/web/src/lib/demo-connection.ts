@@ -93,6 +93,16 @@ export class DemoConnection implements IConnection {
       preinfusionEnabled: this.preinfusionEnabled,
       preinfusionOnMs: this.preinfusionOnMs,
       preinfusionPauseMs: this.preinfusionPauseMs,
+      // User preferences (synced across devices)
+      preferences: {
+        firstDayOfWeek: "sunday",
+        use24HourTime: false,
+        temperatureUnit: "celsius",
+        electricityPrice: 0.15,
+        currency: "USD",
+        lastHeatingStrategy: 1,
+        initialized: true,  // In demo, always initialized
+      },
     });
 
     // Send initial BBW settings (enabled by default in demo)
@@ -191,6 +201,10 @@ export class DemoConnection implements IConnection {
         if (data.pauseTimeMs !== undefined) this.preinfusionPauseMs = data.pauseTimeMs as number;
         console.log("[Demo] Pre-infusion settings updated:", data);
         this.emitPreinfusionSettings();
+        break;
+      case "set_preferences":
+        // User preferences - just log in demo mode (they're stored in localStorage)
+        console.log("[Demo] User preferences updated:", data);
         break;
       case "set_machine_info":
         // Update machine type for diagnostics
@@ -1124,6 +1138,21 @@ export class DemoConnection implements IConnection {
         version: "1.0.0-demo",
         freeHeap: 175000 + Math.floor(Math.random() * 10000),
         uptime: Date.now(),
+      },
+      // Stats section (real-time updates)
+      stats: {
+        shotsToday: this.shotsToday,
+        sessionShots: this.shotsToday, // In demo, session = today
+        daily: {
+          shotCount: this.shotsToday,
+          avgBrewTimeMs: 28500, // ~28.5 seconds average
+          totalKwh: 0.8 + this.shotsToday * 0.05,
+        },
+        lifetime: {
+          totalShots: this.totalShots,
+          avgBrewTimeMs: 28500,
+          totalKwh: 89.3,
+        },
       },
     });
   }
