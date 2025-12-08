@@ -80,7 +80,18 @@ private:
     bool streamFirmwareToPico(File& firmwareFile, size_t firmwareSize);
     
     // GitHub OTA - Download and install firmware from GitHub releases
-    void startGitHubOTA(const String& version);
+    void startGitHubOTA(const String& version);        // ESP32 only
+    void startPicoGitHubOTA(const String& version);    // Pico only (based on machine type)
+    void startCombinedOTA(const String& version);      // Pico first, then ESP32
+    
+    // Check for updates from GitHub releases
+    void checkForUpdates();
+    
+    // Get Pico firmware asset name based on machine type
+    const char* getPicoAssetName(uint8_t machineType);
+    
+    // Version mismatch check
+    bool checkVersionMismatch();
 };
 
 #endif // WEB_SERVER_H

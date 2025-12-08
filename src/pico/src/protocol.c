@@ -7,11 +7,19 @@
 #include <string.h>
 #include "pico/stdlib.h"
 #include "hardware/uart.h"
+#include "hardware/watchdog.h"
 #include "protocol.h"
 #include "config.h"
 #include "pcb_config.h"
 #include "machine_config.h"
 #include "gpio_init.h"
+
+// Reset reason codes
+#define RESET_REASON_POWER_ON      0  // Power-on reset
+#define RESET_REASON_WATCHDOG      1  // Watchdog timeout
+#define RESET_REASON_SOFTWARE      2  // Software reset (watchdog_reboot)
+#define RESET_REASON_DEBUG         3  // Debug reset (debugger attached)
+#define RESET_REASON_UNKNOWN       255
 
 // -----------------------------------------------------------------------------
 // Private State
@@ -146,6 +154,29 @@ bool protocol_send_alarm(uint8_t code, uint8_t severity, uint16_t value) {
     return send_packet(MSG_ALARM, (const uint8_t*)&alarm, sizeof(alarm_payload_t));
 }
 
+/**
+ * Get the reset reason from hardware registers
+ * Returns one of the RESET_REASON_* codes
+ */
+static uint8_t get_reset_reason(void) {
+    // Check if watchdog caused the reboot
+    if (watchdog_caused_reboot()) {
+        // watchdog_enable_caused_reboot() distinguishes between:
+        // - true: watchdog_reboot() was called (software reset)
+        // - false: watchdog timer expired (actual watchdog timeout)
+        if (watchdog_enable_caused_reboot()) {
+            return RESET_REASON_SOFTWARE;
+        } else {
+            return RESET_REASON_WATCHDOG;
+        }
+    }
+    
+    // If not watchdog, it's a power-on reset or debug reset
+    // We can't easily distinguish between POR and debug from SDK
+    // Default to power-on reset
+    return RESET_REASON_POWER_ON;
+}
+
 bool protocol_send_boot(void) {
     const pcb_config_t* pcb = pcb_config_get();
     pcb_version_t pcb_ver = pcb ? pcb->version : (pcb_version_t){0, 0, 0};
@@ -159,7 +190,7 @@ bool protocol_send_boot(void) {
         .pcb_type = (uint8_t)pcb_type,
         .pcb_version_major = pcb_ver.major,
         .pcb_version_minor = pcb_ver.minor,
-        .reset_reason = 0   // TODO: Get actual reset reason
+        .reset_reason = get_reset_reason()
     };
     return send_packet(MSG_BOOT, (const uint8_t*)&boot, sizeof(boot_payload_t));
 }

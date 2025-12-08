@@ -55,6 +55,12 @@ public:
     const char* getMeterName() const;
     const char* getLastError() const;
     
+    // Energy tracking - daily vs total
+    float getDayStartKwh() const { return _dayStartKwh; }
+    float getTodayKwh() const;
+    float getTotalKwh() const { return _lastReading.energy_import; }
+    void resetDailyEnergy();  // Call at midnight
+    
     // Status for WebSocket/MQTT publishing
     void getStatus(JsonDocument& doc);
     
@@ -82,6 +88,11 @@ private:
     // Polling interval (don't query too frequently)
     static constexpr uint32_t POLL_INTERVAL_MS = 1000;
     uint32_t _lastPollTime;
+    
+    // Daily energy tracking
+    float _dayStartKwh = 0.0f;  // Energy reading at start of current day
+    uint8_t _lastDayOfYear = 0;  // Track day changes
+    bool _dayStartSet = false;   // True once we've captured day start
 };
 
 // Global instance

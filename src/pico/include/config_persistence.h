@@ -21,6 +21,7 @@
 #include <stdbool.h>
 #include "environmental_config.h"
 #include "protocol_defs.h"
+#include "power_meter.h"
 
 // =============================================================================
 // Configuration Structure (saved to flash)
@@ -66,8 +67,11 @@ typedef struct __attribute__((packed)) {
     int16_t eco_brew_temp;                // Reduced brew temp in eco mode (Celsius * 10)
     uint16_t eco_timeout_minutes;         // Minutes of idle before entering eco mode (0=disabled)
     
-    // Reserved for future use
-    uint8_t reserved[23];
+    // Power meter settings
+    power_meter_config_t power_meter;     // Power meter configuration (8 bytes)
+    
+    // Reserved for future use (reduced from 23 to accommodate power_meter)
+    uint8_t reserved[15];
     
     // CRC32 for integrity check
     uint32_t crc32;
@@ -149,6 +153,17 @@ bool config_persistence_save_eco(bool enabled, int16_t brew_temp, uint16_t timeo
  * Get eco mode settings from persisted config
  */
 void config_persistence_get_eco(bool* enabled, int16_t* brew_temp, uint16_t* timeout_minutes);
+
+/**
+ * Save power meter settings to flash
+ * @return true on success, false on failure
+ */
+bool config_persistence_save_power_meter(const power_meter_config_t* config);
+
+/**
+ * Get power meter settings from persisted config
+ */
+void config_persistence_get_power_meter(power_meter_config_t* config);
 
 #endif // CONFIG_PERSISTENCE_H
 

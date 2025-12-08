@@ -387,6 +387,11 @@ struct RuntimeState {
     bool cloudConnected = false;
     bool picoConnected = false;
     
+    // Pico firmware info
+    char picoVersion[16] = {0};        // Version string "X.Y.Z"
+    uint8_t picoResetReason = 0;       // 0=POR, 1=WDT, 2=SW, 3=DBG
+    uint8_t machineType = 0;           // 0=unknown, 1=dual_boiler, 2=single_boiler, 3=heat_exchanger
+    
     // Timestamps
     uint32_t lastUpdate = 0;
     uint32_t uptime = 0;

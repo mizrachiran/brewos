@@ -44,6 +44,11 @@ static bool g_pwm_initialized = false;
 static uint8_t g_pwm_slice_channel[MAX_PWM_SLICES] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 static uint8_t g_pwm_slice_gpio[MAX_PWM_SLICES] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
+// PWM duty cycle tracking - stores current duty percent for each slice
+static float g_pwm_duty[MAX_PWM_SLICES] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+// Simulation mode duty tracking
+static float g_sim_pwm_duty[MAX_PWM_SLICES] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+
 // =============================================================================
 // Initialization
 // =============================================================================
@@ -319,8 +324,17 @@ void hw_set_pwm_duty(uint8_t slice_num, float duty_percent) {
         duty_percent = 0.0f;
     }
     
+    // Track duty cycle for this slice
+    if (slice_num < MAX_PWM_SLICES) {
+        if (g_simulation_mode) {
+            g_sim_pwm_duty[slice_num] = duty_percent;
+        } else {
+            g_pwm_duty[slice_num] = duty_percent;
+        }
+    }
+    
     if (g_simulation_mode) {
-        // In simulation, just store the value (could be used for testing)
+        // In simulation, value is already stored above
         return;
     }
     
@@ -356,8 +370,17 @@ void hw_set_pwm_duty_ex(const pwm_ssr_config_t* config, float duty_percent) {
         duty_percent = 0.0f;
     }
     
+    // Track duty cycle for this slice
+    if (config->slice < MAX_PWM_SLICES) {
+        if (g_simulation_mode) {
+            g_sim_pwm_duty[config->slice] = duty_percent;
+        } else {
+            g_pwm_duty[config->slice] = duty_percent;
+        }
+    }
+    
     if (g_simulation_mode) {
-        // In simulation, just store the value (could be used for testing)
+        // In simulation, value is already stored above
         return;
     }
     
@@ -369,17 +392,15 @@ void hw_set_pwm_duty_ex(const pwm_ssr_config_t* config, float duty_percent) {
 }
 
 float hw_get_pwm_duty(uint8_t slice_num) {
-    if (g_simulation_mode) {
-        return 0.0f;  // Not tracked in simulation
+    if (slice_num >= MAX_PWM_SLICES) {
+        return 0.0f;
     }
     
-    // Real hardware: Read current duty cycle
-    // Note: Pico SDK doesn't provide a direct way to read PWM level
-    // This would need to track the level ourselves, or use pwm_get_counter()
-    // For now, return 0.0f as we don't track the level
-    // TODO: Track PWM level when setting it
-    (void)slice_num;  // Unused for now
-    return 0.0f;
+    if (g_simulation_mode) {
+        return g_sim_pwm_duty[slice_num];
+    }
+    
+    return g_pwm_duty[slice_num];
 }
 
 void hw_pwm_set_enabled(uint8_t slice_num, bool enable) {

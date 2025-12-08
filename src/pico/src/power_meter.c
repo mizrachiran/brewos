@@ -13,6 +13,7 @@
 #include "hardware/uart.h"
 #include "hardware/gpio.h"
 #include "pico/stdlib.h"
+#include "config_persistence.h"
 
 #define UART_ID uart1
 
@@ -540,9 +541,14 @@ bool power_meter_auto_detect(void) {
 
 bool power_meter_save_config(void) {
 #ifndef UNIT_TEST
-    // Save to flash using flash_config system
-    // TODO: Integrate with flash_config.c when available
-    return true;
+    // Save current config to flash using config_persistence system
+    power_meter_config_t cfg = {
+        .enabled = initialized,
+        .meter_index = current_map ? (uint8_t)(current_map - meter_register_maps) : 0xFF,
+        .slave_addr = current_map ? current_map->slave_addr : 0,
+        .baud_rate = current_map ? current_map->baud_rate : 0
+    };
+    return config_persistence_save_power_meter(&cfg);
 #else
     // In unit tests, always succeed
     return true;
@@ -551,8 +557,16 @@ bool power_meter_save_config(void) {
 
 bool power_meter_load_config(power_meter_config_t* config) {
 #ifndef UNIT_TEST
-    // Load from flash using flash_config system
-    // TODO: Integrate with flash_config.c when available
+    if (!config) {
+        return false;
+    }
+    // Load from flash using config_persistence system
+    config_persistence_get_power_meter(config);
+    
+    // Check if config is valid (enabled flag and valid meter index)
+    if (config->enabled && config->meter_index != 0xFF) {
+        return true;
+    }
     return false;
 #else
     // In unit tests, always fail (no config)

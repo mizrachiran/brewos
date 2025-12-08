@@ -553,6 +553,35 @@ void StateManager::updateScale(float weight, float flowRate, bool stable) {
     }
 }
 
+void StateManager::setPicoVersion(uint8_t major, uint8_t minor, uint8_t patch) {
+    snprintf(_state.picoVersion, sizeof(_state.picoVersion), "%u.%u.%u", major, minor, patch);
+    Serial.printf("[State] Pico version: %s\n", _state.picoVersion);
+}
+
+void StateManager::setPicoResetReason(uint8_t reason) {
+    _state.picoResetReason = reason;
+    const char* reasonStr = "unknown";
+    switch (reason) {
+        case 0: reasonStr = "power-on"; break;
+        case 1: reasonStr = "watchdog"; break;
+        case 2: reasonStr = "software"; break;
+        case 3: reasonStr = "debug"; break;
+    }
+    Serial.printf("[State] Pico reset reason: %s (%d)\n", reasonStr, reason);
+}
+
+void StateManager::setMachineType(uint8_t type) {
+    _state.machineType = type;
+    const char* typeStr = "unknown";
+    switch (type) {
+        case 1: typeStr = "dual_boiler"; break;
+        case 2: typeStr = "single_boiler"; break;
+        case 3: typeStr = "heat_exchanger"; break;
+        case 4: typeStr = "thermoblock"; break;
+    }
+    Serial.printf("[State] Machine type: %s (%d)\n", typeStr, type);
+}
+
 void StateManager::startShot() {
     _state.shotActive = true;
     _state.shotStartTime = millis();
