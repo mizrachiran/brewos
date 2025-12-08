@@ -9,6 +9,7 @@ The ESP32-S3 handles connectivity, user interface, and advanced features for the
 | [Implementation Plan](Implementation_Plan.md) | Development roadmap and status |
 | [UI Design](UI_Design.md)                     | Display screens and navigation |
 | [UI Simulator](Simulator.md)                  | Desktop UI preview tool        |
+| [OTA Updates](OTA_Updates.md)                 | Firmware update mechanism      |
 
 ### Features
 
@@ -102,6 +103,7 @@ docs/esp32/
 ├── Implementation_Plan.md # Development status
 ├── UI_Design.md           # Display UI specification
 ├── Simulator.md           # Desktop UI simulator
+├── OTA_Updates.md         # Firmware update mechanism
 ├── features/
 │   ├── Schedules.md       # Schedules & auto power-off
 │   ├── Eco_Mode.md        # Eco mode (power saving)

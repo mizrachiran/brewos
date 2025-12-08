@@ -1345,7 +1345,7 @@ void WebServer::processCommand(JsonDocument& doc) {
         // Set log level from WebSocket command
         // Expected payload: { type: "setLogLevel", level: "debug" | "info" | "warn" | "error" }
         String levelStr = doc["level"] | "info";
-        LogLevel level = stringToLogLevel(levelStr.c_str());
+        BrewOSLogLevel level = stringToLogLevel(levelStr.c_str());
         setLogLevel(level);
         broadcastLog("Log level set to: " + String(logLevelToString(level)), "info");
     }

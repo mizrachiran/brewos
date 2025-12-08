@@ -64,38 +64,38 @@ WebServer webServer(wifiManager, picoUart, mqttClient, &pairingManager);
 // =============================================================================
 // LOG LEVEL CONTROL
 // =============================================================================
-LogLevel g_log_level = LOG_LEVEL_INFO;  // Default to INFO level
+BrewOSLogLevel g_log_level = BREWOS_LOG_INFO;  // Default to INFO level
 
-void setLogLevel(LogLevel level) {
+void setLogLevel(BrewOSLogLevel level) {
     g_log_level = level;
     Serial.printf("[Log] Level set to: %s (%d)\n", logLevelToString(level), level);
 }
 
-LogLevel getLogLevel() {
+BrewOSLogLevel getLogLevel() {
     return g_log_level;
 }
 
-const char* logLevelToString(LogLevel level) {
+const char* logLevelToString(BrewOSLogLevel level) {
     switch (level) {
-        case LOG_LEVEL_ERROR: return "error";
-        case LOG_LEVEL_WARN:  return "warn";
-        case LOG_LEVEL_INFO:  return "info";
-        case LOG_LEVEL_DEBUG: return "debug";
+        case BREWOS_LOG_ERROR: return "error";
+        case BREWOS_LOG_WARN:  return "warn";
+        case BREWOS_LOG_INFO:  return "info";
+        case BREWOS_LOG_DEBUG: return "debug";
         default: return "unknown";
     }
 }
 
-LogLevel stringToLogLevel(const char* str) {
-    if (!str) return LOG_LEVEL_INFO;
-    if (strcasecmp(str, "error") == 0) return LOG_LEVEL_ERROR;
-    if (strcasecmp(str, "warn") == 0) return LOG_LEVEL_WARN;
-    if (strcasecmp(str, "warning") == 0) return LOG_LEVEL_WARN;
-    if (strcasecmp(str, "info") == 0) return LOG_LEVEL_INFO;
-    if (strcasecmp(str, "debug") == 0) return LOG_LEVEL_DEBUG;
+BrewOSLogLevel stringToLogLevel(const char* str) {
+    if (!str) return BREWOS_LOG_INFO;
+    if (strcasecmp(str, "error") == 0) return BREWOS_LOG_ERROR;
+    if (strcasecmp(str, "warn") == 0) return BREWOS_LOG_WARN;
+    if (strcasecmp(str, "warning") == 0) return BREWOS_LOG_WARN;
+    if (strcasecmp(str, "info") == 0) return BREWOS_LOG_INFO;
+    if (strcasecmp(str, "debug") == 0) return BREWOS_LOG_DEBUG;
     // Try numeric
     int level = atoi(str);
-    if (level >= 0 && level <= 3) return (LogLevel)level;
-    return LOG_LEVEL_INFO;
+    if (level >= 0 && level <= 3) return (BrewOSLogLevel)level;
+    return BREWOS_LOG_INFO;
 }
 
 // Scale state

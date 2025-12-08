@@ -93,27 +93,28 @@
 #define DEBUG_BAUD              115200
 
 // Log levels (0=ERROR only, 1=+WARN, 2=+INFO, 3=+DEBUG)
-enum LogLevel {
-    LOG_LEVEL_ERROR = 0,
-    LOG_LEVEL_WARN = 1,
-    LOG_LEVEL_INFO = 2,
-    LOG_LEVEL_DEBUG = 3
+// Using BREWOS_ prefix to avoid collision with NimBLE's LOG_LEVEL_* macros
+enum BrewOSLogLevel {
+    BREWOS_LOG_ERROR = 0,
+    BREWOS_LOG_WARN = 1,
+    BREWOS_LOG_INFO = 2,
+    BREWOS_LOG_DEBUG = 3
 };
 
 // Global log level - declared extern, defined in main.cpp
-extern LogLevel g_log_level;
+extern BrewOSLogLevel g_log_level;
 
 // Log level control functions
-void setLogLevel(LogLevel level);
-LogLevel getLogLevel();
-const char* logLevelToString(LogLevel level);
-LogLevel stringToLogLevel(const char* str);
+void setLogLevel(BrewOSLogLevel level);
+BrewOSLogLevel getLogLevel();
+const char* logLevelToString(BrewOSLogLevel level);
+BrewOSLogLevel stringToLogLevel(const char* str);
 
 // Log macros with level checking
 #define LOG_TAG                 "BrewOS"
 #define LOG_E(fmt, ...)         Serial.printf("[%lu] E: " fmt "\n", millis(), ##__VA_ARGS__)
-#define LOG_W(fmt, ...)         do { if (g_log_level >= LOG_LEVEL_WARN) Serial.printf("[%lu] W: " fmt "\n", millis(), ##__VA_ARGS__); } while(0)
-#define LOG_I(fmt, ...)         do { if (g_log_level >= LOG_LEVEL_INFO) Serial.printf("[%lu] I: " fmt "\n", millis(), ##__VA_ARGS__); } while(0)
-#define LOG_D(fmt, ...)         do { if (g_log_level >= LOG_LEVEL_DEBUG) Serial.printf("[%lu] D: " fmt "\n", millis(), ##__VA_ARGS__); } while(0)
+#define LOG_W(fmt, ...)         do { if (g_log_level >= BREWOS_LOG_WARN) Serial.printf("[%lu] W: " fmt "\n", millis(), ##__VA_ARGS__); } while(0)
+#define LOG_I(fmt, ...)         do { if (g_log_level >= BREWOS_LOG_INFO) Serial.printf("[%lu] I: " fmt "\n", millis(), ##__VA_ARGS__); } while(0)
+#define LOG_D(fmt, ...)         do { if (g_log_level >= BREWOS_LOG_DEBUG) Serial.printf("[%lu] D: " fmt "\n", millis(), ##__VA_ARGS__); } while(0)
 
 #endif // CONFIG_H
