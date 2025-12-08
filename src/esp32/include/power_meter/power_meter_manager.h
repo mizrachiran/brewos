@@ -90,8 +90,9 @@ private:
     uint32_t _lastPollTime;
     
     // Daily energy tracking
-    float _dayStartKwh = 0.0f;  // Energy reading at start of current day
-    uint8_t _lastDayOfYear = 0;  // Track day changes
+    float _dayStartKwh = 0.0f;   // Energy reading at start of current day
+    uint16_t _lastDayOfYear = 0; // Track day changes (0-365)
+    uint16_t _lastYear = 0;      // Track year for rollover handling
     bool _dayStartSet = false;   // True once we've captured day start
 };
 

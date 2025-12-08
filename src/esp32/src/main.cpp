@@ -274,7 +274,7 @@ void setup() {
                 
                 // Parse boot payload (boot_payload_t structure)
                 // version_major(1), version_minor(1), version_patch(1), machine_type(1), 
-                // pcb_type(1), pcb_version_major(1), pcb_version_minor(1), reset_reason(4)
+                // pcb_type(1), pcb_version_major(1), pcb_version_minor(1), reset_reason(1)
                 if (packet.length >= 4) {
                     uint8_t ver_major = packet.payload[0];
                     uint8_t ver_minor = packet.payload[1];
@@ -288,9 +288,9 @@ void setup() {
                     LOG_I("Pico version: %d.%d.%d, Machine type: %d", 
                           ver_major, ver_minor, ver_patch, machineState.machine_type);
                     
-                    // Parse reset reason if available (offset 7-10, uint32_t but we use uint8_t)
-                    if (packet.length >= 11) {
-                        uint8_t reset_reason = packet.payload[7];  // First byte of reset_reason
+                    // Parse reset reason if available (offset 7, uint8_t)
+                    if (packet.length >= 8) {
+                        uint8_t reset_reason = packet.payload[7];
                         State.setPicoResetReason(reset_reason);
                     }
                     

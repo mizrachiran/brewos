@@ -544,7 +544,7 @@ bool power_meter_save_config(void) {
     // Save current config to flash using config_persistence system
     power_meter_config_t cfg = {
         .enabled = initialized,
-        .meter_index = current_map ? (uint8_t)(current_map - meter_register_maps) : 0xFF,
+        .meter_index = current_map ? (uint8_t)(current_map - METER_MAPS) : 0xFF,
         .slave_addr = current_map ? current_map->slave_addr : 0,
         .baud_rate = current_map ? current_map->baud_rate : 0
     };
