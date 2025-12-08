@@ -101,7 +101,7 @@ export class DemoConnection implements IConnection {
         electricityPrice: 0.15,
         currency: "USD",
         lastHeatingStrategy: 1,
-        initialized: true,  // In demo, always initialized
+        initialized: true, // In demo, always initialized
       },
     });
 
@@ -186,19 +186,27 @@ export class DemoConnection implements IConnection {
         break;
       case "set_bbw":
         // Brew-by-weight settings - store and emit
-        if (data.enabled !== undefined) this.bbwEnabled = data.enabled as boolean;
-        if (data.targetWeight !== undefined) this.bbwTargetWeight = data.targetWeight as number;
-        if (data.doseWeight !== undefined) this.bbwDoseWeight = data.doseWeight as number;
-        if (data.stopOffset !== undefined) this.bbwStopOffset = data.stopOffset as number;
-        if (data.autoTare !== undefined) this.bbwAutoTare = data.autoTare as boolean;
+        if (data.enabled !== undefined)
+          this.bbwEnabled = data.enabled as boolean;
+        if (data.targetWeight !== undefined)
+          this.bbwTargetWeight = data.targetWeight as number;
+        if (data.doseWeight !== undefined)
+          this.bbwDoseWeight = data.doseWeight as number;
+        if (data.stopOffset !== undefined)
+          this.bbwStopOffset = data.stopOffset as number;
+        if (data.autoTare !== undefined)
+          this.bbwAutoTare = data.autoTare as boolean;
         console.log("[Demo] BBW settings updated:", data);
         this.emitBBWSettings();
         break;
       case "set_preinfusion":
         // Pre-infusion settings - store and emit
-        if (data.enabled !== undefined) this.preinfusionEnabled = data.enabled as boolean;
-        if (data.onTimeMs !== undefined) this.preinfusionOnMs = data.onTimeMs as number;
-        if (data.pauseTimeMs !== undefined) this.preinfusionPauseMs = data.pauseTimeMs as number;
+        if (data.enabled !== undefined)
+          this.preinfusionEnabled = data.enabled as boolean;
+        if (data.onTimeMs !== undefined)
+          this.preinfusionOnMs = data.onTimeMs as number;
+        if (data.pauseTimeMs !== undefined)
+          this.preinfusionPauseMs = data.pauseTimeMs as number;
         console.log("[Demo] Pre-infusion settings updated:", data);
         this.emitPreinfusionSettings();
         break;
@@ -319,13 +327,13 @@ export class DemoConnection implements IConnection {
   private handleConfigurePowerMeter(data: Record<string, unknown>): void {
     const source = data.source as "none" | "hardware" | "mqtt";
     this.powerMeterSource = source;
-    
+
     if (source === "hardware") {
       const meterType = data.meterType as string;
       this.powerMeterType = meterType === "auto" ? null : meterType;
       this.powerMeterEnabled = true;
       this.powerMeterConnected = this.powerMeterType !== null;
-      
+
       console.log("[Demo] Power meter configured:", {
         source,
         meterType: this.powerMeterType,
@@ -339,7 +347,7 @@ export class DemoConnection implements IConnection {
       this.powerMeterConnected = false;
       this.powerMeterType = null;
     }
-    
+
     // Emit updated power meter status
     this.emitPowerMeterStatus();
   }
@@ -347,7 +355,7 @@ export class DemoConnection implements IConnection {
   private simulatePowerMeterDiscovery(): void {
     // Simulate auto-detection of power meter
     console.log("[Demo] Starting power meter auto-discovery...");
-    
+
     // Simulate scanning different baud rates with progress
     const steps = [
       { step: 1, progress: "Scanning UART1..." },
@@ -382,7 +390,7 @@ export class DemoConnection implements IConnection {
       this.powerMeterEnabled = true;
       this.powerMeterConnected = true;
       this.powerMeterSource = "hardware";
-      
+
       this.emit({
         type: "power_meter_status",
         source: "hardware",
@@ -407,11 +415,11 @@ export class DemoConnection implements IConnection {
     // Generate realistic power readings based on machine state
     const baseVoltage = 230 + (Math.random() - 0.5) * 4; // 228-232V
     const frequency = 50 + (Math.random() - 0.5) * 0.2; // 49.9-50.1Hz
-    
+
     let current: number;
     let power: number;
     let powerFactor: number;
-    
+
     if (this.isHeating) {
       // Heating - high power draw
       current = 6.0 + Math.random() * 0.5; // ~1400W heater
@@ -428,7 +436,7 @@ export class DemoConnection implements IConnection {
       power = Math.round(baseVoltage * current * 0.6);
       powerFactor = 0.6;
     }
-    
+
     return {
       voltage: Number(baseVoltage.toFixed(1)),
       current: Number(current.toFixed(3)),
@@ -452,14 +460,16 @@ export class DemoConnection implements IConnection {
       });
       return;
     }
-    
+
     this.emit({
       type: "power_meter_status",
       source: this.powerMeterSource,
       connected: this.powerMeterConnected,
       meterType: this.powerMeterType,
       lastUpdate: this.powerMeterConnected ? Date.now() : null,
-      reading: this.powerMeterConnected ? this.generatePowerMeterReading() : null,
+      reading: this.powerMeterConnected
+        ? this.generatePowerMeterReading()
+        : null,
       error: this.powerMeterConnected ? null : "No response from meter",
     });
   }

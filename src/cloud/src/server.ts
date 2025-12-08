@@ -24,18 +24,40 @@ const app = express();
 const port = process.env.PORT || 3001;
 
 // Middleware
+// CORS configuration - CORS_ORIGIN must be set in production
+const corsOrigin = process.env.CORS_ORIGIN;
+if (!corsOrigin && process.env.NODE_ENV === "production") {
+  console.warn(
+    "[Security] CORS_ORIGIN not set in production! Defaulting to restrictive policy."
+  );
+}
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || "*",
+    // In production, require explicit CORS_ORIGIN; in development, allow localhost
+    origin: corsOrigin || (process.env.NODE_ENV === "production" 
+      ? false  // Reject all cross-origin requests if not configured
+      : ["http://localhost:5173", "http://localhost:3001", "http://127.0.0.1:5173"]),
     credentials: true,
   })
 );
-app.use(express.json());
 
-// Security headers that allow Google OAuth popup to work
-// COOP: same-origin-allow-popups allows the Google Sign-In popup to communicate back
+// Limit JSON body size to prevent DoS attacks
+app.use(express.json({ limit: "100kb" }));
+
+// Security headers
 app.use((_req, res, next) => {
+  // COOP: same-origin-allow-popups allows the Google Sign-In popup to communicate back
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  // Prevent clickjacking
+  res.setHeader("X-Frame-Options", "DENY");
+  // Prevent MIME type sniffing
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  // Enable XSS protection (legacy browsers)
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  // Strict transport security (HTTPS only) - only in production
+  if (process.env.NODE_ENV === "production") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
   next();
 });
 
