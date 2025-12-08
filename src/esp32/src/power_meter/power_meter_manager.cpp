@@ -64,20 +64,23 @@ void PowerMeterManager::loop() {
     time_t now = time(nullptr);
     if (now > 1000000) {  // Time is valid (NTP synced)
         struct tm* tm_now = localtime(&now);
-        uint8_t currentDayOfYear = tm_now->tm_yday;
+        uint16_t currentDayOfYear = tm_now->tm_yday;
+        uint16_t currentYear = tm_now->tm_year + 1900;
         
         // Initialize day start on first valid reading
         if (!_dayStartSet && _lastReading.valid) {
             _dayStartKwh = _lastReading.energy_import;
             _dayStartSet = true;
             _lastDayOfYear = currentDayOfYear;
+            _lastYear = currentYear;
             LOG_I("Initialized day start energy: %.3f kWh", _dayStartKwh);
         }
         
-        // Reset at midnight (day changed)
-        if (_dayStartSet && currentDayOfYear != _lastDayOfYear) {
+        // Reset at midnight (day or year changed)
+        if (_dayStartSet && (currentDayOfYear != _lastDayOfYear || currentYear != _lastYear)) {
             resetDailyEnergy();
             _lastDayOfYear = currentDayOfYear;
+            _lastYear = currentYear;
         }
     }
 }

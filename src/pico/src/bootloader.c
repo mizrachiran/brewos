@@ -8,6 +8,7 @@
 #include "config.h"
 #include "flash_safe.h"       // Flash safety utilities
 #include <string.h>
+#include <stdio.h>
 #include "pico/stdlib.h"
 #include "pico/multicore.h"   // For multicore_lockout
 #include "pico/platform.h"    // For __not_in_flash_func

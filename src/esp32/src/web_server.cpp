@@ -2657,7 +2657,7 @@ void WebServer::checkForUpdates() {
     
     // Determine if combined update is available
     // Both assets must exist for a proper combined update
-    bool combinedUpdateAvailable = updateAvailable && esp32AssetFound && (picoAssetFound || machineType == 0);
+    bool combinedUpdateAvailable = updateAvailable && esp32AssetFound && picoAssetFound;
     
     // Broadcast result to WebSocket clients
     JsonDocument result;
@@ -2748,8 +2748,6 @@ void WebServer::startPicoGitHubOTA(const String& version) {
         serializeJson(doc, json);
         _ws.textAll(json);
     };
-    
-    broadcastProgress("download", 5, "Connecting...");
     
     HTTPClient http;
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
