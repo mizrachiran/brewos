@@ -8,18 +8,15 @@ import { Toggle } from "@/components/Toggle";
 import { PageHeader } from "@/components/PageHeader";
 import { ScaleStatusCard } from "@/components/ScaleStatusCard";
 import { Coffee, Scale, Waves } from "lucide-react";
-import { formatDuration } from "@/lib/utils";
 
 export function Brewing() {
   const bbw = useStore((s) => s.bbw);
-  const shot = useStore((s) => s.shot);
   const scale = useStore((s) => s.scale);
   const preinfusion = useStore((s) => s.preinfusion);
   const { sendCommand } = useCommand();
 
   // Local form state for BBW
   const [formState, setFormState] = useState(bbw);
-  const [shotTime, setShotTime] = useState(0);
   const [saving, setSaving] = useState(false);
 
   // Local form state for pre-infusion
@@ -44,17 +41,6 @@ export function Brewing() {
       sendCommand("set_bbw", { ...formState, enabled: false });
     }
   }, [scale.connected]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Shot timer
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    if (shot.active) {
-      interval = setInterval(() => {
-        setShotTime(Date.now() - shot.startTime);
-      }, 100);
-    }
-    return () => clearInterval(interval);
-  }, [shot.active, shot.startTime]);
 
   const ratio =
     formState.doseWeight > 0
@@ -97,51 +83,9 @@ export function Brewing() {
     <div className="space-y-6">
       {/* Header */}
       <PageHeader
-        title="Brewing"
-        subtitle="Configure pre-infusion and brew-by-weight settings"
+        title="Brew Settings"
+        subtitle="Configure your brew parameters"
       />
-
-      {/* Active Shot */}
-      {shot.active && (
-        <Card className="bg-gradient-to-br from-accent/10 to-accent/5 border-accent/30">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-theme">Active Shot</h2>
-            <span className="text-3xl font-mono font-bold text-theme">
-              {formatDuration(shotTime)}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-6 mb-4">
-            <div className="text-center">
-              <div className="text-4xl font-bold text-theme tabular-nums">
-                {shot.weight.toFixed(1)}
-              </div>
-              <div className="text-sm text-theme-muted">grams</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-theme tabular-nums">
-                {shot.flowRate.toFixed(1)}
-              </div>
-              <div className="text-sm text-theme-muted">g/s flow</div>
-            </div>
-          </div>
-
-          <div className="relative h-3 bg-theme-secondary rounded-full overflow-hidden">
-            <div
-              className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-amber-400 to-accent transition-all duration-200"
-              style={{
-                width: `${Math.min(
-                  100,
-                  (shot.weight / bbw.targetWeight) * 100
-                )}%`,
-              }}
-            />
-          </div>
-          <p className="text-sm text-theme-muted mt-2">
-            Target: {bbw.targetWeight}g
-          </p>
-        </Card>
-      )}
 
       {/* Scale Status - First, as it's the foundation for BBW */}
       <ScaleStatusCard

@@ -287,6 +287,7 @@ const defaultDevice: DeviceInfo = {
   machineModel: "",
   machineType: "" as DeviceInfo["machineType"],
   firmwareVersion: "",
+  hasPressureSensor: true, // Default true, will be updated from device
 };
 
 const defaultDiagnostics: DiagnosticReport = {
@@ -386,6 +387,7 @@ export const useStore = create<BrewOSState>()(
           const wifiData = data.wifi as Record<string, unknown> | undefined;
           const mqttData = data.mqtt as Record<string, unknown> | undefined;
           const esp32Data = data.esp32 as Record<string, unknown> | undefined;
+          const shotData = data.shot as Record<string, unknown> | undefined;
 
           set((state) => ({
             // Machine state
@@ -487,6 +489,19 @@ export const useStore = create<BrewOSState>()(
                   battery: (scaleData.battery as number) ?? state.scale.battery,
                 }
               : state.scale,
+            // Shot (active brew data)
+            shot: shotData
+              ? {
+                  active: (shotData.active as boolean) ?? state.shot.active,
+                  startTime:
+                    (shotData.startTime as number) ?? state.shot.startTime,
+                  duration:
+                    (shotData.duration as number) ?? state.shot.duration,
+                  weight: (shotData.weight as number) ?? state.shot.weight,
+                  flowRate:
+                    (shotData.flowRate as number) ?? state.shot.flowRate,
+                }
+              : state.shot,
             // Connection status and full WiFi/MQTT data
             wifi: wifiData
               ? {
@@ -847,6 +862,10 @@ export const useStore = create<BrewOSState>()(
               firmwareVersion:
                 (data.firmwareVersion as string) ||
                 state.device.firmwareVersion,
+              hasPressureSensor:
+                data.hasPressureSensor !== undefined
+                  ? (data.hasPressureSensor as boolean)
+                  : state.device.hasPressureSensor,
             },
             // Update power settings if provided
             power: {

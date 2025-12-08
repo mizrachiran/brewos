@@ -14,6 +14,7 @@ import { AuthCallback } from "@/pages/AuthCallback";
 import { Pair } from "@/pages/Pair";
 import { Onboarding } from "@/pages/Onboarding";
 import { FirstRunWizard } from "@/pages/FirstRunWizard";
+import { BrewingPreview } from "@/pages/dev/BrewingPreview";
 import {
   initConnection,
   getConnection,
@@ -306,10 +307,28 @@ function App() {
 
   // ===== DEMO MODE =====
   if (inDemoMode) {
+    const isDev = isDevModeEnabled();
     return (
       <>
         <DemoBanner onExit={handleExitDemo} />
         <Routes>
+          {/* Dev preview routes */}
+          {isDev && (
+            <>
+              <Route path="/dev/login" element={<Login />} />
+              <Route path="/dev/onboarding" element={<Onboarding />} />
+              <Route path="/dev/pair" element={<Pair />} />
+              <Route path="/dev/brewing" element={<BrewingPreview />} />
+              <Route
+                path="/dev/wizard"
+                element={
+                  <FirstRunWizard
+                    onComplete={() => (window.location.href = "/")}
+                  />
+                }
+              />
+            </>
+          )}
           <Route path="/machines" element={<Machines />} />
           <Route path="/" element={<Layout onExitDemo={handleExitDemo} />}>
             <Route index element={<Dashboard />} />
@@ -358,6 +377,7 @@ function App() {
               <Route path="/dev/login" element={<Login />} />
               <Route path="/dev/onboarding" element={<Onboarding />} />
               <Route path="/dev/pair" element={<Pair />} />
+              <Route path="/dev/brewing" element={<BrewingPreview />} />
               <Route
                 path="/dev/wizard"
                 element={
@@ -399,6 +419,7 @@ function App() {
               <Route path="/dev/login" element={<Login />} />
               <Route path="/dev/onboarding" element={<Onboarding />} />
               <Route path="/dev/pair" element={<Pair />} />
+              <Route path="/dev/brewing" element={<BrewingPreview />} />
               <Route
                 path="/dev/wizard"
                 element={
@@ -430,6 +451,7 @@ function App() {
               <Route path="/dev/login" element={<Login />} />
               <Route path="/dev/onboarding" element={<Onboarding />} />
               <Route path="/dev/pair" element={<Pair />} />
+              <Route path="/dev/brewing" element={<BrewingPreview />} />
               <Route
                 path="/dev/wizard"
                 element={
@@ -463,6 +485,7 @@ function App() {
             <Route path="/dev/login" element={<Login />} />
             <Route path="/dev/onboarding" element={<Onboarding />} />
             <Route path="/dev/pair" element={<Pair />} />
+            <Route path="/dev/brewing" element={<BrewingPreview />} />
             <Route
               path="/dev/wizard"
               element={

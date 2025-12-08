@@ -235,6 +235,8 @@ export interface DeviceInfo {
   machineModel: string;
   machineType: MachineType; // dual_boiler, single_boiler, heat_exchanger
   firmwareVersion: string;
+  // Optional hardware capabilities
+  hasPressureSensor: boolean; // Pressure transducer installed (optional accessory)
 }
 
 export interface ESP32Info {

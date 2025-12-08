@@ -82,6 +82,7 @@ export class DemoConnection implements IConnection {
       machineModel: "Synchronika",
       machineType: "dual_boiler",
       firmwareVersion: "1.0.0-demo",
+      hasPressureSensor: true, // Demo has pressure sensor installed
       // Power settings
       mainsVoltage: 220,
       maxCurrent: 13,
@@ -208,6 +209,7 @@ export class DemoConnection implements IConnection {
           machineModel: (data.model as string) || "Synchronika",
           machineType: (data.machineType as string) || "dual_boiler",
           firmwareVersion: "1.0.0-demo",
+          hasPressureSensor: true,
           mainsVoltage: 220,
           maxCurrent: 13,
           ecoBrewTemp: 80,
@@ -224,6 +226,7 @@ export class DemoConnection implements IConnection {
           machineModel: (data.machineModel as string) || "Synchronika",
           machineType: (data.machineType as string) || "dual_boiler",
           firmwareVersion: "1.0.0-demo",
+          hasPressureSensor: true,
           mainsVoltage: 220,
           maxCurrent: 13,
           ecoBrewTemp: 80,
@@ -1080,6 +1083,14 @@ export class DemoConnection implements IConnection {
         flowRate: Number(this.flowRate.toFixed(1)),
         stable: !this.isBrewing || this.flowRate < 0.5,
         battery: 85,
+      },
+      // Shot section (active brew data)
+      shot: {
+        active: this.isBrewing,
+        startTime: this.shotStartTime,
+        duration: this.isBrewing ? Date.now() - this.shotStartTime : 0,
+        weight: Number(this.shotWeight.toFixed(1)),
+        flowRate: Number(this.flowRate.toFixed(1)),
       },
       // Connections section
       connections: {

@@ -8,6 +8,7 @@ import { ConnectionOverlay } from "./ConnectionOverlay";
 import { DeviceOfflineBanner } from "./DeviceOfflineBanner";
 import { VersionWarning } from "./VersionWarning";
 import { UserMenu } from "./UserMenu";
+import { BrewingModeOverlay } from "./BrewingModeOverlay";
 import { isDemoMode } from "@/lib/demo-mode";
 import {
   LayoutGrid,
@@ -76,7 +77,9 @@ export function Layout({ onExitDemo }: LayoutProps) {
           <div className="flex items-center justify-between h-16">
             {/* Logo & Mode */}
             <div className="flex items-center gap-4">
-              <Logo size="md" />
+              {/* Hide full logo on very small screens, show icon only */}
+              <Logo size="md" className="hidden xs:flex" />
+              <Logo size="md" iconOnly className="xs:hidden" />
 
               {/* Cloud: Clickable machine indicator */}
               {isCloud && selectedDevice && (
@@ -107,42 +110,42 @@ export function Layout({ onExitDemo }: LayoutProps) {
             </div>
 
             {/* Right side */}
-            <div className="flex items-center gap-3">
-              {/* Connection Status */}
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-theme-tertiary">
+            <div className="flex items-center gap-2 xs:gap-3">
+              {/* Connection Status - icon only on very small screens */}
+              <div className="flex items-center gap-2 px-2 xs:px-3 py-1.5 rounded-full bg-theme-tertiary">
                 {isDemo ? (
                   <>
                     <Sparkles className="w-4 h-4 text-accent" />
-                    <span className="text-xs font-medium text-theme-secondary">
+                    <span className="hidden xs:inline text-xs font-medium text-theme-secondary">
                       Demo
                     </span>
                   </>
                 ) : isCloud ? (
                   <>
                     <Cloud className="w-4 h-4 text-accent" />
-                    <span className="text-xs font-medium text-theme-secondary">
+                    <span className="hidden xs:inline text-xs font-medium text-theme-secondary">
                       Cloud
                     </span>
                   </>
                 ) : isConnected ? (
                   <>
                     <Wifi className="w-4 h-4 text-emerald-500" />
-                    <span className="text-xs font-medium text-theme-secondary">
+                    <span className="hidden xs:inline text-xs font-medium text-theme-secondary">
                       Local
                     </span>
                   </>
                 ) : isConnecting ? (
                   <>
                     <Wifi className="w-4 h-4 text-amber-500 animate-pulse" />
-                    <span className="text-xs font-medium text-theme-secondary">
-                      Connecting...
+                    <span className="hidden xs:inline text-xs font-medium text-theme-secondary">
+                      ...
                     </span>
                   </>
                 ) : (
                   <>
                     <WifiOff className="w-4 h-4 text-red-500" />
-                    <span className="text-xs font-medium text-theme-secondary">
-                      Disconnected
+                    <span className="hidden xs:inline text-xs font-medium text-theme-secondary">
+                      Offline
                     </span>
                   </>
                 )}
@@ -235,6 +238,9 @@ export function Layout({ onExitDemo }: LayoutProps) {
 
       {/* Connection Overlay - Only for local mode (not demo) */}
       {!isCloud && !isDemo && <ConnectionOverlay />}
+
+      {/* Brewing Mode Overlay - Shows full-screen brewing UI during extraction */}
+      <BrewingModeOverlay />
     </div>
   );
 }
