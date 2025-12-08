@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useStore } from "@/lib/store";
 import { useCommand } from "@/lib/useCommand";
 import { Card, CardHeader, CardTitle } from "@/components/Card";
@@ -13,6 +13,10 @@ import {
   formatTemperatureWithUnit,
 } from "@/lib/temperature";
 
+// Default eco temperature in Celsius
+const DEFAULT_ECO_TEMP_CELSIUS = 80;
+const DEFAULT_ECO_TIMEOUT = 30;
+
 export function EcoModeSettings() {
   const temperatureUnit = useStore((s) => s.preferences.temperatureUnit);
   const { sendCommand } = useCommand();
@@ -20,19 +24,34 @@ export function EcoModeSettings() {
   const [savingEco, setSavingEco] = useState(false);
   const [editingEco, setEditingEco] = useState(false);
 
-  // Eco temp stored internally in Celsius (80°C default)
-  const [ecoBrewTempCelsius] = useState(80);
-  const [ecoBrewTempDisplay, setEcoBrewTempDisplay] = useState(() =>
-    convertFromCelsius(80, temperatureUnit)
-  );
-  const [ecoTimeout, setEcoTimeout] = useState(30);
+  // Store the actual value in Celsius (source of truth)
+  const ecoTempCelsiusRef = useRef(DEFAULT_ECO_TEMP_CELSIUS);
 
-  // Update display when unit changes
+  // Display value in current unit
+  const [ecoBrewTempDisplay, setEcoBrewTempDisplay] = useState(() =>
+    convertFromCelsius(DEFAULT_ECO_TEMP_CELSIUS, temperatureUnit)
+  );
+  const [ecoTimeout, setEcoTimeout] = useState(DEFAULT_ECO_TIMEOUT);
+
+  // Track previous unit to detect changes
+  const prevUnitRef = useRef(temperatureUnit);
+
+  // Update display when unit changes (convert existing value to new unit)
   useEffect(() => {
-    setEcoBrewTempDisplay(
-      convertFromCelsius(ecoBrewTempCelsius, temperatureUnit)
-    );
-  }, [temperatureUnit, ecoBrewTempCelsius]);
+    if (prevUnitRef.current !== temperatureUnit) {
+      // Convert current display value to Celsius using the OLD unit
+      const celsiusValue = convertToCelsius(
+        ecoBrewTempDisplay,
+        prevUnitRef.current
+      );
+      // Update the ref with the Celsius value
+      ecoTempCelsiusRef.current = celsiusValue;
+      // Convert Celsius to the NEW unit for display
+      setEcoBrewTempDisplay(convertFromCelsius(celsiusValue, temperatureUnit));
+      // Update the previous unit ref
+      prevUnitRef.current = temperatureUnit;
+    }
+  }, [temperatureUnit, ecoBrewTempDisplay]);
 
   const unitSymbol = getUnitSymbol(temperatureUnit);
   const step = getTemperatureStep(temperatureUnit);
@@ -40,6 +59,12 @@ export function EcoModeSettings() {
   // Calculate min/max in display unit
   const ecoTempMin = convertFromCelsius(60, temperatureUnit);
   const ecoTempMax = convertFromCelsius(90, temperatureUnit);
+
+  // Get current Celsius value from display (for view mode)
+  const currentTempCelsius = convertToCelsius(
+    ecoBrewTempDisplay,
+    temperatureUnit
+  );
 
   const saveEco = () => {
     if (savingEco) return; // Prevent double-click
@@ -49,6 +74,8 @@ export function EcoModeSettings() {
       ecoBrewTempDisplay,
       temperatureUnit
     );
+    // Update the ref with the saved value
+    ecoTempCelsiusRef.current = brewTempCelsius;
     sendCommand(
       "set_eco",
       { brewTemp: brewTempCelsius, timeout: ecoTimeout },
@@ -70,11 +97,7 @@ export function EcoModeSettings() {
           <div className="flex items-center justify-between py-2 border-b border-theme">
             <span className="text-sm text-theme-muted">Eco Temperature</span>
             <span className="text-sm font-medium text-theme">
-              {formatTemperatureWithUnit(
-                ecoBrewTempCelsius,
-                temperatureUnit,
-                0
-              )}
+              {formatTemperatureWithUnit(currentTempCelsius, temperatureUnit, 0)}
             </span>
           </div>
           <div className="flex items-center justify-between py-2 border-b border-theme">
@@ -149,4 +172,3 @@ export function EcoModeSettings() {
     </Card>
   );
 }
-
