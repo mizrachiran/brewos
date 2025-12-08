@@ -47,6 +47,7 @@ public:
     void saveScheduleSettings();
     void saveMachineInfoSettings();
     void saveNotificationSettings();
+    void saveSystemSettings();
     
     // Reset settings to defaults
     void resetSettings();

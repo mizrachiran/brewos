@@ -160,6 +160,9 @@ void StateManager::loadSettings() {
     _settings.notifications.scheduleTriggered = _prefs.getBool("notifSched", true);
     _settings.notifications.brewComplete = _prefs.getBool("notifBrew", false);
     
+    // System
+    _settings.system.setupComplete = _prefs.getBool("setupDone", false);
+    
     _prefs.end();
 }
 
@@ -174,6 +177,7 @@ void StateManager::saveSettings() {
     saveDisplaySettings();
     saveMachineInfoSettings();
     saveNotificationSettings();
+    saveSystemSettings();
 }
 
 void StateManager::saveTemperatureSettings() {
@@ -296,6 +300,13 @@ void StateManager::saveNotificationSettings() {
     _prefs.putBool("notifPico", _settings.notifications.picoOffline);
     _prefs.putBool("notifSched", _settings.notifications.scheduleTriggered);
     _prefs.putBool("notifBrew", _settings.notifications.brewComplete);
+    _prefs.end();
+    notifySettingsChanged();
+}
+
+void StateManager::saveSystemSettings() {
+    _prefs.begin(NVS_SETTINGS, false);
+    _prefs.putBool("setupDone", _settings.system.setupComplete);
     _prefs.end();
     notifySettingsChanged();
 }
@@ -667,6 +678,9 @@ bool StateManager::applySettings(const char* section, const JsonObject& obj) {
     } else if (strcmp(section, "notifications") == 0) {
         _settings.notifications.fromJson(obj);
         saveNotificationSettings();
+    } else if (strcmp(section, "system") == 0) {
+        _settings.system.fromJson(obj);
+        saveSystemSettings();
     } else {
         return false;
     }

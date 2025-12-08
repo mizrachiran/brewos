@@ -142,7 +142,6 @@ const defaultCleaning: CleaningStatus = {
 
 const defaultWater: WaterStatus = {
   tankLevel: "ok",
-  dripTrayFull: false,
 };
 
 const defaultScale: ScaleStatus = {
@@ -461,9 +460,6 @@ export const useStore = create<BrewOSState>()(
                   tankLevel:
                     (waterData.tankLevel as WaterStatus["tankLevel"]) ||
                     state.water.tankLevel,
-                  dripTrayFull:
-                    (waterData.dripTrayFull as boolean) ??
-                    state.water.dripTrayFull,
                 }
               : state.water,
             // Scale
@@ -600,8 +596,6 @@ export const useStore = create<BrewOSState>()(
               tankLevel:
                 (data.waterLevel as WaterStatus["tankLevel"]) ||
                 state.water.tankLevel,
-              dripTrayFull:
-                (data.dripTrayFull as boolean) ?? state.water.dripTrayFull,
             },
           }));
           break;

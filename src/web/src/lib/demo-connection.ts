@@ -1039,7 +1039,6 @@ export class DemoConnection implements IConnection {
       // Water section
       water: {
         tankLevel: "ok",
-        dripTrayFull: false,
       },
       // Scale section
       scale: {

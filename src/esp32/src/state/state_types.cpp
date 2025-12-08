@@ -198,6 +198,19 @@ bool DisplaySettings::fromJson(JsonObjectConst obj) {
 }
 
 // =============================================================================
+// SystemSettings
+// =============================================================================
+
+void SystemSettings::toJson(JsonObject& obj) const {
+    obj["setupComplete"] = setupComplete;
+}
+
+bool SystemSettings::fromJson(JsonObjectConst obj) {
+    if (obj["setupComplete"].is<bool>()) setupComplete = obj["setupComplete"];
+    return true;
+}
+
+// =============================================================================
 // MachineInfoSettings
 // =============================================================================
 
@@ -294,6 +307,9 @@ void Settings::toJson(JsonDocument& doc) const {
     
     JsonObject notificationsObj = doc["notifications"].to<JsonObject>();
     notifications.toJson(notificationsObj);
+    
+    JsonObject systemObj = doc["system"].to<JsonObject>();
+    system.toJson(systemObj);
 }
 
 bool Settings::fromJson(const JsonDocument& doc) {
@@ -362,6 +378,12 @@ bool Settings::fromJson(const JsonDocument& doc) {
     if (notificationsVar.is<JsonObjectConst>()) {
         JsonObjectConst obj = notificationsVar.as<JsonObjectConst>();
         notifications.fromJson(obj);
+    }
+    
+    JsonVariantConst systemVar = doc["system"];
+    if (systemVar.is<JsonObjectConst>()) {
+        JsonObjectConst obj = systemVar.as<JsonObjectConst>();
+        system.fromJson(obj);
     }
     
     return true;
@@ -518,7 +540,6 @@ void RuntimeState::toJson(JsonObject& obj) const {
     obj["powerWatts"] = powerWatts;
     obj["voltage"] = voltage;
     obj["waterLevel"] = waterLevel;
-    obj["dripTrayFull"] = dripTrayFull;
     obj["scaleConnected"] = scaleConnected;
     obj["scaleWeight"] = scaleWeight;
     obj["scaleFlowRate"] = scaleFlowRate;

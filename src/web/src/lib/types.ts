@@ -132,7 +132,6 @@ export type WaterLevel = "ok" | "low" | "empty";
 
 export interface WaterStatus {
   tankLevel: WaterLevel;
-  dripTrayFull: boolean;
 }
 
 // Scale

@@ -281,6 +281,14 @@ void WebServer::setupRoutes() {
         request->send(200, "application/json", "{\"status\":\"ok\"}");
     });
     
+    // Setup complete endpoint (marks first-run wizard as done)
+    _server.on("/api/setup/complete", HTTP_POST, [](AsyncWebServerRequest* request) {
+        State.settings().system.setupComplete = true;
+        State.saveSystemSettings();
+        LOG_I("Setup wizard completed");
+        request->send(200, "application/json", "{\"success\":true}");
+    });
+    
     // MQTT endpoints
     _server.on("/api/mqtt/config", HTTP_GET, [this](AsyncWebServerRequest* request) {
         handleGetMQTTConfig(request);
@@ -1022,6 +1030,9 @@ void WebServer::handleGetStatus(AsyncWebServerRequest* request) {
     
     // WebSocket clients
     doc["clients"] = getClientCount();
+    
+    // Setup status
+    doc["setupComplete"] = State.settings().system.setupComplete;
     
     String response;
     serializeJson(doc, response);
@@ -1963,7 +1974,6 @@ void WebServer::broadcastFullStatus(const ui_state_t& state) {
     // =========================================================================
     JsonObject water = doc["water"].to<JsonObject>();
     water["tankLevel"] = state.water_low ? "low" : "ok";
-    water["dripTrayFull"] = false;  // TODO: Get from state
     
     // =========================================================================
     // Scale Section

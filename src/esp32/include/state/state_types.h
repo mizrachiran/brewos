@@ -54,6 +54,13 @@ struct NetworkSettings {
     bool fromJson(JsonObjectConst obj);
 };
 
+struct SystemSettings {
+    bool setupComplete = false;         // First-run wizard completed
+    
+    void toJson(JsonObject& obj) const;
+    bool fromJson(JsonObjectConst obj);
+};
+
 struct TimeSettings {
     bool useNTP = true;                 // Use NTP vs manual time
     char ntpServer[64] = "pool.ntp.org";
@@ -220,6 +227,7 @@ struct Settings {
     ScheduleSettings schedule;
     MachineInfoSettings machineInfo;
     NotificationSettings notifications;
+    SystemSettings system;
     
     void toJson(JsonDocument& doc) const;
     bool fromJson(const JsonDocument& doc);
@@ -339,7 +347,6 @@ struct RuntimeState {
     
     // Water
     uint8_t waterLevel = 100;          // 0-100%
-    bool dripTrayFull = false;
     
     // Scale
     bool scaleConnected = false;
