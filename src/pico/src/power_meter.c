@@ -13,7 +13,6 @@
 #include "hardware/uart.h"
 #include "hardware/gpio.h"
 #include "pico/stdlib.h"
-#include "flash_config.h"
 
 #define UART_ID uart1
 
