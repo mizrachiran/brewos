@@ -618,7 +618,8 @@ void setup() {
         );
         
         // Set up command handler - forward cloud commands to WebServer
-        cloudConnection.onCommand([&webServer](const String& type, JsonDocument& doc) {
+        // Note: webServer is a global, no capture needed
+        cloudConnection.onCommand([](const String& type, JsonDocument& doc) {
             // Commands from cloud users are processed the same as local WebSocket
             webServer.processCommand(doc);
         });
