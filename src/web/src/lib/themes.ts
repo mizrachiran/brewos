@@ -559,7 +559,7 @@ export const themes: Record<ThemeId, Theme> = {
       accent: "#e89050",
       accentLight: "#f0b080",
       accentGlow: "rgba(232, 144, 80, 0.4)",
-      cardBg: "#35261c",
+      cardBg: "#3a2518",
       border: "#5a4038",
       borderLight: "#4a3428",
       shadowColor: "rgba(0, 0, 0, 0.4)",
