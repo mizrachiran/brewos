@@ -55,12 +55,12 @@ typedef struct {
     int8_t  adc_inlet_temp;      // ADC channel for inlet water temperature
     
     // ═══════════════════════════════════════════════════════════════
-    // SPI (Thermocouple, etc.)
+    // SPI (reserved for future use)
     // ═══════════════════════════════════════════════════════════════
     int8_t  spi_miso;            // SPI MISO (Master In, Slave Out)
-    int8_t  spi_cs_thermocouple;  // SPI CS for thermocouple amplifier
     int8_t  spi_sck;             // SPI clock
     int8_t  spi_mosi;            // SPI MOSI (if needed)
+    int8_t  spi_cs;              // SPI CS (reserved)
     
     // ═══════════════════════════════════════════════════════════════
     // DIGITAL INPUTS
@@ -102,8 +102,8 @@ typedef struct {
     // ═══════════════════════════════════════════════════════════════
     int8_t  uart_esp32_tx;       // UART TX to ESP32
     int8_t  uart_esp32_rx;       // UART RX from ESP32
-    int8_t  uart_pzem_tx;        // UART TX to PZEM (power meter, optional)
-    int8_t  uart_pzem_rx;        // UART RX from PZEM (power meter, optional)
+    int8_t  uart_meter_tx;       // UART TX to power meter (PZEM, JSY, Eastron)
+    int8_t  uart_meter_rx;       // UART RX from power meter
     int8_t  i2c_sda;             // I2C SDA
     int8_t  i2c_scl;             // I2C SCL
     
@@ -148,11 +148,11 @@ static const pcb_config_t PCB_ECM_V1 = {
         .adc_flow           = -1,  // Not used
         .adc_inlet_temp     = -1,  // Not used
         
-        // SPI
+        // SPI (reserved for future use)
         .spi_miso           = 16,  // GPIO16 (SPI0 MISO)
-        .spi_cs_thermocouple = 17, // GPIO17 (SPI0 CS)
         .spi_sck            = 18,  // GPIO18 (SPI0 SCK)
-        .spi_mosi           = -1,  // Not used (MAX31855 is read-only)
+        .spi_mosi           = -1,  // Not used
+        .spi_cs             = 17,  // GPIO17 (SPI0 CS, reserved)
         
         // Digital inputs
         .input_reservoir    = 2,   // GPIO2
@@ -183,8 +183,8 @@ static const pcb_config_t PCB_ECM_V1 = {
         // Communication
         .uart_esp32_tx      = 0,   // GPIO0 (UART0 TX)
         .uart_esp32_rx      = 1,   // GPIO1 (UART0 RX)
-        .uart_pzem_tx       = 6,   // GPIO6 (UART1 TX, optional)
-        .uart_pzem_rx       = 7,   // GPIO7 (UART1 RX, optional)
+        .uart_meter_tx      = 6,   // GPIO6 (UART1 TX, power meter)
+        .uart_meter_rx      = 7,   // GPIO7 (UART1 RX, power meter)
         .i2c_sda            = 8,   // GPIO8 (I2C0 SDA)
         .i2c_scl            = 9,   // GPIO9 (I2C0 SCL)
         

@@ -12,7 +12,7 @@
 #include "sensor_utils.h"
 #include "pcb_config.h"
 #include "machine_config.h"
-#include "pzem.h"
+#include "power_meter.h"
 #include <stdlib.h>
 #include <math.h>
 
@@ -25,7 +25,6 @@
 
 #define FILTER_SIZE_BREW_NTC    8   // Moving average samples for brew NTC
 #define FILTER_SIZE_STEAM_NTC   8   // Moving average samples for steam NTC
-#define FILTER_SIZE_GROUP_TC    4   // Moving average samples for group thermocouple
 #define FILTER_SIZE_PRESSURE    4   // Moving average samples for pressure
 
 // =============================================================================
@@ -38,13 +37,11 @@ static bool g_use_hardware = false;  // Use hardware abstraction (sim or real)
 // Filter buffers
 static float g_filter_buf_brew[FILTER_SIZE_BREW_NTC];
 static float g_filter_buf_steam[FILTER_SIZE_STEAM_NTC];
-static float g_filter_buf_group[FILTER_SIZE_GROUP_TC];
 static float g_filter_buf_pressure[FILTER_SIZE_PRESSURE];
 
 // Filter structures
 static moving_avg_filter_t g_filter_brew;
 static moving_avg_filter_t g_filter_steam;
-static moving_avg_filter_t g_filter_group;
 static moving_avg_filter_t g_filter_pressure;
 
 // Simulation state (fallback if hardware abstraction is in simulation mode)
@@ -55,15 +52,13 @@ static bool g_sim_heating = false;
 // Sensor fault tracking
 static bool g_brew_ntc_fault = false;
 static bool g_steam_ntc_fault = false;
-static bool g_group_tc_fault = false;
 static bool g_pressure_sensor_fault = false;
 
 // Sensor error tracking (consecutive failures)
 static uint16_t g_brew_ntc_error_count = 0;
 static uint16_t g_steam_ntc_error_count = 0;
-static uint16_t g_group_tc_error_count = 0;
 static uint16_t g_pressure_error_count = 0;
-static uint16_t g_pzem_error_count = 0;
+static uint16_t g_power_meter_error_count = 0;
 
 #define SENSOR_ERROR_THRESHOLD 10  // Report error after 10 consecutive failures
 
@@ -180,72 +175,13 @@ static float read_steam_ntc(void) {
 }
 
 /**
- * Read MAX31855 thermocouple (group temperature)
- * Returns NAN if sensor doesn't exist for this machine type
- * Note: For HX machines, this is the primary brew temperature indicator
+ * Read group temperature
+ * Returns NAN as group head thermocouple support was removed (v2.24.3)
  */
 static float read_group_thermocouple(void) {
-    // Machine-type check: Only read if machine has group thermocouple
-    if (!machine_has_group_thermocouple()) {
-        return NAN;  // Not present on this machine type
-    }
-    
-    const pcb_config_t* pcb = pcb_config_get();
-    if (!pcb || pcb->pins.spi_cs_thermocouple < 0) {
-        return NAN;  // Not configured
-    }
-    
-    uint32_t max31855_data;
-    if (!hw_spi_read_max31855(&max31855_data)) {
-        g_group_tc_fault = true;
-        return NAN;
-    }
-    
-    // Check for faults
-    if (hw_max31855_is_fault(max31855_data)) {
-        g_group_tc_fault = true;
-        g_group_tc_error_count++;
-        uint8_t fault_code = hw_max31855_get_fault(max31855_data);
-        if (g_group_tc_error_count >= SENSOR_ERROR_THRESHOLD && 
-            g_group_tc_error_count == SENSOR_ERROR_THRESHOLD) {
-            DEBUG_PRINT("SENSOR ERROR: MAX31855 fault code=%d - %d consecutive failures\n", 
-                       fault_code, g_group_tc_error_count);
-        }
-        return NAN;
-    }
-    
-    // Convert to temperature
-    float temp_c;
-    if (!hw_max31855_to_temp(max31855_data, &temp_c)) {
-        g_group_tc_fault = true;
-        g_group_tc_error_count++;
-        if (g_group_tc_error_count >= SENSOR_ERROR_THRESHOLD && 
-            g_group_tc_error_count == SENSOR_ERROR_THRESHOLD) {
-            DEBUG_PRINT("SENSOR ERROR: MAX31855 conversion failed - %d consecutive failures\n", 
-                       g_group_tc_error_count);
-        }
-        return NAN;
-    }
-    
-    // Validate
-    if (!sensor_validate_temp(temp_c, -50.0f, 200.0f)) {
-        g_group_tc_fault = true;
-        g_group_tc_error_count++;
-        if (g_group_tc_error_count >= SENSOR_ERROR_THRESHOLD && 
-            g_group_tc_error_count == SENSOR_ERROR_THRESHOLD) {
-            DEBUG_PRINT("SENSOR ERROR: Group TC invalid reading (%.1fC) - %d consecutive failures\n", 
-                       temp_c, g_group_tc_error_count);
-        }
-        return NAN;
-    }
-    
-    // Valid reading - reset error count
-    if (g_group_tc_error_count > 0) {
-        DEBUG_PRINT("SENSOR: Group TC recovered after %d failures\n", g_group_tc_error_count);
-    }
-    g_group_tc_fault = false;
-    g_group_tc_error_count = 0;
-    return temp_c;
+    // Group head thermocouple (MAX31855) support removed in v2.24.3
+    // Boiler NTC sensors provide sufficient temperature control
+    return NAN;
 }
 
 /**
@@ -369,19 +305,13 @@ void sensors_init(void) {
     // Initialize filters
     filter_moving_avg_init(&g_filter_brew, g_filter_buf_brew, FILTER_SIZE_BREW_NTC);
     filter_moving_avg_init(&g_filter_steam, g_filter_buf_steam, FILTER_SIZE_STEAM_NTC);
-    filter_moving_avg_init(&g_filter_group, g_filter_buf_group, FILTER_SIZE_GROUP_TC);
     filter_moving_avg_init(&g_filter_pressure, g_filter_buf_pressure, FILTER_SIZE_PRESSURE);
     
     // Check if hardware abstraction is available
     g_use_hardware = true;  // Always use hardware abstraction (sim or real)
     
-    // Initialize MAX31855 SPI if configured
-    const pcb_config_t* pcb = pcb_config_get();
-    if (pcb && pcb->pins.spi_cs_thermocouple >= 0) {
-        hw_spi_init_max31855();
-    }
-    
     // Initialize digital inputs for water level
+    const pcb_config_t* pcb = pcb_config_get();
     if (pcb) {
         if (pcb->pins.input_reservoir >= 0) {
             hw_gpio_init_input(pcb->pins.input_reservoir, true, false);  // Pull-up
@@ -432,14 +362,8 @@ void sensors_read(void) {
             // Sensor fault - keep last valid value
         }
         
-        // Read and filter group thermocouple (slower, so less filtering)
-        float group_temp_raw = read_group_thermocouple();
-        if (!isnan(group_temp_raw)) {
-            float group_temp_filtered = filter_moving_avg_update(&g_filter_group, group_temp_raw);
-            g_sensor_data.group_temp = (int16_t)(group_temp_filtered * 10.0f);
-        } else {
-            // Sensor fault - keep last valid value
-        }
+        // Note: Group head thermocouple support removed (v2.24.3)
+        // g_sensor_data.group_temp remains at default/last value (NAN data)
         
         // Read and filter pressure
         float pressure_raw = read_pressure();
@@ -454,19 +378,22 @@ void sensors_read(void) {
         // Read water level
         g_sensor_data.water_level = read_water_level();
         
-        // Read PZEM power meter
-        // Read every sensor cycle - pzem_read() is non-blocking (uses timeout, not sleep)
+        // Read power meter (PZEM, JSY, Eastron, etc.)
+        // power_meter_update() is non-blocking (uses timeout)
         // Power data doesn't need high frequency, but reading every cycle is fine
-        // since the read is fast (~10-20ms) and non-blocking
-        if (pzem_is_available()) {
-            pzem_data_t pzem_data;
-            if (!pzem_read(&pzem_data)) {
-                // PZEM read failed - error count is tracked internally
-                g_pzem_error_count = pzem_get_error_count();
-                if (g_pzem_error_count > 0 && g_pzem_error_count % 50 == 0) {
+        if (power_meter_is_connected()) {
+            power_meter_update();
+            
+            // Check for persistent errors
+            const char* error = power_meter_get_error();
+            if (error) {
+                g_power_meter_error_count++;
+                if (g_power_meter_error_count % 50 == 0) {
                     // Report every 50 errors to avoid spam
-                    DEBUG_PRINT("SENSOR ERROR: PZEM read failures: %d total\n", g_pzem_error_count);
+                    DEBUG_PRINT("SENSOR ERROR: Power meter: %s (count: %d)\n", error, g_power_meter_error_count);
                 }
+            } else {
+                g_power_meter_error_count = 0;  // Reset on success
             }
         }
         

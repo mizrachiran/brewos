@@ -71,8 +71,8 @@ bool pcb_validate_pins(void) {
     CHECK_PIN(pins->adc_flow);
     CHECK_PIN(pins->adc_inlet_temp);
     CHECK_PIN(pins->spi_miso);
-    CHECK_PIN(pins->spi_cs_thermocouple);
     CHECK_PIN(pins->spi_sck);
+    CHECK_PIN(pins->spi_cs);
     CHECK_PIN(pins->spi_mosi);
     CHECK_PIN(pins->input_reservoir);
     CHECK_PIN(pins->input_tank_level);
@@ -95,8 +95,8 @@ bool pcb_validate_pins(void) {
     CHECK_PIN(pins->buzzer);
     CHECK_PIN(pins->uart_esp32_tx);
     CHECK_PIN(pins->uart_esp32_rx);
-    CHECK_PIN(pins->uart_pzem_tx);
-    CHECK_PIN(pins->uart_pzem_rx);
+    CHECK_PIN(pins->uart_meter_tx);
+    CHECK_PIN(pins->uart_meter_rx);
     CHECK_PIN(pins->i2c_sda);
     CHECK_PIN(pins->i2c_scl);
     CHECK_PIN(pins->input_weight_stop);

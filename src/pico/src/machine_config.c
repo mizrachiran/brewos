@@ -74,11 +74,6 @@ bool machine_has_steam_ntc(void) {
     return g_machine_config ? g_machine_config->features.has_steam_ntc : false;
 }
 
-bool machine_has_group_thermocouple(void) {
-    ensure_config_initialized();
-    return g_machine_config ? g_machine_config->features.has_group_thermocouple : false;
-}
-
 const char* machine_get_name(void) {
     ensure_config_initialized();
     return g_machine_config ? g_machine_config->features.name : "Unknown";

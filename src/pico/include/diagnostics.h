@@ -93,12 +93,6 @@ uint8_t diag_test_brew_ntc(diag_result_t* result);
 uint8_t diag_test_steam_ntc(diag_result_t* result);
 
 /**
- * Test group head thermocouple (MAX31855)
- * Checks: SPI communication, no faults, reading in valid range
- */
-uint8_t diag_test_group_tc(diag_result_t* result);
-
-/**
  * Test pressure transducer
  * Checks: ADC reading, voltage in expected range, ~0 bar when cold
  */
@@ -135,10 +129,10 @@ uint8_t diag_test_relay_pump(diag_result_t* result);
 uint8_t diag_test_relay_solenoid(diag_result_t* result);
 
 /**
- * Test PZEM power meter communication
- * Checks: UART response, voltage/current readings
+ * Test power meter communication (PZEM, JSY, Eastron, etc.)
+ * Checks: UART/Modbus response, voltage/current readings
  */
-uint8_t diag_test_pzem(diag_result_t* result);
+uint8_t diag_test_power_meter(diag_result_t* result);
 
 /**
  * Test ESP32 communication

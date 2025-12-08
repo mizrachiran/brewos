@@ -14,7 +14,7 @@
 #include "sensors.h"
 #include "pcb_config.h"
 #include "machine_config.h"
-#include "pzem.h"
+#include "power_meter.h"
 #include "safety.h"
 #include "protocol_defs.h"
 #include "class_b.h"
@@ -98,14 +98,13 @@ bool diagnostics_run_all(diag_report_t* report) {
     } tests[] = {
         { DIAG_TEST_BREW_NTC, diag_test_brew_ntc },
         { DIAG_TEST_STEAM_NTC, diag_test_steam_ntc },
-        { DIAG_TEST_GROUP_TC, diag_test_group_tc },
         { DIAG_TEST_PRESSURE, diag_test_pressure },
         { DIAG_TEST_WATER_LEVEL, diag_test_water_level },
         { DIAG_TEST_SSR_BREW, diag_test_ssr_brew },
         { DIAG_TEST_SSR_STEAM, diag_test_ssr_steam },
         { DIAG_TEST_RELAY_PUMP, diag_test_relay_pump },
         { DIAG_TEST_RELAY_SOLENOID, diag_test_relay_solenoid },
-        { DIAG_TEST_PZEM, diag_test_pzem },
+        { DIAG_TEST_POWER_METER, diag_test_power_meter },
         { DIAG_TEST_ESP32_COMM, diag_test_esp32_comm },
         { DIAG_TEST_BUZZER, diag_test_buzzer },
         { DIAG_TEST_LED, diag_test_led },
@@ -163,9 +162,6 @@ uint8_t diagnostics_run_test(uint8_t test_id, diag_result_t* result) {
         case DIAG_TEST_STEAM_NTC:
             diag_test_steam_ntc(result);
             break;
-        case DIAG_TEST_GROUP_TC:
-            diag_test_group_tc(result);
-            break;
         case DIAG_TEST_PRESSURE:
             diag_test_pressure(result);
             break;
@@ -184,8 +180,8 @@ uint8_t diagnostics_run_test(uint8_t test_id, diag_result_t* result) {
         case DIAG_TEST_RELAY_SOLENOID:
             diag_test_relay_solenoid(result);
             break;
-        case DIAG_TEST_PZEM:
-            diag_test_pzem(result);
+        case DIAG_TEST_POWER_METER:
+            diag_test_power_meter(result);
             break;
         case DIAG_TEST_ESP32_COMM:
             diag_test_esp32_comm(result);
@@ -308,64 +304,6 @@ uint8_t diag_test_steam_ntc(diag_result_t* result) {
     }
     
     DEBUG_PRINT("Steam NTC: ADC=%d, status=%d\n", adc_value, result->status);
-    return result->status;
-}
-
-uint8_t diag_test_group_tc(diag_result_t* result) {
-    init_result(result, DIAG_TEST_GROUP_TC);
-    
-    // Check if machine has group thermocouple
-    if (!machine_has_group_thermocouple()) {
-        set_result(result, DIAG_STATUS_SKIP, "No group thermocouple");
-        return result->status;
-    }
-    
-    const pcb_config_t* pcb = pcb_config_get();
-    if (!pcb || pcb->pins.spi_cs_thermocouple < 0) {
-        set_result(result, DIAG_STATUS_SKIP, "Not configured");
-        return result->status;
-    }
-    
-    // Read MAX31855
-    uint32_t max31855_data;
-    if (!hw_spi_read_max31855(&max31855_data)) {
-        set_result(result, DIAG_STATUS_FAIL, "SPI read failed");
-        return result->status;
-    }
-    
-    // Check for faults
-    if (hw_max31855_is_fault(max31855_data)) {
-        uint8_t fault_code = hw_max31855_get_fault(max31855_data);
-        if (fault_code & 0x01) {
-            set_result(result, DIAG_STATUS_FAIL, "Open circuit");
-        } else if (fault_code & 0x02) {
-            set_result(result, DIAG_STATUS_FAIL, "Short to GND");
-        } else if (fault_code & 0x04) {
-            set_result(result, DIAG_STATUS_FAIL, "Short to VCC");
-        } else {
-            set_result(result, DIAG_STATUS_FAIL, "Unknown fault");
-        }
-        return result->status;
-    }
-    
-    // Get temperature
-    float temp_c;
-    if (!hw_max31855_to_temp(max31855_data, &temp_c)) {
-        set_result(result, DIAG_STATUS_FAIL, "Conversion failed");
-        return result->status;
-    }
-    
-    result->raw_value = (int16_t)(temp_c * 10);
-    result->expected_min = 100;   // 10.0°C
-    result->expected_max = 400;   // 40.0°C (room temp range)
-    
-    if (temp_c < 10.0f || temp_c > 50.0f) {
-        set_result(result, DIAG_STATUS_WARN, "Temp out of expected range");
-    } else {
-        set_result(result, DIAG_STATUS_PASS, "OK");
-    }
-    
-    DEBUG_PRINT("Group TC: %.1fC, status=%d\n", temp_c, result->status);
     return result->status;
 }
 
@@ -545,31 +483,32 @@ uint8_t diag_test_relay_solenoid(diag_result_t* result) {
     return result->status;
 }
 
-uint8_t diag_test_pzem(diag_result_t* result) {
-    init_result(result, DIAG_TEST_PZEM);
+uint8_t diag_test_power_meter(diag_result_t* result) {
+    init_result(result, DIAG_TEST_POWER_METER);
     
-    if (!pzem_is_available()) {
-        set_result(result, DIAG_STATUS_SKIP, "PZEM not available");
+    if (!power_meter_is_connected()) {
+        set_result(result, DIAG_STATUS_SKIP, "Power meter not configured");
         return result->status;
     }
     
-    // Try to read from PZEM
-    pzem_data_t pzem_data;
-    if (!pzem_read(&pzem_data)) {
+    // Try to read from power meter
+    power_meter_reading_t reading;
+    if (!power_meter_get_reading(&reading) || !reading.valid) {
         set_result(result, DIAG_STATUS_FAIL, "Read failed");
         return result->status;
     }
     
-    result->raw_value = (int16_t)(pzem_data.voltage * 10);
+    result->raw_value = (int16_t)(reading.voltage * 10);
     
     // Check for reasonable voltage (85-265V)
-    if (pzem_data.voltage < 85.0f || pzem_data.voltage > 265.0f) {
+    if (reading.voltage < 85.0f || reading.voltage > 265.0f) {
         set_result(result, DIAG_STATUS_WARN, "Unexpected voltage");
     } else {
         set_result(result, DIAG_STATUS_PASS, "OK");
     }
     
-    DEBUG_PRINT("PZEM: %.1fV, %.2fA\n", pzem_data.voltage, pzem_data.current);
+    const char* meter_name = power_meter_get_name();
+    DEBUG_PRINT("Power meter (%s): %.1fV, %.2fA\n", meter_name, reading.voltage, reading.current);
     return result->status;
 }
 

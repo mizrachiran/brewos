@@ -32,13 +32,15 @@ import type {
 } from "@/lib/types";
 import { DIAGNOSTIC_TESTS, getTestsForMachineType } from "@/lib/types";
 
+// Power meter test ID for dynamic name display
+const POWER_METER_TEST_ID = 0x0A;
+
 // Map test IDs to icons
 function getTestIcon(testId: number) {
   const icons: Record<number, React.ReactNode> = {
-    // Temperature Sensors (T1, T2, T3)
+    // Temperature Sensors (T1, T2)
     0x01: <Thermometer className="w-5 h-5" />, // Brew Boiler NTC
     0x02: <Thermometer className="w-5 h-5" />, // Steam Boiler NTC
-    0x03: <Thermometer className="w-5 h-5" />, // Group Head Thermocouple
     
     // Pressure Sensor (P1)
     0x04: <Gauge className="w-5 h-5" />, // Pressure Transducer
@@ -61,7 +63,7 @@ function getTestIcon(testId: number) {
     
     // Communication
     0x0b: <Wifi className="w-5 h-5" />, // ESP32 Communication
-    0x0a: <Cable className="w-5 h-5" />, // Power Meter (PZEM)
+    0x0a: <Cable className="w-5 h-5" />, // Power Meter (PZEM, JSY, Eastron)
     
     // User Interface
     0x0c: <Speaker className="w-5 h-5" />, // Buzzer
@@ -133,10 +135,21 @@ function TroubleshootItem({
   );
 }
 
-function DiagnosticResultRow({ result }: { result: DiagnosticResult }) {
+function DiagnosticResultRow({ 
+  result, 
+  configuredMeterType 
+}: { 
+  result: DiagnosticResult;
+  configuredMeterType?: string | null;
+}) {
   const statusInfo = getStatusInfo(result.status);
   const testMeta = DIAGNOSTIC_TESTS.find((t) => t.id === result.testId);
   const isOptional = testMeta?.optional ?? false;
+
+  // For power meter test, show the configured meter type if available
+  const displayName = result.testId === POWER_METER_TEST_ID && configuredMeterType
+    ? `Power Meter (${configuredMeterType})`
+    : result.name;
 
   return (
     <div className="flex items-center gap-4 p-4 rounded-xl bg-theme-secondary border border-theme">
@@ -146,7 +159,7 @@ function DiagnosticResultRow({ result }: { result: DiagnosticResult }) {
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <h4 className="font-medium text-theme truncate">{result.name}</h4>
+          <h4 className="font-medium text-theme truncate">{displayName}</h4>
           {isOptional && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-theme-tertiary text-theme-muted uppercase">
               Optional
@@ -173,7 +186,13 @@ export function Diagnostics() {
   const resetDiagnostics = useStore((s) => s.resetDiagnostics);
   const pico = useStore((s) => s.pico);
   const device = useStore((s) => s.device);
+  const powerMeter = useStore((s) => s.power.meter);
   const { sendCommand } = useCommand();
+
+  // Get configured power meter type for dynamic display
+  const configuredMeterType = powerMeter?.source === "hardware" && powerMeter?.meterType 
+    ? powerMeter.meterType 
+    : null;
 
   // Get tests applicable to this machine type
   const machineType = (device.machineType || "dual_boiler") as MachineType;
@@ -373,6 +392,7 @@ export function Diagnostics() {
                 <DiagnosticResultRow
                   key={`${result.testId}-${index}`}
                   result={result}
+                  configuredMeterType={configuredMeterType}
                 />
               ))}
             </div>
@@ -401,10 +421,6 @@ export function Diagnostics() {
             description="50kΩ NTC thermistors with optimized pull-ups (3.3kΩ brew, 1.2kΩ steam). Reading 0 or max = disconnected. Dual boiler tests both, single boiler only T1."
           />
           <TroubleshootItem
-            title="Group Head Thermocouple (T3 - Optional)"
-            description="K-type thermocouple via MAX31855 SPI. Verify GPIO16-18 connections. 'Open circuit' = wire disconnected. Skip if not installed."
-          />
-          <TroubleshootItem
             title="Water Level Sensors (S1, S2, S3)"
             description="S1/S2: Reservoir and tank float switches on GPIO2/3. S3: Steam boiler probe via OPA342/TLV3201 AC sensing on GPIO4. Low level warning is normal if tank not full."
           />
@@ -426,7 +442,7 @@ export function Diagnostics() {
           />
           <TroubleshootItem
             title="Communication & Power Meter"
-            description="ESP32 tests UART0 link (921600 baud). PZEM-004T is optional, tests Modbus on UART1 (9600 baud)."
+            description="ESP32 tests UART0 link (921600 baud). Power meter is optional, supports PZEM-004T, JSY-MK-163T/194T, and Eastron SDM120/230 via Modbus on UART1."
           />
         </div>
       </Card>

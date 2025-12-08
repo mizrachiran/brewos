@@ -4,7 +4,13 @@ import { useCommand } from "@/lib/useCommand";
 import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
-import { Activity, Settings, ChevronRight, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import {
+  Activity,
+  Settings,
+  ChevronRight,
+  CheckCircle2,
+  XCircle,
+} from "lucide-react";
 import { PowerMeterStatus } from "./PowerMeterStatus";
 
 type PowerSource = "none" | "hardware" | "mqtt";
@@ -24,21 +30,33 @@ export function PowerMeterSettings() {
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  
+
   // Configuration state
   const [source, setSource] = useState<PowerSource>("none");
   const [meterType, setMeterType] = useState<string>("auto");
   const [mqttTopic, setMqttTopic] = useState<string>("");
   const [mqttFormat, setMqttFormat] = useState<string>("auto");
+  const [initializedFromStore, setInitializedFromStore] = useState(false);
 
-  // Initialize from store
+  // Initialize from store (only once when entering edit mode)
   useEffect(() => {
-    if (powerMeter) {
+    if (powerMeter && !editing && !initializedFromStore) {
       setSource(powerMeter.source);
-      setMeterType(powerMeter.meterType || "auto");
-      // MQTT topic would come from config (not in status)
+      // Only set specific meter type if not in auto-detect mode
+      // Keep "auto" if that's what user selected to allow saving after detection
+      if (powerMeter.meterType && powerMeter.meterType !== "auto") {
+        setMeterType(powerMeter.meterType);
+      }
+      setInitializedFromStore(true);
     }
-  }, [powerMeter]);
+  }, [powerMeter, editing, initializedFromStore]);
+
+  // Reset initialization flag when exiting edit mode
+  useEffect(() => {
+    if (!editing) {
+      setInitializedFromStore(false);
+    }
+  }, [editing]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -48,11 +66,16 @@ export function PowerMeterSettings() {
     };
 
     if (source === "hardware") {
-      config.meterType = meterType;
-      if (meterType !== "auto") {
+      // Use detected meter type if auto-detect found one, otherwise use selected type
+      const effectiveMeterType =
+        meterType === "auto" && powerMeter?.meterType
+          ? powerMeter.meterType
+          : meterType;
+      config.meterType = effectiveMeterType;
+      if (effectiveMeterType !== "auto") {
         // Include specific config if not auto-detecting
-        config.slaveAddr = 0;  // Use default
-        config.baudRate = 0;   // Use default
+        config.slaveAddr = 0; // Use default
+        config.baudRate = 0; // Use default
       }
     } else if (source === "mqtt") {
       config.topic = mqttTopic;
@@ -71,9 +94,13 @@ export function PowerMeterSettings() {
   };
 
   const handleAutoDetect = () => {
-    sendCommand("start_power_meter_discovery", {}, {
-      successMessage: "Starting auto-detection...",
-    });
+    sendCommand(
+      "start_power_meter_discovery",
+      {},
+      {
+        successMessage: "Starting auto-detection...",
+      }
+    );
   };
 
   const handleCancel = () => {
@@ -88,9 +115,18 @@ export function PowerMeterSettings() {
     setEditing(false);
   };
 
+  // Detect if auto-detection found a meter that needs to be saved
+  const autoDetectedMeter =
+    meterType === "auto" &&
+    powerMeter?.meterType &&
+    powerMeter.meterType !== "auto";
+
   const hasChanges =
-    (powerMeter?.source !== source) ||
-    (source === "hardware" && powerMeter?.meterType !== meterType) ||
+    powerMeter?.source !== source ||
+    (source === "hardware" &&
+      meterType !== "auto" &&
+      powerMeter?.meterType !== meterType) ||
+    (source === "hardware" && autoDetectedMeter) || // Auto-detected meter needs saving
     (source === "mqtt" && mqttTopic.length > 0);
 
   return (
@@ -145,7 +181,9 @@ export function PowerMeterSettings() {
                 <>
                   <XCircle className="w-4 h-4 text-theme-muted" />
                   <span className="text-sm font-medium text-theme-muted">
-                    {powerMeter?.source === "none" ? "Disabled" : "Disconnected"}
+                    {powerMeter?.source === "none"
+                      ? "Disabled"
+                      : "Disconnected"}
                   </span>
                 </>
               )}
@@ -153,9 +191,7 @@ export function PowerMeterSettings() {
           </div>
 
           {/* Show current readings if connected */}
-          {powerMeter?.connected && powerMeter?.reading && (
-            <PowerMeterStatus />
-          )}
+          {powerMeter?.connected && powerMeter?.reading && <PowerMeterStatus />}
 
           <button
             onClick={() => setEditing(true)}
@@ -222,29 +258,27 @@ export function PowerMeterSettings() {
                   disabled={powerMeter?.discovering}
                   loading={powerMeter?.discovering}
                 >
-                  {powerMeter?.discovering ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      {powerMeter?.discoveryProgress || "Detecting..."}
-                    </>
-                  ) : (
-                    "Auto-Detect Meter"
-                  )}
+                  {powerMeter?.discovering
+                    ? powerMeter?.discoveryProgress || "Detecting..."
+                    : "Auto-Detect Meter"}
                 </Button>
               )}
 
-              {powerMeter?.meterType && meterType === "auto" && !powerMeter?.discovering && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-                  <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
-                  <div className="text-sm">
-                    <p className="font-medium text-green-500">Detected</p>
-                    <p className="text-theme-muted">{powerMeter.meterType}</p>
+              {powerMeter?.meterType &&
+                meterType === "auto" &&
+                !powerMeter?.discovering && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                    <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+                    <div className="text-sm">
+                      <p className="font-medium text-green-500">Detected</p>
+                      <p className="text-theme-muted">{powerMeter.meterType}</p>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
               <p className="text-xs text-theme-muted">
-                Connect meter to J17 connector (6-pin JST-XH). See hardware documentation for wiring.
+                Connect meter to J17 connector (6-pin JST-XH). See hardware
+                documentation for wiring.
               </p>
             </div>
           )}
@@ -278,8 +312,8 @@ export function PowerMeterSettings() {
               </div>
 
               <p className="text-xs text-theme-muted">
-                Supports Shelly Plug, Tasmota-flashed smart plugs, and generic JSON formats.
-                MQTT must be enabled in Network settings.
+                Supports Shelly Plug, Tasmota-flashed smart plugs, and generic
+                JSON formats. MQTT must be enabled in Network settings.
               </p>
             </div>
           )}
@@ -310,4 +344,3 @@ export function PowerMeterSettings() {
     </Card>
   );
 }
-

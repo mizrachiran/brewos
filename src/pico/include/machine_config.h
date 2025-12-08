@@ -63,7 +63,6 @@ typedef struct {
     // ═══════════════════════════════════════════════════════════════
     bool     has_brew_ntc;          // Brew boiler temperature sensor
     bool     has_steam_ntc;         // Steam boiler temperature sensor
-    bool     has_group_thermocouple;// Group head thermocouple (critical for HX)
     
     // ═══════════════════════════════════════════════════════════════
     // CONTROL CHARACTERISTICS
@@ -170,11 +169,6 @@ typedef struct {
     // In this mode, we monitor but don't control the heater
     // The external pressurestat handles on/off control
     bool     pressurestat_has_feedback; // True if we can read pressurestat state
-    
-    // Group temperature monitoring (all modes)
-    float    target_group_temp;         // Target group head temperature for display
-    bool     use_group_for_ready;       // Use group temp to determine "ready" state
-    float    group_ready_temp;          // Group temp threshold for ready (°C)
 } heat_exchanger_config_t;
 
 // =============================================================================
@@ -211,7 +205,6 @@ static const machine_config_t MACHINE_CONFIG_DUAL_BOILER = {
         
         .has_brew_ntc           = true,
         .has_steam_ntc          = true,
-        .has_group_thermocouple = true,
         
         .needs_mode_switching   = false,
         .steam_provides_brew_heat = false,
@@ -243,7 +236,6 @@ static const machine_config_t MACHINE_CONFIG_SINGLE_BOILER = {
         
         .has_brew_ntc           = true,   // Single NTC on the boiler
         .has_steam_ntc          = false,  // No separate steam sensor
-        .has_group_thermocouple = true,   // Optional but useful
         
         .needs_mode_switching   = true,   // Must switch between brew/steam setpoint
         .steam_provides_brew_heat = false,
@@ -281,7 +273,6 @@ static const machine_config_t MACHINE_CONFIG_HEAT_EXCHANGER = {
         
         .has_brew_ntc           = false,  // No brew boiler to measure
         .has_steam_ntc          = true,   // Steam boiler temperature
-        .has_group_thermocouple = true,   // CRITICAL for HX - monitors brew water temp
         
         .needs_mode_switching   = false,  // Steam and brew available simultaneously
         .steam_provides_brew_heat = true, // Steam boiler heats the HX
@@ -309,11 +300,6 @@ static const machine_config_t MACHINE_CONFIG_HEAT_EXCHANGER = {
         
         // Pressurestat mode (if HX_CONTROL_PRESSURESTAT)
         .pressurestat_has_feedback = false,
-        
-        // Group temp monitoring (all modes)
-        .target_group_temp      = 93.0f,  // Target for brew
-        .use_group_for_ready    = true,   // Use group temp for ready indication
-        .group_ready_temp       = 88.0f,  // Ready when group reaches this
     },
 };
 
@@ -363,7 +349,6 @@ bool machine_is_heat_exchanger(void);
 bool machine_needs_mode_switching(void);
 bool machine_has_brew_ntc(void);
 bool machine_has_steam_ntc(void);
-bool machine_has_group_thermocouple(void);
 
 /**
  * Get machine name string

@@ -108,7 +108,7 @@ set(COMMON_SOURCES
     src/water_management.c
     src/config_persistence.c
     src/flash_safe.c          # Flash safety utilities (XIP crash prevention)
-    src/pzem.c
+    src/power_meter.c         # Generic power meter (PZEM, JSY, Eastron)
     src/cleaning.c
     src/bootloader.c
     src/diagnostics.c         # Hardware diagnostics tests

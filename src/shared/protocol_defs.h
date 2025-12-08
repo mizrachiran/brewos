@@ -65,10 +65,9 @@ extern "C" {
 // =============================================================================
 #define DIAG_TEST_ALL           0x00    // Run all tests
 
-// Temperature Sensors (Section 3.1: T1, T2, T3)
+// Temperature Sensors (Section 3.1: T1, T2)
 #define DIAG_TEST_BREW_NTC      0x01    // T1: Brew boiler NTC (GPIO26/ADC0)
 #define DIAG_TEST_STEAM_NTC     0x02    // T2: Steam boiler NTC (GPIO27/ADC1)
-#define DIAG_TEST_GROUP_TC      0x03    // T3: Group head thermocouple MAX31855 (SPI)
 
 // Pressure Sensor (Section 3.1: P1)
 #define DIAG_TEST_PRESSURE      0x04    // P1: Pressure transducer YD4060 (GPIO28/ADC2)
@@ -91,7 +90,7 @@ extern "C" {
 
 // Communication (Section 3.3)
 #define DIAG_TEST_ESP32_COMM    0x0B    // ESP32 UART0 link (GPIO0/1)
-#define DIAG_TEST_PZEM          0x0A    // PZEM-004T power meter UART1 (GPIO6/7)
+#define DIAG_TEST_POWER_METER   0x0A    // Power meter UART1 (GPIO6/7) - PZEM, JSY, Eastron
 
 // User Interface (Section 3.4)
 #define DIAG_TEST_BUZZER        0x0C    // Piezo buzzer PWM (GPIO19)

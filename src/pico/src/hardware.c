@@ -143,80 +143,15 @@ float hw_read_adc_voltage(uint8_t channel) {
 // =============================================================================
 
 bool hw_spi_init_max31855(void) {
-    if (g_simulation_mode) {
-        return true;  // Nothing to initialize in simulation
-    }
-    
-    // Get PCB configuration
-    const pcb_config_t* pcb = pcb_config_get();
-    if (!pcb) {
-        DEBUG_PRINT("Hardware: No PCB config available\n");
-        return false;
-    }
-    
-    // Initialize SPI
-    // Using SPI0, mode 0 (CPOL=0, CPHA=0)
-    spi_init(spi0, HW_SPI_MAX31855_FREQ);
-    
-    // Configure pins
-    gpio_set_function(pcb->pins.spi_miso, GPIO_FUNC_SPI);
-    gpio_set_function(pcb->pins.spi_sck, GPIO_FUNC_SPI);
-    // CS is handled manually
-    gpio_init(pcb->pins.spi_cs_thermocouple);
-    gpio_set_dir(pcb->pins.spi_cs_thermocouple, GPIO_OUT);
-    gpio_put(pcb->pins.spi_cs_thermocouple, 1);  // CS high (inactive)
-    
-    return true;
+    // MAX31855 thermocouple support removed (v2.24.3)
+    // This function kept for API compatibility but always returns false
+    return false;
 }
 
 bool hw_spi_read_max31855(uint32_t* data) {
-    if (!data) {
-        return false;
-    }
-    
-    if (!g_initialized) {
-        hw_init();
-    }
-    
-    if (g_simulation_mode) {
-        *data = g_sim_max31855;
-        return true;
-    }
-    
-    // Real hardware: Read from MAX31855
-    const pcb_config_t* pcb = pcb_config_get();
-    if (!pcb || pcb->pins.spi_cs_thermocouple < 0) {
-        DEBUG_PRINT("Hardware: MAX31855 not configured\n");
-        return false;
-    }
-    
-    // Ensure SPI is initialized
-    static bool spi_initialized = false;
-    if (!spi_initialized) {
-        if (!hw_spi_init_max31855()) {
-            return false;
-        }
-        spi_initialized = true;
-    }
-    
-    // Pull CS low to start transaction
-    gpio_put(pcb->pins.spi_cs_thermocouple, 0);
-    sleep_us(1);  // Small delay
-    
-    // Read 32 bits (4 bytes)
-    uint8_t rx_data[4] = {0};
-    spi_read_blocking(spi0, 0, rx_data, 4);
-    
-    // Pull CS high to end transaction
-    gpio_put(pcb->pins.spi_cs_thermocouple, 1);
-    
-    // Combine bytes (MSB first)
-    *data = ((uint32_t)rx_data[0] << 24) |
-            ((uint32_t)rx_data[1] << 16) |
-            ((uint32_t)rx_data[2] << 8) |
-            ((uint32_t)rx_data[3]);
-    
-    return true;
+    // MAX31855 thermocouple support removed (v2.24.3)
+    (void)data;
+    return false;
 }
 
 bool hw_max31855_to_temp(uint32_t data, float* temp_c) {
