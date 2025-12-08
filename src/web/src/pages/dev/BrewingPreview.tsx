@@ -179,7 +179,7 @@ export function BrewingPreview() {
             {/* Brew-by-Weight Toggle - only available when scale is connected */}
             <div className={!scaleConnected ? 'opacity-50' : ''}>
               <Toggle
-                checked={enableBBW && scaleConnected}
+                checked={enableBBW}
                 onChange={setEnableBBW}
                 label="Enable Brew-by-Weight"
                 disabled={!scaleConnected}

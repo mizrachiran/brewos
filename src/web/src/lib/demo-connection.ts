@@ -1052,12 +1052,9 @@ export class DemoConnection implements IConnection {
       if (this.bbwEnabled && this.shotWeight >= this.bbwTargetWeight) {
         this.stopBrewing();
       }
-    } else {
-      // No scale = no weight tracking, time-based extraction only
-      this.shotWeight = 0;
-      this.scaleWeight = 0;
-      this.flowRate = 0;
     }
+    // When scale disconnected: skip weight updates (time-based extraction)
+    // Don't reset values - preserves data if scale reconnects mid-brew
   }
 
   /**
