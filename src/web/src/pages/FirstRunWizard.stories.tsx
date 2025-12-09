@@ -17,7 +17,7 @@ function WizardStoryWrapper({ children }: { children?: React.ReactNode }) {
 }
 
 const meta = {
-  title: "Pages/Onboarding/FirstRunWizard",
+  title: "Pages/FirstRunWizard",
   component: WizardStoryWrapper,
   tags: ["autodocs"],
   parameters: {
@@ -58,7 +58,7 @@ export const Welcome: Story = {
       steps={WIZARD_STEPS}
       showBack={false}
       nextLabel="Next"
-      variant="desktop"
+      variant="auto"
     >
       <WelcomeStep />
     </WizardStepWrapper>
@@ -70,7 +70,7 @@ function MachineSelectionComponent() {
   const [machineId, setMachineId] = useState("");
   const [errors] = useState<Record<string, string>>({});
   return (
-    <WizardStepWrapper currentStep={1} steps={WIZARD_STEPS} variant="desktop">
+    <WizardStepWrapper currentStep={1} steps={WIZARD_STEPS} variant="auto">
       <MachineStep
         machineName={name}
         selectedMachineId={machineId}
@@ -92,7 +92,7 @@ function PowerSettingsComponent() {
   const [current, setCurrent] = useState(13);
   const [errors] = useState<Record<string, string>>({});
   return (
-    <WizardStepWrapper currentStep={2} steps={WIZARD_STEPS} variant="desktop">
+    <WizardStepWrapper currentStep={2} steps={WIZARD_STEPS} variant="auto">
       <EnvironmentStep
         voltage={voltage}
         maxCurrent={current}
@@ -121,7 +121,7 @@ function CloudSetupComponent() {
       currentStep={3}
       steps={WIZARD_STEPS}
       nextLabel="Continue"
-      variant="desktop"
+      variant="auto"
     >
       <CloudStep
         pairing={enabled ? mockPairing : null}
@@ -152,7 +152,7 @@ export const Done: Story = {
       steps={WIZARD_STEPS}
       showBack={false}
       nextLabel="Start Brewing"
-      variant="desktop"
+      variant="auto"
     >
       <DoneStep machineName="My Bianca" />
     </WizardStepWrapper>
@@ -173,7 +173,7 @@ function CloudConnectedComponent() {
       currentStep={3}
       steps={WIZARD_STEPS}
       nextLabel="Continue"
-      variant="desktop"
+      variant="auto"
     >
       <CloudStep
         pairing={enabled ? mockPairing : null}
@@ -208,7 +208,7 @@ function CloudDisabledComponent() {
       currentStep={3}
       steps={WIZARD_STEPS}
       nextLabel="Continue"
-      variant="desktop"
+      variant="auto"
     >
       <CloudStep
         pairing={null}
@@ -246,7 +246,7 @@ export const AllSteps: Story = {
           steps={WIZARD_STEPS}
           showBack={false}
           nextLabel="Next"
-          variant="desktop"
+          variant="auto"
         >
           <WelcomeStep />
         </WizardStepWrapper>
@@ -255,7 +255,7 @@ export const AllSteps: Story = {
         <h3 className="text-theme text-lg font-semibold mb-4 text-center">
           Step 2: Machine Selection
         </h3>
-        <WizardStepWrapper currentStep={1} steps={WIZARD_STEPS} variant="desktop">
+        <WizardStepWrapper currentStep={1} steps={WIZARD_STEPS} variant="auto">
           <MachineStep
             machineName="My Bianca"
             selectedMachineId="lelit_bianca"
@@ -269,7 +269,7 @@ export const AllSteps: Story = {
         <h3 className="text-theme text-lg font-semibold mb-4 text-center">
           Step 3: Power Settings
         </h3>
-        <WizardStepWrapper currentStep={2} steps={WIZARD_STEPS} variant="desktop">
+        <WizardStepWrapper currentStep={2} steps={WIZARD_STEPS} variant="auto">
           <EnvironmentStep
             voltage={220}
             maxCurrent={13}
@@ -287,7 +287,7 @@ export const AllSteps: Story = {
           currentStep={3}
           steps={WIZARD_STEPS}
           nextLabel="Continue"
-          variant="desktop"
+          variant="auto"
         >
           <CloudStep
             pairing={mockPairing}
@@ -312,7 +312,7 @@ export const AllSteps: Story = {
           steps={WIZARD_STEPS}
           showBack={false}
           nextLabel="Start Brewing"
-          variant="desktop"
+          variant="auto"
         >
           <DoneStep machineName="My Bianca" />
         </WizardStepWrapper>

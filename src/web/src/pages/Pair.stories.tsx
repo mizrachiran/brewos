@@ -4,7 +4,7 @@ import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { Logo } from "@/components/Logo";
 import { Check, X, Loader2 } from "lucide-react";
-import React from "react";
+import React, { useState, useEffect } from "react";
 
 // Wrapper component for stories
 function PairStoryWrapper({ children }: { children?: React.ReactNode }) {
@@ -12,7 +12,7 @@ function PairStoryWrapper({ children }: { children?: React.ReactNode }) {
 }
 
 const meta = {
-  title: "Pages/Onboarding/Pair",
+  title: "Pages/Pair",
   component: PairStoryWrapper,
   tags: ["autodocs"],
   parameters: {
@@ -23,8 +23,34 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-// Responsive wrapper - works for both mobile and desktop
+// Responsive wrapper - works for both mobile and desktop with landscape detection
 function PairWrapper({ children }: { children: React.ReactNode }) {
+  const [isMobileLandscape, setIsMobileLandscape] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerHeight <= 500 && window.innerWidth > window.innerHeight;
+  });
+
+  useEffect(() => {
+    const landscapeQuery = window.matchMedia(
+      "(orientation: landscape) and (max-height: 500px)"
+    );
+    const handleChange = (e: MediaQueryListEvent | MediaQueryList) =>
+      setIsMobileLandscape(e.matches);
+    handleChange(landscapeQuery);
+    landscapeQuery.addEventListener("change", handleChange);
+    return () => landscapeQuery.removeEventListener("change", handleChange);
+  }, []);
+
+  if (isMobileLandscape) {
+    return (
+      <div className="min-h-[100dvh] bg-theme overflow-y-auto p-4">
+        <Card className="max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-300">
+          {children}
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-coffee-800 to-coffee-900 flex justify-center items-center p-4">
       <Card className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-300">

@@ -1,7 +1,10 @@
 import { Logo } from "@/components/Logo";
 import { Settings, Zap, Cloud, Sparkles } from "lucide-react";
+import { useMobileLandscape } from "@/lib/useMobileLandscape";
 
 export function WelcomeStep() {
+  const isMobileLandscape = useMobileLandscape();
+
   const steps = [
     {
       icon: Settings,
@@ -20,6 +23,60 @@ export function WelcomeStep() {
     },
   ];
 
+  // Landscape: horizontal layout with larger content
+  if (isMobileLandscape) {
+    return (
+      <div className="flex gap-8 items-center justify-center h-full animate-in fade-in duration-300">
+        {/* Left: Logo + heading */}
+        <div className="flex-shrink-0 text-center">
+          <div className="relative mb-4">
+            <div className="absolute inset-0 bg-accent/20 rounded-full blur-2xl animate-pulse" />
+            <Logo size="xl" className="relative" />
+          </div>
+          <div className="flex items-center gap-2 justify-center mb-2">
+            <Sparkles className="w-5 h-5 text-accent animate-pulse" />
+            <h1 className="text-2xl font-bold text-theme">Welcome to BrewOS</h1>
+          </div>
+          <p className="text-base text-theme-muted max-w-[240px]">
+            Quick setup for your espresso machine
+          </p>
+        </div>
+
+        {/* Right: Steps */}
+        <div className="flex-1 max-w-md space-y-3">
+          {steps.map((step, index) => {
+            const Icon = step.icon;
+            return (
+              <div
+                key={index}
+                className="flex items-center gap-4 p-2 bg-theme-secondary/50 rounded-xl border border-theme/10"
+              >
+                <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center flex-shrink-0 border border-accent/20">
+                  <Icon className="w-5 h-5 text-accent" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-base text-theme">
+                    {step.title}
+                  </p>
+                  <p className="text-sm text-theme-muted">{step.description}</p>
+                </div>
+                <div className="w-6 h-6 rounded-full bg-accent/10 flex items-center justify-center flex-shrink-0">
+                  <span className="text-xs font-bold text-accent">
+                    {index + 1}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+          <p className="text-sm text-theme-muted text-center pt-2">
+            💡 All settings can be changed later
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Portrait: vertical layout
   return (
     <div className="text-center py-4 xs:py-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Logo */}
@@ -62,8 +119,12 @@ export function WelcomeStep() {
                 <Icon className="w-4 h-4 xs:w-5 xs:h-5 text-accent" />
               </div>
               <div className="flex-1 text-left">
-                <p className="font-semibold text-sm xs:text-base text-theme mb-0.5">{step.title}</p>
-                <p className="text-xs xs:text-sm text-theme-muted">{step.description}</p>
+                <p className="font-semibold text-sm xs:text-base text-theme mb-0.5">
+                  {step.title}
+                </p>
+                <p className="text-xs xs:text-sm text-theme-muted">
+                  {step.description}
+                </p>
               </div>
               <div className="flex-shrink-0">
                 <div className="w-5 h-5 xs:w-6 xs:h-6 rounded-full bg-accent/10 flex items-center justify-center">

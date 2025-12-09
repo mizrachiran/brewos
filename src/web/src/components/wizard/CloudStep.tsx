@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import type { PairingData } from "./types";
+import { useMobileLandscape } from "@/lib/useMobileLandscape";
 
 interface CloudStepProps {
   pairing: PairingData | null;
@@ -36,6 +37,102 @@ export function CloudStep({
   onSkip,
   onCloudEnabledChange,
 }: CloudStepProps) {
+  const isMobileLandscape = useMobileLandscape();
+
+  // Landscape: two-column layout with larger content
+  if (isMobileLandscape) {
+    return (
+      <div className="h-full flex flex-col animate-in fade-in duration-300">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center flex-shrink-0 border border-accent/20">
+            <Cloud className="w-6 h-6 text-accent" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-xl font-bold text-theme">Cloud Access</h2>
+            <p className="text-sm text-theme-muted">Control from anywhere</p>
+          </div>
+          <Toggle checked={cloudEnabled} onChange={onCloudEnabledChange} />
+        </div>
+
+        {cloudEnabled ? (
+          <div className="flex-1 flex gap-6 items-center">
+            {/* Left: QR Code */}
+            <div className="flex-shrink-0">
+              {loading ? (
+                <div className="w-36 h-36 flex items-center justify-center bg-theme-secondary rounded-xl">
+                  <Loader2 className="w-8 h-8 animate-spin text-accent" />
+                </div>
+              ) : pairing && !cloudConnected ? (
+                <div className="bg-white p-3 rounded-xl shadow-lg">
+                  <QRCodeSVG value={pairing.url} size={120} level="M" />
+                </div>
+              ) : cloudConnected ? (
+                <div className="w-36 h-36 flex items-center justify-center bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                  <Check className="w-14 h-14 text-emerald-500" />
+                </div>
+              ) : (
+                <div className="w-36 h-36 flex items-center justify-center bg-theme-secondary rounded-xl">
+                  <AlertCircle className="w-8 h-8 text-theme-muted" />
+                </div>
+              )}
+            </div>
+
+            {/* Right: Status + Code */}
+            <div className="flex-1 space-y-4">
+              {cloudConnected ? (
+                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                  <p className="text-base font-medium text-emerald-500">✓ Cloud Connected</p>
+                  <p className="text-sm text-theme-muted">Accessible from cloud.brewos.io</p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-theme-muted">
+                    Scan with your phone or visit{" "}
+                    <a href="https://cloud.brewos.io" className="text-accent font-semibold hover:underline">cloud.brewos.io</a>
+                  </p>
+                  {pairing && (
+                    <div className="space-y-2">
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-theme-muted">
+                        Manual Code
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 bg-theme-secondary px-4 py-3 rounded-xl text-lg font-mono text-theme text-center font-semibold tracking-wider">
+                          {pairing.manualCode || pairing.deviceId.substring(0, 8)}
+                        </code>
+                        <Button variant="secondary" onClick={onCopy}>
+                          {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  <button onClick={onSkip} className="text-sm text-theme-muted hover:text-theme">
+                    Skip for now — complete later in Settings
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="flex items-center gap-4 p-6 bg-theme-secondary rounded-xl border border-theme/10">
+              <CloudOff className="w-12 h-12 text-theme-muted flex-shrink-0" />
+              <div>
+                <p className="font-semibold text-theme text-base">Local Only Mode</p>
+                <p className="text-sm text-theme-muted">
+                  Access at <span className="font-mono text-accent font-semibold">brewos.local</span>
+                </p>
+                <p className="text-xs text-theme-muted mt-1">
+                  Enable cloud anytime in Settings
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Portrait: vertical layout
   return (
     <div className="py-3 xs:py-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="text-center mb-4 xs:mb-6">

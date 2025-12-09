@@ -25,6 +25,27 @@ import {
 } from "@/components/wizard";
 import { darkBgStyles } from "@/lib/darkBgStyles";
 
+// Hook for mobile landscape detection
+function useMobileLandscape() {
+  const [isMobileLandscape, setIsMobileLandscape] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerHeight <= 500 && window.innerWidth > window.innerHeight;
+  });
+
+  useEffect(() => {
+    const landscapeQuery = window.matchMedia(
+      "(orientation: landscape) and (max-height: 500px)"
+    );
+    const handleChange = (e: MediaQueryListEvent | MediaQueryList) =>
+      setIsMobileLandscape(e.matches);
+    handleChange(landscapeQuery);
+    landscapeQuery.addEventListener("change", handleChange);
+    return () => landscapeQuery.removeEventListener("change", handleChange);
+  }, []);
+
+  return isMobileLandscape;
+}
+
 const STEPS: WizardStep[] = [
   { id: "welcome", title: "Welcome", icon: <Coffee className="w-5 h-5" /> },
   {
@@ -44,6 +65,7 @@ interface FirstRunWizardProps {
 export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
   const { sendCommand } = useCommand();
   const { error } = useToast();
+  const isMobileLandscape = useMobileLandscape();
 
   const [currentStep, setCurrentStep] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -370,11 +392,49 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
     </div>
   );
 
+  // Mobile landscape: two-column layout with steps on left
+  if (isMobileLandscape) {
+    return (
+      <div className="h-[100dvh] bg-theme flex">
+        {/* Left column: Progress steps - centered */}
+        <div className="flex-shrink-0 flex items-center justify-center px-3">
+          <ProgressIndicator
+            steps={STEPS}
+            currentStep={currentStep}
+            variant="vertical"
+          />
+        </div>
+
+        {/* Right column: Content fills remaining space */}
+        <div className="flex-1 p-4 overflow-y-auto">
+          <Card className="h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <div className="flex-1 overflow-y-auto py-2">
+              {renderStepContent()}
+            </div>
+            <div className="flex-shrink-0 flex justify-between pt-3 border-t border-theme mt-auto">
+              {currentStep > 0 && STEPS[currentStep].id !== "done" ? (
+                <Button variant="ghost" size="sm" onClick={prevStep}>
+                  <ArrowLeft className="w-4 h-4" />
+                  Back
+                </Button>
+              ) : (
+                <div />
+              )}
+              <Button size="sm" onClick={nextStep} loading={saving}>
+                {getButtonLabel()}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen min-h-[100dvh]">
+    <div className="min-h-[100dvh]">
       {/* Narrow width: Full-screen scrollable with dark gradient */}
       <div
-        className="xs:hidden bg-gradient-to-br from-coffee-800 via-coffee-900 to-coffee-950 min-h-screen min-h-[100dvh] flex flex-col px-4 py-3 safe-area-inset"
+        className="xs:hidden bg-gradient-to-br from-coffee-800 via-coffee-900 to-coffee-950 min-h-[100dvh] flex flex-col px-4 py-3 safe-area-inset"
         style={darkBgStyles}
       >
         <ProgressIndicator steps={STEPS} currentStep={currentStep} />

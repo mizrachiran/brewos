@@ -68,12 +68,14 @@ export function OnboardingLayout({
     };
   }, []);
 
-  // Mobile landscape: Card layout filling screen with margins
+  // Mobile landscape: Card layout with scrolling support
   if (isMobileLandscape) {
     return (
-      <div className="h-screen h-[100dvh] bg-theme flex items-center justify-center p-4">
-        <Card className="w-full h-full max-h-[calc(100dvh-2rem)] flex items-center justify-center animate-in fade-in slide-in-from-bottom-4 duration-300">
-          {children}
+      <div className="min-h-[100dvh] bg-theme overflow-y-auto p-4">
+        <Card className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="py-2">
+            {children}
+          </div>
         </Card>
       </div>
     );
@@ -82,9 +84,9 @@ export function OnboardingLayout({
   if (isWideScreen) {
     // Wide width: Card layout with theme background
     return (
-      <div className="min-h-screen min-h-[100dvh] overflow-y-auto">
+      <div className="min-h-[100dvh] overflow-y-auto">
         <div
-          className={`flex bg-theme min-h-screen min-h-[100dvh] justify-center items-start p-4 ${desktopTopPadding}`}
+          className={`flex bg-theme min-h-[100dvh] justify-center items-start p-4 ${desktopTopPadding}`}
         >
           <div className={`w-full ${maxWidth}`}>
             <Card className="animate-in fade-in slide-in-from-bottom-4 duration-300">
@@ -98,9 +100,9 @@ export function OnboardingLayout({
 
   // Narrow width: Full-screen scrollable with dark gradient
   return (
-    <div className="min-h-screen min-h-[100dvh]">
+    <div className="min-h-[100dvh]">
       <div
-        className={`${gradient} min-h-screen min-h-[100dvh] flex flex-col px-4 py-3 safe-area-inset`}
+        className={`${gradient} min-h-[100dvh] flex flex-col px-4 py-3 safe-area-inset`}
         style={darkBgStyles}
       >
         <div className="flex-1 flex flex-col justify-center overflow-y-auto animate-in fade-in slide-in-from-bottom-4 duration-500">

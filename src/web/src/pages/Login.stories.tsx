@@ -48,10 +48,8 @@ function LoginView({ error }: { error?: string }) {
 
   return (
     <div
-      className={`flex flex-col lg:flex-row ${
-        isMobileLandscape
-          ? "min-h-screen min-h-[100dvh] overflow-y-auto"
-          : "min-h-screen min-h-[100dvh]"
+      className={`flex flex-col lg:flex-row min-h-[100dvh] ${
+        isMobileLandscape ? "overflow-y-auto" : ""
       }`}
     >
       {/* Left Panel - Hero Section (hidden on mobile and mobile landscape) */}
@@ -62,7 +60,7 @@ function LoginView({ error }: { error?: string }) {
         className={`flex-1 lg:w-1/2 xl:w-[45%] flex items-center justify-center bg-theme relative ${
           isMobileLandscape
             ? "p-3 overflow-y-auto"
-            : "p-4 sm:p-6 lg:p-8 overflow-y-auto min-h-screen min-h-[100dvh] lg:min-h-0"
+            : "p-4 sm:p-6 lg:p-8 overflow-y-auto min-h-[100dvh] lg:min-h-0"
         }`}
       >
         {/* Subtle decorative elements - hidden in mobile landscape */}

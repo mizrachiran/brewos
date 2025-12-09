@@ -1,10 +1,13 @@
 import { Check, Sparkles, Coffee, Settings, Scale, Globe } from "lucide-react";
+import { useMobileLandscape } from "@/lib/useMobileLandscape";
 
 interface DoneStepProps {
   machineName: string;
 }
 
 export function DoneStep({ machineName }: DoneStepProps) {
+  const isMobileLandscape = useMobileLandscape();
+
   const tips = [
     {
       icon: Globe,
@@ -21,6 +24,61 @@ export function DoneStep({ machineName }: DoneStepProps) {
     },
   ];
 
+  // Landscape: horizontal layout with larger content
+  if (isMobileLandscape) {
+    return (
+      <div className="h-full flex gap-8 items-center justify-center animate-in fade-in zoom-in-95 duration-500">
+        {/* Left: Success icon + message */}
+        <div className="flex-shrink-0 text-center">
+          <div className="relative mb-4">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-24 h-24 bg-success/20 rounded-full animate-ping opacity-75" />
+            </div>
+            <div className="relative w-20 h-20 bg-gradient-to-br from-success/20 to-success/10 rounded-full flex items-center justify-center mx-auto border-4 border-success/30">
+              <div className="w-14 h-14 bg-success rounded-full flex items-center justify-center shadow-lg">
+                <Check className="w-8 h-8 text-white" />
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 justify-center mb-2">
+            <Sparkles className="w-5 h-5 text-accent animate-pulse" />
+            <h2 className="text-2xl font-bold text-theme">You're All Set!</h2>
+          </div>
+          <p className="text-base text-theme-muted max-w-[240px]">
+            <span className="font-semibold text-theme">{machineName || "Your machine"}</span> is ready to brew!
+          </p>
+        </div>
+
+        {/* Right: Quick tips */}
+        <div className="flex-1 max-w-sm">
+          <div className="bg-theme-secondary rounded-xl p-5 border border-theme/20">
+            <div className="flex items-center gap-2 mb-4">
+              <Coffee className="w-5 h-5 text-accent" />
+              <h3 className="font-semibold text-theme text-base">Quick Tips</h3>
+            </div>
+            <ul className="text-sm text-theme-muted space-y-3">
+              {tips.map((tip, index) => {
+                const Icon = tip.icon;
+                return (
+                  <li key={index} className="flex items-center gap-3">
+                    <Icon className="w-4 h-4 text-accent flex-shrink-0" />
+                    <span>
+                      {tip.text}{" "}
+                      {tip.highlight && (
+                        <span className="font-mono text-accent font-semibold">{tip.highlight}</span>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Portrait: vertical layout
   return (
     <div className="text-center py-4 xs:py-12 animate-in fade-in zoom-in-95 duration-700">
       {/* Success icon with animation */}

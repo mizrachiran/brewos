@@ -10,6 +10,7 @@ import {
 } from "@/lib/machines";
 import { formatTemperatureWithUnit } from "@/lib/temperature";
 import { useStore } from "@/lib/store";
+import { useMobileLandscape } from "@/lib/useMobileLandscape";
 
 interface MachineStepProps {
   machineName: string;
@@ -26,6 +27,7 @@ export function MachineStep({
   onMachineNameChange,
   onMachineIdChange,
 }: MachineStepProps) {
+  const isMobileLandscape = useMobileLandscape();
   const temperatureUnit = useStore((s) => s.preferences.temperatureUnit);
   const machineGroups = useMemo(() => getMachinesGroupedByBrand(), []);
   const selectedMachine = useMemo(
@@ -33,6 +35,57 @@ export function MachineStep({
     [selectedMachineId]
   );
 
+  // Landscape: two-column layout with larger content
+  if (isMobileLandscape) {
+    return (
+      <div className="h-full flex flex-col animate-in fade-in duration-300">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center flex-shrink-0 border border-accent/20">
+            <Coffee className="w-6 h-6 text-accent" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-theme">Select Your Machine</h2>
+            <p className="text-sm text-theme-muted">Choose from our supported list</p>
+          </div>
+        </div>
+
+        <div className="flex-1 flex gap-6">
+          {/* Left: Inputs */}
+          <div className="flex-1 space-y-4">
+            <Input
+              label="Machine Name"
+              placeholder="Kitchen Espresso"
+              value={machineName}
+              onChange={(e) => onMachineNameChange(e.target.value)}
+              error={errors.machineName}
+              hint="Give it a friendly name"
+            />
+            <MachineSelector
+              selectedMachineId={selectedMachineId}
+              machineGroups={machineGroups}
+              error={errors.machineModel}
+              onChange={onMachineIdChange}
+            />
+          </div>
+
+          {/* Right: Machine Info */}
+          <div className="flex-1">
+            {selectedMachine ? (
+              <MachineInfo machine={selectedMachine} temperatureUnit={temperatureUnit} />
+            ) : (
+              <div className="h-full flex items-center justify-center p-6 bg-theme-secondary/30 rounded-xl border border-theme/10">
+                <p className="text-sm text-theme-muted text-center">
+                  Select a machine to see details
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Portrait: vertical layout
   return (
     <div className="py-3 xs:py-6">
       <div className="text-center mb-4 xs:mb-8">
@@ -73,6 +126,7 @@ interface MachineSelectorProps {
   machineGroups: ReturnType<typeof getMachinesGroupedByBrand>;
   error?: string;
   onChange: (id: string) => void;
+  compact?: boolean;
 }
 
 function MachineSelector({
@@ -80,10 +134,11 @@ function MachineSelector({
   machineGroups,
   error,
   onChange,
+  compact = false,
 }: MachineSelectorProps) {
   return (
-    <div className="space-y-1.5 xs:space-y-2">
-      <label className="block text-xs xs:text-sm font-medium text-theme">
+    <div className={compact ? "space-y-1" : "space-y-1.5 xs:space-y-2"}>
+      <label className={cn("block font-medium text-theme", compact ? "text-xs" : "text-xs xs:text-sm")}>
         Machine Model <span className="text-red-500">*</span>
       </label>
       <div className="relative">
@@ -91,11 +146,11 @@ function MachineSelector({
           value={selectedMachineId}
           onChange={(e) => onChange(e.target.value)}
           className={cn(
-            "w-full px-3 xs:px-4 py-2.5 xs:py-3 pr-10 rounded-lg xs:rounded-xl appearance-none",
-            "bg-white/5 xs:bg-theme-secondary border border-white/10 xs:border-theme",
-            "text-theme text-xs xs:text-sm",
-            "focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent",
+            "w-full pr-10 rounded-lg appearance-none",
+            "bg-theme-secondary border border-theme",
+            "text-theme focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent",
             "transition-all duration-200",
+            compact ? "px-3 py-2 text-xs rounded-lg" : "px-3 xs:px-4 py-2.5 xs:py-3 text-xs xs:text-sm xs:rounded-xl",
             !selectedMachineId && "text-theme-muted",
             error && "border-red-500"
           )}
@@ -111,9 +166,9 @@ function MachineSelector({
             </optgroup>
           ))}
         </select>
-        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 xs:w-5 xs:h-5 text-theme-muted pointer-events-none" />
+        <ChevronDown className={cn("absolute right-3 top-1/2 -translate-y-1/2 text-theme-muted pointer-events-none", compact ? "w-4 h-4" : "w-4 h-4 xs:w-5 xs:h-5")} />
       </div>
-      {error && <p className="text-[10px] xs:text-xs text-red-500">{error}</p>}
+      {error && <p className={cn("text-red-500", compact ? "text-[10px]" : "text-[10px] xs:text-xs")}>{error}</p>}
     </div>
   );
 }
@@ -121,9 +176,32 @@ function MachineSelector({
 interface MachineInfoProps {
   machine: MachineDefinition;
   temperatureUnit: "celsius" | "fahrenheit";
+  compact?: boolean;
 }
 
-function MachineInfo({ machine, temperatureUnit }: MachineInfoProps) {
+function MachineInfo({ machine, temperatureUnit, compact = false }: MachineInfoProps) {
+  if (compact) {
+    return (
+      <div className="p-3 rounded-lg bg-accent/5 border border-accent/20 space-y-2 h-full">
+        <div className="flex items-center gap-2">
+          <Coffee className="w-4 h-4 text-accent flex-shrink-0" />
+          <span className="font-semibold text-theme text-xs truncate">
+            {machine.brand} {machine.model}
+          </span>
+        </div>
+        <p className="text-[10px] text-theme-muted line-clamp-2">{machine.description}</p>
+        <div className="flex flex-wrap gap-1 text-[9px]">
+          <span className="px-1.5 py-0.5 rounded-full bg-theme-secondary text-theme-muted">
+            {getMachineTypeLabel(machine.type)}
+          </span>
+          <span className="px-1.5 py-0.5 rounded-full bg-theme-secondary text-theme-muted">
+            {formatTemperatureWithUnit(machine.defaults.brewTemp, temperatureUnit, 0)}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-3 xs:p-4 rounded-lg xs:rounded-xl bg-accent/5 border border-accent/20 space-y-2 xs:space-y-3">
       <div className="flex items-center gap-2">
