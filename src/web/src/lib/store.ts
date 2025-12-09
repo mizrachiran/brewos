@@ -1015,6 +1015,8 @@ export const useStore = create<BrewOSState>()(
                     (prefsData.electricityPrice as number) ?? state.preferences.electricityPrice,
                   currency:
                     (prefsData.currency as UserPreferences["currency"]) ?? state.preferences.currency,
+                  // showAppBadge is client-only, preserve from current state
+                  showAppBadge: state.preferences.showAppBadge,
                 }
               : state.preferences,
           }));

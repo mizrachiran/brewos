@@ -17,9 +17,9 @@ export function AppBadgeManager() {
   const { mode, devices } = useAppStore();
   const onlineDeviceCount = devices.filter((d) => d.isOnline).length;
   
-  // Local mode: check if machine is on (mode is not "off")
+  // Local mode: check if machine is on (mode is "on" or "eco", not "standby")
   const machineMode = useStore((s) => s.machine.mode);
-  const isLocalMachineOn = machineMode !== 'off';
+  const isLocalMachineOn = machineMode === 'on' || machineMode === 'eco';
 
   useEffect(() => {
     if (!isSupported) return;

@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
 
 interface AppBadgeState {
   isSupported: boolean;
@@ -63,32 +63,3 @@ export function useAppBadge(): AppBadgeState {
     clearBadge,
   };
 }
-
-/**
- * Component that manages app badge based on machine online status.
- * Should be mounted once at the app root level.
- */
-export function useAppBadgeManager(
-  isEnabled: boolean,
-  onlineMachineCount: number
-) {
-  const { isSupported, setBadge, clearBadge } = useAppBadge();
-
-  useEffect(() => {
-    if (!isSupported) return;
-
-    if (isEnabled && onlineMachineCount > 0) {
-      // Show badge when machines are online
-      setBadge();
-    } else {
-      // Clear badge when no machines online or feature disabled
-      clearBadge();
-    }
-
-    // Cleanup on unmount
-    return () => {
-      clearBadge();
-    };
-  }, [isSupported, isEnabled, onlineMachineCount, setBadge, clearBadge]);
-}
-
