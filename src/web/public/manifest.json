@@ -6,7 +6,7 @@
   "display": "standalone",
   "background_color": "#391f12",
   "theme_color": "#391f12",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
   "scope": "/",
   "id": "brewos-pwa",
   "prefer_related_applications": false,
