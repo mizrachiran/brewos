@@ -75,8 +75,8 @@ export function useWakeLock(autoActivate = false): WakeLockState {
     if (!isSupported) return;
 
     const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible' && !wakeLockRef.current && isActive) {
-        // Page became visible and we had an active lock - re-acquire
+      if (document.visibilityState === 'visible' && !wakeLockRef.current) {
+        // Page became visible and we had no active lock - re-acquire
         await request();
       }
     };
