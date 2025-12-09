@@ -119,10 +119,14 @@ export function Layout({ onExitDemo }: LayoutProps) {
   const currentPageTitle =
     navigation.find((item) => {
       const currentPath = location.pathname;
+      // Dashboard: exact match for root or machine root
       if (item.href === "/" || item.href === "") {
         return currentPath === "/" || currentPath === `/machine/${deviceId}`;
       }
-      return currentPath.startsWith(item.href);
+      // Other routes: exact match or sub-route (path continues with /)
+      return (
+        currentPath === item.href || currentPath.startsWith(item.href + "/")
+      );
     })?.name || "Dashboard";
 
   // Mobile Landscape Layout - Sidebar navigation
