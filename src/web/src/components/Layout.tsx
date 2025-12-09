@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Outlet, NavLink, useParams, Link } from "react-router-dom";
 import { useStore } from "@/lib/store";
 import { useAppStore } from "@/lib/mode";
-import { useMobileLandscape } from "@/lib/useMobileLandscape";
 import { Logo } from "./Logo";
 import { InstallPrompt, usePWAInstall } from "./InstallPrompt";
 import { ConnectionOverlay } from "./ConnectionOverlay";
