@@ -10,7 +10,11 @@ interface QRScannerProps {
   compact?: boolean;
 }
 
-export function QRScanner({ onScan, onError, compact = false }: QRScannerProps) {
+export function QRScanner({
+  onScan,
+  onError,
+  compact = false,
+}: QRScannerProps) {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +41,9 @@ export function QRScanner({ onScan, onError, compact = false }: QRScannerProps) 
         { facingMode: "environment" },
         {
           fps: 10,
-          qrbox: { width: 250, height: 250 },
+          qrbox: compact
+            ? { width: 150, height: 150 }
+            : { width: 250, height: 250 },
           aspectRatio: 1,
         },
         (decodedText) => {
@@ -70,7 +76,7 @@ export function QRScanner({ onScan, onError, compact = false }: QRScannerProps) 
 
       onError?.(errorMessage);
     }
-  }, [onScan, onError]);
+  }, [onScan, onError, compact]);
 
   const stopScanner = async () => {
     if (scannerRef.current) {
@@ -120,8 +126,31 @@ export function QRScanner({ onScan, onError, compact = false }: QRScannerProps) 
     const styleScanningBox = () => {
       // The library creates the scanning box dynamically
       // Try multiple selectors to find it
+      const qrReader = document.getElementById("qr-reader");
       const scanRegion = document.getElementById("qr-reader__scan_region");
-      if (!scanRegion) return;
+      if (!scanRegion || !qrReader) return;
+
+      // Ensure qr-reader container fills without margins
+      qrReader.style.width = "100%";
+      qrReader.style.height = "100%";
+      qrReader.style.margin = "0";
+      qrReader.style.padding = "0";
+
+      // Ensure scan region fills container without margins
+      scanRegion.style.width = "100%";
+      scanRegion.style.height = "100%";
+      scanRegion.style.margin = "0";
+      scanRegion.style.padding = "0";
+
+      // Style the video element to fill the container
+      const video = scanRegion.querySelector<HTMLVideoElement>("video");
+      if (video) {
+        video.style.width = "100%";
+        video.style.height = "100%";
+        video.style.objectFit = "cover";
+        video.style.margin = "0";
+        video.style.padding = "0";
+      }
 
       // Find the scanning box div (usually the first absolutely positioned div)
       const scanningBox = scanRegion.querySelector<HTMLElement>(
@@ -167,15 +196,24 @@ export function QRScanner({ onScan, onError, compact = false }: QRScannerProps) 
   }, [isScanning]);
 
   return (
-    <div className={compact ? "w-full flex flex-col" : "w-full max-w-xs mx-auto"} ref={containerRef}>
+    <div
+      className={
+        compact ? "w-full h-full flex flex-col" : "w-full max-w-xs mx-auto"
+      }
+      ref={containerRef}
+    >
       {/* Scanner container - fixed aspect ratio to prevent size changes */}
-      <div className={`${compact ? "w-full aspect-square" : "aspect-square w-full"} rounded-xl overflow-hidden bg-black relative`}>
+      <div
+        className={`${
+          compact ? "w-full h-full" : "aspect-square w-full"
+        } rounded-xl overflow-hidden bg-black relative`}
+      >
         <div id="qr-reader" className="absolute inset-0 w-full h-full" />
       </div>
 
       {/* Error state */}
-      {error && (
-        compact ? (
+      {error &&
+        (compact ? (
           // Compact error for landscape - just icon and retry button
           <div className="mt-2 flex items-center justify-center gap-2">
             <CameraOff className="w-4 h-4 text-error" />
@@ -191,25 +229,26 @@ export function QRScanner({ onScan, onError, compact = false }: QRScannerProps) 
           </div>
         ) : (
           // Full error for portrait
-        <div className="mt-3 p-3 bg-error-soft border border-error rounded-xl">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <CameraOff className="w-4 h-4 text-error flex-shrink-0" />
-              <p className="text-xs sm:text-sm text-error truncate">{error}</p>
+          <div className="mt-3 p-3 bg-error-soft border border-error rounded-xl">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <CameraOff className="w-4 h-4 text-error flex-shrink-0" />
+                <p className="text-xs sm:text-sm text-error truncate">
+                  {error}
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={startScanner}
+                className="flex-shrink-0"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Retry</span>
+              </Button>
             </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={startScanner}
-              className="flex-shrink-0"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Retry</span>
-            </Button>
           </div>
-        </div>
-        )
-      )}
+        ))}
 
       {/* Permission denied instructions - only in non-compact mode */}
       {hasPermission === false && !compact && (
@@ -227,7 +266,11 @@ export function QRScanner({ onScan, onError, compact = false }: QRScannerProps) 
 
       {/* Scanning indicator */}
       {isScanning && !error && (
-        <div className={`${compact ? "mt-2" : "mt-4"} flex items-center justify-center gap-2 text-sm text-theme-muted`}>
+        <div
+          className={`${
+            compact ? "mt-2" : "mt-4"
+          } flex items-center justify-center gap-2 text-sm text-theme-muted`}
+        >
           <Camera className="w-4 h-4 animate-pulse" />
           <span>{compact ? "Scanning..." : "Point camera at QR code..."}</span>
         </div>

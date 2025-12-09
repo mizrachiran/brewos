@@ -79,8 +79,8 @@ export function ScanStep({
         <div className="flex gap-6 items-center">
           {/* Left column: QR Scanner */}
           <div className="flex-shrink-0 flex flex-col items-center justify-center">
-            {/* Scanner - square aspect ratio, with room for indicator below */}
-            <div className="w-44 flex flex-col">
+            {/* Scanner - fixed square size */}
+            <div className="w-44 h-44 flex flex-col">
               {onScan ? (
                 <QRScanner
                   onScan={onScan}
