@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, memo } from 'react';
 import { useStore } from '@/lib/store';
+import { useWakeLock } from '@/hooks/useWakeLock';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/Badge';
 import {
@@ -37,6 +38,17 @@ export const BrewingModeOverlay = memo(function BrewingModeOverlay() {
   const [shotTime, setShotTime] = useState(0);
   const [pressureData, setPressureData] = useState<DataPoint[]>([]);
   const [peakPressure, setPeakPressure] = useState(0);
+
+  // Keep screen awake while brewing
+  const { request: requestWakeLock, release: releaseWakeLock } = useWakeLock();
+
+  useEffect(() => {
+    if (shot.active) {
+      requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
+  }, [shot.active, requestWakeLock, releaseWakeLock]);
 
   // Shot timer
   useEffect(() => {
