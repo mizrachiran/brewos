@@ -714,4 +714,6 @@ export interface UserPreferences {
   // Electricity settings
   electricityPrice: number;  // Price per kWh in selected currency
   currency: Currency;
+  // App badge (PWA only) - shows dot on app icon when machine is on
+  showAppBadge: boolean;
 }

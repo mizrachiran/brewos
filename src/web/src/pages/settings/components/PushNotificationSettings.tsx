@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { useAppBadge } from "@/hooks/useAppBadge";
+import { useStore } from "@/lib/store";
 import { isDemoMode } from "@/lib/demo-mode";
 import {
   Card,
@@ -25,6 +27,7 @@ import {
   Settings2,
   Loader2,
   Download,
+  Circle,
 } from "lucide-react";
 import {
   getFirmwareUpdateNotificationEnabled,
@@ -463,6 +466,9 @@ export function PushNotificationSettings() {
         </div>
       </Card>
 
+      {/* App Badge Card */}
+      <AppBadgeSettings />
+
       {/* Notification Preferences Card - Always visible, disabled when not subscribed */}
       <Card className={!isSubscribed ? "opacity-60" : ""}>
         <CardHeader>
@@ -549,5 +555,58 @@ export function PushNotificationSettings() {
         </div>
       </Card>
     </div>
+  );
+}
+
+/**
+ * App Badge Settings - Shows a dot on the app icon when machines are online
+ */
+function AppBadgeSettings() {
+  const { isSupported } = useAppBadge();
+  const showAppBadge = useStore((s) => s.preferences.showAppBadge);
+  const setPreference = useStore((s) => s.setPreference);
+
+  if (!isSupported) {
+    return null; // Don't show if not supported
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle icon={<Circle className="w-5 h-5" />}>
+          App Badge
+        </CardTitle>
+        <CardDescription>
+          Show a notification dot on the app icon
+        </CardDescription>
+      </CardHeader>
+
+      <div className="p-4 sm:p-6">
+        <div className="flex items-start gap-2.5 p-2.5 sm:p-3 bg-theme-secondary rounded-xl">
+          <div className="p-1.5 sm:p-2 bg-theme-tertiary rounded-lg shrink-0">
+            <Circle className="w-4 h-4 text-red-500 fill-red-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <span className="font-medium text-sm text-theme">
+                  Machine Online Indicator
+                </span>
+                <p className="text-xs text-theme-muted mt-0.5">
+                  Show a red dot on the app icon when any of your machines is powered on
+                </p>
+              </div>
+              <Toggle
+                checked={showAppBadge}
+                onChange={(checked) => setPreference("showAppBadge", checked)}
+              />
+            </div>
+          </div>
+        </div>
+        <p className="text-xs text-theme-muted mt-3 px-1">
+          The badge appears on your home screen app icon when installed as a PWA.
+        </p>
+      </div>
+    </Card>
   );
 }

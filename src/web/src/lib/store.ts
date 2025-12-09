@@ -312,6 +312,7 @@ const defaultPreferences: UserPreferences = {
   temperatureUnit: "celsius",
   electricityPrice: 0.15,
   currency: "USD",
+  showAppBadge: true, // Show badge on app icon when machine is on
 };
 
 // Load preferences from localStorage (fallback for offline/demo mode)
