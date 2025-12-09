@@ -1,7 +1,14 @@
-import { useState } from "react";
-import { Outlet, NavLink, useParams, Link } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import {
+  Outlet,
+  NavLink,
+  useParams,
+  Link,
+  useLocation,
+} from "react-router-dom";
 import { useStore } from "@/lib/store";
 import { useAppStore } from "@/lib/mode";
+import { useMobileLandscape } from "@/lib/useMobileLandscape";
 import { Logo } from "./Logo";
 import { InstallPrompt, usePWAInstall } from "./InstallPrompt";
 import { ConnectionOverlay } from "./ConnectionOverlay";
@@ -9,6 +16,7 @@ import { DeviceOfflineBanner } from "./DeviceOfflineBanner";
 import { VersionWarning } from "./VersionWarning";
 import { UserMenu } from "./UserMenu";
 import { BrewingModeOverlay } from "./BrewingModeOverlay";
+import { StatusBar } from "./StatusBar";
 import { isDemoMode } from "@/lib/demo-mode";
 import {
   LayoutGrid,
@@ -16,10 +24,6 @@ import {
   Settings,
   Calendar,
   BarChart3,
-  Wifi,
-  WifiOff,
-  Cloud,
-  Sparkles,
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -45,10 +49,11 @@ interface LayoutProps {
 
 export function Layout({ onExitDemo }: LayoutProps) {
   const { deviceId } = useParams();
-  const connectionState = useStore((s) => s.connectionState);
+  const location = useLocation();
   const deviceName = useStore((s) => s.device.deviceName);
   const { mode, user, getSelectedDevice } = useAppStore();
   const { isMobile } = usePWAInstall();
+  const isMobileLandscape = useMobileLandscape();
   const [showInstallBanner, setShowInstallBanner] = useState(() => {
     // Check if user previously dismissed the banner
     return localStorage.getItem("brewos-install-dismissed") !== "true";
@@ -58,9 +63,50 @@ export function Layout({ onExitDemo }: LayoutProps) {
   const isDemo = isDemoMode();
   const selectedDevice = getSelectedDevice();
 
-  const isConnected = connectionState === "connected";
-  const isConnecting =
-    connectionState === "connecting" || connectionState === "reconnecting";
+  // Scroll-aware header visibility (portrait mode only)
+  const [headerVisible, setHeaderVisible] = useState(true);
+  const lastScrollY = useRef(0);
+  const scrollThreshold = 10; // Minimum scroll delta to trigger hide/show
+
+  useEffect(() => {
+    // Only apply scroll behavior in portrait mode (not landscape)
+    if (isMobileLandscape) return;
+
+    const handleScroll = () => {
+      // Use #root as the scroll container (set in index.css)
+      const scrollContainer = document.getElementById("root");
+      if (!scrollContainer) return;
+
+      const currentScrollY = scrollContainer.scrollTop;
+      const delta = currentScrollY - lastScrollY.current;
+
+      // Only trigger if scroll delta exceeds threshold
+      if (Math.abs(delta) > scrollThreshold) {
+        if (delta > 0 && currentScrollY > 80) {
+          // Scrolling down & past header + nav height - hide
+          setHeaderVisible(false);
+        } else if (delta < 0) {
+          // Scrolling up - show
+          setHeaderVisible(true);
+        }
+        lastScrollY.current = currentScrollY;
+      }
+    };
+
+    const scrollContainer = document.getElementById("root");
+    if (scrollContainer) {
+      scrollContainer.addEventListener("scroll", handleScroll, {
+        passive: true,
+      });
+      return () => scrollContainer.removeEventListener("scroll", handleScroll);
+    }
+  }, [isMobileLandscape]);
+
+  // Reset header visibility on route change
+  useEffect(() => {
+    setHeaderVisible(true);
+    lastScrollY.current = 0;
+  }, [location.pathname]);
 
   const dismissInstallBanner = () => {
     setShowInstallBanner(false);
@@ -69,10 +115,128 @@ export function Layout({ onExitDemo }: LayoutProps) {
 
   const navigation = getNavigation(isCloud, deviceId || selectedDevice?.id);
 
+  // Get current page title from navigation
+  const currentPageTitle =
+    navigation.find((item) => {
+      const currentPath = location.pathname;
+      if (item.href === "/" || item.href === "") {
+        return currentPath === "/" || currentPath === `/machine/${deviceId}`;
+      }
+      return currentPath.startsWith(item.href);
+    })?.name || "Dashboard";
+
+  // Mobile Landscape Layout - Sidebar navigation
+  if (isMobileLandscape) {
+    return (
+      <div className="h-[100dvh] bg-theme flex overflow-hidden">
+        {/* Sidebar */}
+        <aside className="w-16 flex-shrink-0 bg-card border-r border-theme flex flex-col">
+          {/* Logo - icon only */}
+          <div className="h-12 flex items-center justify-center border-b border-theme">
+            <Logo size="sm" iconOnly />
+          </div>
+
+          {/* Navigation */}
+          <nav className="flex-1 flex flex-col items-center py-2 gap-1 overflow-y-auto">
+            {navigation.map((item) => (
+              <NavLink
+                key={item.name}
+                to={item.href}
+                end={
+                  item.href === "/" ||
+                  item.href.endsWith(`/${deviceId || selectedDevice?.id}`)
+                }
+                className={({ isActive }) =>
+                  cn(
+                    "w-11 h-11 flex items-center justify-center rounded-xl transition-all",
+                    isActive ? "nav-active" : "nav-inactive"
+                  )
+                }
+                title={item.name}
+              >
+                <item.icon className="w-5 h-5" />
+              </NavLink>
+            ))}
+          </nav>
+        </aside>
+
+        {/* Main content area */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {/* Compact header */}
+          <header className="h-12 flex-shrink-0 header-glass border-b border-theme px-4 flex items-center justify-between">
+            <div className="flex items-center gap-3 min-w-0">
+              {/* Page title */}
+              <h1 className="text-base font-bold text-theme">
+                {currentPageTitle}
+              </h1>
+
+              {/* Cloud: machine name */}
+              {isCloud && selectedDevice && (
+                <Link
+                  to="/machines"
+                  className="flex items-center gap-2 px-2 py-1 rounded-lg bg-theme-tertiary hover:bg-theme-secondary transition-colors group"
+                >
+                  <div
+                    className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                      selectedDevice.isOnline
+                        ? "bg-emerald-500"
+                        : "bg-theme-muted"
+                    }`}
+                  />
+                  <span className="text-xs font-medium text-theme-secondary group-hover:text-theme truncate max-w-[100px]">
+                    {selectedDevice.name}
+                  </span>
+                </Link>
+              )}
+              {/* Local: device name */}
+              {!isCloud && deviceName && (
+                <span className="text-xs text-theme-muted truncate">
+                  {deviceName}
+                </span>
+              )}
+            </div>
+
+            {/* Right side */}
+            <div className="flex items-center gap-2">
+              {/* Machine Status Icons */}
+              <StatusBar />
+
+              {(isCloud && user) || isDemo ? (
+                <UserMenu onExitDemo={onExitDemo} />
+              ) : null}
+            </div>
+          </header>
+
+          {/* Device Offline Banner */}
+          {isCloud && selectedDevice && !selectedDevice.isOnline && (
+            <DeviceOfflineBanner deviceName={selectedDevice.name} />
+          )}
+
+          {/* Main Content */}
+          <main className="flex-1 overflow-y-auto px-4 py-3">
+            <Outlet />
+          </main>
+        </div>
+
+        {/* Connection Overlay - Only for local mode (not demo) */}
+        {!isCloud && !isDemo && <ConnectionOverlay />}
+
+        {/* Brewing Mode Overlay */}
+        <BrewingModeOverlay />
+      </div>
+    );
+  }
+
+  // Portrait / Desktop Layout
   return (
     <div className="full-page-scroll bg-theme">
-      {/* Header */}
-      <header className="sticky top-0 z-50 header-glass border-b border-theme">
+      {/* Header - hides on scroll down (mobile only) */}
+      <header
+        className={cn(
+          "sticky z-50 header-glass border-b border-theme transition-all duration-300",
+          headerVisible ? "top-0" : "-top-16"
+        )}
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo & Mode */}
@@ -111,45 +275,8 @@ export function Layout({ onExitDemo }: LayoutProps) {
 
             {/* Right side */}
             <div className="flex items-center gap-2 xs:gap-3">
-              {/* Connection Status - icon only on very small screens */}
-              <div className="flex items-center gap-2 px-2 xs:px-3 py-1.5 rounded-full bg-theme-tertiary">
-                {isDemo ? (
-                  <>
-                    <Sparkles className="w-4 h-4 text-accent" />
-                    <span className="hidden xs:inline text-xs font-medium text-theme-secondary">
-                      Demo
-                    </span>
-                  </>
-                ) : isCloud ? (
-                  <>
-                    <Cloud className="w-4 h-4 text-accent" />
-                    <span className="hidden xs:inline text-xs font-medium text-theme-secondary">
-                      Cloud
-                    </span>
-                  </>
-                ) : isConnected ? (
-                  <>
-                    <Wifi className="w-4 h-4 text-emerald-500" />
-                    <span className="hidden xs:inline text-xs font-medium text-theme-secondary">
-                      Local
-                    </span>
-                  </>
-                ) : isConnecting ? (
-                  <>
-                    <Wifi className="w-4 h-4 text-amber-500 animate-pulse" />
-                    <span className="hidden xs:inline text-xs font-medium text-theme-secondary">
-                      ...
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <WifiOff className="w-4 h-4 text-red-500" />
-                    <span className="hidden xs:inline text-xs font-medium text-theme-secondary">
-                      Offline
-                    </span>
-                  </>
-                )}
-              </div>
+              {/* Machine Status Icons */}
+              <StatusBar />
 
               {/* User menu - Cloud mode or Demo mode */}
               {(isCloud && user) || isDemo ? (
@@ -182,7 +309,12 @@ export function Layout({ onExitDemo }: LayoutProps) {
       </div>
 
       {/* Navigation - Desktop: horizontal tabs, Mobile: bottom bar style */}
-      <nav className="sticky top-16 z-40 nav-bg border-b border-theme">
+      <nav
+        className={cn(
+          "sticky z-40 nav-bg border-b border-theme transition-all duration-300",
+          headerVisible ? "top-16" : "top-0"
+        )}
+      >
         <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
           {/* Mobile: evenly distributed icons with labels */}
           <div className="flex sm:hidden justify-around py-1">

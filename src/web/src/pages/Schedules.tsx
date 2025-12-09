@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useStore } from "@/lib/store";
+import { useMobileLandscape } from "@/lib/useMobileLandscape";
 import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
@@ -224,6 +225,9 @@ export function Schedules() {
     setFormData(DEFAULT_SCHEDULE);
   };
 
+  const isMobileLandscape = useMobileLandscape();
+  const sectionGap = isMobileLandscape ? "space-y-3" : "space-y-6";
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -233,7 +237,7 @@ export function Schedules() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className={sectionGap}>
       <PageHeader
         title="Schedules"
         subtitle="Automate your machine power cycles"

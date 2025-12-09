@@ -1,8 +1,8 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { useStore } from "@/lib/store";
 import { useCommand } from "@/lib/useCommand";
+import { useMobileLandscape } from "@/lib/useMobileLandscape";
 import { PageHeader } from "@/components/PageHeader";
-import { StatusBar } from "@/components/StatusBar";
 import { HeatingStrategyModal } from "@/components/HeatingStrategyModal";
 import {
   MachineStatusCard,
@@ -213,14 +213,14 @@ export function Dashboard() {
     return "Since backflush";
   }, [cleaningReminderDue, shotsSinceBackflush]);
 
+  const isMobileLandscape = useMobileLandscape();
+  const gridGap = isMobileLandscape ? "gap-3" : "gap-6";
+  const sectionGap = isMobileLandscape ? "space-y-3" : "space-y-6";
+
   return (
     <>
-      <div className="space-y-6">
-        <PageHeader
-          title="Dashboard"
-          subtitle="Monitor your machine status"
-          action={<StatusBar />}
-        />
+      <div className={sectionGap}>
+        <PageHeader title="Dashboard" subtitle="Monitor your machine status" />
 
         <MachineStatusCard
           mode={machineMode}
@@ -240,7 +240,7 @@ export function Dashboard() {
         />
 
         {/* Contextual Cards: Pressure during brew, Last Shot when idle */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className={`grid grid-cols-1 md:grid-cols-2 ${gridGap}`}>
           {showPressureCard ? (
             <PressureCard pressure={pressure} />
           ) : (
@@ -254,7 +254,11 @@ export function Dashboard() {
         </div>
 
         {/* Quick Stats - Machine health at a glance */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div
+          className={`grid grid-cols-2 md:grid-cols-4 ${
+            isMobileLandscape ? "gap-2" : "gap-4"
+          }`}
+        >
           {/* Session uptime */}
           <QuickStat
             icon={<Clock className="w-5 h-5" />}
@@ -269,7 +273,7 @@ export function Dashboard() {
             value={cleaningDisplayValue}
             status={cleaningStatus}
             showPulse={cleaningReminderDue}
-            subtext={cleaningSubtext}
+            subtext={isMobileLandscape ? undefined : cleaningSubtext}
           />
 
           {/* Machine status */}
@@ -280,7 +284,9 @@ export function Dashboard() {
             status={waterStatus}
             showPulse={waterTankLevel !== "ok"}
             subtext={
-              waterTankLevel === "low"
+              isMobileLandscape
+                ? undefined
+                : waterTankLevel === "low"
                 ? "Refill soon"
                 : waterTankLevel === "empty"
                 ? "Refill now!"
@@ -292,7 +298,7 @@ export function Dashboard() {
             label="Scale"
             value={scaleDisplayValue}
             status={scaleConnected ? "success" : undefined}
-            subtext={scaleSubtext}
+            subtext={isMobileLandscape ? undefined : scaleSubtext}
           />
         </div>
       </div>

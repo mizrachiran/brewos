@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useStore } from "@/lib/store";
 import { useCommand } from "@/lib/useCommand";
+import { useMobileLandscape } from "@/lib/useMobileLandscape";
 import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
@@ -79,8 +80,11 @@ export function Brewing() {
     sendCommand("scale_reset");
   };
 
+  const isMobileLandscape = useMobileLandscape();
+  const sectionGap = isMobileLandscape ? "space-y-3" : "space-y-6";
+
   return (
-    <div className="space-y-6">
+    <div className={sectionGap}>
       {/* Header */}
       <PageHeader
         title="Brew Settings"

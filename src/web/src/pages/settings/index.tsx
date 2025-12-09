@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAppStore } from "@/lib/mode";
+import { useMobileLandscape } from "@/lib/useMobileLandscape";
 import { PageHeader } from "@/components/PageHeader";
 import { getSettingsTabs, SettingsTab } from "./constants/tabs";
 import { isDemoMode } from "@/lib/demo-mode";
@@ -27,6 +28,7 @@ export function Settings() {
   const location = useLocation();
   const navigate = useNavigate();
   const { mode } = useAppStore();
+  const isMobileLandscape = useMobileLandscape();
 
   const isCloud = mode === "cloud";
   const isDemo = isDemoMode();
@@ -42,8 +44,10 @@ export function Settings() {
     navigate({ hash: tab }, { replace: true });
   };
 
+  const sectionGap = isMobileLandscape ? "space-y-3" : "space-y-6";
+
   return (
-    <div className="space-y-6">
+    <div className={sectionGap}>
       {/* Header */}
       <PageHeader
         title="Settings"

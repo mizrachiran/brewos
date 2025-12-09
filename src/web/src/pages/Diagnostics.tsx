@@ -1,5 +1,6 @@
 import { useStore } from "@/lib/store";
 import { useCommand } from "@/lib/useCommand";
+import { useMobileLandscape } from "@/lib/useMobileLandscape";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -33,7 +34,7 @@ import type {
 import { DIAGNOSTIC_TESTS, getTestsForMachineType } from "@/lib/types";
 
 // Power meter test ID for dynamic name display
-const POWER_METER_TEST_ID = 0x0A;
+const POWER_METER_TEST_ID = 0x0a;
 
 // Map test IDs to icons
 function getTestIcon(testId: number) {
@@ -41,30 +42,30 @@ function getTestIcon(testId: number) {
     // Temperature Sensors (T1, T2)
     0x01: <Thermometer className="w-5 h-5" />, // Brew Boiler NTC
     0x02: <Thermometer className="w-5 h-5" />, // Steam Boiler NTC
-    
+
     // Pressure Sensor (P1)
     0x04: <Gauge className="w-5 h-5" />, // Pressure Transducer
-    
+
     // Water Level Sensors (S1, S2, S3)
     0x05: <Droplets className="w-5 h-5" />, // Water Reservoir & Tank Level
     0x0e: <Droplets className="w-5 h-5" />, // Steam Boiler Level Probe
-    
+
     // Brew Control (S4)
     0x0f: <Activity className="w-5 h-5" />, // Brew Handle/Lever Switch
-    
+
     // Heater SSRs (SSR1, SSR2)
     0x06: <Zap className="w-5 h-5" />, // Brew Heater SSR
     0x07: <Zap className="w-5 h-5" />, // Steam Heater SSR
-    
+
     // Relays (K1, K2, K3)
     0x10: <Lightbulb className="w-5 h-5" />, // Water Status LED Relay (K1)
     0x08: <Droplets className="w-5 h-5" />, // Water Pump Relay (K2)
     0x09: <Activity className="w-5 h-5" />, // Brew Solenoid Relay (K3)
-    
+
     // Communication
     0x0b: <Wifi className="w-5 h-5" />, // ESP32 Communication
     0x0a: <Cable className="w-5 h-5" />, // Power Meter (PZEM, JSY, Eastron)
-    
+
     // User Interface
     0x0c: <Speaker className="w-5 h-5" />, // Buzzer
     0x0d: <Lightbulb className="w-5 h-5" />, // Status LED
@@ -135,10 +136,10 @@ function TroubleshootItem({
   );
 }
 
-function DiagnosticResultRow({ 
-  result, 
-  configuredMeterType 
-}: { 
+function DiagnosticResultRow({
+  result,
+  configuredMeterType,
+}: {
   result: DiagnosticResult;
   configuredMeterType?: string | null;
 }) {
@@ -147,9 +148,10 @@ function DiagnosticResultRow({
   const isOptional = testMeta?.optional ?? false;
 
   // For power meter test, show the configured meter type if available
-  const displayName = result.testId === POWER_METER_TEST_ID && configuredMeterType
-    ? `Power Meter (${configuredMeterType})`
-    : result.name;
+  const displayName =
+    result.testId === POWER_METER_TEST_ID && configuredMeterType
+      ? `Power Meter (${configuredMeterType})`
+      : result.name;
 
   return (
     <div className="flex items-center gap-4 p-4 rounded-xl bg-theme-secondary border border-theme">
@@ -190,9 +192,10 @@ export function Diagnostics() {
   const { sendCommand } = useCommand();
 
   // Get configured power meter type for dynamic display
-  const configuredMeterType = powerMeter?.source === "hardware" && powerMeter?.meterType 
-    ? powerMeter.meterType 
-    : null;
+  const configuredMeterType =
+    powerMeter?.source === "hardware" && powerMeter?.meterType
+      ? powerMeter.meterType
+      : null;
 
   // Get tests applicable to this machine type
   const machineType = (device.machineType || "dual_boiler") as MachineType;
@@ -219,9 +222,11 @@ export function Diagnostics() {
     : "skip";
 
   const overallInfo = getStatusInfo(overallStatus);
+  const isMobileLandscape = useMobileLandscape();
+  const sectionGap = isMobileLandscape ? "space-y-3" : "space-y-6";
 
   return (
-    <div className="space-y-6">
+    <div className={sectionGap}>
       <PageHeader
         title="Hardware Diagnostics"
         subtitle="Test hardware wiring and component functionality"
