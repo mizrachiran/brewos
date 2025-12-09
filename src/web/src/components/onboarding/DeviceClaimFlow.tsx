@@ -157,14 +157,14 @@ export function DeviceClaimFlow({
 
   if (step === "success") {
     return (
-      <div className={className}>
+      <div className={`w-full ${className || ""}`}>
         <SuccessStep deviceName={successDeviceName} />
       </div>
     );
   }
 
   return (
-    <div className={className}>
+    <div className={`w-full ${className || ""}`}>
       {showTabs && (
         <div className="flex gap-2 mb-4 xs:mb-6">
           <Button

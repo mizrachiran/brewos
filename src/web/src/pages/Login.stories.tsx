@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { LogoIcon } from "@/components/Logo";
 import { ChevronRight } from "lucide-react";
 import { LoginHero, LoginForm } from "@/components/login";
+import { useState, useEffect } from "react";
 
 // Since Login uses auth context and navigation, we create presentational stories
 // that show the different visual states of the login page using the shared components
@@ -12,7 +13,7 @@ function LoginStoryWrapper({ children }: { children?: React.ReactNode }) {
 }
 
 const meta = {
-  title: "Pages/Onboarding/Login",
+  title: "Pages/Login",
   component: LoginStoryWrapper,
   tags: ["autodocs"],
   parameters: {
@@ -25,17 +26,59 @@ type Story = StoryObj<typeof meta>;
 
 // Full login view using shared components - responsive to viewport
 function LoginView({ error }: { error?: string }) {
+  // Detect mobile landscape for optimized layout
+  const [isMobileLandscape, setIsMobileLandscape] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerHeight <= 500 && window.innerWidth > window.innerHeight;
+  });
+
+  useEffect(() => {
+    const landscapeQuery = window.matchMedia(
+      "(orientation: landscape) and (max-height: 500px)"
+    );
+
+    const handleLandscapeChange = (e: MediaQueryListEvent | MediaQueryList) => {
+      setIsMobileLandscape(e.matches);
+    };
+
+    handleLandscapeChange(landscapeQuery);
+    landscapeQuery.addEventListener("change", handleLandscapeChange);
+    return () => landscapeQuery.removeEventListener("change", handleLandscapeChange);
+  }, []);
+
   return (
-    <div className="min-h-screen flex overflow-hidden">
-      {/* Left Panel - Hero Section (hidden on mobile) */}
-      <LoginHero animated={false} />
+    <div
+      className={`flex flex-col lg:flex-row ${
+        isMobileLandscape
+          ? "min-h-screen min-h-[100dvh] overflow-y-auto"
+          : "min-h-screen min-h-[100dvh]"
+      }`}
+    >
+      {/* Left Panel - Hero Section (hidden on mobile and mobile landscape) */}
+      {!isMobileLandscape && <LoginHero animated={false} />}
 
       {/* Right Panel - Login Form */}
-      <div className="w-full lg:w-1/2 xl:w-[45%] flex items-center justify-center bg-theme p-6 sm:p-8 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-accent/5 to-transparent rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-tr from-accent/5 to-transparent rounded-full blur-3xl" />
+      <div
+        className={`flex-1 lg:w-1/2 xl:w-[45%] flex items-center justify-center bg-theme relative ${
+          isMobileLandscape
+            ? "p-3 overflow-y-auto"
+            : "p-4 sm:p-6 lg:p-8 overflow-y-auto min-h-screen min-h-[100dvh] lg:min-h-0"
+        }`}
+      >
+        {/* Subtle decorative elements - hidden in mobile landscape */}
+        {!isMobileLandscape && (
+          <>
+            <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-accent/5 to-transparent rounded-full blur-3xl" />
+            <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-tr from-accent/5 to-transparent rounded-full blur-3xl" />
+          </>
+        )}
 
-        <LoginForm error={error} animated={false} showMobileLogo />
+        <LoginForm
+          error={error}
+          animated={false}
+          showMobileLogo
+          compact={isMobileLandscape}
+        />
       </div>
     </div>
   );

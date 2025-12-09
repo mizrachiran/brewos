@@ -17,6 +17,7 @@ interface OnboardingLayoutProps {
  * Shared layout component for onboarding/setup pages.
  * Handles responsive mobile (full-screen) and desktop (card) layouts.
  * Uses the `xs` breakpoint (390px) for switching between layouts.
+ * Also handles mobile landscape orientation specially.
  * Used by both production pages and Storybook stories to avoid duplication.
  *
  * NOTE: Uses JS-based responsive detection to ensure children only render once,
@@ -34,27 +35,56 @@ export function OnboardingLayout({
     typeof window !== "undefined" ? window.innerWidth >= 390 : false
   );
 
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(min-width: 390px)");
+  // Detect mobile landscape: landscape orientation with limited height
+  const [isMobileLandscape, setIsMobileLandscape] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerHeight <= 500 && window.innerWidth > window.innerHeight;
+  });
 
-    const handleChange = (e: MediaQueryListEvent | MediaQueryList) => {
+  useEffect(() => {
+    const widthQuery = window.matchMedia("(min-width: 390px)");
+    const landscapeQuery = window.matchMedia(
+      "(orientation: landscape) and (max-height: 500px)"
+    );
+
+    const handleWidthChange = (e: MediaQueryListEvent | MediaQueryList) => {
       setIsWideScreen(e.matches);
     };
 
-    // Set initial value
-    handleChange(mediaQuery);
+    const handleLandscapeChange = (e: MediaQueryListEvent | MediaQueryList) => {
+      setIsMobileLandscape(e.matches);
+    };
+
+    // Set initial values
+    handleWidthChange(widthQuery);
+    handleLandscapeChange(landscapeQuery);
 
     // Listen for changes
-    mediaQuery.addEventListener("change", handleChange);
-    return () => mediaQuery.removeEventListener("change", handleChange);
+    widthQuery.addEventListener("change", handleWidthChange);
+    landscapeQuery.addEventListener("change", handleLandscapeChange);
+    return () => {
+      widthQuery.removeEventListener("change", handleWidthChange);
+      landscapeQuery.removeEventListener("change", handleLandscapeChange);
+    };
   }, []);
+
+  // Mobile landscape: Card layout filling screen with margins
+  if (isMobileLandscape) {
+    return (
+      <div className="h-screen h-[100dvh] bg-theme flex items-center justify-center p-4">
+        <Card className="w-full h-full max-h-[calc(100dvh-2rem)] flex items-center justify-center animate-in fade-in slide-in-from-bottom-4 duration-300">
+          {children}
+        </Card>
+      </div>
+    );
+  }
 
   if (isWideScreen) {
     // Wide width: Card layout with theme background
     return (
-      <div className="min-h-screen min-h-[100dvh]">
+      <div className="min-h-screen min-h-[100dvh] overflow-y-auto">
         <div
-          className={`flex bg-theme min-h-screen justify-center items-start p-4 ${desktopTopPadding}`}
+          className={`flex bg-theme min-h-screen min-h-[100dvh] justify-center items-start p-4 ${desktopTopPadding}`}
         >
           <div className={`w-full ${maxWidth}`}>
             <Card className="animate-in fade-in slide-in-from-bottom-4 duration-300">

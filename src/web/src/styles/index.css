@@ -704,6 +704,33 @@ input[type="checkbox"]:hover:not(:checked) {
   animation-fill-mode: forwards;
 }
 
+/* Mobile Landscape Utilities */
+@media (orientation: landscape) and (max-height: 500px) {
+  /* Make mobile landscape pages scrollable with more compact spacing */
+  .landscape-scroll {
+    overflow-y: auto !important;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Reduce padding and margins in landscape */
+  .landscape-compact {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+  
+  /* Hide non-essential elements in landscape to save space */
+  .landscape-hide {
+    display: none !important;
+  }
+  
+  /* Smaller logo in landscape */
+  .landscape-logo-sm svg,
+  .landscape-logo-sm img {
+    max-height: 2rem;
+  }
+}
+
 /* Html5Qrcode library styling - customize the scanning box */
 /* Hide default controls */
 #qr-reader__dashboard_section_csr,

@@ -1,6 +1,7 @@
 import { Button } from "@/components/Button";
 import { Logo } from "@/components/Logo";
 import { QrCode, ArrowRight, Smartphone, CheckCircle } from "lucide-react";
+import { useState, useEffect } from "react";
 
 interface WelcomeStepProps {
   onScanClick?: () => void;
@@ -8,6 +9,27 @@ interface WelcomeStepProps {
 }
 
 export function WelcomeStep({ onScanClick, onManualClick }: WelcomeStepProps) {
+  // Detect mobile landscape for compact layout
+  const [isMobileLandscape, setIsMobileLandscape] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerHeight <= 500 && window.innerWidth > window.innerHeight;
+  });
+
+  useEffect(() => {
+    const landscapeQuery = window.matchMedia(
+      "(orientation: landscape) and (max-height: 500px)"
+    );
+
+    const handleLandscapeChange = (e: MediaQueryListEvent | MediaQueryList) => {
+      setIsMobileLandscape(e.matches);
+    };
+
+    handleLandscapeChange(landscapeQuery);
+    landscapeQuery.addEventListener("change", handleLandscapeChange);
+    return () =>
+      landscapeQuery.removeEventListener("change", handleLandscapeChange);
+  }, []);
+
   const steps = [
     {
       icon: QrCode,
@@ -26,6 +48,109 @@ export function WelcomeStep({ onScanClick, onManualClick }: WelcomeStepProps) {
     },
   ];
 
+  // Mobile landscape: two-column layout filling the card
+  if (isMobileLandscape) {
+    return (
+      <div className="w-full max-w-4xl px-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="flex gap-8 items-center">
+          {/* Left column: Logo + heading + how it works */}
+          <div className="flex-1 flex flex-col items-center">
+            {/* Logo with glow effect */}
+            <div className="flex justify-center mb-4">
+              <div className="relative">
+                <div className="absolute inset-0 bg-accent/20 rounded-full blur-2xl animate-pulse" />
+                <div className="relative">
+                  <Logo size="xl" />
+                </div>
+              </div>
+            </div>
+
+            {/* Welcome heading */}
+            <div className="text-center mb-4">
+              <h1 className="text-2xl font-bold text-theme tracking-tight mb-2">
+                Welcome to BrewOS
+              </h1>
+              <p className="text-theme-muted text-base leading-relaxed">
+                Control your espresso machine from anywhere.
+              </p>
+            </div>
+
+            {/* How it works */}
+            <div className="border-t border-theme/10 pt-4 w-full">
+              <div className="text-center mb-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-theme-muted">
+                  How it works
+                </h3>
+              </div>
+              <div className="flex justify-center gap-6">
+                {steps.map((step, index) => {
+                  const Icon = step.icon;
+                  return (
+                    <div
+                      key={index}
+                      className="flex flex-col items-center gap-1.5"
+                    >
+                      <div className="w-11 h-11 bg-accent/10 rounded-xl flex items-center justify-center border border-accent/20 shadow-sm">
+                        <Icon className="w-5 h-5 text-accent" />
+                      </div>
+                      <p className="text-xs font-semibold text-theme">
+                        {step.title}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Vertical divider */}
+          <div className="w-px self-stretch min-h-[180px] bg-theme/10 flex-shrink-0" />
+
+          {/* Right column: Action buttons */}
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <div className="space-y-3 w-full max-w-[260px]">
+              {/* Primary button */}
+              <Button
+                className="w-full py-3 text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02]"
+                onClick={onScanClick}
+              >
+                <QrCode className="w-4 h-4" />
+                Scan QR Code
+                <ArrowRight className="w-4 h-4 ml-auto" />
+              </Button>
+
+              {/* Divider */}
+              <div className="relative py-1">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-theme/20"></div>
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="px-3 text-theme-muted">or</span>
+                </div>
+              </div>
+
+              {/* Secondary action */}
+              <button
+                className="w-full py-2 text-theme-muted hover:text-theme transition-colors duration-200 font-medium flex items-center justify-center text-sm"
+                onClick={onManualClick}
+              >
+                Enter code manually
+              </button>
+            </div>
+
+            {/* Quick tip */}
+            <div className="mt-3 text-center">
+              <p className="text-[10px] text-theme-muted">
+                💡 Find the QR code on your machine's display
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Standard portrait/desktop layout
   return (
     <div className="py-3 xs:py-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Logo with subtle animation */}

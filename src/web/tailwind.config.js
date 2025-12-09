@@ -6,6 +6,8 @@ export default {
     extend: {
       screens: {
         xs: "390px",
+        // Mobile landscape: landscape orientation with limited height
+        "landscape-sm": { raw: "(orientation: landscape) and (max-height: 500px)" },
       },
       colors: {
         // Theme-aware colors using CSS variables

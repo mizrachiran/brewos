@@ -43,6 +43,8 @@ interface LoginFormProps {
   showMobileLogo?: boolean;
   /** Custom Google button slot (for real GoogleLogin component) */
   googleButton?: React.ReactNode;
+  /** Compact mode for mobile landscape */
+  compact?: boolean;
 }
 
 export function LoginForm({
@@ -50,6 +52,7 @@ export function LoginForm({
   animated = true,
   showMobileLogo = true,
   googleButton,
+  compact = false,
 }: LoginFormProps) {
   return (
     <div
@@ -57,24 +60,24 @@ export function LoginForm({
         animated ? "login-card-enter" : ""
       }`}
     >
-      {/* Mobile logo (hidden on desktop) */}
-      {showMobileLogo && (
+      {/* Mobile logo (hidden on desktop and in compact mode) */}
+      {showMobileLogo && !compact && (
         <div className="lg:hidden flex justify-center mb-4 sm:mb-8">
           <Logo size="lg" />
         </div>
       )}
 
       {/* Card */}
-      <div className="bg-theme-card rounded-2xl sm:rounded-3xl p-5 sm:p-8 lg:p-10 shadow-2xl border border-theme">
+      <div className={`bg-theme-card rounded-2xl sm:rounded-3xl shadow-2xl border border-theme ${compact ? 'p-4' : 'p-5 sm:p-8 lg:p-10'}`}>
         {/* Header */}
-        <div className="text-center mb-5 sm:mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl bg-accent shadow-lg shadow-accent/20 mb-3 sm:mb-5">
-            <LogoIcon size="md" className="filter brightness-0 invert" />
+        <div className={`text-center ${compact ? 'mb-3' : 'mb-5 sm:mb-8'}`}>
+          <div className={`inline-flex items-center justify-center bg-accent shadow-lg shadow-accent/20 ${compact ? 'w-10 h-10 rounded-lg mb-2' : 'w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl mb-3 sm:mb-5'}`}>
+            <LogoIcon size={compact ? "sm" : "md"} className="filter brightness-0 invert" />
           </div>
-          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-theme mb-1 sm:mb-2">
+          <h2 className={`font-bold text-theme ${compact ? 'text-lg mb-1' : 'text-xl sm:text-2xl lg:text-3xl mb-1 sm:mb-2'}`}>
             Welcome back
           </h2>
-          <p className="text-sm sm:text-base text-theme-muted mb-2">
+          <p className={`text-theme-muted ${compact ? 'text-xs' : 'text-sm sm:text-base mb-2'}`}>
             Sign in to manage your machines
           </p>
         </div>
@@ -82,30 +85,30 @@ export function LoginForm({
         {/* Error message */}
         {error && (
           <div
-            className={`mb-6 p-4 rounded-xl flex items-start gap-3 bg-error-soft border border-error ${
+            className={`rounded-xl flex items-start gap-3 bg-error-soft border border-error ${compact ? 'mb-3 p-3' : 'mb-6 p-4'} ${
               animated ? "login-error" : ""
             }`}
           >
-            <AlertCircle className="w-5 h-5 text-error flex-shrink-0 mt-0.5" />
-            <span className="text-sm text-error">{error}</span>
+            <AlertCircle className={`text-error flex-shrink-0 mt-0.5 ${compact ? 'w-4 h-4' : 'w-5 h-5'}`} />
+            <span className={`text-error ${compact ? 'text-xs' : 'text-sm'}`}>{error}</span>
           </div>
         )}
 
         {/* Google Sign In */}
         <div className={animated ? "login-google-btn" : ""}>
-          <div className="flex justify-center mb-4 sm:mb-6">
+          <div className={`flex justify-center ${compact ? 'mb-3' : 'mb-4 sm:mb-6'}`}>
             <div className="transform hover:scale-[1.02] transition-transform duration-200">
               {googleButton || <MockGoogleButton />}
             </div>
           </div>
 
           {/* Divider */}
-          <div className="relative my-5 sm:my-8">
+          <div className={`relative ${compact ? 'my-3' : 'my-5 sm:my-8'}`}>
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-theme" />
             </div>
             <div className="relative flex justify-center">
-              <span className="px-3 sm:px-4 text-xs sm:text-sm text-theme-muted bg-theme-card">
+              <span className={`text-theme-muted bg-theme-card ${compact ? 'px-2 text-xs' : 'px-3 sm:px-4 text-xs sm:text-sm'}`}>
                 or connect locally
               </span>
             </div>
@@ -114,17 +117,17 @@ export function LoginForm({
           {/* Local connection option */}
           <a
             href="http://brewos.local"
-            className="group flex items-center justify-between w-full p-3 sm:p-4 rounded-xl bg-theme-secondary hover:bg-theme-tertiary transition-all duration-200 border border-transparent hover:border-theme"
+            className={`group flex items-center justify-between w-full rounded-xl bg-theme-secondary hover:bg-theme-tertiary transition-all duration-200 border border-transparent hover:border-theme ${compact ? 'p-2' : 'p-3 sm:p-4'}`}
           >
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-theme-card flex items-center justify-center shadow-sm border border-theme-light">
-                <Wifi className="w-4 h-4 sm:w-5 sm:h-5 text-accent" />
+            <div className={`flex items-center ${compact ? 'gap-2' : 'gap-2 sm:gap-3'}`}>
+              <div className={`rounded-lg bg-theme-card flex items-center justify-center shadow-sm border border-theme-light ${compact ? 'w-8 h-8' : 'w-9 h-9 sm:w-10 sm:h-10'}`}>
+                <Wifi className={`text-accent ${compact ? 'w-4 h-4' : 'w-4 h-4 sm:w-5 sm:h-5'}`} />
               </div>
               <div className="text-left">
-                <div className="font-medium text-theme text-sm">
+                <div className={`font-medium text-theme ${compact ? 'text-xs' : 'text-sm'}`}>
                   Direct Connection
                 </div>
-                <div className="text-xs text-theme-muted">brewos.local</div>
+                <div className={`text-theme-muted ${compact ? 'text-[10px]' : 'text-xs'}`}>brewos.local</div>
               </div>
             </div>
             <ChevronRight className="w-5 h-5 text-theme-muted group-hover:text-accent group-hover:translate-x-1 transition-all duration-200" />
@@ -132,31 +135,33 @@ export function LoginForm({
         </div>
       </div>
 
-      {/* Footer */}
-      <p
-        className={`text-center text-xs text-theme-muted mt-6 ${
-          animated ? "opacity-0 login-footer" : ""
-        }`}
-      >
-        By signing in, you agree to our{" "}
-        <a
-          href={LEGAL_LINKS.terms}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline hover:text-theme-secondary transition-colors"
+      {/* Footer - hidden in compact mode */}
+      {!compact && (
+        <p
+          className={`text-center text-xs text-theme-muted mt-6 ${
+            animated ? "opacity-0 login-footer" : ""
+          }`}
         >
-          Terms of Service
-        </a>{" "}
-        and{" "}
-        <a
-          href={LEGAL_LINKS.privacy}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline hover:text-theme-secondary transition-colors"
-        >
-          Privacy Policy
-        </a>
-      </p>
+          By signing in, you agree to our{" "}
+          <a
+            href={LEGAL_LINKS.terms}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-theme-secondary transition-colors"
+          >
+            Terms of Service
+          </a>{" "}
+          and{" "}
+          <a
+            href={LEGAL_LINKS.privacy}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-theme-secondary transition-colors"
+          >
+            Privacy Policy
+          </a>
+        </p>
+      )}
     </div>
   );
 }

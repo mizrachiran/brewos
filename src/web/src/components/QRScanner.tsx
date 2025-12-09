@@ -6,9 +6,11 @@ import { Button } from "./Button";
 interface QRScannerProps {
   onScan: (result: string) => void;
   onError?: (error: string) => void;
+  /** Compact mode for landscape - shows minimal error UI */
+  compact?: boolean;
 }
 
-export function QRScanner({ onScan, onError }: QRScannerProps) {
+export function QRScanner({ onScan, onError, compact = false }: QRScannerProps) {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -165,35 +167,52 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
   }, [isScanning]);
 
   return (
-    <div className="w-full max-w-xs mx-auto" ref={containerRef}>
+    <div className={compact ? "w-full" : "w-full max-w-xs mx-auto"} ref={containerRef}>
       {/* Scanner container - fixed aspect ratio to prevent size changes */}
       <div className="aspect-square w-full rounded-xl overflow-hidden bg-black relative">
         <div id="qr-reader" className="absolute inset-0 w-full h-full" />
       </div>
 
-      {/* Error state - compact */}
+      {/* Error state */}
       {error && (
-        <div className="mt-3 p-3 bg-error-soft border border-error rounded-xl">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <CameraOff className="w-4 h-4 text-error flex-shrink-0" />
-              <p className="text-xs sm:text-sm text-error truncate">{error}</p>
-            </div>
+        compact ? (
+          // Compact error for landscape - just icon and retry button
+          <div className="mt-2 flex items-center justify-center gap-2">
+            <CameraOff className="w-4 h-4 text-error" />
             <Button
               variant="secondary"
               size="sm"
               onClick={startScanner}
-              className="flex-shrink-0"
+              className="text-xs"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Retry</span>
+              <RefreshCw className="w-3 h-3" />
+              Retry Camera
             </Button>
           </div>
-        </div>
+        ) : (
+          // Full error for portrait
+          <div className="mt-3 p-3 bg-error-soft border border-error rounded-xl">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <CameraOff className="w-4 h-4 text-error flex-shrink-0" />
+                <p className="text-xs sm:text-sm text-error truncate">{error}</p>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={startScanner}
+                className="flex-shrink-0"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Retry</span>
+              </Button>
+            </div>
+          </div>
+        )
       )}
 
-      {/* Permission denied instructions */}
-      {hasPermission === false && (
+      {/* Permission denied instructions - only in non-compact mode */}
+      {hasPermission === false && !compact && (
         <div className="mt-4 p-4 bg-warning-soft border border-warning rounded-xl">
           <p className="text-sm text-warning mb-2 font-medium">
             To scan QR codes, allow camera access:
@@ -208,9 +227,9 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
 
       {/* Scanning indicator */}
       {isScanning && !error && (
-        <div className="mt-4 flex items-center justify-center gap-2 text-sm text-theme-muted">
+        <div className={`${compact ? "mt-2" : "mt-4"} flex items-center justify-center gap-2 text-sm text-theme-muted`}>
           <Camera className="w-4 h-4 animate-pulse" />
-          <span>Point camera at QR code...</span>
+          <span>{compact ? "Scanning..." : "Point camera at QR code..."}</span>
         </div>
       )}
     </div>
