@@ -319,6 +319,7 @@ function App() {
               <Route path="/dev/login" element={<Login />} />
               <Route path="/dev/onboarding" element={<Onboarding />} />
               <Route path="/dev/pair" element={<Pair />} />
+              <Route path="/dev/setup" element={<Setup />} />
               <Route path="/dev/brewing" element={<BrewingPreview />} />
               <Route
                 path="/dev/wizard"
@@ -378,6 +379,7 @@ function App() {
               <Route path="/dev/login" element={<Login />} />
               <Route path="/dev/onboarding" element={<Onboarding />} />
               <Route path="/dev/pair" element={<Pair />} />
+              <Route path="/dev/setup" element={<Setup />} />
               <Route path="/dev/brewing" element={<BrewingPreview />} />
               <Route
                 path="/dev/wizard"
@@ -420,6 +422,7 @@ function App() {
               <Route path="/dev/login" element={<Login />} />
               <Route path="/dev/onboarding" element={<Onboarding />} />
               <Route path="/dev/pair" element={<Pair />} />
+              <Route path="/dev/setup" element={<Setup />} />
               <Route path="/dev/brewing" element={<BrewingPreview />} />
               <Route
                 path="/dev/wizard"
@@ -452,6 +455,7 @@ function App() {
               <Route path="/dev/login" element={<Login />} />
               <Route path="/dev/onboarding" element={<Onboarding />} />
               <Route path="/dev/pair" element={<Pair />} />
+              <Route path="/dev/setup" element={<Setup />} />
               <Route path="/dev/brewing" element={<BrewingPreview />} />
               <Route
                 path="/dev/wizard"
@@ -486,6 +490,7 @@ function App() {
             <Route path="/dev/login" element={<Login />} />
             <Route path="/dev/onboarding" element={<Onboarding />} />
             <Route path="/dev/pair" element={<Pair />} />
+            <Route path="/dev/setup" element={<Setup />} />
             <Route path="/dev/brewing" element={<BrewingPreview />} />
             <Route
               path="/dev/wizard"

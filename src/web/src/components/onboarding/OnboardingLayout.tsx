@@ -68,9 +68,9 @@ export function OnboardingLayout({
   // Mobile landscape: Card fills screen with margins
   if (isMobileLandscape) {
     return (
-      <div className="h-[100dvh] overflow-hidden bg-theme flex items-center justify-center p-3">
-        <Card className="w-full h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 overflow-hidden">
-          <div className="flex-1 flex items-center justify-center">
+      <div className="h-[100dvh] bg-theme flex items-center justify-center p-3">
+        <Card className="w-full h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 overflow-y-auto">
+          <div className="flex-1 flex items-center justify-center min-h-0">
             {children}
           </div>
         </Card>
