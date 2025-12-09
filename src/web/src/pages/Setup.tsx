@@ -136,7 +136,7 @@ export function SetupView({
         </div>
 
         <div className="flex-1 space-y-3">
-          <NetworkListSection compact />
+          {renderNetworkList({ compact: true })}
 
           {status === "error" && (
             <div className="p-2 bg-error-soft text-error rounded-lg text-xs">
