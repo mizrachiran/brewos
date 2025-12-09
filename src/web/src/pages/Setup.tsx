@@ -196,7 +196,6 @@ export function Setup() {
     <OnboardingLayout
       gradient="bg-gradient-to-br from-coffee-800 to-coffee-900"
       maxWidth="max-w-md"
-      desktopTopPadding="pt-0"
     >
       {renderContent()}
     </OnboardingLayout>

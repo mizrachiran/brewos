@@ -9,8 +9,6 @@ interface OnboardingLayoutProps {
   gradient?: string;
   /** Max width for desktop card */
   maxWidth?: string;
-  /** Desktop top padding */
-  desktopTopPadding?: string;
 }
 
 /**
@@ -27,7 +25,6 @@ export function OnboardingLayout({
   children,
   gradient = "bg-gradient-to-br from-coffee-800 via-coffee-900 to-coffee-950",
   maxWidth = "max-w-lg",
-  desktopTopPadding = "pt-8",
 }: OnboardingLayoutProps) {
   // Use JS-based responsive detection to render children only once
   // This prevents components with side effects (camera, etc.) from mounting twice
@@ -68,12 +65,12 @@ export function OnboardingLayout({
     };
   }, []);
 
-  // Mobile landscape: Card layout with scrolling support
+  // Mobile landscape: Card fills screen with margins
   if (isMobileLandscape) {
     return (
-      <div className="min-h-[100dvh] bg-theme overflow-y-auto p-4">
-        <Card className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <div className="py-2">
+      <div className="h-[100dvh] overflow-hidden bg-theme flex items-center justify-center p-3">
+        <Card className="w-full h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 overflow-hidden">
+          <div className="flex-1 flex items-center justify-center">
             {children}
           </div>
         </Card>
@@ -82,12 +79,10 @@ export function OnboardingLayout({
   }
 
   if (isWideScreen) {
-    // Wide width: Card layout with theme background
+    // Wide width: Card layout centered on theme background
     return (
       <div className="min-h-[100dvh] overflow-y-auto">
-        <div
-          className={`flex bg-theme min-h-[100dvh] justify-center items-start p-4 ${desktopTopPadding}`}
-        >
+        <div className="flex bg-theme min-h-[100dvh] justify-center items-center p-4">
           <div className={`w-full ${maxWidth}`}>
             <Card className="animate-in fade-in slide-in-from-bottom-4 duration-300">
               {children}
@@ -102,11 +97,11 @@ export function OnboardingLayout({
   return (
     <div className="min-h-[100dvh]">
       <div
-        className={`${gradient} min-h-[100dvh] flex flex-col px-4 py-3 safe-area-inset`}
+        className={`${gradient} min-h-[100dvh] flex flex-col px-4 pt-2 pb-4 safe-area-inset`}
         style={darkBgStyles}
       >
-        <div className="flex-1 flex flex-col justify-center overflow-y-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="py-2">{children}</div>
+        <div className="flex-1 flex flex-col overflow-y-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {children}
         </div>
       </div>
     </div>
