@@ -160,8 +160,14 @@ make -j4
 cd src/esp32
 pio run
 
-# Upload web UI
-pio run -t uploadfs
+# Flash everything (firmware + web files)
+cd ../scripts
+./flash_esp32.sh
+
+# Or manually:
+cd ../esp32
+pio run -t upload        # Upload firmware
+pio run -t uploadfs      # Upload web UI files
 ```
 
 ### Flashing
@@ -175,7 +181,7 @@ pio run -t uploadfs
 
 **Pico (OTA via ESP32):**
 
-1. Connect to BrewOS-Setup WiFi
+1. Connect to `BrewOS-Setup` WiFi network (password: `brewoscoffee`)
 2. Open http://192.168.4.1
 3. Upload firmware via web interface
 

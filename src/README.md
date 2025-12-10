@@ -135,7 +135,9 @@ Storybook will be available at http://localhost:6006
 ### 1. First Boot (WiFi Setup)
 
 1. Upload ESP32 firmware and web UI
-2. Connect to "BrewOS-XXXXXX" WiFi network
+2. Connect to `BrewOS-Setup` WiFi network:
+   - **Password:** `brewoscoffee`
+   - The password is displayed on the ESP32 screen
 3. Open http://192.168.4.1
 4. Configure your home WiFi
 5. ESP32 will reconnect and be accessible at `http://brewos.local`

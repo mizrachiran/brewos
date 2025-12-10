@@ -89,11 +89,14 @@ cd src/esp32
 # Build
 pio run
 
-# Upload firmware
-pio run -t upload
+# Upload firmware AND web files (recommended)
+cd ../scripts
+./flash_esp32.sh
 
-# Upload web UI files to LittleFS
-pio run -t uploadfs
+# Or manually:
+cd ../esp32
+pio run -t upload        # Upload firmware
+pio run -t uploadfs      # Upload web UI files
 
 # Monitor serial output
 pio device monitor
@@ -155,8 +158,11 @@ make -j4
    ```
 
 2. **Connect to ESP32 web UI:**
-   - Connect to ESP32 WiFi (AP mode: `BrewOS-Setup` or STA mode: your configured network)
-   - Open browser to ESP32 IP address (default: `192.168.4.1` in AP mode)
+   - Connect to ESP32 WiFi:
+     - **Network (SSID):** `BrewOS-Setup`
+     - **Password:** `brewoscoffee`
+   - Open browser to ESP32 IP address: `http://192.168.4.1`
+   - The password is also displayed on the ESP32 screen
 
 3. **Upload firmware:**
    - Navigate to "Firmware Update" section in the web UI

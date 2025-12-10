@@ -90,10 +90,14 @@ See [Simulator.md](Simulator.md) for details.
 
 ## Configuration
 
-1. Power on device - creates `BrewOS-Setup` WiFi
-2. Connect and open `http://192.168.4.1`
-3. Configure WiFi and MQTT
-4. Device restarts and connects to network
+1. Power on device - creates `BrewOS-Setup` WiFi access point
+2. Connect to WiFi network:
+   - **SSID:** `BrewOS-Setup`
+   - **Password:** `brewoscoffee`
+   - The password is displayed on the ESP32 screen
+3. Open `http://192.168.4.1` in your browser
+4. Configure WiFi and MQTT
+5. Device restarts and connects to network
 
 ## Folder Structure
 
