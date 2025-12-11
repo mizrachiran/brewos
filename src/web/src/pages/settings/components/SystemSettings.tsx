@@ -420,13 +420,15 @@ export function SystemSettings() {
                     )}
                   </div>
                   <div className="flex flex-col gap-2">
-                    {updateResult.hasStableUpdate && (
+                    {/* Show Install if update available OR in dev mode (for testing OTA) */}
+                    {(updateResult.hasStableUpdate || devMode) && (
                       <Button
                         size="sm"
                         onClick={() => startOTA(updateResult.stable!.version)}
+                        variant={updateResult.hasStableUpdate ? "primary" : "secondary"}
                       >
                         <Download className="w-4 h-4" />
-                        Install
+                        {updateResult.hasStableUpdate ? "Install" : "Reinstall"}
                       </Button>
                     )}
                     {updateResult.stable.downloadUrl && (
@@ -489,14 +491,15 @@ export function SystemSettings() {
                     </div>
                   </div>
                   <div className="flex flex-col gap-2">
-                    {updateResult.hasBetaUpdate && (
+                    {/* Show Install if update available OR in dev mode (for testing OTA) */}
+                    {(updateResult.hasBetaUpdate || devMode) && (
                       <Button
                         size="sm"
                         variant="secondary"
                         onClick={() => startOTA(updateResult.beta!.version)}
                       >
                         <Download className="w-4 h-4" />
-                        Install Beta
+                        {updateResult.hasBetaUpdate ? "Install Beta" : "Reinstall Beta"}
                       </Button>
                     )}
                     {updateResult.beta.downloadUrl && (
