@@ -44,6 +44,7 @@
 #define CONTROL_LOOP_PERIOD_MS  100             // 10Hz control loop
 #define STATUS_SEND_PERIOD_MS   250             // 4Hz status updates
 #define SENSOR_READ_PERIOD_MS   50              // 20Hz sensor reads
+#define BOOT_INFO_RESEND_MS     (5 * 60 * 1000) // Resend boot info every 5 minutes
 
 // -----------------------------------------------------------------------------
 // PID Defaults

@@ -62,27 +62,27 @@ void core1_main(void) {
     // Initialize protocol
     protocol_init();
     
-    // Send boot message
+    // Send boot message and environmental config
     protocol_send_boot();
     
-    // Send environmental config after boot
     env_config_payload_t env_resp;
     environmental_electrical_t env;
     environmental_config_get(&env);
-    electrical_state_t state;
-    electrical_state_get(&state);
+    electrical_state_t elec_state;
+    electrical_state_get(&elec_state);
     
     env_resp.nominal_voltage = env.nominal_voltage;
     env_resp.max_current_draw = env.max_current_draw;
-    env_resp.brew_heater_current = state.brew_heater_current;
-    env_resp.steam_heater_current = state.steam_heater_current;
-    env_resp.max_combined_current = state.max_combined_current;
+    env_resp.brew_heater_current = elec_state.brew_heater_current;
+    env_resp.steam_heater_current = elec_state.steam_heater_current;
+    env_resp.max_combined_current = elec_state.max_combined_current;
     protocol_send_env_config(&env_resp);
     
     // Signal ready
     g_core1_ready = true;
     
     uint32_t last_status_send = 0;
+    uint32_t last_boot_info_send = 0;  // For periodic boot info resend
     
     while (true) {
         uint32_t now = to_ms_since_boot(get_absolute_time());
@@ -108,6 +108,31 @@ void core1_main(void) {
             if (should_send) {
                 protocol_send_status(&status_copy);
             }
+        }
+        
+        // Periodically resend boot info (version, env config) to ensure ESP32 stays in sync
+        // This helps recover from missed messages or ESP32 restarts
+        if (now - last_boot_info_send >= BOOT_INFO_RESEND_MS) {
+            last_boot_info_send = now;
+            
+            // Resend boot message (contains version, machine type, etc.)
+            protocol_send_boot();
+            
+            // Resend environmental config
+            environmental_electrical_t env_info;
+            environmental_config_get(&env_info);
+            electrical_state_t elec_info;
+            electrical_state_get(&elec_info);
+            
+            env_config_payload_t env_payload;
+            env_payload.nominal_voltage = env_info.nominal_voltage;
+            env_payload.max_current_draw = env_info.max_current_draw;
+            env_payload.brew_heater_current = elec_info.brew_heater_current;
+            env_payload.steam_heater_current = elec_info.steam_heater_current;
+            env_payload.max_combined_current = elec_info.max_combined_current;
+            protocol_send_env_config(&env_payload);
+            
+            DEBUG_PRINT("Core 1: Periodic boot info resend complete\n");
         }
         
         // Signal that Core 1 is alive (for watchdog monitoring by Core 0)
