@@ -171,7 +171,7 @@ export function SystemSettings() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle icon={<Cpu className="w-5 h-5" />}>ESP32-S3</CardTitle>
+            <CardTitle icon={<Cpu className="w-5 h-5" />}>Network Controller</CardTitle>
             <Badge variant={isConnected ? "success" : "error"}>
               {isConnected ? "Online" : "Offline"}
             </Badge>
@@ -189,7 +189,7 @@ export function SystemSettings() {
         <Card>
           <CardHeader>
             <CardTitle icon={<HardDrive className="w-5 h-5" />}>
-              Raspberry Pi Pico
+              Machine Controller
             </CardTitle>
             <Badge variant={pico.connected ? "success" : "error"}>
               {pico.connected ? "Connected" : "Disconnected"}

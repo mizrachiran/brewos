@@ -54,11 +54,11 @@ export function AboutSection() {
             </div>
             <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full">
               <Cpu className="w-4 h-4 text-amber-400" />
-              <span>ESP32: {esp32.version || "—"}</span>
+              <span>Network: {esp32.version || "—"}</span>
             </div>
             <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full">
               <Zap className="w-4 h-4 text-amber-400" />
-              <span>Pico: {pico.version || "—"}</span>
+              <span>Controller: {pico.version || "—"}</span>
             </div>
           </div>
         </div>
