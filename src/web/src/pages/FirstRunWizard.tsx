@@ -26,6 +26,12 @@ import {
 import { darkBgStyles } from "@/lib/darkBgStyles";
 
 import { useMobileLandscape } from "@/lib/useMobileLandscape";
+
+// Delay before fetching pairing QR after sending cloud enable command to ESP32.
+// The ESP32 needs time to process the WebSocket command, initialize the PairingManager,
+// and be ready to respond to the /api/pairing/qr endpoint.
+const CLOUD_ENABLE_DELAY_MS = 1500;
+
 const STEPS: WizardStep[] = [
   { id: "welcome", title: "Welcome", icon: <Coffee className="w-5 h-5" /> },
   {
@@ -126,7 +132,7 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
         // Fetch QR after a delay to allow ESP32 to process the cloud enable command
         const fetchTimeout = setTimeout(() => {
           fetchPairingQR();
-        }, 1500);
+        }, CLOUD_ENABLE_DELAY_MS);
         
         checkCloudStatus();
 
@@ -324,7 +330,7 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
       // Fetch QR after a delay to allow ESP32 to process the command
       setTimeout(() => {
         fetchPairingQR();
-      }, 1000);
+      }, CLOUD_ENABLE_DELAY_MS);
     } else {
       // Clear pairing data when disabling
       setPairing(null);
