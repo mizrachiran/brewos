@@ -8,7 +8,7 @@ interface DeviceConnection {
   deviceId: string;
   connectedAt: Date;
   lastSeen: Date;
-  missedPings: number;  // Track consecutive missed pings
+  missedPings: number; // Track consecutive missed pings
 }
 
 // Ping interval for keep-alive (30 seconds)
@@ -45,10 +45,12 @@ export class DeviceRelay {
     this.devices.forEach((connection, deviceId) => {
       // Increment missed pings counter (reset on pong)
       connection.missedPings++;
-      
+
       if (connection.missedPings > MAX_MISSED_PINGS) {
         // Device missed too many pings - disconnect
-        console.log(`[Device] ${deviceId} ping timeout (${connection.missedPings} missed) - disconnecting`);
+        console.log(
+          `[Device] ${deviceId} ping timeout (${connection.missedPings} missed) - disconnecting`
+        );
         connection.ws.terminate();
         return;
       }
@@ -115,7 +117,7 @@ export class DeviceRelay {
 
     // Handle pong responses for keep-alive
     ws.on("pong", () => {
-      connection.missedPings = 0;  // Reset missed pings counter
+      connection.missedPings = 0; // Reset missed pings counter
       connection.lastSeen = new Date();
     });
 
@@ -129,7 +131,7 @@ export class DeviceRelay {
     // Handle messages from device
     ws.on("message", (data: RawData) => {
       connection.lastSeen = new Date();
-      connection.missedPings = 0;  // Any message means device is alive
+      connection.missedPings = 0; // Any message means device is alive
       try {
         const message: DeviceMessage = JSON.parse(data.toString());
         this.handleDeviceMessage(deviceId, message);
