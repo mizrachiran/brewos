@@ -104,9 +104,14 @@ jobs:
           mkdir -p release
 
           # Copy Pico firmware (all machine types)
+          # UF2 files - for USB drag-and-drop flashing
           cp src/pico/build/brewos_dual_boiler.uf2 release/
           cp src/pico/build/brewos_single_boiler.uf2 release/
           cp src/pico/build/brewos_heat_exchanger.uf2 release/
+          # BIN files - for OTA updates (raw binary format)
+          cp src/pico/build/brewos_dual_boiler.bin release/
+          cp src/pico/build/brewos_single_boiler.bin release/
+          cp src/pico/build/brewos_heat_exchanger.bin release/
 
           # Copy ESP32 firmware and filesystem
           cp src/esp32/.pio/build/esp32s3/firmware.bin release/brewos_esp32.bin
@@ -177,6 +182,9 @@ jobs:
             release/brewos_dual_boiler.uf2
             release/brewos_single_boiler.uf2
             release/brewos_heat_exchanger.uf2
+            release/brewos_dual_boiler.bin
+            release/brewos_single_boiler.bin
+            release/brewos_heat_exchanger.bin
             release/brewos_esp32.bin
             release/brewos_esp32_littlefs.bin
             release/SHA256SUMS.txt
@@ -191,9 +199,12 @@ jobs:
 
             | File | Description |
             |------|-------------|
-            | `brewos_dual_boiler.uf2` | Pico firmware for dual boiler machines (ECM Synchronika, Profitec Pro 700) |
-            | `brewos_single_boiler.uf2` | Pico firmware for single boiler machines (Rancilio Silvia, Gaggia Classic) |
-            | `brewos_heat_exchanger.uf2` | Pico firmware for heat exchanger machines |
+            | `brewos_dual_boiler.uf2` | Pico firmware for dual boiler machines - USB flash |
+            | `brewos_single_boiler.uf2` | Pico firmware for single boiler machines - USB flash |
+            | `brewos_heat_exchanger.uf2` | Pico firmware for heat exchanger machines - USB flash |
+            | `brewos_dual_boiler.bin` | Pico firmware for dual boiler machines - OTA update |
+            | `brewos_single_boiler.bin` | Pico firmware for single boiler machines - OTA update |
+            | `brewos_heat_exchanger.bin` | Pico firmware for heat exchanger machines - OTA update |
             | `brewos_esp32.bin` | ESP32 firmware (main application) |
             | `brewos_esp32_littlefs.bin` | ESP32 filesystem image (web UI) |
 

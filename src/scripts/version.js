@@ -188,9 +188,9 @@ function writeVersionManifest(firmwareVersion, protocolVersion) {
     },
     // Pico firmware files for different machine types
     pico: {
-      dual_boiler: `${baseUrl}/brewos_dual_boiler.uf2`,
-      single_boiler: `${baseUrl}/brewos_single_boiler.uf2`,
-      heat_exchanger: `${baseUrl}/brewos_heat_exchanger.uf2`,
+      dual_boiler: `${baseUrl}/brewos_dual_boiler.bin`,
+      single_boiler: `${baseUrl}/brewos_single_boiler.bin`,
+      heat_exchanger: `${baseUrl}/brewos_heat_exchanger.bin`,
     },
     // Metadata
     generatedAt: new Date().toISOString(),

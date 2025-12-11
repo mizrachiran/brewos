@@ -92,9 +92,11 @@
 #define GITHUB_ESP32_LITTLEFS_ASSET "brewos_esp32_littlefs.bin"
 
 // Pico firmware assets by machine type (UF2 format)
-#define GITHUB_PICO_DUAL_BOILER_ASSET     "brewos_dual_boiler.uf2"
-#define GITHUB_PICO_SINGLE_BOILER_ASSET   "brewos_single_boiler.uf2"
-#define GITHUB_PICO_HEAT_EXCHANGER_ASSET  "brewos_heat_exchanger.uf2"
+// Use .bin files for OTA (raw binary format that bootloader can flash directly)
+// UF2 format is only for USB drag-and-drop flashing
+#define GITHUB_PICO_DUAL_BOILER_ASSET     "brewos_dual_boiler.bin"
+#define GITHUB_PICO_SINGLE_BOILER_ASSET   "brewos_single_boiler.bin"
+#define GITHUB_PICO_HEAT_EXCHANGER_ASSET  "brewos_heat_exchanger.bin"
 
 // GitHub API URL template: https://api.github.com/repos/OWNER/REPO/releases/tags/TAG
 // Asset download URL: https://github.com/OWNER/REPO/releases/download/TAG/ASSET

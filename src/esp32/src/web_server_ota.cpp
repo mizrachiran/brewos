@@ -692,49 +692,42 @@ bool WebServer::startPicoGitHubOTA(const String& version) {
         return false;
     }
     
-    // IMPORTANT: Do NOT manually reset the Pico!
-    // The bootloader will:
-    // 1. Copy firmware from staging area to main area (takes time for ~180KB)
-    // 2. Reboot itself with the new firmware (watchdog_reboot)
-    // If we reset too early, we interrupt the copy and the Pico boots with old firmware!
+    // After streaming, the Pico bootloader will:
+    // 1. Send success ACK (0xAA 0x55 0x00)
+    // 2. Copy firmware from staging area to main area (~2-3 seconds for 180KB)
+    // 3. Reboot itself with watchdog_reboot()
+    // We MUST wait for the copy to complete before resetting!
     
     broadcastOtaProgress(&_ws, "flash", 55, "Finalizing update...");
     
-    // Resume packet processing to receive boot info from new firmware
+    // Resume packet processing
     _picoUart.resume();
     LOG_I("Resumed UART packet processing");
     
-    // Save current packet count - we'll wait for NEW packets after reboot
-    uint32_t packetsBefore = _picoUart.getPacketsReceived();
+    // Drain any leftover bootloader bytes from UART buffer
+    while (Serial1.available()) {
+        Serial1.read();
+    }
     
-    // The bootloader copy operation takes time:
-    //   - Erasing sectors: ~200-400ms for 512KB
-    //   - Programming pages: ~200-300ms for 512KB
-    //   - Then watchdog_reboot triggers
-    // We need to wait for this to complete AND for new firmware to boot
+    // Wait for bootloader to copy firmware from staging to main flash
+    // This takes ~2-3 seconds, but we wait 5 seconds to be safe
+    LOG_I("Waiting 5 seconds for Pico bootloader to copy firmware...");
+    for (int i = 0; i < 50; i++) {  // 5 seconds
+        delay(100);
+        feedWatchdog();
+    }
     
-    LOG_I("Waiting for Pico to boot with new firmware...");
+    // Reset the Pico to boot with new firmware
+    // The bootloader should have completed the copy by now
+    LOG_I("Resetting Pico to boot with new firmware...");
+    _picoUart.resetPico();
     
-    // Wait for Pico to copy firmware, reboot, and send boot info
-    // This can take 3-5 seconds total
-    unsigned long waitStart = millis();
-    bool picoBooted = false;
-    
-    while (millis() - waitStart < 10000) {  // Up to 10 seconds
+    // Wait for Pico to boot and send boot info
+    LOG_I("Waiting for Pico boot info...");
+    for (int i = 0; i < 30; i++) {  // 3 seconds
         delay(100);
         feedWatchdog();
         _picoUart.loop();  // Process any incoming packets
-        
-        // Check if we received NEW packets (boot info from new firmware)
-        if (_picoUart.getPacketsReceived() > packetsBefore) {
-            LOG_I("Pico booted with new firmware after %lu ms", millis() - waitStart);
-            picoBooted = true;
-            break;
-        }
-    }
-    
-    if (!picoBooted) {
-        LOG_W("Pico boot timeout - may still be starting up");
     }
     
     LOG_I("Pico OTA complete!");

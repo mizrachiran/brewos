@@ -104,6 +104,10 @@ jobs:
           cp src/pico/build/brewos_dual_boiler.uf2 release/
           cp src/pico/build/brewos_single_boiler.uf2 release/
           cp src/pico/build/brewos_heat_exchanger.uf2 release/
+          # BIN files - for OTA updates (raw binary format)
+          cp src/pico/build/brewos_dual_boiler.bin release/
+          cp src/pico/build/brewos_single_boiler.bin release/
+          cp src/pico/build/brewos_heat_exchanger.bin release/
 
           # Copy ESP32 firmware
           cp src/esp32/.pio/build/esp32s3/firmware.bin release/brewos_esp32.bin
@@ -164,6 +168,9 @@ jobs:
               release/brewos_dual_boiler.uf2 \
               release/brewos_single_boiler.uf2 \
               release/brewos_heat_exchanger.uf2 \
+              release/brewos_dual_boiler.bin \
+              release/brewos_single_boiler.bin \
+              release/brewos_heat_exchanger.bin \
               release/brewos_esp32.bin \
               release/brewos_esp32_littlefs.bin \
               release/SHA256SUMS.txt \
@@ -178,6 +185,9 @@ jobs:
               release/brewos_dual_boiler.uf2 \
               release/brewos_single_boiler.uf2 \
               release/brewos_heat_exchanger.uf2 \
+              release/brewos_dual_boiler.bin \
+              release/brewos_single_boiler.bin \
+              release/brewos_heat_exchanger.bin \
               release/brewos_esp32.bin \
               release/brewos_esp32_littlefs.bin \
               release/SHA256SUMS.txt
