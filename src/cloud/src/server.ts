@@ -404,6 +404,25 @@ server.on("upgrade", (request, socket, head) => {
   }
 });
 
+// Helper function to calculate spacing for console output alignment
+function getSpacing(
+  protocol: string,
+  port: string | number,
+  path = "",
+  fixedPadding?: number
+): string {
+  if (fixedPadding !== undefined) {
+    return " ".repeat(Math.max(0, fixedPadding));
+  }
+  // Calculate length of URL: protocol://localhost:port + path
+  const urlLength = `${protocol}://localhost:${port}${path}`.length;
+  // Total content width is 57 chars (59 - 2 for the ║ borders)
+  // The prefix is "║  XXXX:    " which varies by protocol label
+  const labelLength = protocol === "https" || protocol === "wss" ? 10 : 10;
+  const remainingSpace = 57 - labelLength - urlLength;
+  return " ".repeat(Math.max(0, remainingSpace));
+}
+
 // Initialize database and start server
 async function start() {
   try {
