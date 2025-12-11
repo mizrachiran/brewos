@@ -163,12 +163,15 @@ bool PairingManager::registerTokenWithCloud() {
     
     // Convert WebSocket URL to HTTP URL
     // wss://cloud.brewos.io -> https://cloud.brewos.io
-    // ws://cloud.brewos.io -> http://cloud.brewos.io
-    String httpUrl = _cloudUrl;
-    if (httpUrl.startsWith("wss://")) {
-        httpUrl.replace("wss://", "https://");
-    } else if (httpUrl.startsWith("ws://")) {
-        httpUrl.replace("ws://", "http://");
+    // wss://cloud.brewos.io -> https://cloud.brewos.io
+    // Use substring to avoid replacing occurrences elsewhere in URL
+    String httpUrl;
+    if (_cloudUrl.startsWith("wss://")) {
+        httpUrl = "https://" + _cloudUrl.substring(6); // 6 = length of "wss://"
+    } else if (_cloudUrl.startsWith("ws://")) {
+        httpUrl = "http://" + _cloudUrl.substring(5);  // 5 = length of "ws://"
+    } else {
+        httpUrl = _cloudUrl;
     }
     
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
