@@ -160,6 +160,7 @@ static const char* get_msg_name(uint8_t type) {
         case MSG_CMD_DIAGNOSTICS:         return "DIAGNOSTICS";
         case MSG_CMD_POWER_METER_CONFIG:  return "POWER_METER_CONFIG";
         case MSG_CMD_POWER_METER_DISCOVER: return "POWER_METER_DISCOVER";
+        case MSG_CMD_GET_BOOT:            return "GET_BOOT";
         default:                          return "UNKNOWN";
     }
 }
@@ -433,6 +434,13 @@ void handle_packet(const packet_t* packet) {
             env_resp.steam_heater_current = state.steam_heater_current;
             env_resp.max_combined_current = state.max_combined_current;
             protocol_send_env_config(&env_resp);
+            break;
+        }
+        
+        case MSG_CMD_GET_BOOT: {
+            // ESP32 requested boot info (version, machine type)
+            // Useful when ESP32 missed initial MSG_BOOT
+            protocol_send_boot();
             break;
         }
         

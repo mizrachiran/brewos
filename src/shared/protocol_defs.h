@@ -145,6 +145,7 @@ extern "C" {
 #define MSG_CMD_DIAGNOSTICS     0x20    // Run diagnostic test(s)
 #define MSG_CMD_POWER_METER_CONFIG 0x21 // Configure power meter
 #define MSG_CMD_POWER_METER_DISCOVER 0x22 // Start power meter auto-discovery
+#define MSG_CMD_GET_BOOT        0x23    // Request boot info (version, machine type)
 
 // =============================================================================
 // Alarm Codes

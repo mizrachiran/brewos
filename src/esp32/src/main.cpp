@@ -899,6 +899,24 @@ void setup() {
         }
     }
     
+    // If machine type is still unknown, request boot info from Pico
+    // This handles the case where MSG_BOOT was missed or Pico hasn't sent it yet
+    if (picoConnected && State.getMachineType() == 0) {
+        Serial.println("Machine type unknown - requesting boot info from Pico...");
+        Serial.flush();
+        if (picoUart->requestBootInfo()) {
+            // Give Pico time to respond
+            delay(200);
+            picoUart->loop();
+            if (State.getMachineType() != 0) {
+                Serial.printf("Machine type received: %d\n", State.getMachineType());
+            } else {
+                Serial.println("WARNING: Still no machine type after request");
+            }
+        }
+        Serial.flush();
+    }
+    
     // Initialize WiFi callbacks using static function pointers
     // This avoids std::function which allocates in PSRAM and causes InstructionFetchError
     wifiManager->onConnected(onWiFiConnected);
