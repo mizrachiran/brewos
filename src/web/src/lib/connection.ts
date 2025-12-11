@@ -164,7 +164,7 @@ export class Connection implements IConnection {
       // Fallback: use current page URL and convert to wss://
       if (typeof window !== 'undefined') {
         const url = new URL(window.location.href);
-        url.protocol = url.protocol === 'https:' ? 'wss:' : 'wss:'; // Always wss:// for cloud
+        url.protocol = 'wss:'; // Always wss:// for cloud
         url.pathname = '/ws/client';
         url.searchParams.set('token', this.config.authToken || '');
         url.searchParams.set('device', this.config.deviceId || '');
