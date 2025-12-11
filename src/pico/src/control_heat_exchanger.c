@@ -92,6 +92,8 @@ void control_init_machine(void) {
         
         DEBUG_PRINT("  Control mode: %d\n", hx_config->control_mode);
         DEBUG_PRINT("  Steam setpoint: %.1fC\n", hx_config->steam_setpoint);
+        DEBUG_PRINT("  Target group temp: %.1fC\n", hx_config->group_setpoint);
+        DEBUG_PRINT("  Ready state config: %d\n", hx_config->ready_state_config);
     } else {
         // Default to temperature control
         g_hx_control_mode = HX_CONTROL_TEMPERATURE;
