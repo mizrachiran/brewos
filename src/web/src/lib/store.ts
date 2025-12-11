@@ -1061,6 +1061,20 @@ export const useStore = create<BrewOSState>()(
                 (data.preinfusionPauseMs as number) ??
                 state.preinfusion.pauseTimeMs,
             },
+            // Update temperature setpoints from saved settings
+            temps: {
+              ...state.temps,
+              brew: {
+                ...state.temps.brew,
+                setpoint:
+                  (data.brewSetpoint as number) ?? state.temps.brew.setpoint,
+              },
+              steam: {
+                ...state.temps.steam,
+                setpoint:
+                  (data.steamSetpoint as number) ?? state.temps.steam.setpoint,
+              },
+            },
             // Update preferences from ESP32 (synced across devices)
             preferences: prefsData
               ? {

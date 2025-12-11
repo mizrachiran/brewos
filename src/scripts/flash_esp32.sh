@@ -394,10 +394,16 @@ fi
 # Track flash success across both paths
 FLASH_SUCCESS=false
 
-# OTA data partition address and size (from ESP32 partition table)
+# OTA data partition address and size (from default_8MB.csv partition table)
 # This partition stores which OTA slot to boot from
-OTADATA_ADDR="0xd000"
+# IMPORTANT: Must match partition table - default_8MB.csv uses 0xe000
+OTADATA_ADDR="0xe000"
 OTADATA_SIZE="0x2000"
+
+# OTA app1 partition address and size (from default_8MB.csv)
+# This partition may contain old firmware from previous OTA that causes fallback issues
+APP1_ADDR="0x340000"
+APP1_SIZE="0x330000"
 
 # Factory reset: erase entire flash first
 if [ "$FACTORY_RESET" = true ]; then
@@ -412,16 +418,25 @@ if [ "$FACTORY_RESET" = true ]; then
     echo -e "${GREEN}✓ Flash erased successfully${NC}"
     echo ""
 else
-    # Always erase OTA data partition to ensure new firmware boots
-    # This clears the boot selection, forcing boot from the primary app partition
+    # Erase OTA data partition to clear boot selection
     echo -e "${YELLOW}🔄 Erasing OTA data partition (ensures fresh firmware boots)...${NC}"
     echo -e "${BLUE}Erasing ${OTADATA_SIZE} bytes at ${OTADATA_ADDR}...${NC}"
     
     if ! "$PYTHON_CMD" "$ESPTOOL_PY" --chip esp32s3 --port "$PORT" erase_region "$OTADATA_ADDR" "$OTADATA_SIZE" 2>&1; then
         echo -e "${YELLOW}⚠ OTA data erase failed (may need bootloader mode), continuing...${NC}"
-        # Don't exit - this is not fatal, the device may not be in bootloader mode yet
     else
         echo -e "${GREEN}✓ OTA data partition erased${NC}"
+    fi
+    
+    # ALSO erase app1 partition to remove old OTA firmware
+    # This prevents fallback to old firmware if OTA crashes
+    echo -e "${YELLOW}🔄 Erasing OTA app1 partition (removes old OTA firmware)...${NC}"
+    echo -e "${BLUE}Erasing ${APP1_SIZE} bytes at ${APP1_ADDR}...${NC}"
+    
+    if ! "$PYTHON_CMD" "$ESPTOOL_PY" --chip esp32s3 --port "$PORT" erase_region "$APP1_ADDR" "$APP1_SIZE" 2>&1; then
+        echo -e "${YELLOW}⚠ App1 erase failed, continuing...${NC}"
+    else
+        echo -e "${GREEN}✓ App1 partition erased${NC}"
     fi
     echo ""
 fi

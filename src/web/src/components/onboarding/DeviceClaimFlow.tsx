@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/Button";
 import {
   ScanStep,
@@ -49,9 +49,12 @@ export function DeviceClaimFlow({
   const [successDeviceName, setSuccessDeviceName] = useState<
     string | undefined
   >();
+  
+  // Track if we should auto-validate after QR scan
+  const pendingScanValidation = useRef(false);
 
   // Validate the code first (without claiming)
-  const handleValidate = async () => {
+  const handleValidate = useCallback(async (fromStep?: "scan" | "manual") => {
     if (!claimCode) return;
 
     setValidating(true);
@@ -63,8 +66,9 @@ export function DeviceClaimFlow({
       if (parsed.manualCode || (parsed.deviceId && parsed.token)) {
         // Code format is valid, move to name step
         setParsedCode(parsed);
-        if (step === "scan" || step === "manual") {
-          setPreviousStep(step);
+        // Store which step we came from (for back navigation)
+        if (fromStep) {
+          setPreviousStep(fromStep);
         }
         setStep("name");
       } else {
@@ -75,7 +79,16 @@ export function DeviceClaimFlow({
     }
 
     setValidating(false);
-  };
+  }, [claimCode]);
+
+  // Auto-validate when QR scan succeeds - triggered by pendingScanValidation ref
+  useEffect(() => {
+    if (pendingScanValidation.current && claimCode && step === "scan") {
+      pendingScanValidation.current = false;
+      // Pass the current step to handleValidate so it knows where to go back to
+      handleValidate("scan");
+    }
+  }, [claimCode, step, handleValidate]);
 
   // Complete the claim with machine name
   const handleClaim = async () => {
@@ -198,6 +211,8 @@ export function DeviceClaimFlow({
       {step === "scan" && (
         <ScanStep
           onScan={(result) => {
+            // Mark that we need to auto-validate once claimCode updates
+            pendingScanValidation.current = true;
             setClaimCode(result);
             setError("");
           }}
@@ -206,7 +221,7 @@ export function DeviceClaimFlow({
           }}
           error={error}
           onBack={showTabs ? undefined : handleClose}
-          onValidate={handleValidate}
+          onValidate={() => handleValidate("scan")}
           disabled={!claimCode || validating}
           loading={validating}
         />
@@ -218,7 +233,7 @@ export function DeviceClaimFlow({
           onClaimCodeChange={setClaimCode}
           error={error}
           onBack={showTabs ? undefined : handleClose}
-          onValidate={handleValidate}
+          onValidate={() => handleValidate("manual")}
           disabled={!claimCode || validating}
           loading={validating}
         />

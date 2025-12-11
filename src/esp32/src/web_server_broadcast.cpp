@@ -473,6 +473,10 @@ void WebServer::broadcastDeviceInfo() {
     doc["mainsVoltage"] = powerSettings.mainsVoltage;
     doc["maxCurrent"] = powerSettings.maxCurrent;
     
+    // Include temperature setpoints (from NVS, used as initial values before Pico reports)
+    doc["brewSetpoint"] = tempSettings.brewSetpoint;
+    doc["steamSetpoint"] = tempSettings.steamSetpoint;
+    
     // Include eco mode settings
     doc["ecoBrewTemp"] = tempSettings.ecoBrewTemp;
     doc["ecoTimeoutMinutes"] = tempSettings.ecoTimeoutMinutes;

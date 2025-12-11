@@ -100,6 +100,12 @@ void WebServer::processCommand(JsonDocument& doc) {
             float brewTemp = doc["brewTemp"] | 80.0f;
             int timeout = doc["timeout"] | 30;
             
+            // Save to State and NVS first
+            auto& tempSettings = State.settings().temperature;
+            tempSettings.ecoBrewTemp = brewTemp;
+            tempSettings.ecoTimeoutMinutes = (uint16_t)timeout;
+            State.saveTemperatureSettings();
+            
             // Convert to Pico format: [enabled:1][eco_brew_temp:2][timeout_minutes:2]
             uint8_t payload[5];
             payload[0] = enabled ? 1 : 0;
@@ -110,10 +116,12 @@ void WebServer::processCommand(JsonDocument& doc) {
             payload[4] = timeout & 0xFF;
             
             if (_picoUart.sendCommand(MSG_CMD_SET_ECO, payload, 5)) {
-                broadcastLogLevel("info", "Eco mode config sent: enabled=%s, temp=%.1f°C, timeout=%dmin", 
-                         enabled ? "true" : "false", brewTemp, timeout);
+                broadcastLogLevel("info", "Eco mode config saved: temp=%.1f°C, timeout=%dmin", 
+                         brewTemp, timeout);
+                // Broadcast updated device info so UI refreshes
+                broadcastDeviceInfo();
             } else {
-                broadcastLogLevel("error", "Failed to send eco config");
+                broadcastLogLevel("error", "Failed to send eco config to device");
             }
         }
         else if (cmd == "enter_eco") {
@@ -139,14 +147,25 @@ void WebServer::processCommand(JsonDocument& doc) {
             String boiler = doc["boiler"] | "brew";
             float temp = doc["temp"] | 0.0f;
             
+            // Save to State and NVS first
+            auto& tempSettings = State.settings().temperature;
+            if (boiler == "steam") {
+                tempSettings.steamSetpoint = temp;
+            } else {
+                tempSettings.brewSetpoint = temp;
+            }
+            State.saveTemperatureSettings();
+            
             uint8_t payload[5];
             payload[0] = (boiler == "steam") ? 0x02 : 0x01;
             memcpy(&payload[1], &temp, sizeof(float));
             if (_picoUart.sendCommand(MSG_CMD_SET_TEMP, payload, 5)) {
                 // Pre-format message to avoid String.c_str() issues
                 char tempMsg[64];
-                snprintf(tempMsg, sizeof(tempMsg), "%s temp set to %.1f°C", boiler.c_str(), temp);
+                snprintf(tempMsg, sizeof(tempMsg), "%s temp saved: %.1f°C", boiler.c_str(), temp);
                 broadcastLog(tempMsg);
+                // Broadcast updated device info so UI refreshes
+                broadcastDeviceInfo();
             }
         }
         else if (cmd == "set_mode") {
@@ -413,6 +432,8 @@ void WebServer::processCommand(JsonDocument& doc) {
                     
                     broadcastLogLevel("info", "Pre-infusion settings saved: %s, on=%dms, pause=%dms", 
                              enabled ? "enabled" : "disabled", onTimeMs, pauseTimeMs);
+                    // Broadcast updated device info so UI refreshes
+                    broadcastDeviceInfo();
                 } else {
                     broadcastLogLevel("error", "Failed to send pre-infusion config to Pico");
                 }
@@ -436,7 +457,9 @@ void WebServer::processCommand(JsonDocument& doc) {
             State.settings().power.maxCurrent = (float)maxCurrent;
             State.savePowerSettings();
             
-            broadcastLog("Power settings updated: %dV, %.1fA", voltage, maxCurrent);
+            broadcastLog("Power settings saved: %dV, %dA", voltage, maxCurrent);
+            // Broadcast updated device info so UI refreshes
+            broadcastDeviceInfo();
         }
         // Power meter configuration
         else if (cmd == "configure_power_meter") {
@@ -576,12 +599,26 @@ void WebServer::processCommand(JsonDocument& doc) {
                 strncpy(networkSettings.hostname, doc["name"].as<const char*>(), sizeof(networkSettings.hostname) - 1);
                 networkSettings.hostname[sizeof(networkSettings.hostname) - 1] = '\0';
             }
+            // Accept both "brand" and "machineBrand" field names for compatibility
+            const char* brandValue = nullptr;
             if (!doc["brand"].isNull()) {
-                strncpy(machineInfo.machineBrand, doc["brand"].as<const char*>(), sizeof(machineInfo.machineBrand) - 1);
+                brandValue = doc["brand"].as<const char*>();
+            } else if (!doc["machineBrand"].isNull()) {
+                brandValue = doc["machineBrand"].as<const char*>();
+            }
+            if (brandValue) {
+                strncpy(machineInfo.machineBrand, brandValue, sizeof(machineInfo.machineBrand) - 1);
                 machineInfo.machineBrand[sizeof(machineInfo.machineBrand) - 1] = '\0';
             }
+            // Accept both "model" and "machineModel" field names for compatibility
+            const char* modelValue = nullptr;
             if (!doc["model"].isNull()) {
-                strncpy(machineInfo.machineModel, doc["model"].as<const char*>(), sizeof(machineInfo.machineModel) - 1);
+                modelValue = doc["model"].as<const char*>();
+            } else if (!doc["machineModel"].isNull()) {
+                modelValue = doc["machineModel"].as<const char*>();
+            }
+            if (modelValue) {
+                strncpy(machineInfo.machineModel, modelValue, sizeof(machineInfo.machineModel) - 1);
                 machineInfo.machineModel[sizeof(machineInfo.machineModel) - 1] = '\0';
             }
             if (!doc["machineType"].isNull()) {

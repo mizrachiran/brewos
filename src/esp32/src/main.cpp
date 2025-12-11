@@ -395,6 +395,61 @@ static void onPicoPacket(const PicoPacket& packet) {
                 }
             }
             
+            // Send saved temperature setpoints to Pico after boot
+            // This ensures Pico uses user's saved settings instead of defaults
+            const auto& tempSettings = State.settings().temperature;
+            if (tempSettings.brewSetpoint > 0) {
+                uint8_t brewPayload[5];
+                brewPayload[0] = 0x01;  // BOILER_BREW
+                memcpy(&brewPayload[1], &tempSettings.brewSetpoint, sizeof(float));
+                if (picoUart->sendCommand(MSG_CMD_SET_TEMP, brewPayload, 5)) {
+                    LOG_I("Sent brew setpoint to Pico: %.1f°C", tempSettings.brewSetpoint);
+                }
+            }
+            if (tempSettings.steamSetpoint > 0) {
+                uint8_t steamPayload[5];
+                steamPayload[0] = 0x02;  // BOILER_STEAM
+                memcpy(&steamPayload[1], &tempSettings.steamSetpoint, sizeof(float));
+                if (picoUart->sendCommand(MSG_CMD_SET_TEMP, steamPayload, 5)) {
+                    LOG_I("Sent steam setpoint to Pico: %.1f°C", tempSettings.steamSetpoint);
+                }
+            }
+            
+            // Send eco mode config to Pico
+            if (tempSettings.ecoBrewTemp > 0 && tempSettings.ecoTimeoutMinutes > 0) {
+                uint8_t ecoPayload[5];
+                ecoPayload[0] = 1;  // enabled
+                int16_t tempScaled = (int16_t)(tempSettings.ecoBrewTemp * 10);
+                ecoPayload[1] = (tempScaled >> 8) & 0xFF;
+                ecoPayload[2] = tempScaled & 0xFF;
+                ecoPayload[3] = (tempSettings.ecoTimeoutMinutes >> 8) & 0xFF;
+                ecoPayload[4] = tempSettings.ecoTimeoutMinutes & 0xFF;
+                if (picoUart->sendCommand(MSG_CMD_SET_ECO, ecoPayload, 5)) {
+                    LOG_I("Sent eco config to Pico: %.1f°C, %d min", 
+                          tempSettings.ecoBrewTemp, tempSettings.ecoTimeoutMinutes);
+                }
+            }
+            
+            // Send pre-infusion config to Pico
+            const auto& brewSettings = State.settings().brew;
+            if (brewSettings.preinfusionTime > 0 || brewSettings.preinfusionPressure > 0) {
+                bool enabled = brewSettings.preinfusionPressure > 0;
+                uint16_t onTimeMs = (uint16_t)(brewSettings.preinfusionTime * 1000);
+                uint16_t pauseTimeMs = enabled ? 5000 : 0;  // Default pause time
+                
+                uint8_t preinfPayload[6];
+                preinfPayload[0] = CONFIG_PREINFUSION;
+                preinfPayload[1] = enabled ? 1 : 0;
+                preinfPayload[2] = onTimeMs & 0xFF;
+                preinfPayload[3] = (onTimeMs >> 8) & 0xFF;
+                preinfPayload[4] = pauseTimeMs & 0xFF;
+                preinfPayload[5] = (pauseTimeMs >> 8) & 0xFF;
+                if (picoUart->sendCommand(MSG_CMD_CONFIG, preinfPayload, 6)) {
+                    LOG_I("Sent pre-infusion config to Pico: %s, on=%dms, pause=%dms",
+                          enabled ? "enabled" : "disabled", onTimeMs, pauseTimeMs);
+                }
+            }
+            
             break;
         }
             
@@ -900,19 +955,31 @@ void setup() {
     }
     
     // If machine type is still unknown, request boot info from Pico
-    // This handles the case where MSG_BOOT was missed or Pico hasn't sent it yet
+    // This handles the case where MSG_BOOT was missed (Pico was already running before ESP32)
     if (picoConnected && State.getMachineType() == 0) {
         Serial.println("Machine type unknown - requesting boot info from Pico...");
         Serial.flush();
-        if (picoUart->requestBootInfo()) {
-            // Give Pico time to respond
-            delay(200);
-            picoUart->loop();
-            if (State.getMachineType() != 0) {
-                Serial.printf("Machine type received: %d\n", State.getMachineType());
-            } else {
-                Serial.println("WARNING: Still no machine type after request");
+        
+        // Try multiple times since Pico might be busy
+        for (int attempt = 0; attempt < 5 && State.getMachineType() == 0; attempt++) {
+            if (picoUart->requestBootInfo()) {
+                // Wait up to 500ms for response, processing packets
+                for (int i = 0; i < 50 && State.getMachineType() == 0; i++) {
+                    delay(10);
+                    picoUart->loop();
+                }
             }
+            if (State.getMachineType() == 0) {
+                Serial.printf("Attempt %d: No boot info received\n", attempt + 1);
+                Serial.flush();
+            }
+        }
+        
+        if (State.getMachineType() != 0) {
+            Serial.printf("Machine type received: %d\n", State.getMachineType());
+        } else {
+            Serial.println("WARNING: Could not get machine type from Pico");
+            Serial.println("OTA updates will wait for Pico to report its type");
         }
         Serial.flush();
     }

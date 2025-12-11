@@ -269,9 +269,20 @@ static void enableWatchdogAfterOTA() {
  * Broadcast OTA progress - uses stack allocation to avoid PSRAM issues
  */
 static void broadcastOtaProgress(AsyncWebSocket* ws, const char* stage, int progress, const char* message) {
-    if (!ws) return;
+    if (!ws) {
+        LOG_W("OTA progress: ws is null!");
+        return;
+    }
     
     feedWatchdog();  // Don't let broadcast block watchdog
+    
+    size_t clientCount = ws->count();
+    LOG_I("OTA broadcast: stage=%s, progress=%d, clients=%zu", stage, progress, clientCount);
+    
+    if (clientCount == 0) {
+        LOG_W("No WebSocket clients connected for OTA progress");
+        return;
+    }
     
     #pragma GCC diagnostic push
     #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
@@ -288,7 +299,10 @@ static void broadcastOtaProgress(AsyncWebSocket* ws, const char* stage, int prog
     if (jsonBuffer) {
         serializeJson(doc, jsonBuffer, jsonSize);
         ws->textAll(jsonBuffer);
+        LOG_D("OTA progress sent: %s", jsonBuffer);
         free(jsonBuffer);
+    } else {
+        LOG_E("Failed to allocate buffer for OTA progress");
     }
     
     feedWatchdog();
@@ -964,10 +978,32 @@ void WebServer::startCombinedOTA(const String& version) {
     // Validate prerequisites BEFORE pausing services
     uint8_t machineType = State.getMachineType();
     if (machineType == 0) {
-        LOG_E("Machine type unknown");
-        broadcastLogLevel("error", "Update error: Please ensure machine is powered on and connected");
-        broadcastOtaProgress(&_ws, "error", 0, "Device not ready");
-        return;
+        // Machine type unknown - try requesting from Pico (handles case where Pico booted before ESP32)
+        LOG_I("Machine type unknown, requesting from Pico...");
+        broadcastLog("Waiting for device connection...");
+        
+        // Try up to 3 times with 500ms delay between attempts
+        for (int attempt = 0; attempt < 3 && machineType == 0; attempt++) {
+            if (_picoUart.requestBootInfo()) {
+                // Wait for response
+                for (int i = 0; i < 10 && machineType == 0; i++) {
+                    delay(100);
+                    _picoUart.loop();
+                    machineType = State.getMachineType();
+                }
+            }
+            if (machineType == 0) {
+                LOG_W("Attempt %d: No response from Pico", attempt + 1);
+            }
+        }
+        
+        if (machineType == 0) {
+            LOG_E("Machine type still unknown after 3 attempts");
+            broadcastLogLevel("error", "Update error: Please ensure machine is powered on and connected");
+            broadcastOtaProgress(&_ws, "error", 0, "Device not ready");
+            return;
+        }
+        LOG_I("Machine type received: %d", machineType);
     }
     
     // Pause ALL background services to prevent interference during OTA

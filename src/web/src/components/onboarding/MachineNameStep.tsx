@@ -86,10 +86,10 @@ export function MachineNameStep({
 
   // Portrait layout
   return (
-    <div className="py-2 xs:py-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="py-3 xs:py-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header */}
       <div className="text-center mb-4 xs:mb-8">
-        <div className="w-10 h-10 xs:w-14 xs:h-14 bg-accent/10 rounded-xl xs:rounded-2xl flex items-center justify-center mx-auto mb-2 xs:mb-4">
+        <div className="w-10 h-10 xs:w-14 xs:h-14 bg-accent/10 rounded-xl xs:rounded-2xl flex items-center justify-center mx-auto mb-2 xs:mb-4 border border-accent/20 shadow-sm">
           <Coffee className="w-5 h-5 xs:w-7 xs:h-7 text-accent" />
         </div>
         <h2 className="text-xl xs:text-3xl font-bold text-theme mb-1 xs:mb-2">Name Your Machine</h2>
