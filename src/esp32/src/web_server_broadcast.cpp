@@ -17,10 +17,6 @@ static void broadcastLogInternal(AsyncWebSocket* ws, CloudConnection* cloudConne
     
     // Additional safety: check if WebSocket is in a valid state
     // Accessing invalid WebSocket can cause LoadProhibited crashes
-    if (reinterpret_cast<uintptr_t>(ws) < 0x1000) {
-        // Invalid pointer (likely null or corrupted)
-        return;
-    }
     
     // Use stack allocation to avoid PSRAM crashes
     #pragma GCC diagnostic push
