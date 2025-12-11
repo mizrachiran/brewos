@@ -46,7 +46,19 @@ void PowerMeterManager::begin() {
     }
 }
 
+void PowerMeterManager::setEnabled(bool enabled) {
+    if (enabled != _enabled) {
+        _enabled = enabled;
+        LOG_I("Power Meter %s", enabled ? "enabled" : "disabled");
+    }
+}
+
 void PowerMeterManager::loop() {
+    // Skip processing if disabled (during OTA)
+    if (!_enabled) {
+        return;
+    }
+    
     // Poll MQTT meter if active
     if (_mqttMeter && (millis() - _lastPollTime) >= POLL_INTERVAL_MS) {
         _lastPollTime = millis();

@@ -47,6 +47,13 @@ bool NotificationManager::begin() {
     return true;
 }
 
+void NotificationManager::setEnabled(bool enabled) {
+    if (enabled != _enabled) {
+        _enabled = enabled;
+        LOG_I("Notifications %s", enabled ? "enabled" : "disabled");
+    }
+}
+
 // =============================================================================
 // Create Notifications
 // =============================================================================
@@ -327,6 +334,11 @@ void NotificationManager::loadPreferences() {
 // =============================================================================
 
 void NotificationManager::send(const Notification& notif) {
+    // Skip sending if disabled (during OTA)
+    if (!_enabled) {
+        return;
+    }
+    
     // Always send to WebSocket (UI)
     if (_onWebSocket) {
         _onWebSocket(notif);

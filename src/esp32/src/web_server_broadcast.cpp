@@ -141,6 +141,11 @@ void WebServer::broadcastRaw(const char* json) {
 // Unified Status Broadcast - Single comprehensive message
 // =============================================================================
 void WebServer::broadcastFullStatus(const ui_state_t& state) {
+    // Skip status broadcasts during OTA to prevent WebSocket queue overflow
+    if (_otaInProgress) {
+        return;
+    }
+    
     // Safety check - only broadcast if we have clients
     if (_ws.count() == 0 && (!_cloudConnection || !_cloudConnection->isConnected())) {
         return;  // No one to send to
@@ -504,6 +509,11 @@ void WebServer::broadcastDeviceInfo() {
 }
 
 void WebServer::broadcastPowerMeterStatus() {
+    // Skip during OTA to prevent WebSocket queue overflow
+    if (_otaInProgress) {
+        return;
+    }
+    
     // Use stack allocation to avoid PSRAM crashes
     #pragma GCC diagnostic push
     #pragma GCC diagnostic ignored "-Wdeprecated-declarations"

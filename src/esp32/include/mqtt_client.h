@@ -91,6 +91,12 @@ public:
     bool isConnected() const { return _connected; }
     
     /**
+     * Enable/disable MQTT (for OTA updates)
+     * When disabled, disconnects and prevents reconnection
+     */
+    void setEnabled(bool enabled);
+    
+    /**
      * Publish machine status
      */
     void publishStatus(const ui_state_t& state);

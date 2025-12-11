@@ -35,6 +35,13 @@ public:
     void begin();
     void loop();
     
+    /**
+     * Enable/disable power meter polling (for OTA updates)
+     * When disabled, stops all HTTP/MQTT polling
+     */
+    void setEnabled(bool enabled);
+    bool isEnabled() const { return _enabled; }
+    
     // Configuration
     bool setSource(PowerMeterSource source);
     bool configureHardware();  // Hardware meters configured on Pico
@@ -94,6 +101,9 @@ private:
     uint16_t _lastDayOfYear = 0; // Track day changes (0-365)
     uint16_t _lastYear = 0;      // Track year for rollover handling
     bool _dayStartSet = false;   // True once we've captured day start
+    
+    // OTA pause flag
+    bool _enabled = true;
 };
 
 // Global instance

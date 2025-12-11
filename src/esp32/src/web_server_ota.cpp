@@ -1,21 +1,239 @@
 #include "web_server.h"
 #include "config.h"
 #include "pico_uart.h"
+#include "cloud_connection.h"
+#include "mqtt_client.h"
+#include "scale/scale_manager.h"
+#include "power_meter/power_meter_manager.h"
+#include "notifications/notification_manager.h"
 #include "state/state_manager.h"
 #include <LittleFS.h>
 #include <HTTPClient.h>
 #include <Update.h>
 #include <esp_heap_caps.h>
 #include <esp_partition.h>
+#include <esp_task_wdt.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <ArduinoJson.h>
 
+// External references to global service instances (for pausing during OTA)
+extern MQTTClient* mqttClient;
+extern ScaleManager* scaleManager;
+extern PowerMeterManager* powerMeterManager;
+extern NotificationManager* notificationManager;
+
 // =============================================================================
-// GitHub OTA - Download and install ESP32 firmware from GitHub releases
+// Forward Declarations
 // =============================================================================
 
-// Helper to broadcast OTA progress - uses stack allocation
+static void disableWatchdogForOTA();
+static void enableWatchdogAfterOTA();
+static inline void feedWatchdog();
+static void broadcastOtaProgress(AsyncWebSocket* ws, const char* stage, int progress, const char* message);
+static void handleOTAFailure(AsyncWebSocket* ws);
+
+// =============================================================================
+// OTA Service Control - Pause/Resume background services during update
+// =============================================================================
+
+/**
+ * Pause all background services before OTA
+ * This prevents network/BLE interference and SSL crashes during update
+ * 
+ * Services paused:
+ * - CloudConnection: SSL WebSocket to cloud server
+ * - MQTTClient: MQTT broker connection
+ * - ScaleManager: BLE scanning/connection (interferes with WiFi)
+ * - PowerMeterManager: HTTP polling to Shelly/Tasmota
+ * - NotificationManager: Push notifications to cloud
+ * 
+ * Services NOT paused (needed for OTA):
+ * - WiFiManager: Network connectivity
+ * - WebServer: Serves OTA UI and handles update
+ * - PicoUART: Communication with Pico for Pico OTA
+ */
+static void pauseServicesForOTA(CloudConnection* cloudConnection) {
+    LOG_I("Pausing services for OTA...");
+    
+    // 0. Disable watchdog - OTA has long-blocking operations
+    disableWatchdogForOTA();
+    
+    // 1. Pause cloud connection (SSL WebSocket)
+    if (cloudConnection) {
+        LOG_I("  - Pausing cloud connection...");
+        cloudConnection->setEnabled(false);
+    }
+    
+    // 2. Pause MQTT client
+    if (mqttClient) {
+        LOG_I("  - Pausing MQTT...");
+        mqttClient->setEnabled(false);
+    }
+    
+    // 3. Stop BLE scale (can interfere with WiFi)
+    if (scaleManager) {
+        LOG_I("  - Stopping BLE scale...");
+        scaleManager->end();
+    }
+    
+    // 4. Pause power meter polling (HTTP requests)
+    if (powerMeterManager) {
+        LOG_I("  - Pausing power meter...");
+        powerMeterManager->setEnabled(false);
+    }
+    
+    // 5. Pause notifications (prevents cloud push attempts)
+    if (notificationManager) {
+        LOG_I("  - Pausing notifications...");
+        notificationManager->setEnabled(false);
+    }
+    
+    // Give all services time to cleanly shut down
+    for (int i = 0; i < 5; i++) {
+        delay(100);
+        yield();
+    }
+    
+    LOG_I("All services paused for OTA");
+}
+
+/**
+ * Handle OTA failure - restart device to ensure clean state
+ * After a failed OTA attempt, the device may be in an inconsistent state.
+ * Restarting ensures all services are properly re-initialized.
+ */
+static void handleOTAFailure(AsyncWebSocket* ws) {
+    LOG_E("OTA failed - restarting device to restore clean state");
+    
+    // Broadcast failure to UI
+    if (ws) {
+        broadcastOtaProgress(ws, "error", 0, "Update failed - restarting...");
+    }
+    
+    // Give time for the error message to be sent
+    for (int i = 0; i < 20; i++) {
+        delay(100);
+        yield();
+    }
+    
+    // Restart the device - this is the safest way to recover
+    ESP.restart();
+}
+
+// =============================================================================
+// OTA Constants and Configuration
+// =============================================================================
+
+// Timeouts (in milliseconds)
+constexpr unsigned long OTA_TOTAL_TIMEOUT_MS = 300000;     // 5 minutes total OTA timeout
+constexpr unsigned long OTA_DOWNLOAD_TIMEOUT_MS = 120000;  // 2 minutes per download
+constexpr unsigned long OTA_HTTP_TIMEOUT_MS = 30000;       // 30 seconds HTTP timeout
+constexpr unsigned long OTA_WATCHDOG_FEED_INTERVAL_MS = 50;// Feed watchdog every 50ms
+
+// Buffer sizes
+constexpr size_t OTA_BUFFER_SIZE = 512;                    // Smaller buffer for more responsive yields
+
+// Retry configuration
+constexpr int OTA_MAX_RETRIES = 3;
+constexpr unsigned long OTA_RETRY_DELAY_MS = 3000;
+
+// =============================================================================
+// OTA Helper Functions
+// =============================================================================
+
+/**
+ * Clean up any leftover OTA files
+ * Called at start and end of OTA process
+ */
+static void cleanupOtaFiles() {
+    if (LittleFS.exists(OTA_FILE_PATH)) {
+        LittleFS.remove(OTA_FILE_PATH);
+        Serial.println("[OTA] Cleaned up temporary firmware file");
+    }
+}
+
+// Track if watchdog is disabled (to avoid reset errors)
+static bool _watchdogDisabled = false;
+
+/**
+ * Feed the watchdog and yield to other tasks
+ * Call this frequently during long operations
+ */
+static inline void feedWatchdog() {
+    yield();
+    // Reset task watchdog only if we haven't disabled it
+    if (!_watchdogDisabled) {
+        esp_task_wdt_reset();
+    }
+}
+
+/**
+ * Disable the Task Watchdog Timer for OTA operations
+ * OTA can involve long-blocking operations (SSL, flash erase) that would trigger WDT
+ * 
+ * We need to disable WDT for multiple tasks:
+ * - Current task (loopTask) - main Arduino loop
+ * - async_tcp task - AsyncWebServer/AsyncTCP runs on CPU 1
+ */
+static void disableWatchdogForOTA() {
+    // Disable watchdog for current task (loopTask)
+    esp_err_t err = esp_task_wdt_delete(NULL);
+    if (err == ESP_OK) {
+        LOG_I("Task watchdog disabled for loopTask");
+    } else if (err == ESP_ERR_NOT_FOUND) {
+        LOG_I("loopTask watchdog not active");
+    }
+    
+    // Try to find and disable watchdog for async_tcp task
+    // This task is created by AsyncTCP library and runs on CPU 1
+    TaskHandle_t asyncTcpTask = xTaskGetHandle("async_tcp");
+    if (asyncTcpTask != NULL) {
+        err = esp_task_wdt_delete(asyncTcpTask);
+        if (err == ESP_OK) {
+            LOG_I("Task watchdog disabled for async_tcp");
+        } else if (err == ESP_ERR_NOT_FOUND) {
+            LOG_I("async_tcp watchdog not active");
+        } else {
+            LOG_W("Could not disable async_tcp watchdog: %d", err);
+        }
+    }
+    
+    // Also try to deinit the entire watchdog timer as a fallback
+    // This is aggressive but ensures no WDT triggers during OTA
+    esp_task_wdt_deinit();
+    LOG_I("Task watchdog fully disabled for OTA");
+    
+    _watchdogDisabled = true;
+}
+
+/**
+ * Re-enable the Task Watchdog Timer after OTA
+ * Note: After successful OTA, the device restarts so this is mainly for failed OTA recovery
+ * We don't fully reinit the WDT - just re-add the current task and let the system recover on reboot
+ */
+static void enableWatchdogAfterOTA() {
+    _watchdogDisabled = false;
+    
+    // Re-add current task to watchdog (best effort)
+    // Full WDT recovery happens on device restart
+    esp_err_t err = esp_task_wdt_add(NULL);
+    if (err == ESP_OK) {
+        LOG_I("Task watchdog re-enabled for current task");
+    } else {
+        // Don't worry about errors - device will restart anyway
+        LOG_D("Watchdog re-enable returned: %d (device will restart)", err);
+    }
+}
+
+/**
+ * Broadcast OTA progress - uses stack allocation to avoid PSRAM issues
+ */
 static void broadcastOtaProgress(AsyncWebSocket* ws, const char* stage, int progress, const char* message) {
     if (!ws) return;
+    
+    feedWatchdog();  // Don't let broadcast block watchdog
+    
     #pragma GCC diagnostic push
     #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     StaticJsonDocument<256> doc;
@@ -33,18 +251,341 @@ static void broadcastOtaProgress(AsyncWebSocket* ws, const char* stage, int prog
         ws->textAll(jsonBuffer);
         free(jsonBuffer);
     }
+    
+    feedWatchdog();
 }
+
+/**
+ * Download a file from URL to LittleFS with proper error handling
+ * Returns true on success, false on failure
+ */
+static bool downloadToFile(const char* url, const char* filePath, 
+                           AsyncWebSocket* ws, int progressStart, int progressEnd,
+                           size_t* outFileSize = nullptr) {
+    LOG_I("Downloading: %s", url);
+    
+    HTTPClient http;
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    http.setTimeout(OTA_HTTP_TIMEOUT_MS);
+    
+    int httpCode = 0;
+    unsigned long downloadStart = millis();
+    
+    // Retry loop for transient errors
+    for (int retry = 0; retry < OTA_MAX_RETRIES; retry++) {
+        feedWatchdog();
+        
+        if (!http.begin(url)) {
+            LOG_E("HTTP begin failed (attempt %d/%d)", retry + 1, OTA_MAX_RETRIES);
+            if (retry < OTA_MAX_RETRIES - 1) {
+                for (int i = 0; i < 30; i++) { delay(100); feedWatchdog(); }
+                continue;
+            }
+            return false;
+        }
+        
+        http.addHeader("User-Agent", "BrewOS-ESP32/" ESP32_VERSION);
+        
+        feedWatchdog();
+        httpCode = http.GET();
+        feedWatchdog();
+        
+        if (httpCode == HTTP_CODE_OK) {
+            break;
+        }
+        
+        LOG_W("HTTP error %d (attempt %d/%d)", httpCode, retry + 1, OTA_MAX_RETRIES);
+        http.end();
+        
+        // Retry on transient errors
+        if ((httpCode == 503 || httpCode == 429 || httpCode == 500) && retry < OTA_MAX_RETRIES - 1) {
+            LOG_I("Retrying in %lu ms...", OTA_RETRY_DELAY_MS);
+            for (unsigned long i = 0; i < OTA_RETRY_DELAY_MS / 100; i++) {
+                delay(100);
+                feedWatchdog();
+            }
+            continue;
+        }
+        
+        return false;
+    }
+    
+    if (httpCode != HTTP_CODE_OK) {
+        LOG_E("HTTP failed after retries: %d", httpCode);
+        return false;
+    }
+    
+    int contentLength = http.getSize();
+    if (contentLength <= 0 || contentLength > OTA_MAX_SIZE) {
+        LOG_E("Invalid content length: %d", contentLength);
+        http.end();
+        return false;
+    }
+    
+    LOG_I("Content length: %d bytes", contentLength);
+    if (outFileSize) *outFileSize = contentLength;
+    
+    // Check available space
+    size_t freeSpace = LittleFS.totalBytes() - LittleFS.usedBytes();
+    if ((size_t)contentLength > freeSpace) {
+        LOG_E("Not enough space: need %d, have %d", contentLength, freeSpace);
+        http.end();
+        return false;
+    }
+    
+    // Delete existing file
+    if (LittleFS.exists(filePath)) {
+        LittleFS.remove(filePath);
+        feedWatchdog();
+    }
+    
+    // Create file
+    File file = LittleFS.open(filePath, "w");
+    feedWatchdog();
+    if (!file) {
+        LOG_E("Failed to create file: %s", filePath);
+        http.end();
+        return false;
+    }
+    
+    // Download to file
+    WiFiClient* stream = http.getStreamPtr();
+    uint8_t buffer[OTA_BUFFER_SIZE];
+    size_t written = 0;
+    int lastProgress = progressStart;
+    unsigned long lastYield = millis();
+    unsigned long lastProgressUpdate = millis();
+    
+    unsigned long lastDataReceived = millis();
+    unsigned long lastConsoleLog = millis();
+    constexpr unsigned long STALL_TIMEOUT_MS = 30000;
+    
+    while (http.connected() && written < (size_t)contentLength) {
+        // Check for overall timeout
+        if (millis() - downloadStart > OTA_DOWNLOAD_TIMEOUT_MS) {
+            LOG_E("Download timeout after %lu ms (wrote %d/%d)", millis() - downloadStart, written, contentLength);
+            file.close();
+            LittleFS.remove(filePath);
+            http.end();
+            return false;
+        }
+        
+        // Check for stall
+        if (millis() - lastDataReceived > STALL_TIMEOUT_MS) {
+            LOG_E("Download stalled - no data for %lu ms (wrote %d/%d)", STALL_TIMEOUT_MS, written, contentLength);
+            file.close();
+            LittleFS.remove(filePath);
+            http.end();
+            return false;
+        }
+        
+        // Feed watchdog frequently
+        if (millis() - lastYield >= OTA_WATCHDOG_FEED_INTERVAL_MS) {
+            feedWatchdog();
+            lastYield = millis();
+        }
+        
+        size_t available = stream->available();
+        if (available > 0) {
+            lastDataReceived = millis();
+            size_t toRead = min(available, sizeof(buffer));
+            size_t bytesRead = stream->readBytes(buffer, toRead);
+            
+            if (bytesRead > 0) {
+                size_t bytesWritten = file.write(buffer, bytesRead);
+                if (bytesWritten != bytesRead) {
+                    LOG_E("Write error: %d/%d bytes (filesystem full?)", bytesWritten, bytesRead);
+                    file.close();
+                    LittleFS.remove(filePath);
+                    http.end();
+                    return false;
+                }
+                written += bytesWritten;
+                
+                // Log to console every 5 seconds
+                if (millis() - lastConsoleLog > 5000) {
+                    int pct = (written * 100) / contentLength;
+                    LOG_I("Download: %d%% (%d/%d bytes)", pct, written, contentLength);
+                    lastConsoleLog = millis();
+                }
+                
+                // Update WebSocket progress (limit frequency to avoid flooding)
+                if (ws && millis() - lastProgressUpdate > 1000) {  // Changed from 500ms to 1000ms
+                    int progress = progressStart + (written * (progressEnd - progressStart)) / contentLength;
+                    if (progress > lastProgress) {
+                        lastProgress = progress;
+                        broadcastOtaProgress(ws, "download", progress, "Downloading...");
+                        lastProgressUpdate = millis();
+                    }
+                }
+            }
+        } else {
+            delay(10);  // Increased from 1ms
+            feedWatchdog();
+        }
+    }
+    
+    file.close();
+    http.end();
+    feedWatchdog();
+    
+    // Verify download complete
+    if (written != (size_t)contentLength) {
+        LOG_E("Download incomplete: %d/%d bytes", written, contentLength);
+        LittleFS.remove(filePath);
+        return false;
+    }
+    
+    // Verify file size matches
+    File verifyFile = LittleFS.open(filePath, "r");
+    if (!verifyFile || verifyFile.size() != (size_t)contentLength) {
+        LOG_E("File verification failed");
+        if (verifyFile) verifyFile.close();
+        LittleFS.remove(filePath);
+        return false;
+    }
+    verifyFile.close();
+    
+    LOG_I("Download complete: %d bytes", written);
+    return true;
+}
+
+// =============================================================================
+// Pico OTA - Download and flash Pico firmware
+// =============================================================================
+
+bool WebServer::startPicoGitHubOTA(const String& version) {
+    LOG_I("Starting Pico GitHub OTA for version: %s", version.c_str());
+    
+    // Get machine type from StateManager
+    uint8_t machineType = State.getMachineType();
+    const char* picoAsset = getPicoAssetName(machineType);
+    
+    if (!picoAsset) {
+        LOG_E("Unknown machine type: %d", machineType);
+        broadcastLogLevel("error", "Update error: Device not ready");
+        broadcastOtaProgress(&_ws, "error", 0, "Device not ready");
+        return false;
+    }
+    
+    LOG_I("Pico asset: %s", picoAsset);
+    
+    // Build URL
+    char tag[32];
+    if (strcmp(version.c_str(), "dev-latest") != 0 && strncmp(version.c_str(), "v", 1) != 0) {
+        snprintf(tag, sizeof(tag), "v%s", version.c_str());
+    } else {
+        strncpy(tag, version.c_str(), sizeof(tag) - 1);
+        tag[sizeof(tag) - 1] = '\0';
+    }
+    
+    char downloadUrl[256];
+    snprintf(downloadUrl, sizeof(downloadUrl), 
+             "https://github.com/" GITHUB_OWNER "/" GITHUB_REPO "/releases/download/%s/%s", 
+             tag, picoAsset);
+    
+    LOG_I("Pico download URL: %s", downloadUrl);
+    
+    // Clean up any leftover files
+    cleanupOtaFiles();
+    
+    // Download firmware
+    broadcastOtaProgress(&_ws, "download", 10, "Downloading Pico firmware...");
+    
+    size_t firmwareSize = 0;
+    if (!downloadToFile(downloadUrl, OTA_FILE_PATH, &_ws, 10, 40, &firmwareSize)) {
+        LOG_E("Pico firmware download failed");
+        broadcastLogLevel("error", "Update error: Download failed");
+        broadcastOtaProgress(&_ws, "error", 0, "Download failed");
+        cleanupOtaFiles();
+        return false;
+    }
+    
+    // Flash to Pico
+    broadcastOtaProgress(&_ws, "flash", 40, "Installing Pico firmware...");
+    
+    File flashFile = LittleFS.open(OTA_FILE_PATH, "r");
+    if (!flashFile) {
+        LOG_E("Failed to open firmware file");
+        broadcastLogLevel("error", "Update error: Cannot read firmware");
+        broadcastOtaProgress(&_ws, "error", 0, "Cannot read firmware");
+        cleanupOtaFiles();
+        return false;
+    }
+    
+    // Send bootloader command
+    broadcastOtaProgress(&_ws, "flash", 42, "Preparing device...");
+    feedWatchdog();
+    
+    if (!_picoUart.sendCommand(MSG_CMD_BOOTLOADER, nullptr, 0)) {
+        LOG_E("Failed to send bootloader command");
+        broadcastLogLevel("error", "Update error: Device not responding");
+        broadcastOtaProgress(&_ws, "error", 0, "Device not responding");
+        flashFile.close();
+        cleanupOtaFiles();
+        return false;
+    }
+    
+    // Give Pico time to process command and enter bootloader mode
+    // Pico sends protocol ACK, waits 50ms, then sends 0xAA 0x55
+    LOG_I("Sent bootloader command, waiting for Pico to enter bootloader...");
+    delay(200);
+    feedWatchdog();
+    
+    // Wait for bootloader ACK with timeout
+    feedWatchdog();
+    if (!_picoUart.waitForBootloaderAck(3000)) {
+        LOG_E("Bootloader ACK timeout");
+        broadcastLogLevel("error", "Update error: Device not ready");
+        broadcastOtaProgress(&_ws, "error", 0, "Device not ready");
+        flashFile.close();
+        cleanupOtaFiles();
+        return false;
+    }
+    
+    broadcastOtaProgress(&_ws, "flash", 45, "Installing...");
+    feedWatchdog();
+    
+    // Stream to Pico
+    bool success = streamFirmwareToPico(flashFile, firmwareSize);
+    flashFile.close();
+    
+    // Clean up temp file regardless of success
+    cleanupOtaFiles();
+    
+    if (!success) {
+        LOG_E("Pico firmware streaming failed");
+        broadcastLogLevel("error", "Update error: Installation failed");
+        broadcastOtaProgress(&_ws, "error", 0, "Installation failed");
+        return false;
+    }
+    
+    // Reset Pico
+    broadcastOtaProgress(&_ws, "flash", 55, "Restarting device...");
+    feedWatchdog();
+    delay(500);
+    feedWatchdog();
+    _picoUart.resetPico();
+    
+    // Wait for Pico to boot
+    LOG_I("Waiting for Pico to boot...");
+    for (int i = 0; i < 30; i++) {
+        delay(100);
+        feedWatchdog();
+    }
+    
+    LOG_I("Pico OTA complete!");
+    return true;
+}
+
+// =============================================================================
+// ESP32 OTA - Download and flash ESP32 firmware + LittleFS
+// =============================================================================
 
 void WebServer::startGitHubOTA(const String& version) {
     LOG_I("Starting ESP32 GitHub OTA for version: %s", version.c_str());
     
-    // Define macro for consistent OTA progress broadcasting
-    #define broadcastProgress(stage, progress, message) broadcastOtaProgress(&_ws, stage, progress, message)
-    
-    broadcastProgress("flash", 65, "Completing update...");
-    
-    // Build the GitHub release download URL
-    // Build download URL using stack buffer to avoid PSRAM
+    // Build URL
     char tag[32];
     if (strcmp(version.c_str(), "dev-latest") != 0 && strncmp(version.c_str(), "v", 1) != 0) {
         snprintf(tag, sizeof(tag), "v%s", version.c_str());
@@ -57,29 +598,57 @@ void WebServer::startGitHubOTA(const String& version) {
     snprintf(downloadUrl, sizeof(downloadUrl), 
              "https://github.com/" GITHUB_OWNER "/" GITHUB_REPO "/releases/download/%s/" GITHUB_ESP32_ASSET, 
              tag);
-    LOG_I("Download URL: %s", downloadUrl);
+    LOG_I("ESP32 download URL: %s", downloadUrl);
     
+    broadcastOtaProgress(&_ws, "download", 65, "Downloading ESP32 firmware...");
+    
+    // Download ESP32 firmware
     HTTPClient http;
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    http.setTimeout(30000);
+    http.setTimeout(OTA_HTTP_TIMEOUT_MS);
     
-    if (!http.begin(downloadUrl)) {
-        LOG_E("Failed to connect to GitHub");
-        broadcastLogLevel("error", "Update error: Cannot connect to server");
-        broadcastOtaProgress(&_ws, "error", 0, "Connection failed");
+    int httpCode = 0;
+    
+    for (int retry = 0; retry < OTA_MAX_RETRIES; retry++) {
+        feedWatchdog();
+        
+        if (!http.begin(downloadUrl)) {
+            LOG_E("HTTP begin failed (attempt %d/%d)", retry + 1, OTA_MAX_RETRIES);
+            if (retry < OTA_MAX_RETRIES - 1) {
+                for (int i = 0; i < 30; i++) { delay(100); feedWatchdog(); }
+                continue;
+            }
+            broadcastLogLevel("error", "Update error: Cannot connect");
+            broadcastOtaProgress(&_ws, "error", 0, "Connection failed");
+            return;
+        }
+        
+        http.addHeader("User-Agent", "BrewOS-ESP32/" ESP32_VERSION);
+        feedWatchdog();
+        httpCode = http.GET();
+        feedWatchdog();
+        
+        if (httpCode == HTTP_CODE_OK) break;
+        
+        LOG_W("HTTP error %d (attempt %d/%d)", httpCode, retry + 1, OTA_MAX_RETRIES);
+        http.end();
+        
+        if ((httpCode == 503 || httpCode == 429 || httpCode == 500) && retry < OTA_MAX_RETRIES - 1) {
+            for (unsigned long i = 0; i < OTA_RETRY_DELAY_MS / 100; i++) {
+                delay(100);
+                feedWatchdog();
+            }
+            continue;
+        }
+        
+        broadcastLogLevel("error", "Update error: HTTP %d", httpCode);
+        broadcastOtaProgress(&_ws, "error", 0, "Download failed");
         return;
     }
     
-    http.addHeader("User-Agent", "BrewOS-ESP32/" ESP32_VERSION);
-    
-    int httpCode = http.GET();
-    
     if (httpCode != HTTP_CODE_OK) {
-        LOG_E("HTTP error: %d", httpCode);
-        const char* errorMsg = (httpCode == 404) ? "Update not found" : "Download failed";
-        broadcastLogLevel("error", "Update error: %s", errorMsg);
-        broadcastOtaProgress(&_ws, "error", 0, errorMsg);
-        http.end();
+        broadcastLogLevel("error", "Update error: Download failed");
+        broadcastOtaProgress(&_ws, "error", 0, "Download failed");
         return;
     }
     
@@ -93,7 +662,6 @@ void WebServer::startGitHubOTA(const String& version) {
     }
     
     LOG_I("ESP32 firmware size: %d bytes", contentLength);
-    broadcastOtaProgress(&_ws, "download", 70, "Downloading...");
     
     // Begin OTA update
     if (!Update.begin(contentLength)) {
@@ -104,323 +672,342 @@ void WebServer::startGitHubOTA(const String& version) {
         return;
     }
     
-    // Stream the firmware to Update
+    broadcastOtaProgress(&_ws, "download", 70, "Installing ESP32 firmware...");
+    
+    // Stream firmware to flash
     WiFiClient* stream = http.getStreamPtr();
-    uint8_t buffer[1024];
+    uint8_t buffer[OTA_BUFFER_SIZE];
     size_t written = 0;
-    int lastProgress = 0;
+    int lastProgress = 70;
+    unsigned long lastYield = millis();
+    unsigned long downloadStart = millis();
+    
+    unsigned long lastProgressLog = 0;  // For console progress logging
+    unsigned long lastDataReceived = millis();  // Track stalls
+    constexpr unsigned long STALL_TIMEOUT_MS = 30000;  // 30 second stall timeout
+    
+    LOG_I("Starting ESP32 firmware download...");
     
     while (http.connected() && written < (size_t)contentLength) {
+        // Check overall timeout
+        if (millis() - downloadStart > OTA_DOWNLOAD_TIMEOUT_MS) {
+            LOG_E("Download timeout after %lu ms (wrote %d/%d bytes)", 
+                  millis() - downloadStart, written, contentLength);
+            Update.abort();
+            http.end();
+            broadcastLogLevel("error", "Update error: Timeout");
+            broadcastOtaProgress(&_ws, "error", 0, "Timeout");
+            return;
+        }
+        
+        // Check for stall (no data for 30 seconds)
+        if (millis() - lastDataReceived > STALL_TIMEOUT_MS) {
+            LOG_E("Download stalled - no data for %lu ms (wrote %d/%d bytes)", 
+                  STALL_TIMEOUT_MS, written, contentLength);
+            Update.abort();
+            http.end();
+            broadcastLogLevel("error", "Update error: Connection stalled");
+            broadcastOtaProgress(&_ws, "error", 0, "Connection stalled");
+            return;
+        }
+        
+        // Feed watchdog
+        if (millis() - lastYield >= OTA_WATCHDOG_FEED_INTERVAL_MS) {
+            feedWatchdog();
+            lastYield = millis();
+        }
+        
         size_t available = stream->available();
         if (available > 0) {
+            lastDataReceived = millis();  // Reset stall timer
             size_t toRead = min(available, sizeof(buffer));
             size_t bytesRead = stream->readBytes(buffer, toRead);
             
             if (bytesRead > 0) {
                 size_t bytesWritten = Update.write(buffer, bytesRead);
                 if (bytesWritten != bytesRead) {
-                    LOG_E("Write error at offset %d", written);
-                    broadcastLogLevel("error", "Update error: Write failed");
-                    broadcastProgress("error", 0, "Write failed");
+                    LOG_E("Write error at %d", written);
                     Update.abort();
                     http.end();
+                    broadcastLogLevel("error", "Update error: Write failed");
+                    broadcastOtaProgress(&_ws, "error", 0, "Write failed");
                     return;
                 }
                 written += bytesWritten;
                 
-                // Report progress 70-95%
+                // Log progress to console every 5 seconds (in case WebSocket is dead)
+                if (millis() - lastProgressLog > 5000) {
+                    int pct = (written * 100) / contentLength;
+                    LOG_I("ESP32 OTA: %d%% (%d/%d bytes)", pct, written, contentLength);
+                    lastProgressLog = millis();
+                }
+                
+                // Progress 70-95% (only broadcast every 5%)
                 int progress = 70 + (written * 25) / contentLength;
-                if (progress >= lastProgress + 5) {
+                if (progress >= lastProgress + 5) {  // Changed from 3 to 5 to reduce WebSocket flooding
                     lastProgress = progress;
-                    LOG_I("OTA progress: %d%% (%d/%d)", progress, written, contentLength);
-                    broadcastProgress("download", progress, "Installing...");
+                    broadcastOtaProgress(&_ws, "download", progress, "Installing...");
                 }
             }
+        } else {
+            delay(10);  // Increased from 1ms to reduce CPU spin
+            feedWatchdog();
         }
-        delay(1);  // Yield to other tasks
     }
     
     http.end();
+    feedWatchdog();
     
     if (written != (size_t)contentLength) {
-        LOG_E("Download incomplete: %d/%d bytes", written, contentLength);
-        broadcastLogLevel("error", "Update error: Download incomplete");
-        broadcastProgress("error", 0, "Download incomplete");
+        LOG_E("Download incomplete: %d/%d", written, contentLength);
         Update.abort();
+        broadcastLogLevel("error", "Update error: Incomplete download");
+        broadcastOtaProgress(&_ws, "error", 0, "Incomplete download");
         return;
     }
     
-    broadcastProgress("flash", 95, "Finalizing firmware...");
+    broadcastOtaProgress(&_ws, "flash", 95, "Finalizing...");
     
     if (!Update.end(true)) {
         LOG_E("Update failed: %s", Update.errorString());
-        broadcastLogLevel("error", "Update error: Installation failed");
-        broadcastProgress("error", 0, "Installation failed");
+        broadcastLogLevel("error", "Update error: %s", Update.errorString());
+        broadcastOtaProgress(&_ws, "error", 0, "Installation failed");
         return;
     }
     
-    LOG_I("Firmware update successful! Now updating filesystem...");
-    broadcastProgress("flash", 96, "Updating web UI...");
+    LOG_I("ESP32 firmware update successful!");
     
-    // Step 2: Download and flash LittleFS filesystem image
+    // Update LittleFS (optional - continue even if fails)
+    updateLittleFS(tag);
+    
+    broadcastOtaProgress(&_ws, "complete", 100, "Update complete!");
+    broadcastLogLevel("info", "BrewOS updated! Restarting...");
+    
+    // Give time for message to send
+    for (int i = 0; i < 10; i++) {
+        delay(100);
+        feedWatchdog();
+    }
+    
+    ESP.restart();
+}
+
+/**
+ * Update LittleFS filesystem (called after ESP32 firmware update)
+ * Non-critical - continues even if fails
+ */
+void WebServer::updateLittleFS(const char* tag) {
+    LOG_I("Updating LittleFS...");
+    broadcastOtaProgress(&_ws, "flash", 96, "Updating web UI...");
+    
     char littlefsUrl[256];
     snprintf(littlefsUrl, sizeof(littlefsUrl), 
              "https://github.com/" GITHUB_OWNER "/" GITHUB_REPO "/releases/download/%s/" GITHUB_ESP32_LITTLEFS_ASSET, 
              tag);
-    LOG_I("LittleFS download URL: %s", littlefsUrl);
     
-    HTTPClient httpFs;
-    httpFs.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    httpFs.setTimeout(30000);
+    HTTPClient http;
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    http.setTimeout(OTA_HTTP_TIMEOUT_MS);
     
-    if (!httpFs.begin(littlefsUrl)) {
-        LOG_W("Failed to connect for LittleFS download - continuing with firmware update only");
-        broadcastLogLevel("warn", "Firmware updated, but web UI update failed");
-        broadcastProgress("complete", 100, "Firmware updated");
-        delay(1000);
-        ESP.restart();
+    feedWatchdog();
+    if (!http.begin(littlefsUrl)) {
+        LOG_W("LittleFS download failed - continuing");
         return;
     }
     
-    httpFs.addHeader("User-Agent", "BrewOS-ESP32/" ESP32_VERSION);
-    int httpCodeFs = httpFs.GET();
+    http.addHeader("User-Agent", "BrewOS-ESP32/" ESP32_VERSION);
+    feedWatchdog();
+    int httpCode = http.GET();
+    feedWatchdog();
     
-    if (httpCodeFs != HTTP_CODE_OK) {
-        LOG_W("LittleFS download failed: %d - continuing with firmware update only", httpCodeFs);
-        broadcastLogLevel("warn", "Firmware updated, but web UI update failed");
-        httpFs.end();
-        broadcastProgress("complete", 100, "Firmware updated");
-        delay(1000);
-        ESP.restart();
+    if (httpCode != HTTP_CODE_OK) {
+        LOG_W("LittleFS HTTP error: %d", httpCode);
+        http.end();
         return;
     }
     
-    int fsContentLength = httpFs.getSize();
-    if (fsContentLength <= 0) {
-        LOG_W("Invalid LittleFS content length: %d", fsContentLength);
-        broadcastLogLevel("warn", "Firmware updated, but web UI update failed");
-        httpFs.end();
-        broadcastProgress("complete", 100, "Firmware updated");
-        delay(1000);
-        ESP.restart();
+    int contentLength = http.getSize();
+    if (contentLength <= 0) {
+        LOG_W("Invalid LittleFS size");
+        http.end();
         return;
     }
     
-    LOG_I("LittleFS image size: %d bytes", fsContentLength);
-    broadcastProgress("flash", 97, "Installing web UI...");
+    // Find LittleFS partition
+    const esp_partition_t* partition = esp_partition_find_first(
+        ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "littlefs");
     
-    // Find the LittleFS partition
-    // Store partition info we need (address and size) since iterator pointers may not persist
-    uint32_t fsPartitionAddr = 0;
-    size_t fsPartitionSize = 0;
-    bool foundPartition = false;
-    
-    // Constants for partition detection
-    /*
-     * WARNING: The hardcoded default address (0x670000) below assumes an 8MB partition layout (default_8MB.csv).
-     * This fallback will FAIL on boards with different flash sizes or custom partition tables.
-     * If you use a custom partition table or a non-8MB flash, you MUST update or remove this fallback.
-     * Prefer finding the partition by label ("littlefs") above. Only use this fallback if you are certain
-     * your partition layout matches the default 8MB configuration.
-     */
-    constexpr uint32_t DEFAULT_LITTLEFS_ADDRESS = 0x670000;  // Default address for 8MB partition layout
-    constexpr size_t MIN_PARTITION_SIZE = 0x100000;          // 1MB minimum size for filesystem partition
-    constexpr uint32_t MIN_PARTITION_ADDRESS = 0x600000;     // 6MB - filesystem typically starts after app partitions
-    
-    // Method 1: Find by label "littlefs" (most reliable)
-    const esp_partition_t* partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "littlefs");
-    if (partition) {
-        fsPartitionAddr = partition->address;
-        fsPartitionSize = partition->size;
-        foundPartition = true;
-        LOG_I("Found LittleFS partition by label at 0x%08X, size: %d", fsPartitionAddr, fsPartitionSize);
-    }
-    
-    // Method 2: Find by expected address (fallback for partition layouts without label)
-    // WARNING: This creates a fragile dependency on specific partition layouts.
-    // This is specific to default_8MB.csv partition layout. If partition layout changes,
-    // this fallback may need adjustment or removal. Consider removing this method or
-    // making the address configurable through a build-time constant.
-    esp_partition_iterator_t addressIt = NULL;
-    if (!foundPartition) {
-        addressIt = esp_partition_find(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, NULL);
-        while (addressIt != NULL) {
-            const esp_partition_t* p = esp_partition_get(addressIt);
-            if (p->address == DEFAULT_LITTLEFS_ADDRESS) {
-                fsPartitionAddr = p->address;
-                fsPartitionSize = p->size;
-                foundPartition = true;
-                LOG_I("Found filesystem partition by address at 0x%08X, size: %d", fsPartitionAddr, fsPartitionSize);
-                break;
-            }
-            addressIt = esp_partition_next(addressIt);
-        }
-        if (addressIt) {
-            esp_partition_iterator_release(addressIt);
-            addressIt = NULL;
-        }
-    }
-    
-    // Method 3: Find largest data partition (excluding nvs, otadata, etc.)
-    // This is a last-resort fallback that looks for large data partitions after the app region
-    esp_partition_iterator_t sizeIt = NULL;
-    if (!foundPartition) {
-        sizeIt = esp_partition_find(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, NULL);
-        size_t largestSize = 0;
-        while (sizeIt != NULL) {
-            const esp_partition_t* p = esp_partition_get(sizeIt);
-            // Skip small system partitions, look for large data partition after app region
-            if (p->size > MIN_PARTITION_SIZE && p->address >= MIN_PARTITION_ADDRESS) {
-                if (p->size > largestSize) {
-                    fsPartitionAddr = p->address;
-                    fsPartitionSize = p->size;
-                    largestSize = p->size;
-                    foundPartition = true;
-                }
-            }
-            sizeIt = esp_partition_next(sizeIt);
-        }
-        if (sizeIt) {
-            esp_partition_iterator_release(sizeIt);
-            sizeIt = NULL;
-        }
-        if (foundPartition) {
-            LOG_I("Found filesystem partition by size at 0x%08X, size: %d", fsPartitionAddr, fsPartitionSize);
-        }
-    }
-    
-    if (!foundPartition || fsPartitionAddr == 0 || fsPartitionSize == 0) {
-        LOG_E("LittleFS partition not found");
-        broadcastLogLevel("warn", "Firmware updated, but web UI update failed (partition not found)");
-        httpFs.end();
-        broadcastProgress("complete", 100, "Firmware updated");
-        delay(1000);
-        ESP.restart();
+    if (!partition) {
+        LOG_W("LittleFS partition not found");
+        http.end();
         return;
     }
     
-    // Re-find partition by address for writing (need stable pointer for esp_partition_write)
-    esp_partition_iterator_t writeIt = esp_partition_find(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, NULL);
-    partition = NULL;
-    while (writeIt != NULL) {
-        const esp_partition_t* p = esp_partition_get(writeIt);
-        if (p->address == fsPartitionAddr) {
-            partition = p;  // This pointer is valid while iterator exists
-            break;
-        }
-        writeIt = esp_partition_next(writeIt);
-    }
+    broadcastOtaProgress(&_ws, "flash", 97, "Erasing filesystem...");
+    feedWatchdog();
     
-    // Always release the iterator after use (regardless of success or failure)
-    // Note: partition pointer remains valid after iterator release in ESP-IDF
-    if (writeIt) {
-        esp_partition_iterator_release(writeIt);
-        writeIt = NULL;
-    }
-    
-    if (!partition || partition->address != fsPartitionAddr) {
-        LOG_E("Failed to get partition handle for writing");
-        broadcastLogLevel("warn", "Firmware updated, but web UI update failed (partition handle error)");
-        httpFs.end();
-        broadcastProgress("complete", 100, "Firmware updated");
-        delay(1000);
-        ESP.restart();
+    if (esp_partition_erase_range(partition, 0, partition->size) != ESP_OK) {
+        LOG_W("Failed to erase LittleFS");
+        http.end();
         return;
     }
     
-    // Erase the partition first
-    broadcastProgress("flash", 98, "Erasing filesystem...");
-    if (esp_partition_erase_range(partition, 0, fsPartitionSize) != ESP_OK) {
-        LOG_E("Failed to erase LittleFS partition");
-        broadcastLogLevel("warn", "Firmware updated, but web UI update failed (erase failed)");
-        httpFs.end();
-        broadcastProgress("complete", 100, "Firmware updated");
-        delay(1000);
-        ESP.restart();
-        return;
-    }
+    broadcastOtaProgress(&_ws, "flash", 98, "Installing web UI...");
     
-    // Download and write to partition
-    WiFiClient* streamFs = httpFs.getStreamPtr();
-    uint8_t bufferFs[1024];
-    size_t writtenFs = 0;
+    WiFiClient* stream = http.getStreamPtr();
+    uint8_t buffer[OTA_BUFFER_SIZE];
+    size_t written = 0;
     size_t offset = 0;
+    unsigned long lastYield = millis();
     
-    while (httpFs.connected() && writtenFs < (size_t)fsContentLength && offset < fsPartitionSize) {
-        size_t available = streamFs->available();
+    while (http.connected() && written < (size_t)contentLength && offset < partition->size) {
+        if (millis() - lastYield >= OTA_WATCHDOG_FEED_INTERVAL_MS) {
+            feedWatchdog();
+            lastYield = millis();
+        }
+        
+        size_t available = stream->available();
         if (available > 0) {
-            size_t toRead = min(available, sizeof(bufferFs));
-            size_t bytesRead = streamFs->readBytes(bufferFs, toRead);
+            size_t toRead = min(available, sizeof(buffer));
+            size_t bytesRead = stream->readBytes(buffer, toRead);
             
             if (bytesRead > 0) {
-                // Write to partition
-                esp_err_t err = esp_partition_write(partition, offset, bufferFs, bytesRead);
-                if (err != ESP_OK) {
-                    LOG_E("Failed to write to LittleFS partition at offset %d: %s", offset, esp_err_to_name(err));
-                    broadcastLogLevel("warn", "Firmware updated, but web UI update failed (write failed)");
-                    httpFs.end();
-                    broadcastProgress("complete", 100, "Firmware updated");
-                    delay(1000);
-                    ESP.restart();
-                    return;
+                if (esp_partition_write(partition, offset, buffer, bytesRead) != ESP_OK) {
+                    LOG_W("LittleFS write failed at offset %d", offset);
+                    break;
                 }
-                writtenFs += bytesRead;
+                written += bytesRead;
                 offset += bytesRead;
-                
-                // Report progress 97-99%
-                int progress = 97 + (writtenFs * 2) / fsContentLength;
-                if (progress > 99) progress = 99;
-                broadcastProgress("flash", progress, "Installing web UI...");
             }
+        } else {
+            delay(1);
+            feedWatchdog();
         }
-        delay(1);  // Yield to other tasks
     }
     
-    httpFs.end();
+    http.end();
+    feedWatchdog();
     
-    if (writtenFs != (size_t)fsContentLength) {
-        LOG_W("LittleFS download incomplete: %d/%d bytes", writtenFs, fsContentLength);
-        broadcastLogLevel("warn", "Firmware updated, but web UI update incomplete");
-        broadcastProgress("complete", 100, "Firmware updated");
-        delay(1000);
-        ESP.restart();
-        return;
+    if (written == (size_t)contentLength) {
+        LOG_I("LittleFS updated: %d bytes", written);
+    } else {
+        LOG_W("LittleFS incomplete: %d/%d bytes", written, contentLength);
     }
-    
-    LOG_I("LittleFS update successful! Total written: %d bytes", writtenFs);
-    broadcastProgress("complete", 100, "Update complete!");
-    
-    // Note: Partition iterator was already released earlier (after finding partition)
-    
-    LOG_I("OTA update successful (firmware + filesystem)!");
-    broadcastLogLevel("info", "BrewOS updated successfully! Restarting...");
-    
-    // Give time for the message to be sent
-    delay(1000);
-    
-    // Restart to apply the update
-    ESP.restart();
-    
-    #undef broadcastProgress
 }
 
 // =============================================================================
-// OTA Update Check - Query GitHub for available updates
+// Combined OTA - Update Pico first, then ESP32
 // =============================================================================
 
-/**
- * Compare semantic version strings (e.g., "0.4.4" vs "0.4.5")
- * Returns: -1 if v1 < v2, 0 if equal, 1 if v1 > v2
- */
+void WebServer::startCombinedOTA(const String& version) {
+    LOG_I("Starting combined OTA for version: %s", version.c_str());
+    broadcastLog("Starting BrewOS update to v%s...", version.c_str());
+    
+    unsigned long otaStart = millis();
+    
+    // Validate prerequisites BEFORE pausing services
+    uint8_t machineType = State.getMachineType();
+    if (machineType == 0) {
+        LOG_E("Machine type unknown");
+        broadcastLogLevel("error", "Update error: Please ensure machine is powered on and connected");
+        broadcastOtaProgress(&_ws, "error", 0, "Device not ready");
+        return;
+    }
+    
+    // Pause ALL background services to prevent interference during OTA
+    // This includes: cloud (SSL), MQTT, BLE scale, power meter HTTP polling
+    pauseServicesForOTA(_cloudConnection);
+    feedWatchdog();
+    
+    // Suppress non-essential broadcasts during OTA
+    _otaInProgress = true;
+    
+    // Clean up any leftover files from previous attempts
+    cleanupOtaFiles();
+    
+    // Log initial state
+    size_t freeHeap = ESP.getFreeHeap();
+    size_t totalFs = LittleFS.totalBytes();
+    size_t usedFs = LittleFS.usedBytes();
+    LOG_I("OTA starting: Free heap=%u, FS total=%u, FS used=%u, FS free=%u bytes", 
+          freeHeap, totalFs, usedFs, totalFs - usedFs);
+    
+    broadcastOtaProgress(&_ws, "download", 0, "Preparing update...");
+    feedWatchdog();
+    
+    // Step 1: Update Pico firmware
+    LOG_I("Step 1/2: Updating Pico...");
+    broadcastOtaProgress(&_ws, "download", 5, "Updating internal controller...");
+    
+    bool picoSuccess = startPicoGitHubOTA(version);
+    feedWatchdog();
+    
+    if (!picoSuccess) {
+        LOG_E("Pico OTA failed - aborting combined update");
+        cleanupOtaFiles();
+        handleOTAFailure(&_ws);  // Will restart device
+        return;  // Won't reach here due to restart
+    }
+    
+    // Wait for Pico to stabilize
+    broadcastOtaProgress(&_ws, "flash", 58, "Verifying internal controller...");
+    for (int i = 0; i < 30; i++) {
+        delay(100);
+        feedWatchdog();
+        _picoUart.loop();  // Process any incoming packets
+    }
+    
+    // Check if Pico came back up
+    bool picoOk = _picoUart.isConnected();
+    if (!picoOk) {
+        LOG_E("Pico not responding after update - aborting");
+        cleanupOtaFiles();
+        handleOTAFailure(&_ws);  // Will restart device
+        return;  // Won't reach here due to restart
+    }
+    LOG_I("Pico responded after update");
+    
+    // Check total timeout
+    if (millis() - otaStart > OTA_TOTAL_TIMEOUT_MS) {
+        LOG_E("OTA timeout exceeded");
+        broadcastLogLevel("error", "Update error: Timeout");
+        cleanupOtaFiles();
+        handleOTAFailure(&_ws);  // Will restart device
+        return;  // Won't reach here due to restart
+    }
+    
+    broadcastOtaProgress(&_ws, "download", 60, "Completing update...");
+    feedWatchdog();
+    
+    // Ensure Pico firmware file is cleaned up before ESP32 OTA
+    LOG_I("Cleaning up Pico firmware before ESP32 OTA...");
+    cleanupOtaFiles();
+    
+    // Log free space before ESP32 OTA
+    LOG_I("Before ESP32 OTA: Free heap=%u, Free FS=%u bytes", 
+          ESP.getFreeHeap(), LittleFS.totalBytes() - LittleFS.usedBytes());
+    
+    // Step 2: Update ESP32 (will reboot on success)
+    LOG_I("Step 2/2: Updating ESP32...");
+    startGitHubOTA(version);
+    
+    // If we reach here, ESP32 update failed
+    LOG_E("ESP32 update failed - cleaning up");
+    cleanupOtaFiles();
+    handleOTAFailure(&_ws);  // Will restart device
+}
+
+// =============================================================================
+// Update Check - Query GitHub API
+// =============================================================================
+
 static int compareVersions(const String& v1, const String& v2) {
     int major1 = 0, minor1 = 0, patch1 = 0;
     int major2 = 0, minor2 = 0, patch2 = 0;
     
-    // Parse v1 (skip leading 'v' if present)
     String ver1 = v1.startsWith("v") ? v1.substring(1) : v1;
     sscanf(ver1.c_str(), "%d.%d.%d", &major1, &minor1, &patch1);
     
-    // Parse v2
     String ver2 = v2.startsWith("v") ? v2.substring(1) : v2;
     sscanf(ver2.c_str(), "%d.%d.%d", &major2, &minor2, &patch2);
     
@@ -434,25 +1021,25 @@ void WebServer::checkForUpdates() {
     LOG_I("Checking for updates...");
     broadcastLogLevel("info", "Checking for updates...");
     
-    // Query GitHub API for latest release
-    // API endpoint: https://api.github.com/repos/OWNER/REPO/releases/latest
     String apiUrl = "https://api.github.com/repos/" GITHUB_OWNER "/" GITHUB_REPO "/releases/latest";
     
     HTTPClient http;
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    http.setTimeout(10000);  // 10 second timeout
+    http.setTimeout(10000);
     
+    feedWatchdog();
     if (!http.begin(apiUrl)) {
         LOG_E("Failed to connect to GitHub API");
-        broadcastLogLevel("error", "Update check failed: Cannot connect to GitHub");
+        broadcastLogLevel("error", "Update check failed");
         return;
     }
     
-    // GitHub API requires User-Agent and Accept headers
     http.addHeader("User-Agent", "BrewOS-ESP32/" ESP32_VERSION);
     http.addHeader("Accept", "application/vnd.github.v3+json");
     
+    feedWatchdog();
     int httpCode = http.GET();
+    feedWatchdog();
     
     if (httpCode != HTTP_CODE_OK) {
         LOG_E("GitHub API error: %d", httpCode);
@@ -461,20 +1048,17 @@ void WebServer::checkForUpdates() {
         return;
     }
     
-    // Parse JSON response
     String payload = http.getString();
     http.end();
+    feedWatchdog();
     
     JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, payload);
-    
-    if (error) {
-        LOG_E("JSON parse error: %s", error.c_str());
-        broadcastLogLevel("error", "Update check failed: Invalid response");
+    if (deserializeJson(doc, payload)) {
+        LOG_E("JSON parse error");
+        broadcastLogLevel("error", "Update check failed");
         return;
     }
     
-    // Extract release information
     String latestVersion = doc["tag_name"] | "";
     String releaseName = doc["name"] | "";
     String releaseBody = doc["body"] | "";
@@ -482,48 +1066,42 @@ void WebServer::checkForUpdates() {
     String publishedAt = doc["published_at"] | "";
     
     if (latestVersion.isEmpty()) {
-        LOG_E("No version found in release");
-        broadcastLogLevel("error", "Update check failed: No version found");
+        LOG_E("No version found");
+        broadcastLogLevel("error", "Update check failed");
         return;
     }
     
-    // Strip 'v' prefix for comparison
     String latestVersionNum = latestVersion.startsWith("v") ? latestVersion.substring(1) : latestVersion;
     String currentVersion = ESP32_VERSION;
     
     LOG_I("Current: %s, Latest: %s", currentVersion.c_str(), latestVersionNum.c_str());
     
-    // Compare versions
     int cmp = compareVersions(currentVersion, latestVersionNum);
     bool updateAvailable = (cmp < 0);
     
-    // Check for both ESP32 and Pico assets
-    int esp32AssetSize = 0;
-    int picoAssetSize = 0;
-    bool esp32AssetFound = false;
-    bool picoAssetFound = false;
+    // Check assets
+    int esp32AssetSize = 0, picoAssetSize = 0;
+    bool esp32AssetFound = false, picoAssetFound = false;
     
     uint8_t machineType = State.getMachineType();
     const char* picoAssetName = getPicoAssetName(machineType);
     
     JsonArray assets = doc["assets"].as<JsonArray>();
     for (JsonObject asset : assets) {
-        String assetName = asset["name"] | "";
-        if (assetName == GITHUB_ESP32_ASSET) {
+        String name = asset["name"] | "";
+        if (name == GITHUB_ESP32_ASSET) {
             esp32AssetSize = asset["size"] | 0;
             esp32AssetFound = true;
         }
-        if (picoAssetName && assetName == picoAssetName) {
+        if (picoAssetName && name == picoAssetName) {
             picoAssetSize = asset["size"] | 0;
             picoAssetFound = true;
         }
     }
     
-    // Determine if combined update is available
-    // Both assets must exist for a proper combined update
     bool combinedUpdateAvailable = updateAvailable && esp32AssetFound && picoAssetFound;
     
-    // Broadcast result to WebSocket clients
+    // Broadcast result
     JsonDocument result;
     result["type"] = "update_check_result";
     result["updateAvailable"] = updateAvailable;
@@ -541,7 +1119,6 @@ void WebServer::checkForUpdates() {
     result["picoAssetName"] = picoAssetName ? picoAssetName : "unknown";
     result["machineType"] = machineType;
     
-    // Truncate changelog if too long
     if (releaseBody.length() > 500) {
         releaseBody = releaseBody.substring(0, 497) + "...";
     }
@@ -551,12 +1128,7 @@ void WebServer::checkForUpdates() {
     serializeJson(result, response);
     _ws.textAll(response);
     
-    // Log result
-    if (updateAvailable && combinedUpdateAvailable) {
-        broadcastLog("BrewOS %s available (current: %s)", latestVersionNum.c_str(), currentVersion.c_str());
-    } else if (updateAvailable) {
-        // Update available but missing some assets - log internally only
-        LOG_W("Update available but missing assets: esp32=%d, pico=%d", esp32AssetFound, picoAssetFound);
+    if (updateAvailable) {
         broadcastLog("BrewOS %s available (current: %s)", latestVersionNum.c_str(), currentVersion.c_str());
     } else {
         broadcastLog("BrewOS is up to date (%s)", currentVersion.c_str());
@@ -564,7 +1136,7 @@ void WebServer::checkForUpdates() {
 }
 
 // =============================================================================
-// Pico GitHub OTA - Download and install Pico firmware from GitHub releases
+// Helper Functions
 // =============================================================================
 
 const char* WebServer::getPicoAssetName(uint8_t machineType) {
@@ -576,285 +1148,15 @@ const char* WebServer::getPicoAssetName(uint8_t machineType) {
     }
 }
 
-void WebServer::startPicoGitHubOTA(const String& version) {
-    LOG_I("Starting Pico GitHub OTA for version: %s", version.c_str());
-    
-    // Get machine type from StateManager
-    uint8_t machineType = State.getMachineType();
-    const char* picoAsset = getPicoAssetName(machineType);
-    
-    if (!picoAsset) {
-        LOG_E("Unknown machine type: %d - cannot determine Pico firmware", machineType);
-        broadcastLogLevel("error", "Update error: Device not ready");
-        return;
-    }
-    
-    LOG_I("Pico asset: %s", picoAsset);
-    
-    // Build the GitHub release download URL using stack buffer to avoid PSRAM
-    char tag[32];
-    if (strcmp(version.c_str(), "dev-latest") != 0 && strncmp(version.c_str(), "v", 1) != 0) {
-        snprintf(tag, sizeof(tag), "v%s", version.c_str());
-    } else {
-        strncpy(tag, version.c_str(), sizeof(tag) - 1);
-        tag[sizeof(tag) - 1] = '\0';
-    }
-    
-    char downloadUrl[256];
-    snprintf(downloadUrl, sizeof(downloadUrl), 
-             "https://github.com/" GITHUB_OWNER "/" GITHUB_REPO "/releases/download/%s/%s", 
-             tag, picoAsset);
-    
-    LOG_I("Pico download URL: %s", downloadUrl);
-    
-    // Use static helper for OTA progress (broadcastOtaProgress defined above)
-    #define broadcastProgress(stage, progress, message) broadcastOtaProgress(&_ws, stage, progress, message)
-    
-    HTTPClient http;
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    http.setTimeout(60000);  // 60 second timeout for larger Pico firmware
-    
-    if (!http.begin(downloadUrl)) {
-        LOG_E("Failed to connect to GitHub");
-        broadcastLogLevel("error", "Update error: Cannot connect to server");
-        broadcastProgress("error", 0, "Connection failed");
-        return;
-    }
-    
-    http.addHeader("User-Agent", "BrewOS-ESP32/" ESP32_VERSION);
-    
-    int httpCode = http.GET();
-    
-    if (httpCode != HTTP_CODE_OK) {
-        LOG_E("HTTP error: %d", httpCode);
-        const char* errorMsg = (httpCode == 404) ? "Update not found for this version" : "Download failed";
-        broadcastLogLevel("error", "Update error: %s", errorMsg);
-        broadcastProgress("error", 0, errorMsg);
-        http.end();
-        return;
-    }
-    
-    int contentLength = http.getSize();
-    if (contentLength <= 0 || contentLength > OTA_MAX_SIZE) {
-        LOG_E("Invalid content length: %d", contentLength);
-        broadcastLogLevel("error", "Update error: Invalid firmware");
-        broadcastProgress("error", 0, "Invalid firmware");
-        http.end();
-        return;
-    }
-    
-    LOG_I("Pico firmware size: %d bytes", contentLength);
-    
-    // Check available space before downloading
-    size_t freeSpace = LittleFS.totalBytes() - LittleFS.usedBytes();
-    if (contentLength > freeSpace) {
-        LOG_E("Not enough space: need %d bytes, have %d bytes", contentLength, freeSpace);
-        broadcastLogLevel("error", "Update error: Not enough storage space");
-        broadcastProgress("error", 0, "Not enough storage space");
-        http.end();
-        return;
-    }
-    
-    // Delete old firmware if exists to free up space
-    if (LittleFS.exists(OTA_FILE_PATH)) {
-        LittleFS.remove(OTA_FILE_PATH);
-        // Recalculate free space after deletion
-        freeSpace = LittleFS.totalBytes() - LittleFS.usedBytes();
-        if (contentLength > freeSpace) {
-            LOG_E("Still not enough space after cleanup: need %d bytes, have %d bytes", contentLength, freeSpace);
-            broadcastLogLevel("error", "Update error: Not enough storage space (even after cleanup)");
-            broadcastProgress("error", 0, "Not enough storage space");
-            http.end();
-            return;
-        }
-    }
-    
-    LOG_I("Available space: %d bytes, required: %d bytes", freeSpace, contentLength);
-    broadcastProgress("download", 10, "Downloading...");
-    
-    // Save to LittleFS first
-    File firmwareFile = LittleFS.open(OTA_FILE_PATH, "w");
-    if (!firmwareFile) {
-        LOG_E("Failed to create firmware file");
-        broadcastLogLevel("error", "Update error: Cannot create file");
-        broadcastProgress("error", 0, "Cannot create file");
-        http.end();
-        return;
-    }
-    
-    // Stream to file
-    WiFiClient* stream = http.getStreamPtr();
-    uint8_t buffer[1024];
-    size_t written = 0;
-    int lastProgress = 0;
-    
-    while (http.connected() && written < (size_t)contentLength) {
-        size_t available = stream->available();
-        if (available > 0) {
-            size_t toRead = min(available, sizeof(buffer));
-            size_t bytesRead = stream->readBytes(buffer, toRead);
-            
-            if (bytesRead > 0) {
-                size_t bytesWritten = firmwareFile.write(buffer, bytesRead);
-                if (bytesWritten != bytesRead) {
-                    LOG_E("File write error: wrote %d/%d bytes (filesystem may be full)", bytesWritten, bytesRead);
-                    broadcastLogLevel("error", "Update error: Write failed - filesystem full");
-                    broadcastProgress("error", 0, "Write failed - filesystem full");
-                    firmwareFile.close();
-                    LittleFS.remove(OTA_FILE_PATH);  // Clean up partial file
-                    http.end();
-                    return;
-                }
-                written += bytesWritten;
-                
-                // Report progress every 5%
-                int progress = 10 + (written * 30) / contentLength;  // 10-40% for download
-                if (progress >= lastProgress + 5) {
-                    lastProgress = progress;
-                    broadcastProgress("download", progress, "Downloading...");
-                }
-            }
-        }
-        delay(1);
-    }
-    
-    firmwareFile.close();
-    http.end();
-    
-    if (written != (size_t)contentLength) {
-        LOG_E("Download incomplete: %d/%d bytes", written, contentLength);
-        broadcastLogLevel("error", "Update error: Download incomplete");
-        broadcastProgress("error", 0, "Download incomplete");
-        return;
-    }
-    
-    broadcastProgress("flash", 40, "Installing...");
-    
-    // Now flash to Pico (reuse existing logic)
-    File flashFile = LittleFS.open(OTA_FILE_PATH, "r");
-    if (!flashFile) {
-        LOG_E("Failed to open firmware file for flashing");
-        broadcastLogLevel("error", "Update error: Cannot read firmware");
-        broadcastProgress("error", 0, "Cannot read firmware");
-        return;
-    }
-    
-    size_t firmwareSize = flashFile.size();
-    
-    // Send bootloader command
-    broadcastProgress("flash", 42, "Preparing device...");
-    if (!_picoUart.sendCommand(MSG_CMD_BOOTLOADER, nullptr, 0)) {
-        LOG_E("Failed to send bootloader command");
-        broadcastLogLevel("error", "Update error: Device not responding");
-        broadcastProgress("error", 0, "Device not responding");
-        flashFile.close();
-        return;
-    }
-    
-    // Wait for bootloader ACK
-    if (!_picoUart.waitForBootloaderAck(3000)) {
-        LOG_E("Bootloader ACK timeout");
-        broadcastLogLevel("error", "Update error: Device not ready");
-        broadcastProgress("error", 0, "Device not ready");
-        flashFile.close();
-        return;
-    }
-    
-    broadcastProgress("flash", 45, "Installing...");
-    
-    // Stream to Pico
-    bool success = streamFirmwareToPico(flashFile, firmwareSize);
-    flashFile.close();
-    
-    if (!success) {
-        LOG_E("Pico firmware streaming failed");
-        broadcastLogLevel("error", "Update error: Installation failed");
-        broadcastProgress("error", 0, "Installation failed");
-        return;
-    }
-    
-    // Reset Pico
-    broadcastProgress("flash", 55, "Restarting...");
-    delay(1000);
-    _picoUart.resetPico();
-    
-    // Wait for Pico to boot and send MSG_BOOT
-    delay(3000);  // Give Pico time to boot
-    
-    LOG_I("Pico OTA complete!");
-    
-    #undef broadcastProgress
-}
-
-// =============================================================================
-// Combined OTA - Update Pico first, then ESP32
-// =============================================================================
-
-void WebServer::startCombinedOTA(const String& version) {
-    LOG_I("Starting combined OTA for version: %s", version.c_str());
-    broadcastLog("Starting BrewOS update to v%s...", version.c_str());
-    
-    // Define macro for consistent OTA progress broadcasting
-    #define broadcastProgress(stage, progress, message) broadcastOtaProgress(&_ws, stage, progress, message)
-    // Note: broadcastProgress macro already defined above for startPicoGitHubOTA
-    
-    // Check machine type is known
-    uint8_t machineType = State.getMachineType();
-    if (machineType == 0) {
-        LOG_E("Machine type unknown - Pico not connected?");
-        broadcastLogLevel("error", "Update error: Please ensure the machine is powered on and connected.");
-        broadcastProgress("error", 0, "Device not ready");
-        return;
-    }
-    
-    broadcastProgress("download", 0, "Preparing update...");
-    
-    // Step 1: Update Pico (internal module)
-    LOG_I("Step 1/2: Updating Pico firmware...");
-    startPicoGitHubOTA(version);
-    
-    // Check if Pico reconnected (crude check - wait and verify)
-    delay(5000);  // Wait for internal module to fully boot
-    
-    if (!_picoUart.isConnected()) {
-        LOG_W("Pico not responding after update - continuing with ESP32 update anyway");
-        broadcastLogLevel("info", "Finalizing update...");
-    } else {
-        // Verify Pico version matches
-        const char* picoVer = State.getPicoVersion();
-        if (picoVer && String(picoVer) != version && String(picoVer) != version.substring(1)) {
-            LOG_W("Pico version mismatch after update: %s vs %s", picoVer, version.c_str());
-        }
-        broadcastLogLevel("info", "Finalizing update...");
-    }
-    
-    broadcastProgress("flash", 60, "Completing update...");
-    
-    #undef broadcastProgress
-    
-    // Step 2: Update ESP32 (this will reboot)
-    LOG_I("Step 2/2: Updating ESP32 firmware...");
-    startGitHubOTA(version);
-    
-    // Note: startGitHubOTA reboots ESP32, so we won't reach here
-}
-
-// =============================================================================
-// Version Mismatch Detection
-// =============================================================================
-
 bool WebServer::checkVersionMismatch() {
     const char* picoVersion = State.getPicoVersion();
     const char* esp32Version = ESP32_VERSION;
     
-    // If Pico version not available, can't check
     if (!picoVersion || picoVersion[0] == '\0') {
-        return false;  // No mismatch detected (not fully connected yet)
+        return false;
     }
     
-    // Compare versions using stack buffers (strip 'v' prefix if present)
-    char picoVer[16];
-    char esp32Ver[16];
+    char picoVer[16], esp32Ver[16];
     strncpy(picoVer, picoVersion[0] == 'v' ? picoVersion + 1 : picoVersion, sizeof(picoVer) - 1);
     picoVer[sizeof(picoVer) - 1] = '\0';
     strncpy(esp32Ver, esp32Version[0] == 'v' ? esp32Version + 1 : esp32Version, sizeof(esp32Ver) - 1);
@@ -863,16 +1165,15 @@ bool WebServer::checkVersionMismatch() {
     bool mismatch = (strcmp(picoVer, esp32Ver) != 0);
     
     if (mismatch) {
-        LOG_W("Internal version mismatch: %s vs %s", esp32Ver, picoVer);
+        LOG_W("Version mismatch: ESP32=%s, Pico=%s", esp32Ver, picoVer);
         
-        // Broadcast to clients using stack allocation
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         StaticJsonDocument<256> doc;
         #pragma GCC diagnostic pop
         doc["type"] = "version_mismatch";
         doc["currentVersion"] = esp32Ver;
-        doc["message"] = "A firmware update is recommended to ensure optimal performance.";
+        doc["message"] = "Firmware update recommended";
         
         size_t jsonSize = measureJson(doc) + 1;
         char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
@@ -886,5 +1187,3 @@ bool WebServer::checkVersionMismatch() {
     
     return mismatch;
 }
-
-

@@ -20,7 +20,8 @@ void WebServer::handleWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* clie
             
         case WS_EVT_CONNECT:
             LOG_I("WebSocket client %u connected from %s", client->id(), client->remoteIP().toString().c_str());
-            broadcastLog("Client connected");
+            // Send device info immediately so UI has the saved settings
+            broadcastDeviceInfo();
             break;
             
         case WS_EVT_DATA:

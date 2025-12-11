@@ -1185,7 +1185,10 @@ void loop() {
     // =========================================================================
     
     // Cloud connection (handles WebSocket to cloud server)
-    if (cloudConnection) {
+    // Throttle to every 50ms to reduce CPU load from SSL processing
+    static unsigned long lastCloudLoop = 0;
+    if (cloudConnection && millis() - lastCloudLoop >= 50) {
+        lastCloudLoop = millis();
         cloudConnection->loop();
     }
     yield();  // Feed watchdog
@@ -1245,6 +1248,21 @@ void loop() {
             LOG_I("=== DEMO MODE DISABLED (Pico connected) ===");
         }
         machineState.pico_connected = picoConnected;
+        
+        // If Pico is connected but machine type is unknown, request boot info
+        // This handles the case where MSG_BOOT was missed (e.g., ESP32 rebooted while Pico was running)
+        static unsigned long lastBootInfoRequest = 0;
+        if (State.getMachineType() == 0 && (millis() - lastBootInfoRequest > 5000)) {
+            lastBootInfoRequest = millis();
+            LOG_W("Pico connected but machine type unknown - requesting boot info...");
+            if (picoUart->requestBootInfo()) {
+                delay(100);
+                picoUart->loop();
+                if (State.getMachineType() != 0) {
+                    LOG_I("Machine type received: %d", State.getMachineType());
+                }
+            }
+        }
     }
     
     // Update demo simulation (sets is_brewing = false, prevents false triggers)

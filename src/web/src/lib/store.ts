@@ -37,6 +37,15 @@ import {
   type DiagnosticTestId,
 } from "./types";
 
+// OTA Update status
+interface OTAStatus {
+  isUpdating: boolean;
+  stage: "idle" | "download" | "flash" | "complete" | "error";
+  progress: number;
+  message: string;
+  startedAt: number | null;
+}
+
 interface BrewOSState {
   // Connection
   connectionState: ConnectionState;
@@ -82,6 +91,9 @@ interface BrewOSState {
 
   // Diagnostics
   diagnostics: DiagnosticReport;
+
+  // OTA Update state
+  ota: OTAStatus;
 
   // User preferences (localStorage)
   preferences: UserPreferences;
@@ -305,6 +317,14 @@ const defaultDiagnostics: DiagnosticReport = {
   timestamp: 0,
 };
 
+const defaultOTA: OTAStatus = {
+  isUpdating: false,
+  stage: "idle",
+  progress: 0,
+  message: "",
+  startedAt: null,
+};
+
 // Default preferences (used as fallback)
 const defaultPreferences: UserPreferences = {
   firstDayOfWeek: "sunday",
@@ -434,6 +454,7 @@ export const useStore = create<BrewOSState>()(
     alerts: [],
     logs: [],
     diagnostics: defaultDiagnostics,
+    ota: defaultOTA,
     preferences: loadPreferencesFromStorage(),
 
     // Actions
@@ -1166,6 +1187,35 @@ export const useStore = create<BrewOSState>()(
               results: [...state.diagnostics.results, result],
             },
           }));
+          break;
+        }
+
+        // =======================================================================
+        // OTA Update progress
+        // =======================================================================
+        case "ota_progress": {
+          const stage = (data.stage as OTAStatus["stage"]) || "download";
+          const progress = (data.progress as number) ?? 0;
+          const message = (data.message as string) || "";
+          
+          console.log(`[Store] OTA progress: ${stage} ${progress}% - ${message}`);
+          
+          set((state) => ({
+            ota: {
+              isUpdating: stage !== "error" && stage !== "complete",
+              stage,
+              progress,
+              message,
+              startedAt: state.ota.startedAt || Date.now(),
+            },
+          }));
+          
+          // If complete or error, device will restart - reset OTA state after delay
+          if (stage === "complete" || stage === "error") {
+            setTimeout(() => {
+              set({ ota: defaultOTA });
+            }, stage === "complete" ? 5000 : 10000);
+          }
           break;
         }
 

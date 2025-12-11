@@ -61,6 +61,13 @@ public:
      */
     bool begin();
     
+    /**
+     * Enable/disable notifications (for OTA updates)
+     * When disabled, notifications are queued but not sent
+     */
+    void setEnabled(bool enabled);
+    bool isEnabled() const { return _enabled; }
+    
     // =========================================================================
     // Create Notifications (call these when conditions are met)
     // =========================================================================
@@ -137,6 +144,7 @@ private:
     Notification _active[NOTIF_MAX_ACTIVE];
     size_t _activeCount;
     NotificationPreferences _prefs;
+    bool _enabled = true;  // Pause during OTA
     
     // Deduplication - track last notification time per type
     uint32_t _lastNotified[12];  // Indexed by type
