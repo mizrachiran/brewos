@@ -125,8 +125,8 @@ function getFeatureDisplayName(feature: FeatureKey): string {
     [FEATURES.PUSH_NOTIFICATIONS]: 'Push Notifications',
     [FEATURES.REMOTE_ACCESS]: 'Remote Access',
     [FEATURES.MULTI_DEVICE]: 'Multi-Device',
-    [FEATURES.PICO_OTA]: 'Pico OTA Updates',
-    [FEATURES.ESP32_OTA]: 'ESP32 OTA Updates',
+    [FEATURES.PICO_OTA]: 'Controller OTA Updates',
+    [FEATURES.ESP32_OTA]: 'Network OTA Updates',
     [FEATURES.DEBUG_CONSOLE]: 'Debug Console',
     [FEATURES.PROTOCOL_DEBUG]: 'Protocol Debug',
   };

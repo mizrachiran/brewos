@@ -716,7 +716,7 @@ export function SystemSettings() {
           <div className="flex-1">
             <h4 className="font-semibold text-theme mb-1">Restart Device</h4>
             <p className="text-sm text-theme-muted">
-              Reboot the ESP32. Settings will be preserved.
+              Reboot the network controller. Settings will be preserved.
             </p>
           </div>
           <Button variant="secondary" onClick={restartDevice}>

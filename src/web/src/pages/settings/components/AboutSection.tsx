@@ -69,7 +69,7 @@ export function AboutSection() {
         <AboutFeatureCard
           icon={<Cpu className="w-6 h-6" />}
           title="Dual-Core Control"
-          description="ESP32-S3 for connectivity, Pico for real-time control"
+          description="Network controller for connectivity, machine controller for real-time brewing"
           color="amber"
         />
         <AboutFeatureCard

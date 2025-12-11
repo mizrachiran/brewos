@@ -615,7 +615,7 @@ export const DIAGNOSTIC_TESTS: DiagnosticTestMeta[] = [
   // ==========================================================================
   {
     id: 0x0b,
-    name: "ESP32 Communication",
+    name: "Network Controller Link",
     description: "UART0 link on GPIO0/1 (921600 baud)",
     machineTypes: [], // All machine types
     optional: false,

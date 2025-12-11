@@ -325,7 +325,7 @@ export function Diagnostics() {
 
           {!pico.connected && (
             <p className="text-sm text-red-500">
-              Pico not connected. Connect to run diagnostics.
+              Machine controller not connected. Connect to run diagnostics.
             </p>
           )}
         </div>
@@ -447,7 +447,7 @@ export function Diagnostics() {
           />
           <TroubleshootItem
             title="Communication & Power Meter"
-            description="ESP32 tests UART0 link (921600 baud). Power meter is optional, supports PZEM-004T, JSY-MK-163T/194T, and Eastron SDM120/230 via Modbus on UART1."
+            description="Network controller connection via UART (921600 baud). Power meter is optional, supports PZEM-004T, JSY-MK-163T/194T, and Eastron SDM120/230 via Modbus."
           />
         </div>
       </Card>
