@@ -33,7 +33,7 @@ export const StatusBar = memo(function StatusBar() {
   const machineMode = useStore((s) => s.machine.mode);
   const wifiConnected = useStore((s) => s.wifi.connected);
   const scaleConnected = useStore((s) => s.scale.connected);
-  const cloudEnabled = useStore((s) => s.mqtt.connected); // Using MQTT as cloud proxy for now
+  const cloudConnected = useStore((s) => s.cloud.connected);
 
   const isPoweredOn = machineMode !== "standby";
 
@@ -59,8 +59,8 @@ export const StatusBar = memo(function StatusBar() {
       />
       <StatusIndicator
         icon={Cloud}
-        active={cloudEnabled}
-        title={cloudEnabled ? "Cloud Connected" : "Cloud Disconnected"}
+        active={cloudConnected}
+        title={cloudConnected ? "Cloud Connected" : "Cloud Disconnected"}
         activeColor="text-violet-500"
       />
     </div>

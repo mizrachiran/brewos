@@ -14,6 +14,7 @@ import type {
   ShotStatus,
   WiFiStatus,
   MQTTStatus,
+  CloudConfig,
   ESP32Info,
   PicoInfo,
   DeviceInfo,
@@ -79,6 +80,7 @@ interface BrewOSState {
   // Network
   wifi: WiFiStatus;
   mqtt: MQTTStatus;
+  cloud: CloudConfig;
 
   // Device info
   esp32: ESP32Info;
@@ -210,6 +212,13 @@ const defaultMqtt: MQTTStatus = {
   connected: false,
   broker: "",
   topic: "brewos",
+};
+
+const defaultCloud: CloudConfig = {
+  enabled: false,
+  connected: false,
+  serverUrl: "",
+  deviceId: "",
 };
 
 const defaultEsp32: ESP32Info = {
@@ -448,6 +457,7 @@ export const useStore = create<BrewOSState>()(
     ecoMode: defaultEcoMode,
     wifi: defaultWifi,
     mqtt: defaultMqtt,
+    cloud: defaultCloud,
     esp32: defaultEsp32,
     pico: defaultPico,
     stats: defaultStats,
@@ -638,6 +648,13 @@ export const useStore = create<BrewOSState>()(
                     (connectionsData.mqtt as boolean) ?? state.mqtt.connected,
                 }
               : state.mqtt,
+            cloud: connectionsData
+              ? {
+                  ...state.cloud,
+                  connected:
+                    (connectionsData.cloud as boolean) ?? state.cloud.connected,
+                }
+              : state.cloud,
             pico: (() => {
               // Check if there's a dedicated pico object in the message
               const picoData = data.pico as Record<string, unknown> | undefined;

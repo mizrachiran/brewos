@@ -12,10 +12,13 @@
 #include "pico/stdlib.h"
 #include "pico/multicore.h"   // For multicore_lockout
 #include "pico/platform.h"    // For __not_in_flash_func
+#include "pico/bootrom.h"     // For ROM function lookups
 #include "hardware/uart.h"
 #include "hardware/flash.h"
 #include "hardware/sync.h"
 #include "hardware/watchdog.h"
+#include "hardware/structs/watchdog.h"
+#include "hardware/regs/watchdog.h"   // For WATCHDOG_LOAD_OFFSET
 
 // Bootloader protocol constants
 #define BOOTLOADER_MAGIC_1          0x55
@@ -35,6 +38,32 @@
 #define FLASH_MAX_FIRMWARE_SIZE     (512 * 1024)   // Max firmware size: 512KB
 // Note: Using SDK definitions for sector/page size to avoid redefinition warnings
 // FLASH_SECTOR_SIZE and FLASH_PAGE_SIZE are already defined in hardware/flash.h
+
+// -----------------------------------------------------------------------------
+// ROM Function Types for Direct Flash Access
+// -----------------------------------------------------------------------------
+// We must use ROM functions directly in copy_firmware_to_main() because the 
+// SDK flash functions (flash_range_erase, flash_range_program) are compiled 
+// into flash memory. When we erase sector 0, those functions are destroyed.
+// ROM functions are in read-only memory and always available.
+//
+// The SDK provides these typedefs in pico/bootrom.h:
+// - rom_connect_internal_flash_fn
+// - rom_flash_exit_xip_fn
+// - rom_flash_range_erase_fn
+// - rom_flash_range_program_fn
+// - rom_flash_flush_cache_fn
+// - rom_flash_enter_cmd_xip_fn
+
+// ROM function lookup structure - populated before entering critical section
+typedef struct {
+    rom_connect_internal_flash_fn connect_internal_flash;
+    rom_flash_exit_xip_fn flash_exit_xip;
+    rom_flash_range_erase_fn flash_range_erase;
+    rom_flash_range_program_fn flash_range_program;
+    rom_flash_flush_cache_fn flash_flush_cache;
+    rom_flash_enter_cmd_xip_fn flash_enter_cmd_xip;
+} rom_flash_funcs_t;
 
 // Bootloader state
 static uint32_t g_total_size = 0;
@@ -144,21 +173,25 @@ static bool flash_write_page(uint32_t offset, const uint8_t* data) {
  * This function does not return on success - it reboots the device.
  */
 /**
- * Copy firmware from staging area to main area.
+ * Copy firmware from staging area to main area using ROM functions.
  * 
  * CRITICAL SAFETY REQUIREMENTS (all code must be in RAM):
  * 1. NO memcpy() - it's in flash and will crash after erase
  * 2. NO watchdog_reboot() - it's in flash and will crash after erase
  * 3. NO watchdog_update() - it's in flash, use direct register writes
  * 4. NO flash_safe_*() - they call flash functions that may be erased
- * 5. Use timeout for multicore lockout to prevent hangs
+ * 5. NO flash_range_erase/flash_range_program - these are SDK wrappers IN FLASH!
+ * 6. Use timeout for multicore lockout to prevent hangs
  * 
  * After erasing main flash, we can ONLY use:
- * - Direct register writes
- * - ROM functions (flash_range_erase, flash_range_program)
+ * - Direct register writes (watchdog, AIRCR)
+ * - ROM functions (passed via rom_flash_funcs_t pointer - looked up BEFORE erase)
  * - Code in RAM (this function + static data)
+ * 
+ * @param firmware_size Size of firmware to copy
+ * @param rom Pointer to ROM function lookup structure (populated before calling)
  */
-static void __not_in_flash_func(copy_firmware_to_main)(uint32_t firmware_size) {
+static void __not_in_flash_func(copy_firmware_to_main)(uint32_t firmware_size, const rom_flash_funcs_t* rom) {
     #ifndef XIP_BASE
     #define XIP_BASE 0x10000000
     #endif
@@ -168,7 +201,8 @@ static void __not_in_flash_func(copy_firmware_to_main)(uint32_t firmware_size) {
     #endif
     
     // Watchdog register for direct feeding (can't use SDK after flash erase)
-    // Use SDK-defined addresses which are correct for both RP2040 and RP2350
+    // Feed value 0x7fffff = ~8.3 million ticks = ~8.3 seconds at 1MHz watchdog clock
+    // This is safe (max is ~16 seconds/0xFFFFFF) and large enough to survive 4KB sector erase (~50-400ms)
     volatile uint32_t* wdg_load = (volatile uint32_t*)(WATCHDOG_BASE + WATCHDOG_LOAD_OFFSET);
     
     uint32_t size_pages = (firmware_size + FLASH_PAGE_SIZE - 1) / FLASH_PAGE_SIZE;
@@ -177,27 +211,33 @@ static void __not_in_flash_func(copy_firmware_to_main)(uint32_t firmware_size) {
     // Kick watchdog BEFORE any flash operations (SDK function still available here)
     watchdog_update();
     
-    // Try to pause Core 1 with timeout (100ms)
-    // If Core 1 doesn't respond, proceed anyway - we're about to reboot
+    // Try to pause Core 0 with timeout (100ms)
+    // Note: This function runs on Core 1 (from handle_packet), so we lock Core 0
+    // If Core 0 doesn't respond, proceed anyway - we're about to reboot
     multicore_lockout_start_timeout_us(100000);
     
     // Disable interrupts for the entire critical operation
     uint32_t ints = save_and_disable_interrupts();
     
+    // Prepare flash for direct access via ROM functions
+    rom->connect_internal_flash();
+    rom->flash_exit_xip();
+    
     // Static buffer in RAM (BSS section)
     static uint8_t page_buffer[FLASH_PAGE_SIZE];
     const uint8_t* staging_addr = (const uint8_t*)(XIP_BASE + FLASH_TARGET_OFFSET);
     
-    // 1. Erase main firmware area (ROM function - always available)
+    // 1. Erase main firmware area using ROM function
+    // Use 4KB sector erase command (0x20)
     for (uint32_t sector = 0; sector < size_sectors; sector++) {
-        // Feed watchdog via direct register write (SDK function is in erased flash!)
+        // Feed watchdog via direct register write
         *wdg_load = 0x7fffff;
         
         uint32_t offset = FLASH_MAIN_OFFSET + (sector * FLASH_SECTOR_SIZE);
-        flash_range_erase(offset, FLASH_SECTOR_SIZE);
+        rom->flash_range_erase(offset, FLASH_SECTOR_SIZE, FLASH_SECTOR_SIZE, 0x20);
     }
     
-    // 2. Copy from staging to main, page by page
+    // 2. Copy from staging to main, page by page using ROM function
     for (uint32_t page = 0; page < size_pages; page++) {
         // Feed watchdog every 32 pages (~8KB) to reduce overhead
         if (page % 32 == 0) {
@@ -212,11 +252,15 @@ static void __not_in_flash_func(copy_firmware_to_main)(uint32_t firmware_size) {
             page_buffer[i] = src[i];
         }
         
-        // Write to main area (ROM function - always available)
-        flash_range_program(offset, page_buffer, FLASH_PAGE_SIZE);
+        // Write to main area using ROM function
+        rom->flash_range_program(offset, page_buffer, FLASH_PAGE_SIZE);
     }
     
-    // 3. Trigger reset via AIRCR register
+    // 3. Restore XIP mode and flush cache (good practice before reset)
+    rom->flash_flush_cache();
+    rom->flash_enter_cmd_xip();
+    
+    // 4. Trigger reset via AIRCR register
     // DO NOT use watchdog_reboot() - it's in the flash we just erased!
     // AIRCR: Application Interrupt and Reset Control Register
     // Write VECTKEY (0x05FA) and SYSRESETREQ (bit 2)
@@ -520,9 +564,32 @@ bootloader_result_t bootloader_receive_firmware(void) {
     LOG_PRINT("Bootloader: Firmware received successfully (%lu bytes, %lu chunks)\n",
               g_received_size, g_chunk_count);
     
+    // Look up ROM functions BEFORE entering the critical copy section
+    // These pointers point to read-only memory and will survive flash erase
+    LOG_PRINT("Bootloader: Looking up ROM functions...\n");
+    rom_flash_funcs_t rom;
+    rom.connect_internal_flash = (rom_connect_internal_flash_fn)rom_func_lookup_inline(ROM_FUNC_CONNECT_INTERNAL_FLASH);
+    rom.flash_exit_xip = (rom_flash_exit_xip_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_EXIT_XIP);
+    rom.flash_range_erase = (rom_flash_range_erase_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_RANGE_ERASE);
+    rom.flash_range_program = (rom_flash_range_program_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_RANGE_PROGRAM);
+    rom.flash_flush_cache = (rom_flash_flush_cache_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_FLUSH_CACHE);
+    rom.flash_enter_cmd_xip = (rom_flash_enter_cmd_xip_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_ENTER_CMD_XIP);
+    
+    // Validate ROM function lookups
+    if (!rom.connect_internal_flash || !rom.flash_exit_xip || 
+        !rom.flash_range_erase || !rom.flash_range_program ||
+        !rom.flash_flush_cache || !rom.flash_enter_cmd_xip) {
+        LOG_PRINT("Bootloader: ERROR - ROM function lookup failed!\n");
+        uart_write_byte(0xFF);
+        uart_write_byte(BOOTLOADER_ERROR_UNKNOWN);
+        return BOOTLOADER_ERROR_UNKNOWN;
+    }
+    
+    LOG_PRINT("Bootloader: Starting flash copy to main area...\n");
+    
     // Copy firmware from staging area to main area
     // This function does not return - it reboots the device
-    copy_firmware_to_main(g_received_size);
+    copy_firmware_to_main(g_received_size, &rom);
     
     // Should never reach here
     return BOOTLOADER_SUCCESS;

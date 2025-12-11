@@ -191,13 +191,11 @@ function App() {
       try {
         // In cloud mode, setupComplete is not applicable - always treat as complete
         // (FirstRunWizard is only for local ESP32 device setup)
-        // Also, don't initialize WebSocket in cloud mode - it will be initialized
-        // when needed (e.g., when viewing a machine dashboard)
         if (mode === "cloud") {
           setSetupComplete(true);
           setLoading(false);
-          // Disconnect any existing connection (in case mode changed)
-          getConnection()?.disconnect();
+          // Cloud WebSocket connection is handled by a separate effect
+          // that watches for selectedDeviceId changes
           return;
         }
 
@@ -306,6 +304,62 @@ function App() {
       setInitialDevicesFetched(false);
     }
   }, [user, initialDevicesFetched]);
+
+  // Cloud mode: Connect WebSocket when device is selected
+  const { selectedDeviceId, getAccessToken } = useAppStore();
+
+  useEffect(() => {
+    if (inDemoMode) return;
+    if (mode !== "cloud") return;
+    if (!user || !selectedDeviceId) return;
+    if (!initialDevicesFetched) return;
+
+    let cancelled = false;
+
+    const connectCloudWebSocket = async () => {
+      try {
+        // Get auth token for WebSocket connection
+        const token = await getAccessToken();
+        if (!token || cancelled) return;
+
+        // Disconnect existing connection if any
+        getConnection()?.disconnect();
+
+        // Initialize cloud WebSocket connection
+        // cloudUrl is not provided - connection.ts will use current page URL
+        // This works for any cloud server (production, staging, local dev)
+        const connection = initConnection({
+          mode: "cloud",
+          authToken: token,
+          deviceId: selectedDeviceId,
+        });
+
+        initializeStore(connection);
+
+        connection.connect().catch((error) => {
+          console.error("[Cloud] WebSocket connection failed:", error);
+        });
+
+        console.log(`[Cloud] Connecting to device ${selectedDeviceId}`);
+      } catch (error) {
+        console.error("[Cloud] Failed to connect:", error);
+      }
+    };
+
+    connectCloudWebSocket();
+
+    return () => {
+      cancelled = true;
+      getConnection()?.disconnect();
+    };
+  }, [
+    mode,
+    user,
+    selectedDeviceId,
+    initialDevicesFetched,
+    inDemoMode,
+    getAccessToken,
+  ]);
 
   // Handle setup completion
   const handleSetupComplete = () => {

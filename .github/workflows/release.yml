@@ -32,10 +32,66 @@ jobs:
       is_prerelease: ${{ steps.version.outputs.is_prerelease }}
 
     steps:
+      - name: Determine ref to checkout
+        id: ref
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            # For manual triggers, checkout the specified version tag
+            echo "ref=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            # For tag pushes, checkout the pushed tag
+            echo "ref=${{ github.ref }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          ref: ${{ steps.ref.outputs.ref }}
           fetch-depth: 0 # Required for git-cliff to see full history
+
+      - name: Verify source code version matches tag
+        run: |
+          # Get version from tag
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            TAG_VERSION="${{ github.event.inputs.version }}"
+          else
+            TAG_VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          # Remove 'v' prefix for comparison
+          EXPECTED_VERSION="${TAG_VERSION#v}"
+
+          # Check VERSION file
+          SOURCE_VERSION=$(grep "FIRMWARE_VERSION=" VERSION | cut -d'=' -f2)
+
+          echo "Tag version: $EXPECTED_VERSION"
+          echo "Source version: $SOURCE_VERSION"
+
+          if [ "$SOURCE_VERSION" != "$EXPECTED_VERSION" ]; then
+            echo "❌ ERROR: Version mismatch!"
+            echo "   Tag says: $EXPECTED_VERSION"
+            echo "   Source says: $SOURCE_VERSION"
+            echo ""
+            echo "The source code version must match the release tag."
+            echo "Run: node src/scripts/version.js --set $EXPECTED_VERSION --release"
+            exit 1
+          fi
+
+          # Also verify Pico config.h
+          PICO_MAJOR=$(grep "FIRMWARE_VERSION_MAJOR" src/pico/include/config.h | grep -o '[0-9]*')
+          PICO_MINOR=$(grep "FIRMWARE_VERSION_MINOR" src/pico/include/config.h | grep -o '[0-9]*')
+          PICO_PATCH=$(grep "FIRMWARE_VERSION_PATCH" src/pico/include/config.h | grep -o '[0-9]*')
+          PICO_VERSION="${PICO_MAJOR}.${PICO_MINOR}.${PICO_PATCH}"
+
+          echo "Pico config version: $PICO_VERSION"
+
+          if [ "$PICO_VERSION" != "$EXPECTED_VERSION" ]; then
+            echo "❌ ERROR: Pico config.h version mismatch!"
+            echo "   Expected: $EXPECTED_VERSION"
+            echo "   Got: $PICO_VERSION"
+            exit 1
+          fi
+
+          echo "✓ All version checks passed!"
 
       # ===== Pico Build =====
       - name: Install ARM GCC Toolchain
