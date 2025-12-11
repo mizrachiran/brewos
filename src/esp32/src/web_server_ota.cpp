@@ -65,7 +65,7 @@ void WebServer::startGitHubOTA(const String& version) {
     
     if (!http.begin(downloadUrl)) {
         LOG_E("Failed to connect to GitHub");
-        broadcastLog("Update error: Cannot connect to server", "error");
+        broadcastLogLevel("error", "Update error: Cannot connect to server");
         broadcastOtaProgress(&_ws, "error", 0, "Connection failed");
         return;
     }
@@ -77,7 +77,7 @@ void WebServer::startGitHubOTA(const String& version) {
     if (httpCode != HTTP_CODE_OK) {
         LOG_E("HTTP error: %d", httpCode);
         const char* errorMsg = (httpCode == 404) ? "Update not found" : "Download failed";
-        broadcastLog("Update error: %s", "error", errorMsg);
+        broadcastLogLevel("error", "Update error: %s", errorMsg);
         broadcastOtaProgress(&_ws, "error", 0, errorMsg);
         http.end();
         return;
@@ -86,7 +86,7 @@ void WebServer::startGitHubOTA(const String& version) {
     int contentLength = http.getSize();
     if (contentLength <= 0) {
         LOG_E("Invalid content length: %d", contentLength);
-        broadcastLog("Update error: Invalid firmware", "error");
+        broadcastLogLevel("error", "Update error: Invalid firmware");
         broadcastOtaProgress(&_ws, "error", 0, "Invalid firmware");
         http.end();
         return;
@@ -98,7 +98,7 @@ void WebServer::startGitHubOTA(const String& version) {
     // Begin OTA update
     if (!Update.begin(contentLength)) {
         LOG_E("Not enough space for OTA");
-        broadcastLog("Update error: Not enough space", "error");
+        broadcastLogLevel("error", "Update error: Not enough space");
         broadcastOtaProgress(&_ws, "error", 0, "Not enough space");
         http.end();
         return;
@@ -120,7 +120,7 @@ void WebServer::startGitHubOTA(const String& version) {
                 size_t bytesWritten = Update.write(buffer, bytesRead);
                 if (bytesWritten != bytesRead) {
                     LOG_E("Write error at offset %d", written);
-                    broadcastLog("Update error: Write failed", "error");
+                    broadcastLogLevel("error", "Update error: Write failed");
                     broadcastProgress("error", 0, "Write failed");
                     Update.abort();
                     http.end();
@@ -144,7 +144,7 @@ void WebServer::startGitHubOTA(const String& version) {
     
     if (written != (size_t)contentLength) {
         LOG_E("Download incomplete: %d/%d bytes", written, contentLength);
-        broadcastLog("Update error: Download incomplete", "error");
+        broadcastLogLevel("error", "Update error: Download incomplete");
         broadcastProgress("error", 0, "Download incomplete");
         Update.abort();
         return;
@@ -154,7 +154,7 @@ void WebServer::startGitHubOTA(const String& version) {
     
     if (!Update.end(true)) {
         LOG_E("Update failed: %s", Update.errorString());
-        broadcastLog("Update error: Installation failed", "error");
+        broadcastLogLevel("error", "Update error: Installation failed");
         broadcastProgress("error", 0, "Installation failed");
         return;
     }
@@ -175,7 +175,7 @@ void WebServer::startGitHubOTA(const String& version) {
     
     if (!httpFs.begin(littlefsUrl)) {
         LOG_W("Failed to connect for LittleFS download - continuing with firmware update only");
-        broadcastLog("Firmware updated, but web UI update failed", "warn");
+        broadcastLogLevel("warn", "Firmware updated, but web UI update failed");
         broadcastProgress("complete", 100, "Firmware updated");
         delay(1000);
         ESP.restart();
@@ -187,7 +187,7 @@ void WebServer::startGitHubOTA(const String& version) {
     
     if (httpCodeFs != HTTP_CODE_OK) {
         LOG_W("LittleFS download failed: %d - continuing with firmware update only", httpCodeFs);
-        broadcastLog("Firmware updated, but web UI update failed", "warn");
+        broadcastLogLevel("warn", "Firmware updated, but web UI update failed");
         httpFs.end();
         broadcastProgress("complete", 100, "Firmware updated");
         delay(1000);
@@ -198,7 +198,7 @@ void WebServer::startGitHubOTA(const String& version) {
     int fsContentLength = httpFs.getSize();
     if (fsContentLength <= 0) {
         LOG_W("Invalid LittleFS content length: %d", fsContentLength);
-        broadcastLog("Firmware updated, but web UI update failed", "warn");
+        broadcastLogLevel("warn", "Firmware updated, but web UI update failed");
         httpFs.end();
         broadcastProgress("complete", 100, "Firmware updated");
         delay(1000);
@@ -291,7 +291,7 @@ void WebServer::startGitHubOTA(const String& version) {
     
     if (!foundPartition || fsPartitionAddr == 0 || fsPartitionSize == 0) {
         LOG_E("LittleFS partition not found");
-        broadcastLog("Firmware updated, but web UI update failed (partition not found)", "warn");
+        broadcastLogLevel("warn", "Firmware updated, but web UI update failed (partition not found)");
         httpFs.end();
         broadcastProgress("complete", 100, "Firmware updated");
         delay(1000);
@@ -320,7 +320,7 @@ void WebServer::startGitHubOTA(const String& version) {
     
     if (!partition || partition->address != fsPartitionAddr) {
         LOG_E("Failed to get partition handle for writing");
-        broadcastLog("Firmware updated, but web UI update failed (partition handle error)", "warn");
+        broadcastLogLevel("warn", "Firmware updated, but web UI update failed (partition handle error)");
         httpFs.end();
         broadcastProgress("complete", 100, "Firmware updated");
         delay(1000);
@@ -332,7 +332,7 @@ void WebServer::startGitHubOTA(const String& version) {
     broadcastProgress("flash", 98, "Erasing filesystem...");
     if (esp_partition_erase_range(partition, 0, fsPartitionSize) != ESP_OK) {
         LOG_E("Failed to erase LittleFS partition");
-        broadcastLog("Firmware updated, but web UI update failed (erase failed)", "warn");
+        broadcastLogLevel("warn", "Firmware updated, but web UI update failed (erase failed)");
         httpFs.end();
         broadcastProgress("complete", 100, "Firmware updated");
         delay(1000);
@@ -357,7 +357,7 @@ void WebServer::startGitHubOTA(const String& version) {
                 esp_err_t err = esp_partition_write(partition, offset, bufferFs, bytesRead);
                 if (err != ESP_OK) {
                     LOG_E("Failed to write to LittleFS partition at offset %d: %s", offset, esp_err_to_name(err));
-                    broadcastLog("Firmware updated, but web UI update failed (write failed)", "warn");
+                    broadcastLogLevel("warn", "Firmware updated, but web UI update failed (write failed)");
                     httpFs.end();
                     broadcastProgress("complete", 100, "Firmware updated");
                     delay(1000);
@@ -380,7 +380,7 @@ void WebServer::startGitHubOTA(const String& version) {
     
     if (writtenFs != (size_t)fsContentLength) {
         LOG_W("LittleFS download incomplete: %d/%d bytes", writtenFs, fsContentLength);
-        broadcastLog("Firmware updated, but web UI update incomplete", "warn");
+        broadcastLogLevel("warn", "Firmware updated, but web UI update incomplete");
         broadcastProgress("complete", 100, "Firmware updated");
         delay(1000);
         ESP.restart();
@@ -393,7 +393,7 @@ void WebServer::startGitHubOTA(const String& version) {
     // Note: Partition iterator was already released earlier (after finding partition)
     
     LOG_I("OTA update successful (firmware + filesystem)!");
-    broadcastLog("BrewOS updated successfully! Restarting...", "info");
+    broadcastLogLevel("info", "BrewOS updated successfully! Restarting...");
     
     // Give time for the message to be sent
     delay(1000);
@@ -432,7 +432,7 @@ static int compareVersions(const String& v1, const String& v2) {
 
 void WebServer::checkForUpdates() {
     LOG_I("Checking for updates...");
-    broadcastLog("Checking for updates...", "info");
+    broadcastLogLevel("info", "Checking for updates...");
     
     // Query GitHub API for latest release
     // API endpoint: https://api.github.com/repos/OWNER/REPO/releases/latest
@@ -444,7 +444,7 @@ void WebServer::checkForUpdates() {
     
     if (!http.begin(apiUrl)) {
         LOG_E("Failed to connect to GitHub API");
-        broadcastLog("Update check failed: Cannot connect to GitHub", "error");
+        broadcastLogLevel("error", "Update check failed: Cannot connect to GitHub");
         return;
     }
     
@@ -456,7 +456,7 @@ void WebServer::checkForUpdates() {
     
     if (httpCode != HTTP_CODE_OK) {
         LOG_E("GitHub API error: %d", httpCode);
-        broadcastLog("Update check failed: HTTP %d", "error", httpCode);
+        broadcastLogLevel("error", "Update check failed: HTTP %d", httpCode);
         http.end();
         return;
     }
@@ -470,7 +470,7 @@ void WebServer::checkForUpdates() {
     
     if (error) {
         LOG_E("JSON parse error: %s", error.c_str());
-        broadcastLog("Update check failed: Invalid response", "error");
+        broadcastLogLevel("error", "Update check failed: Invalid response");
         return;
     }
     
@@ -483,7 +483,7 @@ void WebServer::checkForUpdates() {
     
     if (latestVersion.isEmpty()) {
         LOG_E("No version found in release");
-        broadcastLog("Update check failed: No version found", "error");
+        broadcastLogLevel("error", "Update check failed: No version found");
         return;
     }
     
@@ -585,7 +585,7 @@ void WebServer::startPicoGitHubOTA(const String& version) {
     
     if (!picoAsset) {
         LOG_E("Unknown machine type: %d - cannot determine Pico firmware", machineType);
-        broadcastLog("Update error: Device not ready", "error");
+        broadcastLogLevel("error", "Update error: Device not ready");
         return;
     }
     
@@ -616,7 +616,7 @@ void WebServer::startPicoGitHubOTA(const String& version) {
     
     if (!http.begin(downloadUrl)) {
         LOG_E("Failed to connect to GitHub");
-        broadcastLog("Update error: Cannot connect to server", "error");
+        broadcastLogLevel("error", "Update error: Cannot connect to server");
         broadcastProgress("error", 0, "Connection failed");
         return;
     }
@@ -628,7 +628,7 @@ void WebServer::startPicoGitHubOTA(const String& version) {
     if (httpCode != HTTP_CODE_OK) {
         LOG_E("HTTP error: %d", httpCode);
         const char* errorMsg = (httpCode == 404) ? "Update not found for this version" : "Download failed";
-        broadcastLog("Update error: %s", "error", errorMsg);
+        broadcastLogLevel("error", "Update error: %s", errorMsg);
         broadcastProgress("error", 0, errorMsg);
         http.end();
         return;
@@ -637,7 +637,7 @@ void WebServer::startPicoGitHubOTA(const String& version) {
     int contentLength = http.getSize();
     if (contentLength <= 0 || contentLength > OTA_MAX_SIZE) {
         LOG_E("Invalid content length: %d", contentLength);
-        broadcastLog("Update error: Invalid firmware", "error");
+        broadcastLogLevel("error", "Update error: Invalid firmware");
         broadcastProgress("error", 0, "Invalid firmware");
         http.end();
         return;
@@ -649,7 +649,7 @@ void WebServer::startPicoGitHubOTA(const String& version) {
     size_t freeSpace = LittleFS.totalBytes() - LittleFS.usedBytes();
     if (contentLength > freeSpace) {
         LOG_E("Not enough space: need %d bytes, have %d bytes", contentLength, freeSpace);
-        broadcastLog("Update error: Not enough storage space", "error");
+        broadcastLogLevel("error", "Update error: Not enough storage space");
         broadcastProgress("error", 0, "Not enough storage space");
         http.end();
         return;
@@ -662,7 +662,7 @@ void WebServer::startPicoGitHubOTA(const String& version) {
         freeSpace = LittleFS.totalBytes() - LittleFS.usedBytes();
         if (contentLength > freeSpace) {
             LOG_E("Still not enough space after cleanup: need %d bytes, have %d bytes", contentLength, freeSpace);
-            broadcastLog("Update error: Not enough storage space (even after cleanup)", "error");
+            broadcastLogLevel("error", "Update error: Not enough storage space (even after cleanup)");
             broadcastProgress("error", 0, "Not enough storage space");
             http.end();
             return;
@@ -676,7 +676,7 @@ void WebServer::startPicoGitHubOTA(const String& version) {
     File firmwareFile = LittleFS.open(OTA_FILE_PATH, "w");
     if (!firmwareFile) {
         LOG_E("Failed to create firmware file");
-        broadcastLog("Update error: Cannot create file", "error");
+        broadcastLogLevel("error", "Update error: Cannot create file");
         broadcastProgress("error", 0, "Cannot create file");
         http.end();
         return;
@@ -698,7 +698,7 @@ void WebServer::startPicoGitHubOTA(const String& version) {
                 size_t bytesWritten = firmwareFile.write(buffer, bytesRead);
                 if (bytesWritten != bytesRead) {
                     LOG_E("File write error: wrote %d/%d bytes (filesystem may be full)", bytesWritten, bytesRead);
-                    broadcastLog("Update error: Write failed - filesystem full", "error");
+                    broadcastLogLevel("error", "Update error: Write failed - filesystem full");
                     broadcastProgress("error", 0, "Write failed - filesystem full");
                     firmwareFile.close();
                     LittleFS.remove(OTA_FILE_PATH);  // Clean up partial file
@@ -723,7 +723,7 @@ void WebServer::startPicoGitHubOTA(const String& version) {
     
     if (written != (size_t)contentLength) {
         LOG_E("Download incomplete: %d/%d bytes", written, contentLength);
-        broadcastLog("Update error: Download incomplete", "error");
+        broadcastLogLevel("error", "Update error: Download incomplete");
         broadcastProgress("error", 0, "Download incomplete");
         return;
     }
@@ -734,7 +734,7 @@ void WebServer::startPicoGitHubOTA(const String& version) {
     File flashFile = LittleFS.open(OTA_FILE_PATH, "r");
     if (!flashFile) {
         LOG_E("Failed to open firmware file for flashing");
-        broadcastLog("Update error: Cannot read firmware", "error");
+        broadcastLogLevel("error", "Update error: Cannot read firmware");
         broadcastProgress("error", 0, "Cannot read firmware");
         return;
     }
@@ -745,7 +745,7 @@ void WebServer::startPicoGitHubOTA(const String& version) {
     broadcastProgress("flash", 42, "Preparing device...");
     if (!_picoUart.sendCommand(MSG_CMD_BOOTLOADER, nullptr, 0)) {
         LOG_E("Failed to send bootloader command");
-        broadcastLog("Update error: Device not responding", "error");
+        broadcastLogLevel("error", "Update error: Device not responding");
         broadcastProgress("error", 0, "Device not responding");
         flashFile.close();
         return;
@@ -754,7 +754,7 @@ void WebServer::startPicoGitHubOTA(const String& version) {
     // Wait for bootloader ACK
     if (!_picoUart.waitForBootloaderAck(3000)) {
         LOG_E("Bootloader ACK timeout");
-        broadcastLog("Update error: Device not ready", "error");
+        broadcastLogLevel("error", "Update error: Device not ready");
         broadcastProgress("error", 0, "Device not ready");
         flashFile.close();
         return;
@@ -768,7 +768,7 @@ void WebServer::startPicoGitHubOTA(const String& version) {
     
     if (!success) {
         LOG_E("Pico firmware streaming failed");
-        broadcastLog("Update error: Installation failed", "error");
+        broadcastLogLevel("error", "Update error: Installation failed");
         broadcastProgress("error", 0, "Installation failed");
         return;
     }
@@ -802,7 +802,7 @@ void WebServer::startCombinedOTA(const String& version) {
     uint8_t machineType = State.getMachineType();
     if (machineType == 0) {
         LOG_E("Machine type unknown - Pico not connected?");
-        broadcastLog("Update error: Please ensure the machine is powered on and connected.", "error");
+        broadcastLogLevel("error", "Update error: Please ensure the machine is powered on and connected.");
         broadcastProgress("error", 0, "Device not ready");
         return;
     }
@@ -818,14 +818,14 @@ void WebServer::startCombinedOTA(const String& version) {
     
     if (!_picoUart.isConnected()) {
         LOG_W("Pico not responding after update - continuing with ESP32 update anyway");
-        broadcastLog("Finalizing update...", "info");
+        broadcastLogLevel("info", "Finalizing update...");
     } else {
         // Verify Pico version matches
         const char* picoVer = State.getPicoVersion();
         if (picoVer && String(picoVer) != version && String(picoVer) != version.substring(1)) {
             LOG_W("Pico version mismatch after update: %s vs %s", picoVer, version.c_str());
         }
-        broadcastLog("Finalizing update...", "info");
+        broadcastLogLevel("info", "Finalizing update...");
     }
     
     broadcastProgress("flash", 60, "Completing update...");

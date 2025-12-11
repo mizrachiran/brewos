@@ -914,7 +914,7 @@ void WebServer::setupRoutes() {
         }
         scaleManager->clearDiscovered();
         scaleManager->startScan(15000);  // 15 second scan
-        broadcastLog("BLE scale scan started", "info");
+        broadcastLogLevel("info", "BLE scale scan started");
         request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Scanning...\"}");
     });
     
@@ -978,7 +978,7 @@ void WebServer::setupRoutes() {
             }
             
             if (success) {
-                broadcastLog("Connecting to scale...", "info");
+                broadcastLogLevel("info", "Connecting to scale...");
                 request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Connecting...\"}");
             } else {
                 request->send(400, "application/json", "{\"error\":\"Connection failed\"}");
@@ -995,7 +995,7 @@ void WebServer::setupRoutes() {
     // Forget saved scale
     _server.on("/api/scale/forget", HTTP_POST, [this](AsyncWebServerRequest* request) {
         scaleManager->forgetScale();
-        broadcastLog("Scale forgotten", "info");
+        broadcastLogLevel("info", "Scale forgotten");
         request->send(200, "application/json", "{\"status\":\"ok\"}");
     });
     
@@ -1122,7 +1122,7 @@ void WebServer::setupRoutes() {
             
             if (State.removeSchedule(id)) {
                 request->send(200, "application/json", "{\"status\":\"ok\"}");
-                broadcastLog("Schedule deleted", "info");
+                broadcastLogLevel("info", "Schedule deleted");
             } else {
                 request->send(404, "application/json", "{\"error\":\"Schedule not found\"}");
             }
@@ -1270,7 +1270,7 @@ void WebServer::setupRoutes() {
             );
             
             request->send(200, "application/json", "{\"status\":\"ok\"}");
-            broadcastLog("Time settings updated", "info");
+            broadcastLogLevel("info", "Time settings updated");
         }
     );
     
@@ -1284,7 +1284,7 @@ void WebServer::setupRoutes() {
         
         _wifiManager.syncNTP();
         request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"NTP sync initiated\"}");
-        broadcastLog("NTP sync initiated", "info");
+        broadcastLogLevel("info", "NTP sync initiated");
     });
     
     // Handle OPTIONS for CORS preflight
@@ -1584,7 +1584,7 @@ void WebServer::setupRoutes() {
         // Send command to Pico to run all diagnostics
         uint8_t payload[1] = { 0x00 };  // DIAG_TEST_ALL
         if (_picoUart.sendCommand(MSG_CMD_DIAGNOSTICS, payload, 1)) {
-            broadcastLog("Running hardware diagnostics...", "info");
+            broadcastLogLevel("info", "Running hardware diagnostics...");
             request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Diagnostics started\"}");
         } else {
             request->send(500, "application/json", "{\"error\":\"Failed to send diagnostic command\"}");
@@ -2045,7 +2045,7 @@ void WebServer::handleOTAUpload(AsyncWebServerRequest* request, const String& fi
         size_t freeSpace = LittleFS.totalBytes() - LittleFS.usedBytes();
         if (totalSize > freeSpace) {
             LOG_E("Not enough space: need %d bytes, have %d bytes", totalSize, freeSpace);
-            broadcastLog("Upload failed: Not enough storage space", "error");
+            broadcastLogLevel("error", "Upload failed: Not enough storage space");
             request->send(507, "application/json", "{\"error\":\"Not enough storage space\"}");
             return;
         }
@@ -2057,7 +2057,7 @@ void WebServer::handleOTAUpload(AsyncWebServerRequest* request, const String& fi
             freeSpace = LittleFS.totalBytes() - LittleFS.usedBytes();
             if (totalSize > freeSpace) {
                 LOG_E("Still not enough space after cleanup: need %d bytes, have %d bytes", totalSize, freeSpace);
-                broadcastLog("Upload failed: Not enough storage space (even after cleanup)", "error");
+                broadcastLogLevel("error", "Upload failed: Not enough storage space (even after cleanup)");
                 request->send(507, "application/json", "{\"error\":\"Not enough storage space\"}");
                 return;
             }
@@ -2068,7 +2068,7 @@ void WebServer::handleOTAUpload(AsyncWebServerRequest* request, const String& fi
         otaFile = LittleFS.open(OTA_FILE_PATH, "w");
         if (!otaFile) {
             LOG_E("Failed to open OTA file for writing");
-            broadcastLog("Upload failed: Cannot create file", "error");
+            broadcastLogLevel("error", "Upload failed: Cannot create file");
             request->send(500, "application/json", "{\"error\":\"Failed to open file\"}");
             return;
         }
@@ -2081,7 +2081,7 @@ void WebServer::handleOTAUpload(AsyncWebServerRequest* request, const String& fi
             // Close file and abort upload if write fails
             otaFile.close();
             LittleFS.remove(OTA_FILE_PATH);  // Clean up partial file
-            broadcastLog("Upload failed: Filesystem full or write error", "error");
+            broadcastLogLevel("error", "Upload failed: Filesystem full or write error");
             request->send(507, "application/json", "{\"error\":\"Filesystem full\"}");
             return;
         }
@@ -2127,12 +2127,12 @@ void WebServer::handleOTAUpload(AsyncWebServerRequest* request, const String& fi
             
             if (fileSize != uploadedSize) {
                 LOG_E("File size mismatch: expected %d, got %d", uploadedSize, fileSize);
-                broadcastLog("Upload failed: file size mismatch", "error");
+                broadcastLogLevel("error", "Upload failed: file size mismatch");
                 uploadSuccess = false;
             }
         } else {
             LOG_E("Failed to verify uploaded file");
-            broadcastLog("Upload failed: file verification error", "error");
+            broadcastLogLevel("error", "Upload failed: file verification error");
             uploadSuccess = false;
         }
         
@@ -2185,36 +2185,36 @@ void WebServer::handleStartOTA(AsyncWebServerRequest* request) {
     
     request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Starting OTA...\"}");
     
-    broadcastLog("Starting Pico firmware update...", "info");
+    broadcastLogLevel("info", "Starting Pico firmware update...");
     
     // Step 1: Send bootloader command via UART (serial bootloader - preferred method)
-    broadcastLog("Sending bootloader command to Pico...", "info");
+    broadcastLogLevel("info", "Sending bootloader command to Pico...");
     if (!_picoUart.sendCommand(MSG_CMD_BOOTLOADER, nullptr, 0)) {
-        broadcastLog("Failed to send bootloader command", "error");
+        broadcastLogLevel("error", "Failed to send bootloader command");
         firmwareFile.close();
         return;
     }
     
     // Step 2: Wait for bootloader ACK (0xAA 0x55)
     // The bootloader sends this ACK to confirm it's ready to receive firmware
-    broadcastLog("Waiting for bootloader ACK...", "info");
+    broadcastLogLevel("info", "Waiting for bootloader ACK...");
     if (!_picoUart.waitForBootloaderAck(2000)) {
-        broadcastLog("Bootloader ACK timeout - bootloader may not be ready", "error");
+        broadcastLogLevel("error", "Bootloader ACK timeout - bootloader may not be ready");
         firmwareFile.close();
         return;
     }
-    broadcastLog("Bootloader ACK received, ready to stream firmware", "info");
+    broadcastLogLevel("info", "Bootloader ACK received, ready to stream firmware");
     
     // Step 3: Stream firmware
-    broadcastLog("Streaming firmware to Pico...", "info");
+    broadcastLogLevel("info", "Streaming firmware to Pico...");
     bool success = streamFirmwareToPico(firmwareFile, firmwareSize);
     
     firmwareFile.close();
     
     if (!success) {
-        broadcastLog("Firmware update failed", "error");
+        broadcastLogLevel("error", "Firmware update failed");
         // Fallback: Try hardware bootloader entry
-        broadcastLog("Attempting hardware bootloader entry (fallback)...", "info");
+        broadcastLogLevel("info", "Attempting hardware bootloader entry (fallback)...");
         _picoUart.enterBootloader();
         delay(500);
         // Note: Hardware bootloader entry requires different protocol (USB bootloader)
@@ -2224,10 +2224,10 @@ void WebServer::handleStartOTA(AsyncWebServerRequest* request) {
     
     // Step 4: Reset Pico to boot new firmware
     delay(1000);
-    broadcastLog("Resetting Pico...", "info");
+    broadcastLogLevel("info", "Resetting Pico...");
     _picoUart.resetPico();
     
-    broadcastLog("Firmware update complete. Pico should boot with new firmware.", "info");
+    broadcastLogLevel("info", "Firmware update complete. Pico should boot with new firmware.");
 }
 
 size_t WebServer::getClientCount() {
@@ -2266,7 +2266,7 @@ bool WebServer::streamFirmwareToPico(File& firmwareFile, size_t firmwareSize) {
         
         if (bytesRead == 0) {
             LOG_E("Failed to read firmware chunk at offset %d", bytesSent);
-            broadcastLog("Firmware read error", "error");
+            broadcastLogLevel("error", "Firmware read error");
             return false;
         }
         
@@ -2274,7 +2274,7 @@ bool WebServer::streamFirmwareToPico(File& firmwareFile, size_t firmwareSize) {
         size_t sent = _picoUart.streamFirmwareChunk(buffer, bytesRead, chunkNumber);
         if (sent != bytesRead) {
             LOG_E("Failed to send chunk %d: %d/%d bytes", chunkNumber, sent, bytesRead);
-            broadcastLog("Firmware streaming error at chunk %d", "error", chunkNumber);
+            broadcastLogLevel("error", "Firmware streaming error at chunk %d", chunkNumber);
             return false;
         }
         
@@ -2316,7 +2316,7 @@ bool WebServer::streamFirmwareToPico(File& firmwareFile, size_t firmwareSize) {
     size_t sent = _picoUart.streamFirmwareChunk(endMarker, 2, 0xFFFFFFFF);
     if (sent != 2) {
         LOG_E("Failed to send end marker");
-        broadcastLog("Failed to send end marker", "error");
+        broadcastLogLevel("error", "Failed to send end marker");
         return false;
     }
     
@@ -2405,7 +2405,7 @@ void WebServer::handleSetMQTTConfig(AsyncWebServerRequest* request, uint8_t* dat
     
     if (_mqttClient.setConfig(config)) {
         request->send(200, "application/json", "{\"status\":\"ok\"}");
-        broadcastLog("MQTT configuration updated", "info");
+        broadcastLogLevel("info", "MQTT configuration updated");
     } else {
         request->send(400, "application/json", "{\"error\":\"Invalid configuration\"}");
     }
@@ -2414,9 +2414,9 @@ void WebServer::handleSetMQTTConfig(AsyncWebServerRequest* request, uint8_t* dat
 void WebServer::handleTestMQTT(AsyncWebServerRequest* request) {
     if (_mqttClient.testConnection()) {
         request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Connection successful\"}");
-        broadcastLog("MQTT connection test successful", "info");
+        broadcastLogLevel("info", "MQTT connection test successful");
     } else {
         request->send(500, "application/json", "{\"error\":\"Connection failed\"}");
-        broadcastLog("MQTT connection test failed", "error");
+        broadcastLogLevel("error", "MQTT connection test failed");
     }
 }

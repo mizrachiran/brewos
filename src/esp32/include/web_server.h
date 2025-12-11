@@ -38,9 +38,9 @@ public:
     void broadcastDeviceInfo();   // Device info (on connect only)
     void broadcastPowerMeterStatus();  // Power meter status update
     // Log messages - variadic format string (like printf) to avoid PSRAM
-    // Usage: broadcastLog("info", "Message: %s", value) or broadcastLog("Message", "info")
+    // Usage: broadcastLog("Message: %s", value) or broadcastLogLevel("warn", "Message: %s", value)
     void broadcastLog(const char* format, ...) __attribute__((format(printf, 2, 3)));  // Variadic: defaults to "info"
-    void broadcastLog(const char* format, const char* level, ...) __attribute__((format(printf, 3, 4)));  // Variadic with explicit level
+    void broadcastLogLevel(const char* level, const char* format, ...) __attribute__((format(printf, 3, 4)));  // Level first, then format
     void broadcastEvent(const String& event, const JsonDocument* data = nullptr);  // Events (shot_start, shot_end, etc.)
     
     // Legacy/debug - raw pico message forwarding

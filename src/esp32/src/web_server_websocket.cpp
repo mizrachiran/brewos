@@ -109,28 +109,28 @@ void WebServer::processCommand(JsonDocument& doc) {
             payload[4] = timeout & 0xFF;
             
             if (_picoUart.sendCommand(MSG_CMD_SET_ECO, payload, 5)) {
-                broadcastLog("info", "Eco mode config sent: enabled=%s, temp=%.1f°C, timeout=%dmin", 
+                broadcastLogLevel("info", "Eco mode config sent: enabled=%s, temp=%.1f°C, timeout=%dmin", 
                          enabled ? "true" : "false", brewTemp, timeout);
             } else {
-                broadcastLog("Failed to send eco config", "error");
+                broadcastLogLevel("error", "Failed to send eco config");
             }
         }
         else if (cmd == "enter_eco") {
             // Manually enter eco mode
             uint8_t payload[1] = {1};  // 1 = enter eco
             if (_picoUart.sendCommand(MSG_CMD_SET_ECO, payload, 1)) {
-                broadcastLog("Entering eco mode", "info");
+                broadcastLogLevel("info", "Entering eco mode");
             } else {
-                broadcastLog("Failed to enter eco mode", "error");
+                broadcastLogLevel("error", "Failed to enter eco mode");
             }
         }
         else if (cmd == "exit_eco") {
             // Manually exit eco mode (wake up)
             uint8_t payload[1] = {0};  // 0 = exit eco
             if (_picoUart.sendCommand(MSG_CMD_SET_ECO, payload, 1)) {
-                broadcastLog("Exiting eco mode", "info");
+                broadcastLogLevel("info", "Exiting eco mode");
             } else {
-                broadcastLog("Failed to exit eco mode", "error");
+                broadcastLogLevel("error", "Failed to exit eco mode");
             }
         }
         else if (cmd == "set_temp") {
@@ -210,9 +210,9 @@ void WebServer::processCommand(JsonDocument& doc) {
             _mqttClient.setConfig(config);
             
             if (_mqttClient.testConnection()) {
-                broadcastLog("MQTT connection test successful", "info");
+                broadcastLogLevel("info", "MQTT connection test successful");
             } else {
-                broadcastLog("MQTT connection test failed", "error");
+                broadcastLogLevel("error", "MQTT connection test failed");
             }
         }
         else if (cmd == "mqtt_config") {
@@ -235,7 +235,7 @@ void WebServer::processCommand(JsonDocument& doc) {
             if (!doc["discovery"].isNull()) config.ha_discovery = doc["discovery"].as<bool>();
             
             if (_mqttClient.setConfig(config)) {
-                broadcastLog("MQTT configuration updated", "info");
+                broadcastLogLevel("info", "MQTT configuration updated");
             }
         }
         else if (cmd == "set_cloud_config") {
@@ -262,11 +262,17 @@ void WebServer::processCommand(JsonDocument& doc) {
                 if (cloudSettings.enabled && strlen(cloudSettings.serverUrl) > 0) {
                     // Initialize or update with new URL
                     _pairingManager->begin(String(cloudSettings.serverUrl));
-                    broadcastLog("Cloud enabled: %s", cloudSettings.serverUrl);
+                    
+                    // Register device key with cloud server
+                    if (_pairingManager->registerTokenWithCloud()) {
+                        broadcastLog("Cloud enabled and device registered: %s", cloudSettings.serverUrl);
+                    } else {
+                        broadcastLog("Cloud enabled: %s (registration pending)", cloudSettings.serverUrl);
+                    }
                 } else if (!cloudSettings.enabled && wasEnabled) {
                     // Cloud was disabled - clear pairing manager
                     _pairingManager->begin("");  // Clear cloud URL
-                    broadcastLog("Cloud disabled", "info");
+                    broadcastLogLevel("info", "Cloud disabled");
                 }
             }
             
@@ -289,7 +295,7 @@ void WebServer::processCommand(JsonDocument& doc) {
                 BrewOS::ScheduleEntry entry;
                 entry.fromJson(doc.as<JsonObjectConst>());
                 if (State.updateSchedule(id, entry)) {
-                    broadcastLog("Schedule updated", "info");
+                    broadcastLogLevel("info", "Schedule updated");
                 }
             }
         }
@@ -297,7 +303,7 @@ void WebServer::processCommand(JsonDocument& doc) {
             // Delete schedule
             uint8_t id = doc["id"] | 0;
             if (id > 0 && State.removeSchedule(id)) {
-                broadcastLog("Schedule deleted", "info");
+                broadcastLogLevel("info", "Schedule deleted");
             }
         }
         else if (cmd == "toggle_schedule") {
@@ -313,7 +319,7 @@ void WebServer::processCommand(JsonDocument& doc) {
             bool enabled = doc["enabled"] | false;
             uint16_t minutes = doc["minutes"] | 60;
             State.setAutoPowerOff(enabled, minutes);
-            broadcastLog("Auto power-off updated", "info");
+            broadcastLogLevel("info", "Auto power-off updated");
         }
         else if (cmd == "get_schedules") {
             // Return schedules to requesting client (if needed)
@@ -327,12 +333,12 @@ void WebServer::processCommand(JsonDocument& doc) {
                 }
                 scaleManager->clearDiscovered();
                 scaleManager->startScan(15000);
-                broadcastLog("BLE scale scan started", "info");
+                broadcastLogLevel("info", "BLE scale scan started");
             }
         }
         else if (cmd == "scale_scan_stop") {
             scaleManager->stopScan();
-            broadcastLog("BLE scale scan stopped", "info");
+            broadcastLogLevel("info", "BLE scale scan stopped");
         }
         else if (cmd == "scale_connect") {
             String address = doc["address"] | "";
@@ -346,16 +352,16 @@ void WebServer::processCommand(JsonDocument& doc) {
         }
         else if (cmd == "scale_disconnect") {
             scaleManager->disconnect();
-            broadcastLog("Scale disconnected", "info");
+            broadcastLogLevel("info", "Scale disconnected");
         }
         else if (cmd == "tare" || cmd == "scale_tare") {
             scaleManager->tare();
-            broadcastLog("Scale tared", "info");
+            broadcastLogLevel("info", "Scale tared");
         }
         else if (cmd == "scale_reset") {
             scaleManager->tare();
             brewByWeight->reset();
-            broadcastLog("Scale reset", "info");
+            broadcastLogLevel("info", "Scale reset");
         }
         // Brew-by-weight settings
         else if (cmd == "set_bbw") {
@@ -374,7 +380,7 @@ void WebServer::processCommand(JsonDocument& doc) {
             if (!doc["auto_tare"].isNull()) {
                 brewByWeight->setAutoTare(doc["auto_tare"].as<bool>());
             }
-            broadcastLog("Brew-by-weight settings updated", "info");
+            broadcastLogLevel("info", "Brew-by-weight settings updated");
         }
         // Pre-infusion settings
         else if (cmd == "set_preinfusion") {
@@ -384,9 +390,9 @@ void WebServer::processCommand(JsonDocument& doc) {
             
             // Validate timing parameters
             if (onTimeMs > 10000) {
-                broadcastLog("Pre-infusion on_time too long (max 10000ms)", "error");
+                broadcastLogLevel("error", "Pre-infusion on_time too long (max 10000ms)");
             } else if (pauseTimeMs > 30000) {
-                broadcastLog("Pre-infusion pause_time too long (max 30000ms)", "error");
+                broadcastLogLevel("error", "Pre-infusion pause_time too long (max 30000ms)");
             } else {
                 // Build payload for Pico: [config_type, enabled, on_time_ms(2), pause_time_ms(2)]
                 uint8_t payload[6];
@@ -404,10 +410,10 @@ void WebServer::processCommand(JsonDocument& doc) {
                     settings.brew.preinfusionPressure = enabled ? 1.0f : 0.0f;  // Use as enabled flag
                     State.saveBrewSettings();
                     
-                    broadcastLog("info", "Pre-infusion settings saved: %s, on=%dms, pause=%dms", 
+                    broadcastLogLevel("info", "Pre-infusion settings saved: %s, on=%dms, pause=%dms", 
                              enabled ? "enabled" : "disabled", onTimeMs, pauseTimeMs);
                 } else {
-                    broadcastLog("Failed to send pre-infusion config to Pico", "error");
+                    broadcastLogLevel("error", "Failed to send pre-infusion config to Pico");
                 }
             }
         }
@@ -440,7 +446,7 @@ void WebServer::processCommand(JsonDocument& doc) {
                 // Send disable command to Pico
                 uint8_t payload[1] = {0};  // 0 = disabled
                 _picoUart.sendCommand(MSG_CMD_POWER_METER_CONFIG, payload, 1);
-                broadcastLog("Power metering disabled", "info");
+                broadcastLogLevel("info", "Power metering disabled");
             }
             else if (source == "hardware") {
                 // Hardware meters are configured on Pico
@@ -449,7 +455,7 @@ void WebServer::processCommand(JsonDocument& doc) {
                 // Send enable command to Pico
                 uint8_t payload[1] = {1};  // 1 = enabled
                 _picoUart.sendCommand(MSG_CMD_POWER_METER_CONFIG, payload, 1);
-                broadcastLog("Power meter configured (hardware)", "info");
+                broadcastLogLevel("info", "Power meter configured (hardware)");
             }
             else if (source == "mqtt") {
                 String topic = doc["topic"] | "";
@@ -462,10 +468,10 @@ void WebServer::processCommand(JsonDocument& doc) {
                         snprintf(mqttMsg, sizeof(mqttMsg), "MQTT power meter configured: %s", topic.c_str());
                         broadcastLog(mqttMsg);
                     } else {
-                        broadcastLog("Failed to configure MQTT power meter", "error");
+                        broadcastLogLevel("error", "Failed to configure MQTT power meter");
                     }
                 } else {
-                    broadcastLog("MQTT topic required", "error");
+                    broadcastLogLevel("error", "MQTT topic required");
                 }
             }
             
@@ -476,12 +482,12 @@ void WebServer::processCommand(JsonDocument& doc) {
             // Forward discovery command to Pico
             _picoUart.sendCommand(MSG_CMD_POWER_METER_DISCOVER, nullptr, 0);
             powerMeterManager->startAutoDiscovery();
-            broadcastLog("Starting power meter auto-discovery...", "info");
+            broadcastLogLevel("info", "Starting power meter auto-discovery...");
         }
         // WiFi commands
         else if (cmd == "wifi_forget") {
             _wifiManager.clearCredentials();
-            broadcastLog("WiFi credentials cleared. Device will restart.", "warn");
+            broadcastLogLevel("warn", "WiFi credentials cleared. Device will restart.");
             delay(1000);
             ESP.restart();
         }
@@ -502,7 +508,7 @@ void WebServer::processCommand(JsonDocument& doc) {
                 snprintf(ipMsg, sizeof(ipMsg), "Static IP configured: %s. Reconnecting...", ip.c_str());
                 broadcastLog(ipMsg);
             } else {
-                broadcastLog("DHCP mode enabled. Reconnecting...", "info");
+                broadcastLogLevel("info", "DHCP mode enabled. Reconnecting...");
             }
             
             // Reconnect to apply new settings
@@ -511,12 +517,12 @@ void WebServer::processCommand(JsonDocument& doc) {
         }
         // System commands
         else if (cmd == "restart") {
-            broadcastLog("Device restarting...", "warn");
+            broadcastLogLevel("warn", "Device restarting...");
             delay(500);
             ESP.restart();
         }
         else if (cmd == "factory_reset") {
-            broadcastLog("Factory reset initiated...", "warn");
+            broadcastLogLevel("warn", "Factory reset initiated...");
             State.factoryReset();
             _wifiManager.clearCredentials();
             delay(1000);
@@ -530,7 +536,7 @@ void WebServer::processCommand(JsonDocument& doc) {
             // Update BrewOS firmware (combined: Pico first, then ESP32)
             String version = doc["version"] | "";
             if (version.isEmpty()) {
-                broadcastLog("OTA error: No version specified", "error");
+                broadcastLogLevel("error", "OTA error: No version specified");
             } else {
                 startCombinedOTA(version);
             }
@@ -539,7 +545,7 @@ void WebServer::processCommand(JsonDocument& doc) {
             // ESP32 only - for recovery/advanced use
             String version = doc["version"] | "";
             if (version.isEmpty()) {
-                broadcastLog("OTA error: No version specified", "error");
+                broadcastLogLevel("error", "OTA error: No version specified");
             } else {
                 startGitHubOTA(version);
             }
@@ -548,7 +554,7 @@ void WebServer::processCommand(JsonDocument& doc) {
             // Pico only - for recovery/advanced use
             String version = doc["version"] | "";
             if (version.isEmpty()) {
-                broadcastLog("OTA error: No version specified", "error");
+                broadcastLogLevel("error", "OTA error: No version specified");
             } else {
                 startPicoGitHubOTA(version);
             }
@@ -620,7 +626,7 @@ void WebServer::processCommand(JsonDocument& doc) {
             
             State.saveUserPreferences();
             broadcastDeviceInfo();
-            broadcastLog("User preferences updated", "info");
+            broadcastLogLevel("info", "User preferences updated");
         }
         // Maintenance records
         else if (cmd == "record_maintenance") {
@@ -638,9 +644,9 @@ void WebServer::processCommand(JsonDocument& doc) {
             // Run all diagnostic tests
             uint8_t payload[1] = { 0x00 };  // DIAG_TEST_ALL
             if (_picoUart.sendCommand(MSG_CMD_DIAGNOSTICS, payload, 1)) {
-                broadcastLog("Running hardware diagnostics...", "info");
+                broadcastLogLevel("info", "Running hardware diagnostics...");
             } else {
-                broadcastLog("Failed to start diagnostics", "error");
+                broadcastLogLevel("error", "Failed to start diagnostics");
             }
         }
         else if (cmd == "run_diagnostic_test") {
@@ -650,7 +656,7 @@ void WebServer::processCommand(JsonDocument& doc) {
             if (_picoUart.sendCommand(MSG_CMD_DIAGNOSTICS, payload, 1)) {
                 broadcastLog("Running diagnostic test %d", testId);
             } else {
-                broadcastLog("Failed to start diagnostic test", "error");
+                broadcastLogLevel("error", "Failed to start diagnostic test");
             }
         }
     }

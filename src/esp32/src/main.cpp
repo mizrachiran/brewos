@@ -363,7 +363,7 @@ static void onPicoPacket(const PicoPacket& packet) {
                 snprintf(picoVerStr, sizeof(picoVerStr), "%d.%d.%d", ver_major, ver_minor, ver_patch);
                 if (strcmp(picoVerStr, ESP32_VERSION) != 0) {
                     LOG_W("Internal version mismatch: %s vs %s", ESP32_VERSION, picoVerStr);
-                    if (webServer) webServer->broadcastLog("Firmware update recommended", "warn");
+                    if (webServer) webServer->broadcastLogLevel("warn", "Firmware update recommended");
                 }
             }
             
@@ -460,7 +460,7 @@ static void onPicoPacket(const PicoPacket& packet) {
                 float max_current = 0;
                 memcpy(&max_current, &packet.payload[2], sizeof(float));
                 LOG_I("Env config: %dV, %.1fA max", voltage, max_current);
-                if (webServer) webServer->broadcastLog("Env config: %dV, %.1fA max", "info", voltage, max_current);
+                if (webServer) webServer->broadcastLogLevel("info", "Env config: %dV, %.1fA max", voltage, max_current);
             }
             break;
         }
@@ -1067,6 +1067,15 @@ void setup() {
         if (String(cloudSettings.deviceId) != deviceId) {
             strncpy(cloudSettings.deviceId, deviceId.c_str(), sizeof(cloudSettings.deviceId) - 1);
             State.saveCloudSettings();
+        }
+        
+        // Register device key with cloud server BEFORE trying to connect
+        // This ensures the cloud knows our device key for WebSocket authentication
+        LOG_I("Registering device key with cloud...");
+        if (pairingManager->registerTokenWithCloud()) {
+            LOG_I("Device key registered with cloud");
+        } else {
+            LOG_W("Failed to register device key with cloud - will retry on connect");
         }
         
         // Initialize Cloud Connection for real-time state relay

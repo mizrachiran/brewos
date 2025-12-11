@@ -64,14 +64,14 @@ void WebServer::broadcastLog(const char* format, ...) {
     broadcastLogInternal(&_ws, _cloudConnection, "info", message);
 }
 
-// Variadic version with explicit level (format, level, ...args)
-void WebServer::broadcastLog(const char* format, const char* level, ...) {
+// Variadic version with explicit level (level, format, ...args)
+void WebServer::broadcastLogLevel(const char* level, const char* format, ...) {
     if (!format || !level) return;
     
     // Format message into stack-allocated buffer (internal RAM, not PSRAM)
     char message[256];
     va_list args;
-    va_start(args, level);
+    va_start(args, format);
     vsnprintf(message, sizeof(message), format, args);
     va_end(args);
     
