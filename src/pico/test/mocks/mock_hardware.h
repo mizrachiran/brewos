@@ -10,6 +10,10 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+// Note: <stddef.h> is included instead of <stdlib.h> because only basic types
+// like size_t and NULL are needed in this mock header. <stdlib.h> provides
+// additional functions (e.g., malloc, free) which are not required here.
+// If you need those functions, include <stdlib.h> in your test code.
 #include <stddef.h>
 #include <time.h>
 
