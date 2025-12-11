@@ -126,9 +126,9 @@ void CloudConnection::loop() {
                           freeHeap, MIN_FREE_HEAP_FOR_SSL);
                     lowMemLogged = true;
                 }
-                // Wait longer before retrying (60 seconds when memory is low)
+                // Wait longer before retrying when memory is low
                 _lastConnectAttempt = now;
-                _reconnectDelay = LONG_BACKOFF_MS * 2;  // 60 seconds
+                _reconnectDelay = LONG_BACKOFF_MS * 2;  // Double the normal backoff
                 _inLongBackoff = true;
                 return;  // Skip _ws.loop() when memory is low
             } else {
