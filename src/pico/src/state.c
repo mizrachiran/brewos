@@ -673,7 +673,6 @@ bool state_set_mode(machine_mode_t mode) {
     
     
     // If entering IDLE from defensive mode, allow it (safety system needs this)
-    DEBUG_PRINT("Mode: %d -> %d\n", g_mode, mode);
     g_mode = mode;
     return true;
 }
