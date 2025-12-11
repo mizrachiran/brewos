@@ -270,9 +270,18 @@ bool PicoUART::waitForBootloaderAck(uint32_t timeoutMs) {
     uint8_t expected[2] = {0xAA, 0x55};
     uint8_t index = 0;
     
-    // Clear any pending data first to avoid confusion
+    // Wait a moment for Pico to process command and enter bootloader
+    // (Pico has 50ms delay before sending ACK)
+    delay(100);
+    
+    // Clear any pending data from normal protocol (status packets, etc)
+    int drained = 0;
     while (Serial1.available()) {
         Serial1.read();
+        drained++;
+    }
+    if (drained > 0) {
+        LOG_I("Drained %d bytes from UART buffer", drained);
     }
     
     // Reset packet state machine to avoid interference
@@ -280,9 +289,13 @@ bool PicoUART::waitForBootloaderAck(uint32_t timeoutMs) {
     RxState savedState = _rxState;
     _rxState = RxState::WAIT_START;
     
+    LOG_I("Waiting for bootloader ACK (0xAA 0x55)...");
+    int bytesRead = 0;
+    
     while ((millis() - startTime) < timeoutMs) {
         if (Serial1.available()) {
             uint8_t byte = Serial1.read();
+            bytesRead++;
             
             if (index == 0 && byte == expected[0]) {
                 // Got first byte (0xAA) - could be protocol sync or bootloader ACK
@@ -290,11 +303,15 @@ bool PicoUART::waitForBootloaderAck(uint32_t timeoutMs) {
             } else if (index == 1) {
                 if (byte == expected[1]) {
                     // Got second byte (0x55) - this is the bootloader ACK!
-                    LOG_I("Bootloader ACK received: 0x%02X 0x%02X", expected[0], expected[1]);
+                    LOG_I("Bootloader ACK received after %d bytes, %lu ms", 
+                          bytesRead, millis() - startTime);
                     _rxState = savedState;  // Restore state
                     return true;
                 } else {
                     // Not 0x55, reset and check if this byte is 0xAA
+                    if (bytesRead < 50) {  // Only log first few bytes to avoid spam
+                        LOG_D("Got 0xAA then 0x%02X (not ACK)", byte);
+                    }
                     index = (byte == expected[0]) ? 1 : 0;
                 }
             } else {
@@ -307,7 +324,7 @@ bool PicoUART::waitForBootloaderAck(uint32_t timeoutMs) {
     
     // Restore state
     _rxState = savedState;
-    LOG_E("Bootloader ACK timeout after %d ms", timeoutMs);
+    LOG_E("Bootloader ACK timeout after %d ms (read %d bytes total)", timeoutMs, bytesRead);
     return false;
 }
 

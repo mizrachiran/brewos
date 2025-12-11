@@ -227,6 +227,22 @@ void MQTTClient::disconnect() {
     _connected = false;
 }
 
+void MQTTClient::setEnabled(bool enabled) {
+    if (enabled && !_config.enabled) {
+        // Re-enable MQTT
+        _config.enabled = true;
+        _reconnectDelay = 1000;
+        _lastReconnectAttempt = 0;  // Allow immediate reconnect
+        LOG_I("MQTT enabled");
+    } else if (!enabled && _config.enabled) {
+        // Disable MQTT - disconnect first
+        LOG_I("MQTT disabling...");
+        disconnect();
+        _config.enabled = false;
+        LOG_I("MQTT disabled");
+    }
+}
+
 void MQTTClient::publishStatus(const ui_state_t& state) {
     if (!_connected) return;
     

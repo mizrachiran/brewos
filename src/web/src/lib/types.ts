@@ -45,6 +45,8 @@ export type MessageType =
   | "device_info"
   | "diagnostics_header"
   | "diagnostics_result"
+  // OTA update progress
+  | "ota_progress"
   // Cloud-specific message types
   | "connected"      // Cloud tells client if device is online
   | "device_online"  // Device came online

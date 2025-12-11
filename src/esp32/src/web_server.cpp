@@ -373,7 +373,18 @@ void WebServer::setupRoutes() {
     // Root route - serve React app
     _server.on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
         Serial.println("[WEB] / hit - serving index.html");
-        request->send(LittleFS, "/index.html", "text/html");
+        File file = LittleFS.open("/index.html", "r");
+        if (file) {
+            size_t fileSize = file.size();
+            AsyncWebServerResponse* response = request->beginResponse(
+                LittleFS, "/index.html", "text/html", false
+            );
+            response->addHeader("Content-Length", String(fileSize));
+            request->send(response);
+            file.close();
+        } else {
+            request->send(404, "text/plain", "index.html not found");
+        }
     });
     
     // NOTE: serveStatic is registered at the END of setupRoutes() to ensure
@@ -1726,9 +1737,22 @@ void WebServer::setupRoutes() {
         
         // Only try LittleFS for paths that look like files (have extensions)
         if (hasFileExtension && LittleFS.exists(path)) {
-            String contentType = getContentType(path);
-            request->send(LittleFS, path, contentType);
-            return;
+            // Open file to get actual size for Content-Length header
+            File file = LittleFS.open(path, "r");
+            if (file) {
+                size_t fileSize = file.size();
+                String contentType = getContentType(path);
+                
+                // Create response with explicit Content-Length
+                AsyncWebServerResponse* response = request->beginResponse(
+                    LittleFS, path, contentType, false
+                );
+                response->addHeader("Content-Length", String(fileSize));
+                response->addHeader("Cache-Control", "public, max-age=31536000, immutable");
+                request->send(response);
+                file.close();
+                return;
+            }
         }
         
         // Asset files that don't exist should 404
@@ -1740,7 +1764,18 @@ void WebServer::setupRoutes() {
         
         // SPA fallback - serve index.html for React Router paths
         // (paths like /brewing, /stats, /settings, etc.)
-        request->send(LittleFS, "/index.html", "text/html");
+        File indexFile = LittleFS.open("/index.html", "r");
+        if (indexFile) {
+            size_t indexSize = indexFile.size();
+            AsyncWebServerResponse* response = request->beginResponse(
+                LittleFS, "/index.html", "text/html", false
+            );
+            response->addHeader("Content-Length", String(indexSize));
+            request->send(response);
+            indexFile.close();
+        } else {
+            request->send(404, "text/plain", "index.html not found");
+        }
     });
     
     LOG_I("Routes setup complete");

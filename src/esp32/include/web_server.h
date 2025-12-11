@@ -93,8 +93,9 @@ private:
     
     // GitHub OTA - Download and install firmware from GitHub releases
     void startGitHubOTA(const String& version);        // ESP32 only
-    void startPicoGitHubOTA(const String& version);    // Pico only (based on machine type)
+    bool startPicoGitHubOTA(const String& version);    // Pico only (based on machine type), returns true on success
     void startCombinedOTA(const String& version);      // Pico first, then ESP32
+    void updateLittleFS(const char* tag);              // Update web UI filesystem
     
     // Check for updates from GitHub releases
     void checkForUpdates();
@@ -104,6 +105,9 @@ private:
     
     // Version mismatch check
     bool checkVersionMismatch();
+    
+    // OTA in progress flag - suppresses non-essential broadcasts
+    bool _otaInProgress = false;
 };
 
 #endif // WEB_SERVER_H
