@@ -55,51 +55,54 @@ if [ -n "$3" ]; then
     echo -e "${BLUE}Using manual mount point: $MANUAL_MOUNT${NC}"
 fi
 
-# Check if firmware path provided
+# Check if firmware path provided manually
 if [ -n "$2" ]; then
     FIRMWARE="$2"
     if [ ! -f "$FIRMWARE" ]; then
         echo -e "${RED}✗ Firmware file not found: $FIRMWARE${NC}"
         exit 1
     fi
+    echo -e "${YELLOW}⚠ Using manually specified firmware: $FIRMWARE${NC}"
+    echo -e "${YELLOW}⚠ Note: This firmware may not match the current source code${NC}"
+    echo ""
 else
-    # Auto-detect firmware location
-    FIRMWARE="$BUILD_DIR/$FIRMWARE_NAME"
+    # Always build firmware before flashing
+    echo -e "${BLUE}Building firmware for $MACHINE_TYPE...${NC}"
     
-    # Check if firmware exists
-    if [ ! -f "$FIRMWARE" ]; then
-        echo -e "${YELLOW}⚠ Firmware not found: $FIRMWARE${NC}"
-        echo ""
-        echo -e "${YELLOW}Building firmware for $MACHINE_TYPE...${NC}"
-        
-        # Check if Pico SDK is set
-        if [ -z "$PICO_SDK_PATH" ]; then
-            if [ -d "$HOME/pico-sdk" ]; then
-                export PICO_SDK_PATH="$HOME/pico-sdk"
-                echo -e "${BLUE}Using PICO_SDK_PATH=$PICO_SDK_PATH${NC}"
-            else
-                echo -e "${RED}✗ PICO_SDK_PATH not set and ~/pico-sdk not found${NC}"
-                echo "Please set PICO_SDK_PATH or install Pico SDK to ~/pico-sdk"
-                exit 1
-            fi
+    # Check if Pico SDK is set
+    if [ -z "$PICO_SDK_PATH" ]; then
+        if [ -d "$HOME/pico-sdk" ]; then
+            export PICO_SDK_PATH="$HOME/pico-sdk"
+            echo -e "${BLUE}Using PICO_SDK_PATH=$PICO_SDK_PATH${NC}"
+        else
+            echo -e "${RED}✗ PICO_SDK_PATH not set and ~/pico-sdk not found${NC}"
+            echo "Please set PICO_SDK_PATH or install Pico SDK to ~/pico-sdk"
+            exit 1
         fi
-        
-        # Create build directory if it doesn't exist
-        mkdir -p "$BUILD_DIR"
-        cd "$BUILD_DIR"
-        
-        # Configure CMake if not already configured
-        if [ ! -f "CMakeCache.txt" ] || ! grep -q "MACHINE_TYPE:STRING=$MACHINE_TYPE" CMakeCache.txt 2>/dev/null; then
-            echo -e "${BLUE}Configuring CMake for $MACHINE_TYPE...${NC}"
-            cmake .. -DMACHINE_TYPE="$MACHINE_TYPE"
-        fi
-        
-        # Build
-        echo -e "${BLUE}Building firmware...${NC}"
-        make -j$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
-        
-        echo ""
     fi
+    
+    # Create build directory if it doesn't exist
+    mkdir -p "$BUILD_DIR"
+    cd "$BUILD_DIR"
+    
+    # Configure CMake if not already configured or if machine type changed
+    if [ ! -f "CMakeCache.txt" ] || ! grep -q "MACHINE_TYPE:STRING=$MACHINE_TYPE" CMakeCache.txt 2>/dev/null; then
+        echo -e "${BLUE}Configuring CMake for $MACHINE_TYPE...${NC}"
+        cmake .. -DMACHINE_TYPE="$MACHINE_TYPE"
+    fi
+    
+    # Always rebuild to ensure we flash the latest version
+    echo -e "${BLUE}Building firmware...${NC}"
+    if make -j$(sysctl -n hw.ncpu 2>/dev/null || echo 4); then
+        echo -e "${GREEN}✓ Build successful${NC}"
+    else
+        echo -e "${RED}✗ Build failed${NC}"
+        exit 1
+    fi
+    
+    # Set firmware path to built version
+    FIRMWARE="$BUILD_DIR/$FIRMWARE_NAME"
+    echo ""
 fi
 
 # Verify firmware exists

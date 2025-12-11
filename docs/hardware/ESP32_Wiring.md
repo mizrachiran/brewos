@@ -25,8 +25,8 @@ The ESP32 firmware uses the following GPIO pins (defined in `src/esp32/include/c
 
 | ESP32 GPIO | Function        | J15 Pin   | Pico Side  |
 | ---------- | --------------- | --------- | ---------- |
-| GPIO17     | UART TX → Pico  | Pin 3     | GPIO0 (RX) |
-| GPIO18     | UART RX ← Pico  | Pin 4     | GPIO1 (TX) |
+| GPIO43     | UART TX → Pico  | Pin 4     | GPIO1 (RX) |
+| GPIO44     | UART RX ← Pico  | Pin 3     | GPIO0 (TX) |
 | GPIO8      | RUN control     | Pin 5     | Pico RUN   |
 | GPIO9      | SPARE1          | Pin 6     | GPIO16     |
 | **GPIO10** | **WEIGHT_STOP** | **Pin 7** | **GPIO21** |
@@ -60,8 +60,8 @@ Most ESP32 debug boards have:
 
 3. **Connect UART:**
 
-   - ESP32 GPIO17 (TX) → J15 Pin 3 (TX)
-   - ESP32 GPIO18 (RX) → J15 Pin 4 (RX)
+   - ESP32 GPIO43 (TX) → J15 Pin 4 (RX)
+   - ESP32 GPIO44 (RX) ← J15 Pin 3 (TX)
 
 4. **Connect control pins:**
 
@@ -83,8 +83,8 @@ Most ESP32 debug boards have:
 │  ┌──────────────┐                                           │
 │  │  ESP32-S3    │                                           │
 │  │              │                                           │
-│  │  GPIO17 ─────┼──► J15 Pin 3 (TX)                         │
-│  │  GPIO18 ◄────┼─── J15 Pin 4 (RX)                         │
+│  │  GPIO43 ─────┼──► J15 Pin 4 (RX)                         │
+│  │  GPIO44 ◄────┼─── J15 Pin 3 (TX)                         │
 │  │  GPIO8  ─────┼──► J15 Pin 5 (RUN)                        │
 │  │  GPIO9  ─────┼──► J15 Pin 6 (SPARE1)                     │
 │  │  GPIO10 ─────┼──► J15 Pin 7 (WEIGHT_STOP) ⭐             │
@@ -262,8 +262,8 @@ J15 Connector (Control PCB)          ESP32 Debug Board
 ───────────────────────────          ──────────────────
 Pin 1 (5V)    ────────────────────►  5V
 Pin 2 (GND)   ────────────────────►  GND
-Pin 3 (TX)    ────────────────────►  GPIO18 (RX)
-Pin 4 (RX)    ◄────────────────────  GPIO17 (TX)
+Pin 3 (TX)    ────────────────────►  GPIO44 (RX)
+Pin 4 (RX)    ◄────────────────────  GPIO43 (TX)
 Pin 5 (RUN)    ────────────────────►  GPIO8
 Pin 6 (SPARE1) ────────────────────►  GPIO9 (optional)
 Pin 7 (WGHT)   ────────────────────►  GPIO10 ⭐

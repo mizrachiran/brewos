@@ -6,6 +6,7 @@
 #   --firmware-only: Only flash firmware, skip web files (default: flash both)
 
 set -e
+set -o pipefail  # Make pipes fail if any command in the pipeline fails
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ESP32_DIR="$SCRIPT_DIR/../esp32"
@@ -84,11 +85,17 @@ fi
 # Build LittleFS image if not firmware-only
 if [ "$FIRMWARE_ONLY" = false ]; then
     echo -e "${BLUE}Building LittleFS image...${NC}"
-    pio run -e esp32s3 -t buildfs
+    if ! pio run -e esp32s3 -t buildfs; then
+        echo -e "${RED}✗ LittleFS build failed!${NC}"
+        exit 1
+    fi
 fi
 echo ""
 
 # Note: LittleFS image will be built during firmware build if needed
+
+# Now proceed to port detection and flashing
+echo -e "${BLUE}Detecting serial port...${NC}"
 
 # Detect port (first non-flag argument)
 PORT=""
@@ -113,11 +120,16 @@ if [ -z "$PORT" ]; then
         # Look for common ESP32-S3 USB patterns
         # Exclude debug-console (native USB CDC, not for programming)
         # Prioritize usbserial over usbmodem (more reliable for ESP32-S3)
+        # Use set +e temporarily to avoid exiting if ls finds no files
+        set +e
         AVAILABLE_PORTS=($(ls /dev/cu.usbserial* /dev/cu.usbmodem* /dev/cu.wchusbserial* 2>/dev/null | grep -v "debug-console"))
+        set -e
     else
         # Linux - exclude ttyACM0 if it's the debug console
         # ESP32-S3 programming port is usually ttyUSB* or ttyACM1
+        set +e
         AVAILABLE_PORTS=($(ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | grep -v "ttyACM0"))
+        set -e
     fi
     
     # If multiple ports found, let user choose
@@ -158,31 +170,53 @@ if [[ "$PORT" == *"debug-console"* ]]; then
 fi
 
 if [ -z "$PORT" ]; then
-    echo -e "${RED}✗ No ESP32 device found!${NC}"
+    echo -e "${YELLOW}⚠ No ESP32 device auto-detected${NC}"
     echo ""
     echo "Available serial ports:"
     if [[ "$OSTYPE" == "darwin"* ]]; then
         echo "  Programming ports (use these):"
-        ls /dev/cu.usbmodem* /dev/cu.usbserial* /dev/cu.wchusbserial* 2>/dev/null | grep -v "debug-console" || echo "    (none)"
+        set +e  # Temporarily disable exit on error for ls commands
+        FOUND_PORTS=$(ls /dev/cu.usbmodem* /dev/cu.usbserial* /dev/cu.wchusbserial* 2>/dev/null | grep -v "debug-console" || echo "    (none)")
+        echo "$FOUND_PORTS"
         echo ""
         echo "  Debug console (do NOT use for flashing):"
-        ls /dev/cu.debug-console 2>/dev/null || echo "    (none)"
+        DEBUG_CONSOLE=$(ls /dev/cu.debug-console 2>/dev/null || echo "    (none)")
+        echo "$DEBUG_CONSOLE"
+        set -e  # Re-enable exit on error
     else
         echo "  Programming ports (use these):"
-        ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | grep -v "ttyACM0" || echo "    (none)"
+        set +e  # Temporarily disable exit on error for ls commands
+        FOUND_PORTS=$(ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | grep -v "ttyACM0" || echo "    (none)")
+        echo "$FOUND_PORTS"
         echo ""
         echo "  Debug console (do NOT use for flashing):"
-        ls /dev/ttyACM0 2>/dev/null || echo "    (none)"
+        DEBUG_CONSOLE=$(ls /dev/ttyACM0 2>/dev/null || echo "    (none)")
+        echo "$DEBUG_CONSOLE"
+        set -e  # Re-enable exit on error
     fi
     echo ""
-    echo "Usage: $0 [port]"
-    echo "Example: $0 /dev/cu.usbmodem14101"
+    echo -e "${CYAN}Please enter the serial port path manually:${NC}"
+    echo "Example: /dev/cu.usbserial-00000000 or /dev/cu.usbmodem14101"
     echo ""
     echo -e "${YELLOW}Note: Do NOT use /dev/cu.debug-console for flashing!${NC}"
     echo "The ESP32-S3 has two USB ports:"
     echo "  - Programming port (usbmodem/usbserial) - use this for flashing"
     echo "  - Debug console (debug-console) - use this for Serial monitor only"
-    exit 1
+    echo ""
+    echo -e "${YELLOW}Enter port path (or Ctrl+C to cancel):${NC}"
+    read -r PORT
+    
+    if [ -z "$PORT" ]; then
+        echo -e "${RED}✗ No port specified${NC}"
+        exit 1
+    fi
+    
+    if [ ! -e "$PORT" ]; then
+        echo -e "${RED}✗ Port does not exist: $PORT${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}Using port: $PORT${NC}"
 fi
 
 echo -e "📍 Port: ${GREEN}$PORT${NC}"
@@ -253,6 +287,9 @@ else
     exit 1
 fi
 
+# Track flash success across both paths
+FLASH_SUCCESS=false
+
 # Flash firmware and filesystem together if not firmware-only
 if [ "$FIRMWARE_ONLY" = false ] && [ -f "$LITTLEFS_IMAGE" ]; then
     echo -e "${YELLOW}⚡ Flashing firmware and filesystem together (one bootloader session)...${NC}"
@@ -304,14 +341,6 @@ if [ "$FIRMWARE_ONLY" = false ] && [ -f "$LITTLEFS_IMAGE" ]; then
     # This keeps the ESP32 in bootloader mode for the entire operation
     # Add --verify to ensure flash succeeded
     # Use --after no_reset to prevent RTS reset (we don't have RTS pin)
-    echo -e "${YELLOW}⚠ Make sure ESP32 is in bootloader mode before continuing!${NC}"
-    echo -e "${CYAN}If not in bootloader mode:${NC}"
-    echo "  1. Hold the BOOT button"
-    echo "  2. Press and release the RESET button"
-    echo "  3. Release the BOOT button"
-    echo ""
-    sleep 2
-    
     echo -e "${BLUE}Starting flash operation...${NC}"
     
     # Build flash command arguments
@@ -339,14 +368,30 @@ if [ "$FIRMWARE_ONLY" = false ] && [ -f "$LITTLEFS_IMAGE" ]; then
     # Add firmware and filesystem
     FLASH_ARGS="$FLASH_ARGS 0x10000 $FIRMWARE $LITTLEFS_ADDR $LITTLEFS_IMAGE"
     
+    # Use pipefail (set at top of script) to ensure we catch esptool failures even when using tee
+    FLASH_SUCCESS=false
     if "$PYTHON_CMD" "$ESPTOOL_PY" $FLASH_ARGS 2>&1 | tee /tmp/flash_output.log; then
-        echo ""
-        echo -e "${GREEN}✓ Firmware and filesystem flashed and verified successfully!${NC}"
-        echo ""
-        echo -e "${YELLOW}⚠ IMPORTANT: Manually reset the ESP32 now!${NC}"
-        echo -e "${CYAN}Press and release the RESET button on the ESP32 to boot.${NC}"
-        echo ""
+        # Double-check for fatal errors in the output (esptool sometimes returns 0 even on failure)
+        # Look for specific fatal error patterns, not just any "error" word
+        if grep -qiE "(fatal error|Failed to connect|No serial data received|A fatal error occurred)" /tmp/flash_output.log; then
+            echo ""
+            echo -e "${RED}✗ Flash failed (fatal errors detected in output)!${NC}"
+            echo -e "${YELLOW}Check the output above for errors.${NC}"
+            FLASH_SUCCESS=false
+        else
+            echo ""
+            echo -e "${GREEN}✓ Firmware and filesystem flashed and verified successfully!${NC}"
+            echo ""
+            echo -e "${YELLOW}⚠ IMPORTANT: Manually reset the ESP32 now!${NC}"
+            echo -e "${CYAN}Press and release the RESET button on the ESP32 to boot.${NC}"
+            echo ""
+            FLASH_SUCCESS=true
+        fi
     else
+        FLASH_SUCCESS=false
+    fi
+    
+    if [ "$FLASH_SUCCESS" = false ]; then
         echo ""
         echo -e "${RED}✗ Flash failed!${NC}"
         echo -e "${YELLOW}Check the output above for errors.${NC}"
@@ -369,6 +414,7 @@ else
     if pio run -e esp32s3 -t upload --upload-port "$PORT"; then
         echo ""
         echo -e "${GREEN}✓ Firmware flashed successfully!${NC}"
+        FLASH_SUCCESS=true
         
         # If LittleFS image exists but wasn't flashed, offer to flash it separately
         if [ "$FIRMWARE_ONLY" = false ] && [ -f "$LITTLEFS_IMAGE" ]; then
@@ -381,13 +427,23 @@ else
     else
         echo ""
         echo -e "${RED}✗ Flash failed!${NC}"
+        FLASH_SUCCESS=false
         exit 1
     fi
 fi
 
-echo ""
-echo -e "${GREEN}✓ Flash complete!${NC}"
-echo ""
-echo "Monitor serial output with:"
-echo -e "  ${CYAN}cd src/esp32 && pio device monitor -p $PORT${NC}"
+# Only print success message if we actually succeeded
+# (This prevents false success messages if flash failed earlier)
+if [ "$FLASH_SUCCESS" = true ]; then
+    echo ""
+    echo -e "${GREEN}✓ Flash complete!${NC}"
+    echo ""
+    echo "Monitor serial output with:"
+    echo -e "  ${CYAN}cd src/esp32 && pio device monitor -p $PORT${NC}"
+else
+    # This shouldn't be reached if exit 1 was called, but just in case
+    echo ""
+    echo -e "${RED}✗ Flash did not complete successfully${NC}"
+    exit 1
+fi
 
