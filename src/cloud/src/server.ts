@@ -3,8 +3,14 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import cors from "cors";
 import path from "path";
-import { createServer } from "http";
+import { createServer, Server as HttpServer } from "http";
+import {
+  createServer as createHttpsServer,
+  Server as HttpsServer,
+} from "https";
+import { readFileSync, existsSync, readdirSync } from "fs";
 import { WebSocketServer } from "ws";
+import type { SecureContextOptions } from "tls";
 import { DeviceRelay } from "./device-relay.js";
 import { ClientProxy } from "./client-proxy.js";
 import authRouter from "./routes/auth.js";
@@ -57,6 +63,24 @@ app.use(
 // Limit JSON body size to prevent DoS attacks
 app.use(express.json({ limit: "100kb" }));
 
+// Enforce HTTPS in production
+if (process.env.NODE_ENV === "production") {
+  app.use((req, res, next) => {
+    // Check if request is secure (HTTPS) or forwarded as secure (behind proxy)
+    const isSecure =
+      req.secure ||
+      req.headers["x-forwarded-proto"] === "https" ||
+      req.headers["x-forwarded-ssl"] === "on";
+
+    if (!isSecure) {
+      // Redirect HTTP to HTTPS
+      const httpsUrl = `https://${req.headers.host}${req.url}`;
+      return res.redirect(301, httpsUrl);
+    }
+    next();
+  });
+}
+
 // Security headers
 app.use((_req, res, next) => {
   // COOP: same-origin-allow-popups allows the Google Sign-In popup to communicate back
@@ -71,7 +95,7 @@ app.use((_req, res, next) => {
   if (process.env.NODE_ENV === "production") {
     res.setHeader(
       "Strict-Transport-Security",
-      "max-age=31536000; includeSubDomains"
+      "max-age=31536000; includeSubDomains; preload"
     );
   }
   next();
@@ -125,8 +149,145 @@ app.use(
   })
 );
 
-// Create HTTP server
-const server = createServer(app);
+// Create HTTP/HTTPS server based on configuration
+let server: HttpServer | HttpsServer;
+const isProduction = process.env.NODE_ENV === "production";
+
+// Determine SSL certificate paths
+// Priority: 1. Explicit paths from env, 2. Let's Encrypt auto-detection, 3. None
+let sslCertPath = process.env.SSL_CERT_PATH;
+let sslKeyPath = process.env.SSL_KEY_PATH;
+
+// Auto-detect Let's Encrypt certificates if not explicitly set
+if (isProduction && (!sslCertPath || !sslKeyPath)) {
+  const letsEncryptDomain = process.env.LETSENCRYPT_DOMAIN;
+  if (letsEncryptDomain) {
+    const letsEncryptCertPath = `/etc/letsencrypt/live/${letsEncryptDomain}/fullchain.pem`;
+    const letsEncryptKeyPath = `/etc/letsencrypt/live/${letsEncryptDomain}/privkey.pem`;
+
+    if (existsSync(letsEncryptCertPath) && existsSync(letsEncryptKeyPath)) {
+      sslCertPath = letsEncryptCertPath;
+      sslKeyPath = letsEncryptKeyPath;
+      console.log(
+        `[Security] Auto-detected Let's Encrypt certificates for ${letsEncryptDomain}`
+      );
+    } else {
+      console.warn(
+        `[Security] Let's Encrypt certificates not found at: ${letsEncryptCertPath}`
+      );
+    }
+  } else {
+    // Try to auto-detect domain from common locations
+    // Check if /etc/letsencrypt/live exists and has a domain
+    const letsEncryptLive = "/etc/letsencrypt/live";
+    if (existsSync(letsEncryptLive)) {
+      try {
+        const domains = readdirSync(letsEncryptLive, { withFileTypes: true })
+          .filter((dirent) => dirent.isDirectory())
+          .map((dirent) => dirent.name);
+
+        if (domains.length > 0) {
+          // Use the first domain found
+          const domain = domains[0];
+          const certPath = `${letsEncryptLive}/${domain}/fullchain.pem`;
+          const keyPath = `${letsEncryptLive}/${domain}/privkey.pem`;
+
+          if (existsSync(certPath) && existsSync(keyPath)) {
+            sslCertPath = certPath;
+            sslKeyPath = keyPath;
+            console.log(
+              `[Security] Auto-detected Let's Encrypt certificates for ${domain}`
+            );
+            console.log(
+              `[Security] Set LETSENCRYPT_DOMAIN=${domain} to explicitly specify domain`
+            );
+          }
+        }
+      } catch {
+        // Ignore errors reading directory
+      }
+    }
+  }
+}
+
+if (isProduction && sslCertPath && sslKeyPath) {
+  // Production: Use HTTPS with SSL certificates
+  try {
+    // Verify files exist before trying to read them
+    if (!existsSync(sslCertPath)) {
+      throw new Error(`Certificate file not found: ${sslCertPath}`);
+    }
+    if (!existsSync(sslKeyPath)) {
+      throw new Error(`Private key file not found: ${sslKeyPath}`);
+    }
+
+    const sslOptions: SecureContextOptions = {
+      cert: readFileSync(sslCertPath),
+      key: readFileSync(sslKeyPath),
+      // Require TLS 1.2 or higher
+      minVersion: "TLSv1.2",
+    };
+
+    // Optional: Add CA certificate for client certificate validation
+    if (process.env.SSL_CA_PATH) {
+      if (existsSync(process.env.SSL_CA_PATH)) {
+        sslOptions.ca = readFileSync(process.env.SSL_CA_PATH);
+      } else {
+        console.warn(
+          `[Security] CA certificate file not found: ${process.env.SSL_CA_PATH}`
+        );
+      }
+    }
+
+    server = createHttpsServer(sslOptions, app);
+    console.log(`[Security] HTTPS enabled with SSL certificates`);
+    console.log(`[Security] Certificate: ${sslCertPath}`);
+    console.log(`[Security] Private key: ${sslKeyPath}`);
+  } catch (error) {
+    console.error(
+      "[Security] Failed to load SSL certificates, falling back to HTTP:",
+      error
+    );
+    console.warn(
+      "[Security] WARNING: Running in production without HTTPS is insecure!"
+    );
+    server = createServer(app);
+  }
+} else if (isProduction) {
+  // Production without SSL certificates
+  // Require explicit acknowledgment that SSL is handled elsewhere (reverse proxy)
+  const trustProxy = process.env.TRUST_PROXY === "true";
+
+  if (!trustProxy) {
+    console.error(
+      "[Security] ERROR: Production mode requires SSL certificates!"
+    );
+    console.error("[Security] Options:");
+    console.error(
+      "  1. Set SSL_CERT_PATH and SSL_KEY_PATH environment variables"
+    );
+    console.error("  2. Set LETSENCRYPT_DOMAIN for auto-detection");
+    console.error(
+      "  3. Set TRUST_PROXY=true if behind a reverse proxy with SSL termination"
+    );
+    throw new Error(
+      "SSL certificates required in production. Set TRUST_PROXY=true to bypass if using a reverse proxy."
+    );
+  }
+
+  // Explicit reverse proxy mode
+  console.log(
+    "[Security] TRUST_PROXY enabled - assuming SSL termination at reverse proxy"
+  );
+  console.warn(
+    "[Security] ⚠️  Ensure your reverse proxy (nginx, traefik, Caddy) handles SSL!"
+  );
+  server = createServer(app);
+} else {
+  // Development: Use HTTP
+  server = createServer(app);
+  console.log("[Security] HTTP mode (development)");
+}
 
 // WebSocket server for ESP32 devices
 const deviceWss = new WebSocketServer({ noServer: true });
@@ -287,17 +448,36 @@ async function start() {
     }, 60 * 60 * 1000);
 
     // Start server
+    const protocol =
+      isProduction && sslCertPath && sslKeyPath ? "https" : "http";
+    const wsProtocol = isProduction && sslCertPath && sslKeyPath ? "wss" : "ws";
+
     server.listen(port, () => {
       console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                  BrewOS Cloud Service                     ║
 ╠═══════════════════════════════════════════════════════════╣
-║  HTTP:    http://localhost:${port}                           ║
-║  Device:  ws://localhost:${port}/ws/device                   ║
-║  Client:  ws://localhost:${port}/ws/client                   ║
-║  DB:      SQLite (sql.js)                                 ║
+║  ${protocol.toUpperCase()}:    ${protocol}://localhost:${port}${" ".repeat(
+        Math.max(0, 30 - protocol.length - port.toString().length)
+      )}║
+║  Device:  ${wsProtocol}://localhost:${port}/ws/device${" ".repeat(
+        Math.max(0, 30 - wsProtocol.length - port.toString().length - 12)
+      )}║
+║  Client:  ${wsProtocol}://localhost:${port}/ws/client${" ".repeat(
+        Math.max(0, 30 - wsProtocol.length - port.toString().length - 12)
+      )}║
+║  DB:      SQLite (sql.js)${" ".repeat(30)}║
+║  SSL:     ${
+        isProduction && sslCertPath && sslKeyPath
+          ? "Enabled ✓"
+          : "Disabled (dev/proxy)"
+      }${" ".repeat(
+        Math.max(0, 30 - (isProduction && sslCertPath && sslKeyPath ? 18 : 23))
+      )}║
 ╚═══════════════════════════════════════════════════════════╝
       `);
+
+      // SSL status is already logged during server creation
     });
   } catch (error) {
     console.error("Failed to start server:", error);
