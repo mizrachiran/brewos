@@ -27,6 +27,9 @@ public:
     // Set cloud connection for remote state broadcasting
     void setCloudConnection(CloudConnection* cloudConnection);
     
+    // Start cloud connection (called when cloud is enabled dynamically)
+    void startCloudConnection(const String& serverUrl, const String& deviceId, const String& deviceKey);
+    
     // Mark WiFi as connected - starts delay timer before serving requests
     void setWiFiConnected();
     

@@ -74,6 +74,46 @@ void WebServer::setCloudConnection(CloudConnection* cloudConnection) {
     _cloudConnection = cloudConnection;
 }
 
+// Static callback wrapper for cloud commands - avoids lambda capture issues
+static void cloudCommandCallback(const String& type, JsonDocument& doc) {
+    if (_wsInstance) {
+        _wsInstance->processCommand(doc);
+    }
+}
+
+// Static pairing manager pointer for registration callback
+static PairingManager* _staticPairingManager = nullptr;
+
+static bool cloudRegisterCallback() {
+    if (_staticPairingManager) {
+        return _staticPairingManager->registerTokenWithCloud();
+    }
+    return false;
+}
+
+void WebServer::startCloudConnection(const String& serverUrl, const String& deviceId, const String& deviceKey) {
+    if (!_cloudConnection) {
+        LOG_W("Cannot start cloud connection: not initialized");
+        return;
+    }
+    
+    LOG_I("Starting cloud connection to %s", serverUrl.c_str());
+    
+    // Initialize cloud connection
+    _cloudConnection->begin(serverUrl, deviceId, deviceKey);
+    
+    // Set up registration callback using static function pointer
+    if (_pairingManager) {
+        _staticPairingManager = _pairingManager;
+        _cloudConnection->onRegister(cloudRegisterCallback);
+    }
+    
+    // Set up command handler using static function pointer
+    _cloudConnection->onCommand(cloudCommandCallback);
+    
+    LOG_I("Cloud connection started");
+}
+
 void WebServer::setWiFiConnected() {
     _wifiReadyTime = millis();
     LOG_I("WiFi connected - requests will be served after %lu ms delay", WIFI_READY_DELAY_MS);

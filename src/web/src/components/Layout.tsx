@@ -116,6 +116,9 @@ export function Layout({ onExitDemo }: LayoutProps) {
 
   const navigation = getNavigation(isCloud, deviceId || selectedDevice?.id);
 
+  // Check if device is offline (for hiding navigation)
+  const isDeviceOffline = isCloud && selectedDevice && !selectedDevice.isOnline;
+
   // Get current page title from navigation
   const currentPageTitle =
     navigation.find((item) => {
@@ -141,28 +144,30 @@ export function Layout({ onExitDemo }: LayoutProps) {
             <Logo size="sm" iconOnly />
           </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 flex flex-col items-center py-2 gap-1 overflow-y-auto">
-            {navigation.map((item) => (
-              <NavLink
-                key={item.name}
-                to={item.href}
-                end={
-                  item.href === "/" ||
-                  item.href.endsWith(`/${deviceId || selectedDevice?.id}`)
-                }
-                className={({ isActive }) =>
-                  cn(
-                    "w-11 h-11 flex items-center justify-center rounded-xl transition-all",
-                    isActive ? "nav-active" : "nav-inactive"
-                  )
-                }
-                title={item.name}
-              >
-                <item.icon className="w-5 h-5" />
-              </NavLink>
-            ))}
-          </nav>
+          {/* Navigation - hidden when device is offline */}
+          {!isDeviceOffline && (
+            <nav className="flex-1 flex flex-col items-center py-2 gap-1 overflow-y-auto">
+              {navigation.map((item) => (
+                <NavLink
+                  key={item.name}
+                  to={item.href}
+                  end={
+                    item.href === "/" ||
+                    item.href.endsWith(`/${deviceId || selectedDevice?.id}`)
+                  }
+                  className={({ isActive }) =>
+                    cn(
+                      "w-11 h-11 flex items-center justify-center rounded-xl transition-all",
+                      isActive ? "nav-active" : "nav-inactive"
+                    )
+                  }
+                  title={item.name}
+                >
+                  <item.icon className="w-5 h-5" />
+                </NavLink>
+              ))}
+            </nav>
+          )}
         </aside>
 
         {/* Main content area */}
@@ -319,59 +324,62 @@ export function Layout({ onExitDemo }: LayoutProps) {
       </div>
 
       {/* Navigation - Desktop: horizontal tabs, Mobile: bottom bar style */}
-      <nav
-        className={cn(
-          "sticky z-40 nav-bg border-b border-theme transition-all duration-300",
-          headerVisible ? "top-16" : "top-0"
-        )}
-      >
-        <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
-          {/* Mobile: evenly distributed icons with labels */}
-          <div className="flex sm:hidden justify-around py-1">
-            {navigation.map((item) => (
-              <NavLink
-                key={item.name}
-                to={item.href}
-                end={
-                  item.href === "/" ||
-                  item.href.endsWith(`/${deviceId || selectedDevice?.id}`)
-                }
-                className={({ isActive }) =>
-                  cn(
-                    "flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl text-xs font-medium transition-all min-w-0 flex-1 max-w-20",
-                    isActive ? "nav-active" : "nav-inactive"
-                  )
-                }
-              >
-                <item.icon className="w-5 h-5" />
-                <span className="truncate">{item.name}</span>
-              </NavLink>
-            ))}
+      {/* Hidden when device is offline */}
+      {!isDeviceOffline && (
+        <nav
+          className={cn(
+            "sticky z-40 nav-bg border-b border-theme transition-all duration-300",
+            headerVisible ? "top-16" : "top-0"
+          )}
+        >
+          <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
+            {/* Mobile: evenly distributed icons with labels */}
+            <div className="flex sm:hidden justify-around py-1">
+              {navigation.map((item) => (
+                <NavLink
+                  key={item.name}
+                  to={item.href}
+                  end={
+                    item.href === "/" ||
+                    item.href.endsWith(`/${deviceId || selectedDevice?.id}`)
+                  }
+                  className={({ isActive }) =>
+                    cn(
+                      "flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl text-xs font-medium transition-all min-w-0 flex-1 max-w-20",
+                      isActive ? "nav-active" : "nav-inactive"
+                    )
+                  }
+                >
+                  <item.icon className="w-5 h-5" />
+                  <span className="truncate">{item.name}</span>
+                </NavLink>
+              ))}
+            </div>
+            {/* Desktop: horizontal tabs with full labels */}
+            <div className="hidden sm:flex gap-1 py-2">
+              {navigation.map((item) => (
+                <NavLink
+                  key={item.name}
+                  to={item.href}
+                  end={
+                    item.href === "/" ||
+                    item.href.endsWith(`/${deviceId || selectedDevice?.id}`)
+                  }
+                  className={({ isActive }) =>
+                    cn(
+                      "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all",
+                      isActive ? "nav-active" : "nav-inactive"
+                    )
+                  }
+                >
+                  <item.icon className="w-4 h-4" />
+                  <span>{item.name}</span>
+                </NavLink>
+              ))}
+            </div>
           </div>
-          {/* Desktop: horizontal tabs with full labels */}
-          <div className="hidden sm:flex gap-1 py-2">
-            {navigation.map((item) => (
-              <NavLink
-                key={item.name}
-                to={item.href}
-                end={
-                  item.href === "/" ||
-                  item.href.endsWith(`/${deviceId || selectedDevice?.id}`)
-                }
-                className={({ isActive }) =>
-                  cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all",
-                    isActive ? "nav-active" : "nav-inactive"
-                  )
-                }
-              >
-                <item.icon className="w-4 h-4" />
-                <span>{item.name}</span>
-              </NavLink>
-            ))}
-          </div>
-        </div>
-      </nav>
+        </nav>
+      )}
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

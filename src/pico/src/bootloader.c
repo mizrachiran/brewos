@@ -149,8 +149,9 @@ static bool flash_write_page(uint32_t offset, const uint8_t* data) {
  * CRITICAL SAFETY REQUIREMENTS (all code must be in RAM):
  * 1. NO memcpy() - it's in flash and will crash after erase
  * 2. NO watchdog_reboot() - it's in flash and will crash after erase
- * 3. NO flash_safe_*() - they call flash functions that may be erased
- * 4. Use timeout for multicore lockout to prevent hangs
+ * 3. NO watchdog_update() - it's in flash, use direct register writes
+ * 4. NO flash_safe_*() - they call flash functions that may be erased
+ * 5. Use timeout for multicore lockout to prevent hangs
  * 
  * After erasing main flash, we can ONLY use:
  * - Direct register writes
@@ -162,15 +163,18 @@ static void __not_in_flash_func(copy_firmware_to_main)(uint32_t firmware_size) {
     #define XIP_BASE 0x10000000
     #endif
     
-    // PPB_BASE is always defined, but just in case
     #ifndef PPB_BASE
     #define PPB_BASE 0xe0000000
     #endif
     
+    // Watchdog register for direct feeding (can't use SDK after flash erase)
+    // Use SDK-defined addresses which are correct for both RP2040 and RP2350
+    volatile uint32_t* wdg_load = (volatile uint32_t*)(WATCHDOG_BASE + WATCHDOG_LOAD_OFFSET);
+    
     uint32_t size_pages = (firmware_size + FLASH_PAGE_SIZE - 1) / FLASH_PAGE_SIZE;
     uint32_t size_sectors = (firmware_size + FLASH_SECTOR_SIZE - 1) / FLASH_SECTOR_SIZE;
     
-    // Kick watchdog BEFORE any flash operations (SDK function still in flash)
+    // Kick watchdog BEFORE any flash operations (SDK function still available here)
     watchdog_update();
     
     // Try to pause Core 1 with timeout (100ms)
@@ -186,12 +190,20 @@ static void __not_in_flash_func(copy_firmware_to_main)(uint32_t firmware_size) {
     
     // 1. Erase main firmware area (ROM function - always available)
     for (uint32_t sector = 0; sector < size_sectors; sector++) {
+        // Feed watchdog via direct register write (SDK function is in erased flash!)
+        *wdg_load = 0x7fffff;
+        
         uint32_t offset = FLASH_MAIN_OFFSET + (sector * FLASH_SECTOR_SIZE);
         flash_range_erase(offset, FLASH_SECTOR_SIZE);
     }
     
     // 2. Copy from staging to main, page by page
     for (uint32_t page = 0; page < size_pages; page++) {
+        // Feed watchdog every 32 pages (~8KB) to reduce overhead
+        if (page % 32 == 0) {
+            *wdg_load = 0x7fffff;
+        }
+        
         uint32_t offset = FLASH_MAIN_OFFSET + (page * FLASH_PAGE_SIZE);
         const uint8_t* src = staging_addr + (page * FLASH_PAGE_SIZE);
         

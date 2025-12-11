@@ -694,13 +694,13 @@ bool WebServer::startPicoGitHubOTA(const String& version) {
     
     // After streaming, the Pico bootloader will:
     // 1. Send success ACK (0xAA 0x55 0x00)
-    // 2. Copy firmware from staging area to main area (~2-3 seconds for 180KB)
-    // 3. Reboot itself with watchdog_reboot()
-    // We MUST wait for the copy to complete before resetting!
+    // 2. Copy firmware from staging to main (~1-3 seconds)
+    // 3. Self-reset via AIRCR register (not watchdog_reboot - that's in erased flash!)
+    // 4. Boot with new firmware and send heartbeats
     
-    broadcastOtaProgress(&_ws, "flash", 55, "Finalizing update...");
+    broadcastOtaProgress(&_ws, "flash", 55, "Waiting for device restart...");
     
-    // Resume packet processing
+    // Resume packet processing to detect when Pico comes back
     _picoUart.resume();
     LOG_I("Resumed UART packet processing");
     
@@ -709,25 +709,36 @@ bool WebServer::startPicoGitHubOTA(const String& version) {
         Serial1.read();
     }
     
-    // Wait for bootloader to copy firmware from staging to main flash
-    // This takes ~2-3 seconds, but we wait 5 seconds to be safe
-    LOG_I("Waiting 5 seconds for Pico bootloader to copy firmware...");
-    for (int i = 0; i < 50; i++) {  // 5 seconds
+    // Wait for Pico to self-reset and reconnect
+    // The bootloader copies firmware (~1-3s) then resets via AIRCR register
+    // Don't blindly reset - wait for it to come back on its own
+    LOG_I("Waiting for Pico to self-reset and boot with new firmware...");
+    
+    bool picoReconnected = false;
+    for (int i = 0; i < 80; i++) {  // Wait up to 8 seconds (copy ~3s + boot ~2s + margin)
         delay(100);
         feedWatchdog();
+        _picoUart.loop();  // Process incoming packets
+        
+        // Check if Pico sent any packets (heartbeat or boot info)
+        if (_picoUart.isConnected()) {
+            LOG_I("Pico reconnected after self-reset (%d ms)", i * 100);
+            picoReconnected = true;
+            break;
+        }
     }
     
-    // Reset the Pico to boot with new firmware
-    // The bootloader should have completed the copy by now
-    LOG_I("Resetting Pico to boot with new firmware...");
-    _picoUart.resetPico();
-    
-    // Wait for Pico to boot and send boot info
-    LOG_I("Waiting for Pico boot info...");
-    for (int i = 0; i < 30; i++) {  // 3 seconds
-        delay(100);
-        feedWatchdog();
-        _picoUart.loop();  // Process any incoming packets
+    // Only force reset if Pico didn't come back on its own
+    if (!picoReconnected) {
+        LOG_W("Pico did not self-reset, forcing manual reset...");
+        _picoUart.resetPico();
+        
+        // Wait for boot after manual reset
+        for (int i = 0; i < 30; i++) {  // 3 seconds
+            delay(100);
+            feedWatchdog();
+            _picoUart.loop();
+        }
     }
     
     LOG_I("Pico OTA complete!");

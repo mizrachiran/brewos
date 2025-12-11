@@ -5,6 +5,7 @@
 #include "brew_by_weight.h"
 #include "scale/scale_manager.h"
 #include "pairing_manager.h"
+#include "cloud_connection.h"
 #include "state/state_manager.h"
 #include "power_meter/power_meter_manager.h"
 #include "ui/ui.h"
@@ -277,23 +278,37 @@ void WebServer::processCommand(JsonDocument& doc) {
             // Save settings to NVS
             State.saveCloudSettings();
             
-            // Update pairing manager based on enabled state
-            if (_pairingManager) {
-                if (cloudSettings.enabled && strlen(cloudSettings.serverUrl) > 0) {
-                    // Initialize or update with new URL
+            // Update pairing manager and cloud connection based on enabled state
+            if (cloudSettings.enabled && strlen(cloudSettings.serverUrl) > 0) {
+                // Initialize pairing manager with new URL
+                if (_pairingManager) {
                     _pairingManager->begin(String(cloudSettings.serverUrl));
                     
-                    // Register device key with cloud server
-                    if (_pairingManager->registerTokenWithCloud()) {
-                        broadcastLog("Cloud enabled and device registered: %s", cloudSettings.serverUrl);
-                    } else {
-                        broadcastLog("Cloud enabled: %s (registration pending)", cloudSettings.serverUrl);
+                    // Get device credentials from pairing manager
+                    String deviceId = _pairingManager->getDeviceId();
+                    String deviceKey = _pairingManager->getDeviceKey();
+                    
+                    // Sync device ID to cloud settings
+                    if (String(cloudSettings.deviceId) != deviceId) {
+                        strncpy(cloudSettings.deviceId, deviceId.c_str(), sizeof(cloudSettings.deviceId) - 1);
+                        State.saveCloudSettings();
                     }
-                } else if (!cloudSettings.enabled && wasEnabled) {
-                    // Cloud was disabled - clear pairing manager
-                    _pairingManager->begin("");  // Clear cloud URL
-                    broadcastLogLevel("info", "Cloud disabled");
+                    
+                    // Start the cloud WebSocket connection
+                    startCloudConnection(String(cloudSettings.serverUrl), deviceId, deviceKey);
+                    
+                    broadcastLog("Cloud enabled: %s", cloudSettings.serverUrl);
                 }
+            } else if (!cloudSettings.enabled && wasEnabled) {
+                // Cloud was disabled - stop cloud connection
+                if (_cloudConnection) {
+                    _cloudConnection->end();
+                    broadcastLogLevel("info", "Cloud connection stopped");
+                }
+                if (_pairingManager) {
+                    _pairingManager->begin("");  // Clear cloud URL
+                }
+                broadcastLogLevel("info", "Cloud disabled");
             }
             
             broadcastLog("Cloud configuration updated: %s", cloudSettings.enabled ? "enabled" : "disabled");

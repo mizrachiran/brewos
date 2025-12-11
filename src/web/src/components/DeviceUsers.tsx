@@ -216,15 +216,14 @@ export function DeviceUsers({
         return;
       }
 
-      const response = await fetch(
-        `/api/devices/${deviceId}/users/${user.id}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      // Use removeDevice endpoint (DELETE /api/devices/:id) to leave a device
+      // This removes the device from the current user's account
+      const response = await fetch(`/api/devices/${deviceId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (response.ok) {
         success("You have left this device");
