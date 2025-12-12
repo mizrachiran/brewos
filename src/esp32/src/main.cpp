@@ -358,8 +358,12 @@ static void onPicoPacket(const PicoPacket& packet) {
                 
                 // Parse reset reason if available (offset 7-10, uint32_t)
                 if (packet.length >= 11) {
-                    // reset_reason is at offset 7 (after pcb_type and pcb_version)
-                    uint8_t reset_reason = packet.payload[7];  // Just use first byte
+                    // reset_reason is at offset 7 (after pcb_type and pcb_version), 4 bytes (uint32_t, little-endian)
+                    uint32_t reset_reason = 
+                        (static_cast<uint32_t>(packet.payload[7])      ) |
+                        (static_cast<uint32_t>(packet.payload[8]) << 8 ) |
+                        (static_cast<uint32_t>(packet.payload[9]) << 16) |
+                        (static_cast<uint32_t>(packet.payload[10]) << 24);
                     State.setPicoResetReason(reset_reason);
                 }
                 
