@@ -812,7 +812,7 @@ bool WebServer::startPicoGitHubOTA(const String& version) {
     _picoUart.clearConnectionState();
     
     // Wait for Pico to self-reset and reconnect
-    // The bootloader copies firmware (~3-5s for 22 sectors × ~100ms each) then resets.
+    // The bootloader copies firmware (~3-5s for 22 sectors * ~100ms each) then resets.
     // Total time: copy (~5s) + reboot (~1s) + reconnect (~1s) = ~7s minimum
     // Use generous 25s timeout to be safe.
     LOG_I("Waiting for Pico to self-reset and boot with new firmware...");
