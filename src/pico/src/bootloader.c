@@ -1,6 +1,6 @@
 /**
  * Pico Firmware - Serial Bootloader
- * PRODUCTION READY: RAM-based execution, Write Verification, Direct Watchdog handling.
+ * RESTORED: The working version, with critical variable fix and safer timing.
  */
 
  #include "bootloader.h"
@@ -39,10 +39,11 @@
  #define FLASH_TARGET_OFFSET         (1536 * 1024)  // Staging area
  #define FLASH_MAIN_OFFSET           0              // Main firmware area
  
-// Bootloader state
-static uint32_t g_received_size = 0;
-static uint32_t g_chunk_count = 0;
-static volatile bool g_bootloader_active = false;
+ // Bootloader state
+ static uint32_t g_received_size = 0;
+ static uint32_t g_chunk_count = 0;
+ static bool g_receiving = false; // [FIXED] Restored missing declaration
+ static volatile bool g_bootloader_active = false;
  
  // -----------------------------------------------------------------------------
  // BootROM Function Typedefs
@@ -103,7 +104,10 @@ static volatile bool g_bootloader_active = false;
      absolute_time_t timeout = make_timeout_time_ms(timeout_ms);
      while (!uart_is_readable(ESP32_UART_ID)) {
          if (time_reached(timeout)) return false;
-         sleep_us(100);
+         // [TUNED] Reduced from 100us to 10us. 
+         // 100us allows ~11 bytes to arrive at 921k baud, risking FIFO (32 byte) overflow.
+         // 10us allows ~1 byte, which is completely safe while still being nice to the CPU.
+         sleep_us(10); 
      }
      *byte = uart_getc(ESP32_UART_ID);
      return true;
@@ -185,8 +189,6 @@ static volatile bool g_bootloader_active = false;
      for (uint32_t sector = 0; sector < size_sectors; sector++) {
          // [WATCHDOG] Feed manually via register write (safe in RAM)
          // SDK's watchdog_update() is in Flash and cannot be called.
-         // Assuming ~8s timeout was set, just poke the load register.
-         // watchdog_hw is mapped to 0x40058000
          watchdog_hw->load = 0x7fffff; // Load large value (~8.3s at 1MHz)
          
          uint32_t offset = sector * FLASH_SECTOR_SIZE;
@@ -246,9 +248,10 @@ static volatile bool g_bootloader_active = false;
  // Main Receive Loop
  // -----------------------------------------------------------------------------
  
-bootloader_result_t bootloader_receive_firmware(void) {
-    g_received_size = 0;
-    g_chunk_count = 0;
+ bootloader_result_t bootloader_receive_firmware(void) {
+     g_receiving = true; // [FIXED] Variable set, no longer causes error
+     g_received_size = 0;
+     g_chunk_count = 0;
      
      // Flush UART
      while (uart_is_readable(ESP32_UART_ID)) (void)uart_getc(ESP32_UART_ID);
