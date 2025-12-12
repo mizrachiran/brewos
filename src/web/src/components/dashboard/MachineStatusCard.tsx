@@ -123,6 +123,7 @@ export const MachineStatusCard = memo(function MachineStatusCard({
       <div
         className={cn(
           "absolute top-0 left-0 right-0 h-1 transition-colors duration-500",
+          state === "offline" && "bg-slate-500",
           state === "ready" && "bg-emerald-500",
           state === "heating" && "bg-amber-500",
           state === "brewing" && "bg-accent",
@@ -234,6 +235,10 @@ function getStatusDescription(
   isDualBoiler?: boolean,
   heatingStrategy?: HeatingStrategy | null
 ): string {
+  // Handle offline state first - device not reachable
+  if (state === "offline") {
+    return "Machine is offline. Check power and network connection.";
+  }
   if (mode === "standby") {
     // Check if still cooling down
     if (heatingProgress && heatingProgress > 10) {

@@ -1,10 +1,10 @@
-import { WebSocketServer, WebSocket, RawData } from 'ws';
-import { IncomingMessage } from 'http';
-import { v4 as uuidv4 } from 'uuid';
-import { verifyWebSocketToken } from './middleware/auth.js';
-import { userOwnsDevice } from './services/device.js';
-import type { DeviceRelay } from './device-relay.js';
-import type { DeviceMessage } from './types.js';
+import { WebSocketServer, WebSocket, RawData } from "ws";
+import { IncomingMessage } from "http";
+import { v4 as uuidv4 } from "uuid";
+import { verifyWebSocketToken } from "./middleware/auth.js";
+import { userOwnsDevice } from "./services/device.js";
+import type { DeviceRelay } from "./device-relay.js";
+import type { DeviceMessage } from "./types.js";
 
 interface ClientConnection {
   ws: WebSocket;
@@ -16,10 +16,10 @@ interface ClientConnection {
 
 /**
  * Client Proxy
- * 
+ *
  * Handles WebSocket connections from client apps (web, mobile).
  * Routes messages between clients and their associated devices.
- * 
+ *
  * Authentication uses our own session tokens (not OAuth provider tokens).
  */
 export class ClientProxy {
@@ -30,7 +30,7 @@ export class ClientProxy {
   constructor(wss: WebSocketServer, deviceRelay: DeviceRelay) {
     this.deviceRelay = deviceRelay;
 
-    wss.on('connection', (ws, req) => this.handleConnection(ws, req));
+    wss.on("connection", (ws, req) => this.handleConnection(ws, req));
 
     // Subscribe to device messages
     deviceRelay.onDeviceMessage((deviceId, message) => {
@@ -38,27 +38,30 @@ export class ClientProxy {
     });
   }
 
-  private async handleConnection(ws: WebSocket, req: IncomingMessage): Promise<void> {
-    const url = new URL(req.url || '', `http://${req.headers.host}`);
-    const token = url.searchParams.get('token');
-    const deviceId = url.searchParams.get('device');
+  private async handleConnection(
+    ws: WebSocket,
+    req: IncomingMessage
+  ): Promise<void> {
+    const url = new URL(req.url || "", `http://${req.headers.host}`);
+    const token = url.searchParams.get("token");
+    const deviceId = url.searchParams.get("device");
 
     if (!token || !deviceId) {
-      ws.close(4001, 'Missing token or device ID');
+      ws.close(4001, "Missing token or device ID");
       return;
     }
 
     // Verify our session token (not OAuth provider token)
     const user = verifyWebSocketToken(token);
-    
+
     if (!user) {
-      ws.close(4002, 'Invalid or expired token');
+      ws.close(4002, "Invalid or expired token");
       return;
     }
 
     // Verify user has access to this device
     if (!userOwnsDevice(user.id, deviceId)) {
-      ws.close(4003, 'Access denied to device');
+      ws.close(4003, "Access denied to device");
       return;
     }
 
@@ -72,10 +75,12 @@ export class ClientProxy {
     };
 
     this.registerClient(connection);
-    console.log(`[Client] Connected: ${sessionId} -> device ${deviceId} (user: ${user.email})`);
+    console.log(
+      `[Client] Connected: ${sessionId} -> device ${deviceId} (user: ${user.email})`
+    );
 
     // Handle messages from client
-    ws.on('message', (data: RawData) => {
+    ws.on("message", (data: RawData) => {
       try {
         const message: DeviceMessage = JSON.parse(data.toString());
         this.handleClientMessage(connection, message);
@@ -85,12 +90,12 @@ export class ClientProxy {
     });
 
     // Handle disconnect
-    ws.on('close', () => {
+    ws.on("close", () => {
       this.unregisterClient(connection);
       console.log(`[Client] Disconnected: ${sessionId}`);
     });
 
-    ws.on('error', (err) => {
+    ws.on("error", (err) => {
       console.error(`[Client] Error from ${sessionId}:`, err);
       this.unregisterClient(connection);
     });
@@ -98,12 +103,21 @@ export class ClientProxy {
     // Send connection status
     const deviceOnline = this.deviceRelay.isDeviceConnected(deviceId);
     this.sendToClient(connection, {
-      type: 'connected',
+      type: "connected",
       sessionId,
       deviceId,
       deviceOnline,
       timestamp: Date.now(),
     });
+
+    // Request device to send full state if online
+    // This ensures cloud clients get all current state on connect
+    if (deviceOnline) {
+      this.deviceRelay.sendToDevice(deviceId, {
+        type: "request_state",
+        timestamp: Date.now(),
+      });
+    }
   }
 
   private registerClient(client: ClientConnection): void {
@@ -128,18 +142,21 @@ export class ClientProxy {
     }
   }
 
-  private handleClientMessage(client: ClientConnection, message: DeviceMessage): void {
+  private handleClientMessage(
+    client: ClientConnection,
+    message: DeviceMessage
+  ): void {
     // Forward message to device
     message.timestamp = Date.now();
-    
+
     const sent = this.deviceRelay.sendToDevice(client.deviceId, message);
-    
+
     if (!sent) {
       // Device is offline, notify client
       this.sendToClient(client, {
-        type: 'error',
-        error: 'device_offline',
-        message: 'Device is not connected',
+        type: "error",
+        error: "device_offline",
+        message: "Device is not connected",
       });
     }
   }
@@ -150,7 +167,10 @@ export class ClientProxy {
     }
   }
 
-  private broadcastToDeviceClients(deviceId: string, message: DeviceMessage): void {
+  private broadcastToDeviceClients(
+    deviceId: string,
+    message: DeviceMessage
+  ): void {
     const sessions = this.deviceClients.get(deviceId);
     if (!sessions) return;
 

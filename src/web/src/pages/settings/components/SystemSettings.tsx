@@ -41,6 +41,7 @@ export function SystemSettings() {
   const pico = useStore((s) => s.pico);
   const connectionState = useStore((s) => s.connectionState);
   const clearLogs = useStore((s) => s.clearLogs);
+  const startOTAOverlay = useStore((s) => s.startOTA);
   const { sendCommandWithConfirm } = useCommand();
   
   const isConnected = connectionState === "connected";
@@ -124,7 +125,7 @@ export function SystemSettings() {
       ? "This is a pre-release version for testing. The device will restart after update."
       : "The device will restart after the update is installed.";
 
-    await sendCommandWithConfirm(
+    const confirmed = await sendCommandWithConfirm(
       "ota_start",
       description,
       { version },
@@ -135,6 +136,12 @@ export function SystemSettings() {
         successMessage: `Installing v${version}...`,
       }
     );
+    
+    // If command was sent successfully, immediately show the OTA overlay
+    // This provides instant feedback before the ESP32 sends its first progress message
+    if (confirmed) {
+      startOTAOverlay();
+    }
   };
 
   const currentVersionDisplay = getVersionDisplay(esp32.version || "0.0.0");
@@ -481,10 +488,15 @@ export function SystemSettings() {
                       <Badge variant="warning">
                         v{updateResult.beta.version}
                       </Badge>
+                      {updateResult.beta.commitSha && (
+                        <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 font-mono text-[10px]">
+                          {updateResult.beta.commitSha}
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-xs text-theme-muted mb-2">
                       Released{" "}
-                      {formatReleaseDate(updateResult.beta.releaseDate)}
+                      {formatReleaseDate(updateResult.beta.assetUpdatedAt || updateResult.beta.releaseDate)}
                     </p>
                     {updateResult.hasBetaUpdate ? (
                       <p className="text-sm text-warning flex items-center gap-1">
@@ -543,12 +555,14 @@ export function SystemSettings() {
                       <span className="font-semibold text-theme">
                         Dev Build
                       </span>
-                      <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">
-                        {updateResult.dev.version}
-                      </Badge>
+                      {updateResult.dev.commitSha && (
+                        <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 font-mono">
+                          {updateResult.dev.commitSha}
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-xs text-theme-muted mb-2">
-                      Built {formatReleaseDate(updateResult.dev.releaseDate)}
+                      Built {formatReleaseDate(updateResult.dev.assetUpdatedAt || updateResult.dev.releaseDate)}
                     </p>
                     <p className="text-sm text-purple-400 flex items-center gap-1">
                       <RefreshCw className="w-4 h-4" />

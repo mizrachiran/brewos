@@ -1279,17 +1279,29 @@ void WebServer::startCombinedOTA(const String& version) {
         _picoUart.loop();
     }
     
-    // Verify Pico version matches expected version
+    // Verify Pico version after update
+    // For dev-latest and beta channels (versions containing "-"), skip exact version matching
+    // since the tag name differs from the actual firmware version (e.g., "dev-latest" vs "0.7.5")
     const char* picoVersion = State.getPicoVersion();
+    bool isDevOrBeta = (strcmp(version.c_str(), "dev-latest") == 0) || 
+                       (strstr(version.c_str(), "-") != nullptr);
+    
     if (picoVersion && picoVersion[0] != '\0') {
-        LOG_I("Pico version after update: %s (expected: %s)", picoVersion, version.c_str());
-        if (strcmp(picoVersion, version.c_str()) != 0) {
-            LOG_E("Pico update FAILED! Got %s, expected %s", picoVersion, version.c_str());
-            broadcastLogLevel("error", "Internal controller update failed");
-            broadcastOtaProgress(&_ws, "error", 0, "Update failed - restarting...");
-            cleanupOtaFiles();
-            handleOTAFailure(&_ws);  // Will restart device
-            return;  // Won't reach here due to restart
+        if (isDevOrBeta) {
+            // For dev/beta channels, just log the version - we can't verify against tag name
+            LOG_I("Pico version after update: %s (dev/beta channel: %s - skipping version check)", 
+                  picoVersion, version.c_str());
+        } else {
+            // For stable releases, verify exact version match
+            LOG_I("Pico version after update: %s (expected: %s)", picoVersion, version.c_str());
+            if (strcmp(picoVersion, version.c_str()) != 0) {
+                LOG_E("Pico update FAILED! Got %s, expected %s", picoVersion, version.c_str());
+                broadcastLogLevel("error", "Internal controller update failed");
+                broadcastOtaProgress(&_ws, "error", 0, "Update failed - restarting...");
+                cleanupOtaFiles();
+                handleOTAFailure(&_ws);  // Will restart device
+                return;  // Won't reach here due to restart
+            }
         }
         LOG_I("Pico version verified: %s", picoVersion);
     } else {

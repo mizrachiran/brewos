@@ -15,6 +15,9 @@ export interface VersionInfo {
   releaseNotes?: string;
   downloadUrl?: string;
   isPrerelease: boolean;
+  // Additional info for dev/beta builds
+  commitSha?: string;      // First 7 chars of commit SHA
+  assetUpdatedAt?: string; // When the assets were last updated (more accurate for dev builds)
 }
 
 export interface UpdateCheckResult {
@@ -129,6 +132,21 @@ export function getVersionDisplay(version: string): {
   return { text: version, badge: null };
 }
 
+interface GitHubAsset {
+  name: string;
+  updated_at: string;
+}
+
+interface GitHubRelease {
+  tag_name: string;
+  prerelease: boolean;
+  published_at: string;
+  body: string;
+  html_url: string;
+  target_commitish?: string;
+  assets?: GitHubAsset[];
+}
+
 /**
  * Fetch releases from GitHub API
  */
@@ -147,29 +165,45 @@ async function fetchGitHubReleases(): Promise<VersionInfo[]> {
       throw new Error(`GitHub API error: ${response.status}`);
     }
 
-    const releases = await response.json();
+    const releases: GitHubRelease[] = await response.json();
 
-    return releases.map(
-      (release: {
-        tag_name: string;
-        prerelease: boolean;
-        published_at: string;
-        body: string;
-        html_url: string;
-      }) => {
-        const tagName = release.tag_name;
-        const isDev = tagName === "dev-latest";
+    return releases.map((release) => {
+      const tagName = release.tag_name;
+      const isDev = tagName === "dev-latest";
+      const isBeta = release.prerelease && !isDev;
 
-        return {
-          version: isDev ? "dev-latest" : tagName.replace(/^v/, ""),
-          channel: isDev ? "dev" : release.prerelease ? "beta" : "stable",
-          releaseDate: release.published_at,
-          releaseNotes: release.body,
-          downloadUrl: release.html_url,
-          isPrerelease: release.prerelease || isDev,
-        };
+      // For dev builds, use the most recent asset update time (when CI uploaded new binaries)
+      // This is more accurate than published_at which is when the release was first created
+      let effectiveDate = release.published_at;
+      if ((isDev || isBeta) && release.assets && release.assets.length > 0) {
+        // Find the most recently updated asset
+        const latestAsset = release.assets.reduce((latest, asset) => {
+          return new Date(asset.updated_at) > new Date(latest.updated_at) ? asset : latest;
+        });
+        effectiveDate = latestAsset.updated_at;
       }
-    );
+
+      // Extract commit SHA from release notes if present (our CI adds it)
+      // Format in release notes: "Commit: abc1234" or "Build: abc1234"
+      let commitSha: string | undefined;
+      if (release.body) {
+        const commitMatch = release.body.match(/(?:Commit|Build|SHA):\s*([a-f0-9]{7,40})/i);
+        if (commitMatch) {
+          commitSha = commitMatch[1].substring(0, 7);
+        }
+      }
+
+      return {
+        version: isDev ? "dev-latest" : tagName.replace(/^v/, ""),
+        channel: isDev ? "dev" : release.prerelease ? "beta" : "stable",
+        releaseDate: effectiveDate,
+        releaseNotes: release.body,
+        downloadUrl: release.html_url,
+        isPrerelease: release.prerelease || isDev,
+        commitSha,
+        assetUpdatedAt: effectiveDate,
+      };
+    });
   } catch (error) {
     console.error("Failed to fetch GitHub releases:", error);
     return [];
@@ -197,26 +231,32 @@ function getMockVersions(): VersionInfo[] {
       channel: "beta",
       releaseDate: "2024-12-01",
       releaseNotes:
-        "## Beta Release\n- New cloud integration\n- Push notifications\n- UI improvements\n\n⚠️ This is a beta version for testing.",
+        "## Beta Release\n- New cloud integration\n- Push notifications\n- UI improvements\n\n⚠️ This is a beta version for testing.\n\nCommit: a1b2c3d",
       downloadUrl: `${repoUrl}/releases/tag/v1.1.0-beta.2`,
       isPrerelease: true,
+      commitSha: "a1b2c3d",
+      assetUpdatedAt: "2024-12-01T10:30:00Z",
     },
     {
       version: "1.1.0-beta.1",
       channel: "beta",
       releaseDate: "2024-11-25",
-      releaseNotes: "## Beta Release\n- Initial beta with new features",
+      releaseNotes: "## Beta Release\n- Initial beta with new features\n\nCommit: e4f5g6h",
       downloadUrl: `${repoUrl}/releases/tag/v1.1.0-beta.1`,
       isPrerelease: true,
+      commitSha: "e4f5g6h",
+      assetUpdatedAt: "2024-11-25T14:20:00Z",
     },
     {
       version: "dev-latest",
       channel: "dev",
       releaseDate: new Date().toISOString(),
       releaseNotes:
-        "## Dev Build\n- Latest from main branch\n- For development testing only",
+        "## Dev Build\n- Latest from main branch\n- For development testing only\n\nCommit: abc1234",
       downloadUrl: `${repoUrl}/releases/tag/dev-latest`,
       isPrerelease: true,
+      commitSha: "abc1234",
+      assetUpdatedAt: new Date().toISOString(),
     },
   ];
 }

@@ -4,10 +4,14 @@
 #include "state/state_manager.h"
 #include "statistics/statistics_manager.h"
 #include "power_meter/power_meter_manager.h"
+#include "brew_by_weight.h"
 #include <ArduinoJson.h>
 #include <esp_heap_caps.h>
 #include <stdarg.h>
 #include <stdio.h>
+
+// External references for status broadcast
+extern BrewByWeight* brewByWeight;
 
 // Internal helper to broadcast a formatted log message
 // CRITICAL: During OTA, the WebSocket queue can fill up quickly.
@@ -360,6 +364,16 @@ void WebServer::broadcastFullStatus(const ui_state_t& state) {
     scale["flowRate"] = state.flow_rate;
     // Scale name and type come from scaleManager (accessed in main.cpp)
     
+    // Brew-by-weight settings (needed for cloud clients)
+    if (brewByWeight) {
+        JsonObject bbw = scale["bbw"].to<JsonObject>();
+        bbw["targetWeight"] = brewByWeight->getTargetWeight();
+        bbw["doseWeight"] = brewByWeight->getDoseWeight();
+        bbw["stopOffset"] = brewByWeight->getStopOffset();
+        bbw["autoStop"] = brewByWeight->isAutoStopEnabled();
+        bbw["autoTare"] = brewByWeight->isAutoTareEnabled();
+    }
+    
     // =========================================================================
     // Connections Section
     // =========================================================================
@@ -502,6 +516,11 @@ void WebServer::broadcastDeviceInfo() {
     // Include user preferences (synced across devices)
     JsonObject preferences = doc["preferences"].to<JsonObject>();
     prefs.toJson(preferences);
+    
+    // Include schedules for cloud clients (they can't access REST APIs)
+    const auto& scheduleSettings = State.settings().schedule;
+    JsonObject scheduleObj = doc["schedule"].to<JsonObject>();
+    scheduleSettings.toJson(scheduleObj);
     
     // Allocate JSON buffer in internal RAM (not PSRAM) to avoid crashes
     size_t jsonSize = measureJson(doc) + 1;

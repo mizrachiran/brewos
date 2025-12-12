@@ -61,6 +61,7 @@ export interface WebSocketMessage {
 // MUST match Pico state values exactly!
 export type MachineState =
   | "unknown"
+  | "offline" // Device not connected (cloud mode)
   | "init"    // 0: Initializing
   | "idle"    // 1: Machine on but not heating
   | "heating" // 2: Actively heating to setpoint

@@ -32,6 +32,7 @@ import type {
   DiagnosticResult,
   DiagnosticHeader,
 } from "./types";
+import type { Schedule } from "@/components/schedules";
 import {
   diagStatusFromCode,
   getDiagnosticTestName,
@@ -77,6 +78,10 @@ interface BrewOSState {
   // Eco mode settings
   ecoMode: EcoModeSettings;
 
+  // Schedules
+  schedules: Schedule[];
+  autoPowerOff: { enabled: boolean; minutes: number };
+
   // Network
   wifi: WiFiStatus;
   mqtt: MQTTStatus;
@@ -116,6 +121,9 @@ interface BrewOSState {
   // Diagnostics actions
   setDiagnosticsRunning: (running: boolean) => void;
   resetDiagnostics: () => void;
+  
+  // OTA actions
+  startOTA: () => void;  // Called when OTA command is sent to show overlay immediately
 }
 
 // Default state
@@ -151,6 +159,11 @@ interface EcoModeSettings {
 const defaultEcoMode: EcoModeSettings = {
   ecoBrewTemp: 80, // °C
   autoOffTimeout: 30, // minutes
+};
+
+const defaultAutoPowerOff = {
+  enabled: false,
+  minutes: 60,
 };
 
 const defaultCleaning: CleaningStatus = {
@@ -455,6 +468,8 @@ export const useStore = create<BrewOSState>()(
     shot: defaultShot,
     preinfusion: defaultPreinfusion,
     ecoMode: defaultEcoMode,
+    schedules: [],
+    autoPowerOff: defaultAutoPowerOff,
     wifi: defaultWifi,
     mqtt: defaultMqtt,
     cloud: defaultCloud,
@@ -1127,6 +1142,22 @@ export const useStore = create<BrewOSState>()(
                   showAppBadge: state.preferences.showAppBadge,
                 }
               : state.preferences,
+            // Update schedules if provided (nested under schedule.schedules)
+            schedules: (() => {
+              const scheduleData = data.schedule as { schedules?: Schedule[] } | undefined;
+              return scheduleData?.schedules ?? state.schedules;
+            })(),
+            autoPowerOff: (() => {
+              const scheduleData = data.schedule as {
+                autoPowerOffEnabled?: boolean;
+                autoPowerOffMinutes?: number;
+              } | undefined;
+              if (!scheduleData) return state.autoPowerOff;
+              return {
+                enabled: scheduleData.autoPowerOffEnabled ?? state.autoPowerOff.enabled,
+                minutes: scheduleData.autoPowerOffMinutes ?? state.autoPowerOff.minutes,
+              };
+            })(),
           }));
 
           // Also cache preferences locally
@@ -1265,31 +1296,63 @@ export const useStore = create<BrewOSState>()(
 
         // =======================================================================
         // Cloud mode: device connection status
+        // In cloud mode, connectionState = connection to cloud server
+        // deviceOnline/device_offline = whether the ESP32 device is reachable
         // =======================================================================
         case "connected": {
           // Cloud server tells us if the target device is online
           const deviceOnline = (data.deviceOnline as boolean) ?? false;
           console.log(`[Store] Cloud connected, device online: ${deviceOnline}`);
           
-          // If device is offline, set connection state to reflect that
-          // Commands will be blocked until device comes online
+          // If device is offline, update machine state (but keep cloud connected)
           if (!deviceOnline) {
-            set({ connectionState: "disconnected" });
+            set((state) => ({
+              machine: {
+                ...state.machine,
+                state: "offline" as const,
+                mode: "standby",
+                isHeating: false,
+                isBrewing: false,
+              },
+              pico: { ...state.pico, connected: false },
+              scale: { ...state.scale, connected: false },
+            }));
           }
           break;
         }
 
         case "device_online": {
-          // Device came online - update connection state
+          // Device came online via cloud - request fresh state
           console.log("[Store] Device came online");
-          set({ connectionState: "connected" });
+          // Machine state will be updated when status messages arrive
+          // Don't change connectionState - we're still connected to cloud
           break;
         }
 
         case "device_offline": {
-          // Device went offline - update connection state
+          // Device went offline via cloud - update machine state to reflect offline
+          // Don't change connectionState - we're still connected to cloud
           console.log("[Store] Device went offline");
-          set({ connectionState: "disconnected" });
+          set((state) => ({
+            // Mark Pico as disconnected since we can't reach the device
+            pico: {
+              ...state.pico,
+              connected: false,
+            },
+            // Update machine state to reflect offline status
+            machine: {
+              ...state.machine,
+              state: "offline" as const,
+              mode: "standby",
+              isHeating: false,
+              isBrewing: false,
+            },
+            // Mark scale as disconnected too
+            scale: {
+              ...state.scale,
+              connected: false,
+            },
+          }));
           break;
         }
       }
@@ -1339,6 +1402,20 @@ export const useStore = create<BrewOSState>()(
 
     resetDiagnostics: () => {
       set({ diagnostics: defaultDiagnostics });
+    },
+    
+    startOTA: () => {
+      // Immediately show the OTA overlay when command is sent
+      // This provides instant feedback before the ESP32 sends its first progress message
+      set({
+        ota: {
+          isUpdating: true,
+          stage: "download",
+          progress: 0,
+          message: "Preparing update...",
+          startedAt: Date.now(),
+        },
+      });
     },
   }))
 );

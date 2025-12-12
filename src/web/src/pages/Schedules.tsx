@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useStore } from "@/lib/store";
+import { useCommand } from "@/lib/useCommand";
 import { useMobileLandscape } from "@/lib/useMobileLandscape";
 import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -22,18 +23,33 @@ import { Clock, Plus, Moon, Calendar, Save } from "lucide-react";
 export function Schedules() {
   const preferences = useStore((s) => s.preferences);
   const device = useStore((s) => s.device);
+  const storeSchedules = useStore((s) => s.schedules);
+  const storeAutoPowerOff = useStore((s) => s.autoPowerOff);
+  const { sendCommand } = useCommand();
   const { success, error } = useToast();
   const { confirm } = useConfirmDialog();
 
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [autoPowerOff, setAutoPowerOff] = useState({
-    enabled: false,
-    minutes: 60,
-  });
+  // Use store data in production, demo data in demo mode
+  const isDemo = isDemoMode();
+  const [demoSchedules, setDemoSchedules] = useState<Schedule[]>(() =>
+    isDemo ? (getDemoSchedules().schedules as Schedule[]) : []
+  );
+  const [demoAutoPowerOff, setDemoAutoPowerOff] = useState(() =>
+    isDemo
+      ? {
+          enabled: getDemoSchedules().autoPowerOffEnabled,
+          minutes: getDemoSchedules().autoPowerOffMinutes,
+        }
+      : { enabled: false, minutes: 60 }
+  );
+
+  // Use demo data in demo mode, store data otherwise
+  const schedules = isDemo ? demoSchedules : storeSchedules;
+  const autoPowerOff = isDemo ? demoAutoPowerOff : storeAutoPowerOff;
+
   const [isEditing, setIsEditing] = useState<number | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState<ScheduleFormData>(DEFAULT_SCHEDULE);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const isDualBoiler = device.machineType === "dual_boiler";
@@ -42,48 +58,14 @@ export function Schedules() {
     [preferences.firstDayOfWeek]
   );
 
-  const isDemo = isDemoMode();
-
-  const fetchSchedules = useCallback(async () => {
-    // Use mock data in demo mode
-    if (isDemo) {
-      const demoData = getDemoSchedules();
-      setSchedules(demoData.schedules as Schedule[]);
-      setAutoPowerOff({
-        enabled: demoData.autoPowerOffEnabled,
-        minutes: demoData.autoPowerOffMinutes,
-      });
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const res = await fetch("/api/schedules");
-      const data = await res.json();
-      setSchedules(data.schedules || []);
-      setAutoPowerOff({
-        enabled: data.autoPowerOffEnabled || false,
-        minutes: data.autoPowerOffMinutes || 60,
-      });
-    } catch (err) {
-      console.error("Failed to fetch schedules:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [isDemo]);
-
-  useEffect(() => {
-    fetchSchedules();
-  }, [fetchSchedules]);
-
-  const saveSchedule = async () => {
+  const saveSchedule = useCallback(async () => {
     setSaving(true);
 
     // Demo mode: simulate save locally
     if (isDemo) {
-      await new Promise((r) => setTimeout(r, 300)); // Brief delay for UX
+      await new Promise((r) => setTimeout(r, 300));
       if (isEditing) {
-        setSchedules((prev) =>
+        setDemoSchedules((prev) =>
           prev.map((s) => (s.id === isEditing ? { ...s, ...formData } : s))
         );
       } else {
@@ -91,7 +73,7 @@ export function Schedules() {
           id: Date.now(),
           ...formData,
         };
-        setSchedules((prev) => [...prev, newSchedule]);
+        setDemoSchedules((prev) => [...prev, newSchedule]);
       }
       resetForm();
       success(isEditing ? "Schedule updated" : "Schedule created");
@@ -100,18 +82,10 @@ export function Schedules() {
     }
 
     try {
-      const endpoint = isEditing ? "/api/schedules/update" : "/api/schedules";
-      const body = isEditing ? { id: isEditing, ...formData } : formData;
+      const command = isEditing ? "update_schedule" : "add_schedule";
+      const payload = isEditing ? { id: isEditing, ...formData } : formData;
 
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) throw new Error("Failed to save");
-
-      await fetchSchedules();
+      await sendCommand(command, payload);
       resetForm();
       success(isEditing ? "Schedule updated" : "Schedule created");
     } catch (err) {
@@ -120,65 +94,59 @@ export function Schedules() {
     } finally {
       setSaving(false);
     }
-  };
+  }, [isDemo, isEditing, formData, sendCommand, success, error]);
 
-  const deleteSchedule = async (id: number) => {
-    const confirmed = await confirm({
-      title: "Delete Schedule?",
-      description: "This schedule will be permanently removed.",
-      variant: "danger",
-      confirmText: "Delete",
-    });
-    if (!confirmed) return;
-
-    // Demo mode: delete locally
-    if (isDemo) {
-      setSchedules((prev) => prev.filter((s) => s.id !== id));
-      success("Schedule deleted");
-      return;
-    }
-
-    try {
-      const res = await fetch("/api/schedules/delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
+  const deleteSchedule = useCallback(
+    async (id: number) => {
+      const confirmed = await confirm({
+        title: "Delete Schedule?",
+        description: "This schedule will be permanently removed.",
+        variant: "danger",
+        confirmText: "Delete",
       });
-      if (!res.ok) throw new Error("Failed to delete");
-      await fetchSchedules();
-      success("Schedule deleted");
-    } catch (err) {
-      console.error("Failed to delete schedule:", err);
-      error("Failed to delete schedule. Please try again.");
-    }
-  };
+      if (!confirmed) return;
 
-  const toggleSchedule = async (id: number, enabled: boolean) => {
-    // Demo mode: toggle locally
-    if (isDemo) {
-      setSchedules((prev) =>
-        prev.map((s) => (s.id === id ? { ...s, enabled } : s))
-      );
-      success(`Schedule ${enabled ? "enabled" : "disabled"}`);
-      return;
-    }
+      // Demo mode: delete locally
+      if (isDemo) {
+        setDemoSchedules((prev) => prev.filter((s) => s.id !== id));
+        success("Schedule deleted");
+        return;
+      }
 
-    try {
-      const res = await fetch("/api/schedules/toggle", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, enabled }),
-      });
-      if (!res.ok) throw new Error("Failed to toggle");
-      await fetchSchedules();
-      success(`Schedule ${enabled ? "enabled" : "disabled"}`);
-    } catch (err) {
-      console.error("Failed to toggle schedule:", err);
-      error("Failed to update schedule. Please try again.");
-    }
-  };
+      try {
+        await sendCommand("delete_schedule", { id });
+        success("Schedule deleted");
+      } catch (err) {
+        console.error("Failed to delete schedule:", err);
+        error("Failed to delete schedule. Please try again.");
+      }
+    },
+    [isDemo, confirm, sendCommand, success, error]
+  );
 
-  const saveAutoPowerOff = async () => {
+  const toggleSchedule = useCallback(
+    async (id: number, enabled: boolean) => {
+      // Demo mode: toggle locally
+      if (isDemo) {
+        setDemoSchedules((prev) =>
+          prev.map((s) => (s.id === id ? { ...s, enabled } : s))
+        );
+        success(`Schedule ${enabled ? "enabled" : "disabled"}`);
+        return;
+      }
+
+      try {
+        await sendCommand("toggle_schedule", { id, enabled });
+        success(`Schedule ${enabled ? "enabled" : "disabled"}`);
+      } catch (err) {
+        console.error("Failed to toggle schedule:", err);
+        error("Failed to update schedule. Please try again.");
+      }
+    },
+    [isDemo, sendCommand, success, error]
+  );
+
+  const saveAutoPowerOff = useCallback(async () => {
     // Demo mode: just show success
     if (isDemo) {
       success("Auto power-off settings saved");
@@ -186,20 +154,15 @@ export function Schedules() {
     }
 
     try {
-      const res = await fetch("/api/schedules/auto-off", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(autoPowerOff),
-      });
-      if (!res.ok) throw new Error("Failed to save");
+      await sendCommand("set_auto_off", autoPowerOff);
       success("Auto power-off settings saved");
     } catch (err) {
       console.error("Failed to save auto power-off:", err);
       error("Failed to save auto power-off settings.");
     }
-  };
+  }, [isDemo, autoPowerOff, sendCommand, success, error]);
 
-  const editSchedule = (schedule: Schedule) => {
+  const editSchedule = useCallback((schedule: Schedule) => {
     setIsEditing(schedule.id);
     setFormData({
       enabled: schedule.enabled,
@@ -211,30 +174,42 @@ export function Schedules() {
       name: schedule.name,
     });
     setIsAdding(false);
-  };
+  }, []);
 
-  const startAdding = () => {
+  const startAdding = useCallback(() => {
     setIsAdding(true);
     setIsEditing(null);
     setFormData(DEFAULT_SCHEDULE);
-  };
+  }, []);
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setIsEditing(null);
     setIsAdding(false);
     setFormData(DEFAULT_SCHEDULE);
-  };
+  }, []);
+
+  // Local state for auto power-off editing (for demo mode)
+  const [localAutoPowerOff, setLocalAutoPowerOff] = useState(autoPowerOff);
+
+  // Sync local state when store updates (for non-demo mode)
+  useMemo(() => {
+    if (!isDemo) {
+      setLocalAutoPowerOff(autoPowerOff);
+    }
+  }, [isDemo, autoPowerOff]);
+
+  const handleAutoPowerOffChange = useCallback(
+    (value: { enabled: boolean; minutes: number }) => {
+      if (isDemo) {
+        setDemoAutoPowerOff(value);
+      }
+      setLocalAutoPowerOff(value);
+    },
+    [isDemo]
+  );
 
   const isMobileLandscape = useMobileLandscape();
   const sectionGap = isMobileLandscape ? "space-y-3" : "space-y-6";
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent" />
-      </div>
-    );
-  }
 
   return (
     <div className={sectionGap}>
@@ -307,8 +282,8 @@ export function Schedules() {
 
       {/* Auto Power-Off */}
       <AutoPowerOffCard
-        autoPowerOff={autoPowerOff}
-        onChange={setAutoPowerOff}
+        autoPowerOff={localAutoPowerOff}
+        onChange={handleAutoPowerOffChange}
         onSave={saveAutoPowerOff}
       />
     </div>

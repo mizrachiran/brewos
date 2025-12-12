@@ -75,7 +75,15 @@ void WebServer::processCommand(JsonDocument& doc) {
     if (type == "ping") {
         LOG_I("Command: ping");
         _picoUart.sendPing();
-    } 
+    }
+    else if (type == "request_state") {
+        // Cloud client requesting full state - send everything
+        LOG_I("Cloud: Sending full state to cloud client");
+        // Get current machine state and broadcast it
+        extern ui_state_t machineState;
+        broadcastFullStatus(machineState);
+        broadcastDeviceInfo();
+    }
     else if (type == "getConfig") {
         LOG_I("Command: getConfig");
         _picoUart.requestConfig();
@@ -321,6 +329,7 @@ void WebServer::processCommand(JsonDocument& doc) {
             uint8_t newId = State.addSchedule(entry);
             if (newId > 0) {
                 broadcastLog("Schedule added: %s", entry.name);
+                broadcastDeviceInfo();  // Notify all clients of schedule changes
             }
         }
         else if (cmd == "update_schedule") {
@@ -331,6 +340,7 @@ void WebServer::processCommand(JsonDocument& doc) {
                 entry.fromJson(doc.as<JsonObjectConst>());
                 if (State.updateSchedule(id, entry)) {
                     broadcastLogLevel("info", "Schedule updated");
+                    broadcastDeviceInfo();  // Notify all clients of schedule changes
                 }
             }
         }
@@ -339,14 +349,15 @@ void WebServer::processCommand(JsonDocument& doc) {
             uint8_t id = doc["id"] | 0;
             if (id > 0 && State.removeSchedule(id)) {
                 broadcastLogLevel("info", "Schedule deleted");
+                broadcastDeviceInfo();  // Notify all clients of schedule changes
             }
         }
         else if (cmd == "toggle_schedule") {
             // Enable/disable schedule
             uint8_t id = doc["id"] | 0;
             bool enabled = doc["enabled"] | false;
-            if (id > 0) {
-                State.enableSchedule(id, enabled);
+            if (id > 0 && State.enableSchedule(id, enabled)) {
+                broadcastDeviceInfo();  // Notify all clients of schedule changes
             }
         }
         else if (cmd == "set_auto_off") {
@@ -355,10 +366,11 @@ void WebServer::processCommand(JsonDocument& doc) {
             uint16_t minutes = doc["minutes"] | 60;
             State.setAutoPowerOff(enabled, minutes);
             broadcastLogLevel("info", "Auto power-off updated");
+            broadcastDeviceInfo();  // Notify all clients of schedule changes
         }
         else if (cmd == "get_schedules") {
-            // Return schedules to requesting client (if needed)
-            // Usually schedules are sent via full state broadcast
+            // Return schedules to requesting client
+            broadcastDeviceInfo();
         }
         // Scale commands
         else if (cmd == "scale_scan") {
