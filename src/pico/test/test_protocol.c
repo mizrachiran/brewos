@@ -190,8 +190,8 @@ void test_alarm_payload_size(void) {
 }
 
 void test_boot_payload_size(void) {
-    // boot_payload_t: version(3) + machine_type(1) + pcb_type(1) + pcb_version(2) + reset(4) = 11 bytes
-    TEST_ASSERT_EQUAL_INT(11, 3 + 1 + 1 + 2 + 4);
+    // boot_payload_t: version(3) + machine_type(1) + pcb_type(1) + pcb_version(2) + reset(4) + build_date(12) + build_time(9) = 32 bytes
+    TEST_ASSERT_EQUAL_INT(32, 3 + 1 + 1 + 2 + 4 + 12 + 9);
 }
 
 void test_config_payload_size(void) {

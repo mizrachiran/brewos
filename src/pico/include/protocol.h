@@ -66,6 +66,8 @@ typedef struct __attribute__((packed)) {
     uint8_t pcb_version_major;
     uint8_t pcb_version_minor;
     uint32_t reset_reason;
+    char build_date[12];        // "Dec 12 2024" (compile date)
+    char build_time[9];         // "14:30:45" (compile time)
 } boot_payload_t;
 
 // -----------------------------------------------------------------------------

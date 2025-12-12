@@ -216,8 +216,14 @@ bool protocol_send_boot(void) {
         .pcb_type = (uint8_t)pcb_type,
         .pcb_version_major = pcb_ver.major,
         .pcb_version_minor = pcb_ver.minor,
-        .reset_reason = reset_reason
+        .reset_reason = reset_reason,
+        .build_date = {0},
+        .build_time = {0}
     };
+    // Copy build date/time (compile-time constants)
+    strncpy(boot.build_date, BUILD_DATE, sizeof(boot.build_date) - 1);
+    strncpy(boot.build_time, BUILD_TIME, sizeof(boot.build_time) - 1);
+    
     bool result = send_packet(MSG_BOOT, (const uint8_t*)&boot, sizeof(boot_payload_t));
     if (!result) {
         LOG_PRINT("Protocol: ERROR - Failed to send boot message\n");

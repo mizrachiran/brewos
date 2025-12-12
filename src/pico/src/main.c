@@ -702,6 +702,7 @@ int main(void) {
                 FIRMWARE_VERSION_MAJOR, 
                 FIRMWARE_VERSION_MINOR, 
                 FIRMWARE_VERSION_PATCH);
+    LOG_PRINT("Build: %s %s\n", BUILD_DATE, BUILD_TIME);
     LOG_PRINT("========================================\n");
     
     // Initialize hardware abstraction layer

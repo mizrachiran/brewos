@@ -342,6 +342,7 @@ static void onPicoPacket(const PicoPacket& packet) {
             machineState.pico_connected = true;
             
             // Parse boot payload (boot_payload_t structure)
+            // Layout: ver(3) + machine(1) + pcb(1) + pcb_ver(2) + reset(4) + build_date(12) + build_time(9) = 32 bytes
             if (packet.length >= 4) {
                 uint8_t ver_major = packet.payload[0];
                 uint8_t ver_minor = packet.payload[1];
@@ -355,10 +356,20 @@ static void onPicoPacket(const PicoPacket& packet) {
                 LOG_I("Pico version: %d.%d.%d, Machine type: %d", 
                       ver_major, ver_minor, ver_patch, machineState.machine_type);
                 
-                // Parse reset reason if available (offset 7, uint8_t)
-                if (packet.length >= 8) {
-                    uint8_t reset_reason = packet.payload[7];
+                // Parse reset reason if available (offset 7-10, uint32_t)
+                if (packet.length >= 11) {
+                    // reset_reason is at offset 7 (after pcb_type and pcb_version)
+                    uint8_t reset_reason = packet.payload[7];  // Just use first byte
                     State.setPicoResetReason(reset_reason);
+                }
+                
+                // Parse build date/time if available (offset 11-31)
+                if (packet.length >= 32) {
+                    char buildDate[12] = {0};
+                    char buildTime[9] = {0};
+                    memcpy(buildDate, &packet.payload[11], 11);
+                    memcpy(buildTime, &packet.payload[23], 8);
+                    State.setPicoBuildDate(buildDate, buildTime);
                 }
                 
                 // Check for version mismatch

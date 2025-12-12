@@ -538,6 +538,11 @@ void WebServer::setupRoutes() {
         doc["webVersion"] = ESP32_VERSION;  // Web UI bundled with this firmware
         doc["protocolVersion"] = PROTOCOL_VERSION;
         
+        // ESP32 build timestamp (for dev builds)
+        char esp32Build[24];
+        snprintf(esp32Build, sizeof(esp32Build), "%s %s", BUILD_DATE, BUILD_TIME);
+        doc["buildDate"] = esp32Build;
+        
         // Pico version (if connected) - with safety check
         if (_picoUart.isConnected()) {
             doc["picoConnected"] = true;
@@ -545,6 +550,11 @@ void WebServer::setupRoutes() {
             const char* picoVer = State.getPicoVersion();
             if (picoVer && picoVer[0] != '\0') {
                 doc["picoVersion"] = picoVer;
+            }
+            // Pico build timestamp
+            const char* picoBuild = State.getPicoBuildDate();
+            if (picoBuild && picoBuild[0] != '\0') {
+                doc["picoBuildDate"] = picoBuild;
             }
         } else {
             doc["picoConnected"] = false;

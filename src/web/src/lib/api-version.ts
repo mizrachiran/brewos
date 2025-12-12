@@ -72,6 +72,10 @@ export interface BackendInfo {
   picoVersion?: string;         // Connected Pico firmware version
   protocolVersion?: number;     // Pico-ESP32 binary protocol version
   
+  // Build timestamps (for dev build identification)
+  buildDate?: string;           // ESP32 compile date/time "Dec 12 2024 14:30:45"
+  picoBuildDate?: string;       // Pico compile date/time
+  
   // Mode detection
   mode: 'local' | 'cloud';
   

@@ -645,6 +645,19 @@ void StateManager::setPicoVersion(uint8_t major, uint8_t minor, uint8_t patch) {
     Serial.printf("[State] Pico version: %s\n", _state.picoVersion);
 }
 
+void StateManager::setPicoBuildDate(const char* buildDate, const char* buildTime) {
+    if (buildDate && buildDate[0] && buildTime && buildTime[0]) {
+        snprintf(_state.picoBuildDate, sizeof(_state.picoBuildDate), "%s %s", buildDate, buildTime);
+    } else if (buildDate && buildDate[0]) {
+        strncpy(_state.picoBuildDate, buildDate, sizeof(_state.picoBuildDate) - 1);
+    } else {
+        _state.picoBuildDate[0] = '\0';
+    }
+    if (_state.picoBuildDate[0]) {
+        Serial.printf("[State] Pico build: %s\n", _state.picoBuildDate);
+    }
+}
+
 void StateManager::setPicoResetReason(uint8_t reason) {
     _state.picoResetReason = reason;
     const char* reasonStr = "unknown";

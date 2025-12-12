@@ -22,6 +22,11 @@
 #define PICO_VERSION_MINOR      FIRMWARE_VERSION_MINOR
 #define PICO_VERSION_PATCH      FIRMWARE_VERSION_PATCH
 
+// Build timestamp (set at compile time)
+// Format: "Dec 12 2024" and "14:30:45"
+#define BUILD_DATE      __DATE__
+#define BUILD_TIME      __TIME__
+
 // -----------------------------------------------------------------------------
 // Safety Limits (NEVER exceed these)
 // -----------------------------------------------------------------------------

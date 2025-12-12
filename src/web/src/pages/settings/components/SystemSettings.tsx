@@ -33,6 +33,7 @@ import {
 } from "@/lib/updates";
 import { useDevMode } from "@/lib/dev-mode";
 import { useNavigate } from "react-router-dom";
+import { useBackendInfo } from "@/lib/backend-info";
 
 export function SystemSettings() {
   const navigate = useNavigate();
@@ -44,6 +45,7 @@ export function SystemSettings() {
   
   const isConnected = connectionState === "connected";
   const devMode = useDevMode();
+  const backendInfo = useBackendInfo((s) => s.info);
 
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
@@ -182,6 +184,13 @@ export function SystemSettings() {
               value={esp32.version || "Unknown"}
               mono
             />
+            {channel === "dev" && backendInfo?.buildDate && (
+              <StatusRow
+                label="Build"
+                value={backendInfo.buildDate}
+                mono
+              />
+            )}
             <StatusRow label="Free Heap" value={formatBytes(esp32.freeHeap)} />
           </div>
         </Card>
@@ -201,6 +210,13 @@ export function SystemSettings() {
               value={pico.version || "Unknown"}
               mono
             />
+            {channel === "dev" && backendInfo?.picoBuildDate && (
+              <StatusRow
+                label="Build"
+                value={backendInfo.picoBuildDate}
+                mono
+              />
+            )}
             <StatusRow
               label="Status"
               value={pico.connected ? "Connected" : "No response"}

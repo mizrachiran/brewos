@@ -101,9 +101,11 @@ public:
     
     // Pico firmware info
     void setPicoVersion(uint8_t major, uint8_t minor, uint8_t patch);
+    void setPicoBuildDate(const char* buildDate, const char* buildTime);
     void setPicoResetReason(uint8_t reason);
     void setMachineType(uint8_t type);
     const char* getPicoVersion() const { return _state.picoVersion; }
+    const char* getPicoBuildDate() const { return _state.picoBuildDate; }
     uint8_t getPicoResetReason() const { return _state.picoResetReason; }
     uint8_t getMachineType() const { return _state.machineType; }
     

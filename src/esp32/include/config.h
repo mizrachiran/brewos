@@ -18,6 +18,11 @@
 #define ESP32_VERSION_PRERELEASE "beta.1"  // Empty string "" for stable releases
 #define ESP32_VERSION           "0.7.5"
 
+// Build timestamp (set at compile time)
+// Format: "Dec 12 2024" and "14:30:45"
+#define BUILD_DATE              __DATE__
+#define BUILD_TIME              __TIME__
+
 // Update channel: "stable" or "beta"
 // Users on "stable" only get released versions (no pre-release suffix)
 // Users on "beta" get all versions including pre-releases
