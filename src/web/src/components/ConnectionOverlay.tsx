@@ -27,9 +27,11 @@ export function ConnectionOverlay() {
   });
 
   const isConnected = connectionState === "connected";
-  const isDeviceOffline = machineState === "offline";  // Device offline in cloud mode
+  const isDeviceOffline = machineState === "offline"; // Device offline in cloud mode
   const isUpdating = ota.isUpdating || ota.stage === "complete";
-  const [isVisible, setIsVisible] = useState(!isConnected || isUpdating || isDeviceOffline);
+  const [isVisible, setIsVisible] = useState(
+    !isConnected || isUpdating || isDeviceOffline
+  );
 
   // Track OTA state in localStorage so store.ts can detect it after reconnect
   useEffect(() => {
@@ -85,7 +87,7 @@ export function ConnectionOverlay() {
 
   // Don't render if not visible
   if (!isVisible) return null;
-  
+
   // Dev bypass only works for connection issues, not device offline or OTA
   // This allows testing the UI without a real connection but still shows important overlays
   if (DEV_MODE && devBypassed && !isDeviceOffline && !isUpdating) return null;
@@ -101,8 +103,9 @@ export function ConnectionOverlay() {
   };
 
   // Determine status based on OTA state or connection state
-  const isRetryingOrConnecting = retrying || 
-    connectionState === "connecting" || 
+  const isRetryingOrConnecting =
+    retrying ||
+    connectionState === "connecting" ||
     connectionState === "reconnecting";
 
   // Build status based on current state
@@ -112,7 +115,8 @@ export function ConnectionOverlay() {
       return {
         icon: <Download className="w-16 h-16 text-accent" />,
         title: "Updating BrewOS...",
-        subtitle: "Please wait while the update is being installed. The device will restart automatically.",
+        subtitle:
+          "Please wait while the update is being installed. The device will restart automatically.",
         showRetry: false,
         showPulse: true,
         isOTA: true,
@@ -138,7 +142,8 @@ export function ConnectionOverlay() {
       return {
         icon: <Power className="w-16 h-16 text-theme-muted" />,
         title: "Machine is offline",
-        subtitle: "Check that your machine is powered on and connected to the network.",
+        subtitle:
+          "Check that your machine is powered on and connected to the network.",
         showRetry: false,
         showPulse: false,
         isOTA: false,
@@ -197,10 +202,22 @@ export function ConnectionOverlay() {
         {/* OTA Animation - pulsing dots */}
         {status.isOTA && (
           <div className="flex items-center justify-center gap-2 py-4">
-            <div className="w-3 h-3 rounded-full bg-accent animate-bounce" style={{ animationDelay: "0ms" }} />
-            <div className="w-3 h-3 rounded-full bg-accent animate-bounce" style={{ animationDelay: "150ms" }} />
-            <div className="w-3 h-3 rounded-full bg-accent animate-bounce" style={{ animationDelay: "300ms" }} />
-            <div className="w-3 h-3 rounded-full bg-accent animate-bounce" style={{ animationDelay: "450ms" }} />
+            <div
+              className="w-3 h-3 rounded-full bg-accent animate-bounce"
+              style={{ animationDelay: "0ms" }}
+            />
+            <div
+              className="w-3 h-3 rounded-full bg-accent animate-bounce"
+              style={{ animationDelay: "150ms" }}
+            />
+            <div
+              className="w-3 h-3 rounded-full bg-accent animate-bounce"
+              style={{ animationDelay: "300ms" }}
+            />
+            <div
+              className="w-3 h-3 rounded-full bg-accent animate-bounce"
+              style={{ animationDelay: "450ms" }}
+            />
           </div>
         )}
 

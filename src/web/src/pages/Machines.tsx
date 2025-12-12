@@ -252,7 +252,11 @@ export function Machines() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <h3 className={`font-semibold text-sm sm:text-base truncate ${device.isOnline ? "text-theme" : "text-theme-muted"}`}>
+                        <h3
+                          className={`font-semibold text-sm sm:text-base truncate ${
+                            device.isOnline ? "text-theme" : "text-theme-muted"
+                          }`}
+                        >
                           {device.name}
                         </h3>
                         {isSelected && (
@@ -260,11 +264,17 @@ export function Machines() {
                         )}
                       </div>
                       <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-theme-muted flex-wrap">
-                        <span className={device.isOnline ? "text-success" : "text-error"}>
+                        <span
+                          className={
+                            device.isOnline ? "text-success" : "text-error"
+                          }
+                        >
                           {device.isOnline ? "Online" : "Offline"}
                         </span>
                         {!device.isOnline && (
-                          <span className="text-theme-muted">· Can't connect</span>
+                          <span className="text-theme-muted">
+                            · Can't connect
+                          </span>
                         )}
                         {device.firmwareVersion && device.isOnline && (
                           <>
