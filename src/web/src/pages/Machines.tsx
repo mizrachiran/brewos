@@ -223,14 +223,18 @@ export function Machines() {
           <div className="space-y-3">
             {devices.map((device) => {
               const isSelected = device.id === selectedDeviceId;
+              const canConnect = device.isOnline;
 
               return (
                 <button
                   key={device.id}
-                  onClick={() => handleConnect(device.id)}
-                  className={`w-full text-left card flex items-center gap-2 sm:gap-3 transition-all p-3 sm:p-4 cursor-pointer hover:border-theme-secondary hover:shadow-md ${
-                    isSelected ? "border-accent/40 bg-accent/5" : ""
-                  }`}
+                  onClick={() => canConnect && handleConnect(device.id)}
+                  disabled={!canConnect}
+                  className={`w-full text-left card flex items-center gap-2 sm:gap-3 transition-all p-3 sm:p-4 ${
+                    canConnect
+                      ? "cursor-pointer hover:border-theme-secondary hover:shadow-md"
+                      : "cursor-not-allowed opacity-60"
+                  } ${isSelected ? "border-accent/40 bg-accent/5" : ""}`}
                 >
                   <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
                     <div
@@ -248,7 +252,7 @@ export function Machines() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-sm sm:text-base text-theme truncate">
+                        <h3 className={`font-semibold text-sm sm:text-base truncate ${device.isOnline ? "text-theme" : "text-theme-muted"}`}>
                           {device.name}
                         </h3>
                         {isSelected && (
@@ -256,10 +260,13 @@ export function Machines() {
                         )}
                       </div>
                       <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-theme-muted flex-wrap">
-                        <span className={device.isOnline ? "text-success" : ""}>
+                        <span className={device.isOnline ? "text-success" : "text-error"}>
                           {device.isOnline ? "Online" : "Offline"}
                         </span>
-                        {device.firmwareVersion && (
+                        {!device.isOnline && (
+                          <span className="text-theme-muted">· Can't connect</span>
+                        )}
+                        {device.firmwareVersion && device.isOnline && (
                           <>
                             <span className="hidden sm:inline">·</span>
                             <span className="hidden sm:inline">

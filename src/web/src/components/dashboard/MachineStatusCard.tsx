@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, memo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, memo } from "react";
 import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
 import {
@@ -23,6 +23,49 @@ const STRATEGY_LABELS: Record<number, { label: string; icon: typeof Flame }> = {
   2: { label: "Parallel", icon: Zap },
   3: { label: "Smart", icon: Brain },
 };
+
+// Extracted outside component to prevent re-creation on each render
+interface PowerButtonProps {
+  icon: typeof Power;
+  label: string;
+  description: string;
+  isActive: boolean;
+  onClick: () => void;
+}
+
+const PowerButton = memo(function PowerButton({
+  icon: Icon,
+  label,
+  description,
+  isActive,
+  onClick,
+}: PowerButtonProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "group flex-1 px-5 py-4 rounded-xl font-semibold transition-colors duration-200",
+        "flex items-center justify-center gap-3",
+        isActive
+          ? "nav-active"
+          : "bg-theme-secondary text-theme-secondary hover:bg-theme-tertiary"
+      )}
+    >
+      <Icon className="w-5 h-5" />
+      <div className="flex flex-col items-start">
+        <span className="text-sm">{label}</span>
+        <span
+          className={cn(
+            "text-[10px] font-normal",
+            isActive ? "opacity-70" : "text-theme-muted"
+          )}
+        >
+          {description}
+        </span>
+      </div>
+    </button>
+  );
+});
 
 interface MachineStatusCardProps {
   mode: string;
@@ -411,48 +454,6 @@ const PowerControls = memo(function PowerControls({
 }: PowerControlsProps) {
   const isOnActive = mode === "on";
 
-  // Simple button component for non-split buttons
-  const SimpleButton = ({
-    id,
-    icon: Icon,
-    label,
-    description,
-    isActive,
-    onClick,
-  }: {
-    id: string;
-    icon: typeof Power;
-    label: string;
-    description: string;
-    isActive: boolean;
-    onClick: () => void;
-  }) => (
-    <button
-      key={id}
-      onClick={onClick}
-      className={cn(
-        "group flex-1 px-5 py-4 rounded-xl font-semibold transition-colors duration-200",
-        "flex items-center justify-center gap-3",
-        isActive
-          ? "nav-active"
-          : "bg-theme-secondary text-theme-secondary hover:bg-theme-tertiary"
-      )}
-    >
-      <Icon className="w-5 h-5" />
-      <div className="flex flex-col items-start">
-        <span className="text-sm">{label}</span>
-        <span
-          className={cn(
-            "text-[10px] font-normal",
-            isActive ? "opacity-70" : "text-theme-muted"
-          )}
-        >
-          {description}
-        </span>
-      </div>
-    </button>
-  );
-
   // Split "On" button for dual boiler
   const SplitOnButton = () => {
     // Get the strategy that will be used (from state or localStorage)
@@ -526,25 +527,27 @@ const PowerControls = memo(function PowerControls({
     );
   };
 
+  // Memoize callbacks to prevent unnecessary re-renders
+  const handleStandby = useCallback(() => onSetMode("standby"), [onSetMode]);
+  const handleEco = useCallback(() => onSetMode("eco"), [onSetMode]);
+
   return (
     <div className="border-t border-theme pt-5">
       <div className="flex flex-col sm:flex-row gap-3">
         {/* Standby button */}
-        <SimpleButton
-          id="standby"
+        <PowerButton
           icon={Power}
           label="Standby"
           description="Power off"
           isActive={mode === "standby"}
-          onClick={() => onSetMode("standby")}
+          onClick={handleStandby}
         />
 
         {/* On button - split for dual boiler, simple for others */}
         {isDualBoiler ? (
           <SplitOnButton />
         ) : (
-          <SimpleButton
-            id="on"
+          <PowerButton
             icon={Zap}
             label="On"
             description="Full power"
@@ -554,13 +557,12 @@ const PowerControls = memo(function PowerControls({
         )}
 
         {/* Eco button */}
-        <SimpleButton
-          id="eco"
+        <PowerButton
           icon={Leaf}
           label="Eco"
           description="Energy saving"
           isActive={mode === "eco"}
-          onClick={() => onSetMode("eco")}
+          onClick={handleEco}
         />
       </div>
     </div>

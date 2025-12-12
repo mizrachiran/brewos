@@ -11,9 +11,9 @@ interface DeviceConnection {
   missedPings: number; // Track consecutive missed pings
 }
 
-// Ping interval for keep-alive (30 seconds)
-const PING_INTERVAL_MS = 30000;
-// Disconnect after this many missed pings
+// Ping interval for keep-alive (10 seconds for faster detection)
+const PING_INTERVAL_MS = 10000;
+// Disconnect after this many missed pings (10s * 2 = 20s max detection time)
 const MAX_MISSED_PINGS = 2;
 
 /**

@@ -1,6 +1,6 @@
 import { useStore } from "@/lib/store";
 import { getActiveConnection } from "@/lib/connection";
-import { Wifi, RefreshCw, X, Download, AlertCircle } from "lucide-react";
+import { Wifi, RefreshCw, X, Download, AlertCircle, Power } from "lucide-react";
 import { Button } from "./Button";
 import { useState, useEffect } from "react";
 
@@ -16,6 +16,7 @@ const OTA_IN_PROGRESS_KEY = "brewos-ota-in-progress";
 
 export function ConnectionOverlay() {
   const connectionState = useStore((s) => s.connectionState);
+  const machineState = useStore((s) => s.machine.state);
   const ota = useStore((s) => s.ota);
   const [retrying, setRetrying] = useState(false);
 
@@ -26,8 +27,9 @@ export function ConnectionOverlay() {
   });
 
   const isConnected = connectionState === "connected";
+  const isDeviceOffline = machineState === "offline";  // Device offline in cloud mode
   const isUpdating = ota.isUpdating || ota.stage === "complete";
-  const [isVisible, setIsVisible] = useState(!isConnected || isUpdating);
+  const [isVisible, setIsVisible] = useState(!isConnected || isUpdating || isDeviceOffline);
 
   // Track OTA state in localStorage so store.ts can detect it after reconnect
   useEffect(() => {
@@ -36,13 +38,16 @@ export function ConnectionOverlay() {
     }
   }, [ota.isUpdating]);
 
-  // Visibility control - show during OTA or when not connected
+  // Visibility control - show during OTA, when not connected, or when device is offline
   useEffect(() => {
     if (isUpdating) {
       // Always show during OTA
       setIsVisible(true);
+    } else if (isDeviceOffline) {
+      // Show when device is offline (cloud mode)
+      setIsVisible(true);
     } else if (isConnected) {
-      // Hide with delay when connected (and not updating)
+      // Hide with delay when connected (and not updating and device is online)
       const timeout = setTimeout(() => {
         setIsVisible(false);
       }, HIDE_DELAY_MS);
@@ -50,7 +55,7 @@ export function ConnectionOverlay() {
     } else {
       setIsVisible(true);
     }
-  }, [isConnected, isUpdating]);
+  }, [isConnected, isUpdating, isDeviceOffline]);
 
   // Lock body scroll when overlay is visible
   useEffect(() => {
@@ -78,9 +83,12 @@ export function ConnectionOverlay() {
     setDevBypassed(true);
   };
 
-  // Don't render if bypassed in dev mode or not visible
-  if (DEV_MODE && devBypassed) return null;
+  // Don't render if not visible
   if (!isVisible) return null;
+  
+  // Dev bypass only works for connection issues, not device offline or OTA
+  // This allows testing the UI without a real connection but still shows important overlays
+  if (DEV_MODE && devBypassed && !isDeviceOffline && !isUpdating) return null;
 
   const handleRetry = async () => {
     setRetrying(true);
@@ -108,6 +116,7 @@ export function ConnectionOverlay() {
         showRetry: false,
         showPulse: true,
         isOTA: true,
+        isDeviceOffline: false,
       };
     }
 
@@ -120,6 +129,20 @@ export function ConnectionOverlay() {
         showRetry: false,
         showPulse: false,
         isOTA: false,
+        isDeviceOffline: false,
+      };
+    }
+
+    // Device offline (cloud mode - connected to cloud but device is offline)
+    if (isDeviceOffline && isConnected) {
+      return {
+        icon: <Power className="w-16 h-16 text-theme-muted" />,
+        title: "Machine is offline",
+        subtitle: "Check that your machine is powered on and connected to the network.",
+        showRetry: false,
+        showPulse: false,
+        isOTA: false,
+        isDeviceOffline: true,
       };
     }
 
@@ -131,6 +154,7 @@ export function ConnectionOverlay() {
       showRetry: !isRetryingOrConnecting,
       showPulse: true,
       isOTA: false,
+      isDeviceOffline: false,
     };
   };
 
