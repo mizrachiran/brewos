@@ -572,7 +572,7 @@ export const useStore = create<BrewOSState>()(
                       : state.machine.lastShotTimestamp,
                 }
               : state.machine,
-            // Temperatures
+            // Temperatures (from device_info - always accept, it's authoritative)
             temps: tempsData
               ? {
                   brew: {
@@ -594,6 +594,7 @@ export const useStore = create<BrewOSState>()(
                     max: state.temps.steam.max,
                   },
                   group: (tempsData.group as number) ?? state.temps.group,
+                  lastUpdated: Date.now(), // Device info is authoritative
                 }
               : state.temps,
             // Pressure
@@ -828,6 +829,7 @@ export const useStore = create<BrewOSState>()(
                 max: state.temps.steam.max,
               },
               group: (data.groupTemp as number) ?? state.temps.group,
+              lastUpdated: Date.now(), // Status updates are authoritative
             },
             pressure: (data.pressure as number) ?? state.pressure,
             power: {
@@ -1132,7 +1134,7 @@ export const useStore = create<BrewOSState>()(
                 (data.preinfusionPauseMs as number) ??
                 state.preinfusion.pauseTimeMs,
             },
-            // Update temperature setpoints from saved settings
+            // Update temperature setpoints from saved settings (device_info is authoritative)
             temps: {
               ...state.temps,
               brew: {
@@ -1145,6 +1147,7 @@ export const useStore = create<BrewOSState>()(
                 setpoint:
                   (data.steamSetpoint as number) ?? state.temps.steam.setpoint,
               },
+              lastUpdated: Date.now(), // Device info is authoritative
             },
             // Update preferences from ESP32 (synced across devices)
             preferences: prefsData

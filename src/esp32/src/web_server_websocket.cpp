@@ -15,6 +15,19 @@
 // External reference to machine state defined in main.cpp
 extern ui_state_t machineState;
 
+/**
+ * Helper function to allocate memory for JSON buffers.
+ * Tries heap_caps_malloc first (preferred for internal RAM), falls back to malloc.
+ * Returns nullptr on failure.
+ */
+static char* allocateJsonBuffer(size_t size) {
+    char* buffer = (char*)heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    if (!buffer) {
+        buffer = (char*)malloc(size);
+    }
+    return buffer;
+}
+
 // WebSocket event handler for AsyncWebSocket (ESP32Async library)
 void WebServer::handleWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len) {
     switch (type) {
@@ -698,7 +711,13 @@ void WebServer::processCommand(JsonDocument& doc) {
             auto& timeSettings = State.settings().time;
             
             if (!doc["useNTP"].isNull()) timeSettings.useNTP = doc["useNTP"].as<bool>();
-            if (!doc["ntpServer"].isNull()) strncpy(timeSettings.ntpServer, doc["ntpServer"].as<const char*>(), sizeof(timeSettings.ntpServer) - 1);
+            if (!doc["ntpServer"].isNull()) {
+                strncpy(
+                    timeSettings.ntpServer,
+                    doc["ntpServer"].as<const char*>(),
+                    sizeof(timeSettings.ntpServer) - 1
+                );
+            }
             if (!doc["utcOffsetMinutes"].isNull()) timeSettings.utcOffsetMinutes = doc["utcOffsetMinutes"].as<int16_t>();
             if (!doc["dstEnabled"].isNull()) timeSettings.dstEnabled = doc["dstEnabled"].as<bool>();
             if (!doc["dstOffsetMinutes"].isNull()) timeSettings.dstOffsetMinutes = doc["dstOffsetMinutes"].as<int16_t>();
@@ -730,8 +749,7 @@ void WebServer::processCommand(JsonDocument& doc) {
             tsDoc["utcOffset"] = ts.utcOffset;
             
             size_t jsonSize = measureJson(tsDoc) + 1;
-            char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-            if (!jsonBuffer) jsonBuffer = (char*)malloc(jsonSize);
+            char* jsonBuffer = allocateJsonBuffer(jsonSize);
             if (jsonBuffer) {
                 serializeJson(tsDoc, jsonBuffer, jsonSize);
                 broadcastRaw(jsonBuffer);

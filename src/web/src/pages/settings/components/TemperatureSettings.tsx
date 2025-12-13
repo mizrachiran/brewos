@@ -68,19 +68,29 @@ export function TemperatureSettings() {
     // Optimistically update the store to prevent UI flicker
     // This ensures the "View Mode" shows the new values immediately when editing closes
     // even if the machine status update hasn't arrived yet
-    useStore.setState((state) => ({
-      temps: {
-        ...state.temps,
-        brew: {
-          ...state.temps.brew,
-          setpoint: brewTempCelsius
-        },
-        steam: {
-          ...state.temps.steam,
-          setpoint: steamTempCelsius
-        }
+    // Use timestamp-based conflict resolution to prevent race conditions
+    const optimisticTimestamp = Date.now();
+    useStore.setState((state) => {
+      // Only apply the optimistic update if no newer data has been received
+      if (!state.temps.lastUpdated || state.temps.lastUpdated <= optimisticTimestamp) {
+        return {
+          temps: {
+            ...state.temps,
+            brew: {
+              ...state.temps.brew,
+              setpoint: brewTempCelsius
+            },
+            steam: {
+              ...state.temps.steam,
+              setpoint: steamTempCelsius
+            },
+            lastUpdated: optimisticTimestamp,
+          }
+        };
       }
-    }));
+      // If newer data has already arrived, do not apply the optimistic update
+      return state;
+    });
     
     // Brief visual feedback for fire-and-forget WebSocket command
     setTimeout(() => setSaving(false), 600);

@@ -40,7 +40,7 @@ export function TimeSettings() {
   useEffect(() => {
     // Initial fetch
     sendCommand("get_time_status");
-    
+
     // Poll every 10s
     const interval = setInterval(() => {
       sendCommand("get_time_status");
@@ -51,24 +51,33 @@ export function TimeSettings() {
   const saveSettings = () => {
     if (saving) return;
     setSaving(true);
-    
-    const success = sendCommand("set_time_config", settings as unknown as Record<string, unknown>, { 
-      successMessage: "Time settings saved" 
-    });
-    
+
+    const success = sendCommand(
+      "set_time_config",
+      settings as unknown as Record<string, unknown>,
+      {
+        successMessage: "Time settings saved",
+      }
+    );
+
     if (success) {
       setEditing(false);
       // Refresh status after a delay to allow NTP to reconfigure
       setTimeout(() => sendCommand("get_time_status"), 1000);
+      // Reset saving state after successful save
+      setTimeout(() => setSaving(false), 600);
+    } else {
+      // Reset saving state immediately on failure
+      setSaving(false);
     }
-    
-    setTimeout(() => setSaving(false), 600);
   };
 
   const syncNow = () => {
     setSyncing(true);
-    sendCommand("sync_time", undefined, { successMessage: "NTP sync initiated" });
-    
+    sendCommand("sync_time", undefined, {
+      successMessage: "NTP sync initiated",
+    });
+
     // Check status after a delay
     setTimeout(() => {
       sendCommand("get_time_status");
@@ -234,10 +243,7 @@ export function TimeSettings() {
             <Button variant="ghost" onClick={() => setEditing(false)}>
               Cancel
             </Button>
-            <Button
-              onClick={saveSettings}
-              loading={saving}
-            >
+            <Button onClick={saveSettings} loading={saving}>
               Save
             </Button>
           </div>

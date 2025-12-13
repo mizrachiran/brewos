@@ -97,6 +97,7 @@ export interface Temperatures {
   brew: BoilerTemp;
   steam: BoilerTemp;
   group: number; // Group head temp (°C) - kept for protocol compatibility
+  lastUpdated?: number; // Timestamp (ms) of last update for conflict resolution
 }
 
 // Power Meter
