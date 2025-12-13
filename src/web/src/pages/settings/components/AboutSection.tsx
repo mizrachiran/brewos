@@ -1,4 +1,5 @@
 import { useStore } from "@/lib/store";
+import { useBackendInfo } from "@/lib/backend-info";
 import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { Logo } from "@/components/Logo";
 import {
@@ -19,11 +20,13 @@ import {
 export function AboutSection() {
   const esp32 = useStore((s) => s.esp32);
   const pico = useStore((s) => s.pico);
+  const backendInfo = useBackendInfo((s) => s.info);
 
   const GITHUB_REPO = "https://github.com/mizrachiran/brewos";
 
-  // Use build-time version constant
-  const uiVersion = __VERSION__;
+  // Use webVersion from backend if available (ESP32 reports the version of bundled UI)
+  // Fall back to build-time constant for cloud mode or when backend info isn't loaded yet
+  const uiVersion = backendInfo?.webVersion || __VERSION__;
 
   return (
     <div className="space-y-6">
