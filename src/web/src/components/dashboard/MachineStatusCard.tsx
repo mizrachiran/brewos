@@ -455,7 +455,7 @@ const PowerControls = memo(function PowerControls({
   state,
 }: PowerControlsProps & { state: string }) {
   const isOnActive = mode === "on";
-  
+
   // Only allow turning on from idle, ready, or eco states
   const canTurnOn = state === "idle" || state === "ready" || state === "eco";
 
@@ -493,7 +493,11 @@ const PowerControls = memo(function PowerControls({
               ? "nav-active rounded-l-xl"
               : "bg-theme-secondary text-theme-secondary hover:bg-theme-tertiary"
           )}
-          title={!canTurnOn ? "Machine must be in IDLE, READY, or ECO state to turn on" : undefined}
+          title={
+            !canTurnOn
+              ? "Machine must be in IDLE, READY, or ECO state to turn on"
+              : undefined
+          }
         >
           <StrategyIcon className="w-5 h-5" />
           <div className="flex flex-col items-start">
@@ -566,7 +570,11 @@ const PowerControls = memo(function PowerControls({
                 ? "nav-active"
                 : "bg-theme-secondary text-theme-secondary hover:bg-theme-tertiary"
             )}
-            title={!canTurnOn ? "Machine must be in IDLE, READY, or ECO state to turn on" : undefined}
+            title={
+              !canTurnOn
+                ? "Machine must be in IDLE, READY, or ECO state to turn on"
+                : undefined
+            }
           >
             <Zap className="w-5 h-5" />
             <div className="flex flex-col items-start">
@@ -595,7 +603,11 @@ const PowerControls = memo(function PowerControls({
               ? "nav-active"
               : "bg-theme-secondary text-theme-secondary hover:bg-theme-tertiary"
           )}
-          title={!canTurnOn ? "Machine must be in IDLE, READY, or ECO state to enter eco mode" : undefined}
+          title={
+            !canTurnOn
+              ? "Machine must be in IDLE, READY, or ECO state to enter eco mode"
+              : undefined
+          }
         >
           <Leaf className="w-5 h-5" />
           <div className="flex flex-col items-start">
