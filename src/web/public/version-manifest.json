@@ -1,19 +1,19 @@
 {
   "latest": {
-    "version": "0.7.7",
-    "tag": "v0.7.7",
+    "version": "0.7.8",
+    "tag": "v0.7.8",
     "channel": "stable",
     "protocol": 1,
-    "releaseUrl": "https://github.com/mizrachiran/brewos/releases/tag/v0.7.7"
+    "releaseUrl": "https://github.com/mizrachiran/brewos/releases/tag/v0.7.8"
   },
   "esp32": {
-    "firmware": "https://github.com/mizrachiran/brewos/releases/download/v0.7.7/brewos_esp32.bin",
-    "filesystem": "https://github.com/mizrachiran/brewos/releases/download/v0.7.7/brewos_esp32_littlefs.bin"
+    "firmware": "https://github.com/mizrachiran/brewos/releases/download/v0.7.8/brewos_esp32.bin",
+    "filesystem": "https://github.com/mizrachiran/brewos/releases/download/v0.7.8/brewos_esp32_littlefs.bin"
   },
   "pico": {
-    "dual_boiler": "https://github.com/mizrachiran/brewos/releases/download/v0.7.7/brewos_dual_boiler.bin",
-    "single_boiler": "https://github.com/mizrachiran/brewos/releases/download/v0.7.7/brewos_single_boiler.bin",
-    "heat_exchanger": "https://github.com/mizrachiran/brewos/releases/download/v0.7.7/brewos_heat_exchanger.bin"
+    "dual_boiler": "https://github.com/mizrachiran/brewos/releases/download/v0.7.8/brewos_dual_boiler.bin",
+    "single_boiler": "https://github.com/mizrachiran/brewos/releases/download/v0.7.8/brewos_single_boiler.bin",
+    "heat_exchanger": "https://github.com/mizrachiran/brewos/releases/download/v0.7.8/brewos_heat_exchanger.bin"
   },
-  "generatedAt": "2025-12-13T07:04:50.205Z"
+  "generatedAt": "2025-12-13T18:50:18.261Z"
 }
