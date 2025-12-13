@@ -1319,10 +1319,16 @@ export const useStore = create<BrewOSState>()(
         }
 
         case "device_online": {
-          // Device came online via cloud - request fresh state
+          // Device came online via cloud - update state immediately
           console.log("[Store] Device came online");
-          // Machine state will be updated when status messages arrive
-          // Don't change connectionState - we're still connected to cloud
+          // Set machine state to "unknown" so overlay hides
+          // Real state will be updated when status messages arrive
+          set((state) => ({
+            machine: {
+              ...state.machine,
+              state: "unknown" as const,  // Clear offline state, will be updated by status
+            },
+          }));
           break;
         }
 

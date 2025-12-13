@@ -70,6 +70,13 @@ export function ConnectionOverlay() {
       document.body.style.left = "0";
       document.body.style.right = "0";
       document.body.style.overflow = "hidden";
+      document.body.style.width = "100%";
+
+      // Also prevent touch scrolling on mobile
+      const preventScroll = (e: TouchEvent) => {
+        e.preventDefault();
+      };
+      document.addEventListener("touchmove", preventScroll, { passive: false });
 
       return () => {
         document.body.style.position = "";
@@ -77,6 +84,8 @@ export function ConnectionOverlay() {
         document.body.style.left = "";
         document.body.style.right = "";
         document.body.style.overflow = "";
+        document.body.style.width = "";
+        document.removeEventListener("touchmove", preventScroll);
         window.scrollTo(0, scrollY);
       };
     }
@@ -168,7 +177,7 @@ export function ConnectionOverlay() {
   const status = getStatus();
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-theme/95 backdrop-blur-md">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-theme/95 backdrop-blur-md overflow-hidden touch-none overscroll-none">
       {/* Dev mode bypass button */}
       {DEV_MODE && (
         <button

@@ -27,7 +27,12 @@ export function FirmwareUpdateNotification() {
   const [pendingUpdate, setPendingUpdate] = useState<PendingUpdate | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const esp32Version = useStore((s) => s.esp32.version);
+  const machineState = useStore((s) => s.machine.state);
+  const connectionState = useStore((s) => s.connectionState);
   const navigate = useNavigate();
+  
+  // Don't show firmware update notification when machine is offline or not connected
+  const isOfflineOrDisconnected = machineState === "offline" || connectionState !== "connected";
 
   // Set up the callback for in-app notifications
   useEffect(() => {
@@ -72,8 +77,8 @@ export function FirmwareUpdateNotification() {
     setDismissed(true);
   }, []);
 
-  // Don't render if no update or dismissed
-  if (!pendingUpdate || dismissed) {
+  // Don't render if no update, dismissed, or machine is offline/disconnected
+  if (!pendingUpdate || dismissed || isOfflineOrDisconnected) {
     return null;
   }
 
