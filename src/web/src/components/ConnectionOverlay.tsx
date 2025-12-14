@@ -37,7 +37,17 @@ export function ConnectionOverlay() {
   // Device is offline in cloud mode: this specifically detects when the cloud connection is established,
   // but the physical machine is unreachable.
   const isDeviceOffline = machineState === "offline";
-  const isUpdating = ota.isUpdating || ota.stage === "complete";
+
+  // Check localStorage for OTA state to persist across disconnects
+  const storedOtaInProgress =
+    localStorage.getItem(OTA_IN_PROGRESS_KEY) === "true";
+
+  // Consider updating if store says so, OR if we have stored state
+  // This ensures overlay stays visible even if connection drops or store resets during reboot
+  const isUpdating =
+    ota.isUpdating ||
+    ota.stage === "complete" ||
+    (storedOtaInProgress && (!isConnected || isDeviceOffline));
 
   // Track stable overlay state with debouncing to prevent flickering
   const [overlayState, setOverlayState] = useState<OverlayState>(() => {
@@ -59,6 +69,18 @@ export function ConnectionOverlay() {
       localStorage.setItem(OTA_IN_PROGRESS_KEY, "true");
     }
   }, [ota.isUpdating]);
+
+  // Clear OTA state when finished or device comes back online
+  useEffect(() => {
+    const isFinished = ota.stage === "complete" || ota.stage === "error";
+    // Device is back online if state is valid (not unknown/offline) and connected
+    const isBackOnline =
+      machineState !== "offline" && machineState !== "unknown" && isConnected;
+
+    if (isFinished || isBackOnline) {
+      localStorage.removeItem(OTA_IN_PROGRESS_KEY);
+    }
+  }, [ota.stage, machineState, isConnected]);
 
   // Track device offline state - once confirmed offline, stay that way until device comes back
   useEffect(() => {
@@ -295,8 +317,8 @@ export function ConnectionOverlay() {
 
   const status = getStatus();
 
-  // Lower z-index when device is offline so header (z-50) remains accessible
-  const zIndex = status.isDeviceOffline ? "z-[40]" : "z-[60]";
+  // set z-index when device is offline so header (z-50) remains accessible
+  const zIndex = "z-[40]";
 
   return (
     <div
