@@ -82,8 +82,8 @@ High-current connections to original machine wiring use 6.3mm (0.25") spade term
 | --- | ----------- | ---------- | -------------------------------------------- |
 | 1   | +5V         | Power      | ESP32 power                                  |
 | 2   | GND         | Power      | Ground                                       |
-| 3   | PICO_TX     | Pico→ESP32 | GPIO0 via 33Ω                                |
-| 4   | PICO_RX     | ESP32→Pico | GPIO1 via 33Ω                                |
+| 3   | PICO_TX     | Pico→ESP32 | GPIO0 via 1kΩ (R40, 5V tolerance - ECO-03)   |
+| 4   | PICO_RX     | ESP32→Pico | GPIO1 via 1kΩ (R41, 5V tolerance - ECO-03)   |
 | 5   | PICO_RUN    | ESP32→Pico | Reset control (ESP32 GPIO8)                  |
 | 6   | SPARE1      | ESP32↔Pico | GPIO16 ↔ ESP32 GPIO9, 4.7kΩ pull-down (R74)  |
 | 7   | WEIGHT_STOP | ESP32→Pico | GPIO21, 4.7kΩ pull-down (R73)                |
@@ -97,16 +97,19 @@ High-current connections to original machine wiring use 6.3mm (0.25") spade term
 
 4-pin header for debug access. **Shares UART0 with J15 (ESP32).**
 
-| Pin | Signal     | Notes                   |
-| --- | ---------- | ----------------------- |
-| 1   | +3.3V      | 3.3V power              |
-| 2   | GND        | Ground                  |
-| 3   | SERVICE_TX | GPIO0 (shared with J15) |
-| 4   | SERVICE_RX | GPIO1 (shared with J15) |
+| Pin | Signal     | Notes                                |
+| --- | ---------- | ------------------------------------ |
+| 1   | +3.3V      | 3.3V power                           |
+| 2   | GND        | Ground                               |
+| 3   | SERVICE_TX | GPIO0 via 1kΩ (R42, shared with J15) |
+| 4   | SERVICE_RX | GPIO1 via 1kΩ (R43, shared with J15) |
 
 **⚠️ Disconnect ESP32 cable when using service port for flashing!**
 
-**Protection:** D23/D24 (BZT52C3V3) clamp inputs to 3.3V for 5V TTL adapter safety.
+**Protection:**
+
+- R42/R43: 1kΩ series resistors for RP2350 5V tolerance protection (ECO-03)
+- D23/D24: BZT52C3V3 Zener clamps for 5V TTL adapter overvoltage safety
 
 ---
 

@@ -1394,15 +1394,15 @@ using the machine's existing high-voltage wiring. NO HIGH CURRENT flows through 
     UART TX (GPIO0 → ESP32 RX):
     ───────────────────────────
                                     ┌────┐
-    GPIO0 ──────────────────────────┤ 33Ω├─────────────────── J15 Pin 3 (TX)
-    (UART0_TX)                      │R40 │
+    GPIO0 ──────────────────────────┤ 1kΩ├─────────────────── J15 Pin 3 (TX)
+    (UART0_TX)                      │R40 │ (ECO-03: 5V tolerance)
                                     └────┘
 
     UART RX (ESP32 TX → GPIO1):
     ───────────────────────────
                                     ┌────┐
-    GPIO1 ◄─────────────────────────┤ 33Ω├─────────────────── J15 Pin 4 (RX)
-    (UART0_RX)                      │R41 │
+    GPIO1 ◄─────────────────────────┤ 1kΩ├─────────────────── J15 Pin 4 (RX)
+    (UART0_RX)                      │R41 │ (ECO-03: 5V tolerance)
                                     └────┘
 
 
@@ -1542,7 +1542,7 @@ using the machine's existing high-voltage wiring. NO HIGH CURRENT flows through 
 
     Component Values:
     ─────────────────
-    R40-41: 33Ω 5%, 0805 (UART series protection)
+    R40-41: 1kΩ 5%, 0805 (UART series protection - 5V tolerance per ECO-03)
     R71:    10kΩ 5%, 0805 (RUN pull-up)
     R73:    4.7kΩ 5%, 0805 (WEIGHT_STOP pull-down, RP2350 E9)
     R74:    4.7kΩ 5%, 0805 (SPARE1 pull-down, RP2350 E9)
@@ -1569,8 +1569,8 @@ using the machine's existing high-voltage wiring. NO HIGH CURRENT flows through 
     ⚠️ DISCONNECT ESP32 (J15) BEFORE USING SERVICE PORT
 
                                     ┌────┐
-    GPIO0 ──────────────────────────┤ 33Ω├──┬──────────────── J15 Pin 3 (ESP32 RX)
-    (UART0_TX)                      │R42 │  │
+    GPIO0 ──────────────────────────┤ 1kΩ├──┬──────────────── J15 Pin 3 (ESP32 RX)
+    (UART0_TX)                      │R42 │  │ (ECO-03: 5V tolerance)
                                     └────┘  ├──────────────── J16 Pin 3 (Service TX)
                                             │
                                        ┌────┴────┐
@@ -1581,8 +1581,8 @@ using the machine's existing high-voltage wiring. NO HIGH CURRENT flows through 
                                            GND
 
                                     ┌────┐
-    GPIO1 ◄─────────────────────────┤ 33Ω├──┬──────────────── J15 Pin 4 (ESP32 TX)
-    (UART0_RX)                      │R43 │  │
+    GPIO1 ◄─────────────────────────┤ 1kΩ├──┬──────────────── J15 Pin 4 (ESP32 TX)
+    (UART0_RX)                      │R43 │  │ (ECO-03: 5V tolerance)
                                     └────┘  ├──────────────── J16 Pin 4 (Service RX)
                                             │
                                        ┌────┴────┐
@@ -1611,8 +1611,8 @@ using the machine's existing high-voltage wiring. NO HIGH CURRENT flows through 
 
     Component Values:
     ─────────────────
-    R42:  33Ω 5%, 0805 (Service TX series)
-    R43:  33Ω 5%, 0805 (Service RX series)
+    R42:  1kΩ 5%, 0805 (Service TX series - 5V tolerance per ECO-03)
+    R43:  1kΩ 5%, 0805 (Service RX series - 5V tolerance per ECO-03)
     D23:  BZT52C3V3 3.3V Zener, SOD-123 (TX overvoltage clamp)
     D24:  BZT52C3V3 3.3V Zener, SOD-123 (RX overvoltage clamp)
 
