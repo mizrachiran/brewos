@@ -100,18 +100,16 @@ export function ConnectionOverlay() {
     // Device is offline (cloud connected but device unreachable)
     if (isDeviceOffline && isConnected) return "offline";
 
-    // Not connected to server - show connecting
-    // Also use deviceConfirmedOffline to show offline while cloud reconnects
+    // Not connected to server - show connecting or offline
     if (!isConnected) {
       return deviceConfirmedOffline.current ? "offline" : "connecting";
     }
 
-    // Machine state is unknown (just connected, waiting for status)
-    // Show connecting briefly while we wait for the machine to report its state
-    if (machineState === "unknown") return "connecting";
-
+    // Connected to cloud and device is not offline - hide overlay
+    // Don't show "connecting" just because we're waiting for first status message
+    // The device is online, we're just waiting for fresh data
     return "hidden";
-  }, [isUpdating, isDeviceOffline, isConnected, machineState]);
+  }, [isUpdating, isDeviceOffline, isConnected]);
 
   // Stabilized state transition logic
   useEffect(() => {
