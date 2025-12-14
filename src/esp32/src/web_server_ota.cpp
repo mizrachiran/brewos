@@ -433,7 +433,6 @@ static bool downloadToFile(const char* url, const char* filePath,
     // Configure secure client for maximum throughput
     WiFiClientSecure client;
     client.setInsecure();
-    client.setRxBufferSize(16384);
     
     HTTPClient http;
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
@@ -839,7 +838,6 @@ void WebServer::startGitHubOTA(const String& version) {
     // Configure secure client for maximum throughput
     WiFiClientSecure client;
     client.setInsecure(); // Skip cert verification for speed/simplicity
-    client.setRxBufferSize(16384); // 16KB buffer for SSL/TCP
     
     // Download ESP32 firmware
     HTTPClient http;
@@ -1044,12 +1042,16 @@ void WebServer::updateLittleFS(const char* tag) {
              "https://github.com/" GITHUB_OWNER "/" GITHUB_REPO "/releases/download/%s/" GITHUB_ESP32_LITTLEFS_ASSET, 
              tag);
     
+    // Configure secure client
+    WiFiClientSecure client;
+    client.setInsecure();
+    
     HTTPClient http;
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
     http.setTimeout(OTA_HTTP_TIMEOUT_MS);
     
     feedWatchdog();
-    if (!http.begin(littlefsUrl)) {
+    if (!http.begin(client, littlefsUrl)) {
         LOG_W("LittleFS download failed - continuing");
         return;
     }
