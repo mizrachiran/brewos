@@ -8,16 +8,18 @@ This document explains how to connect an ESP32 display module (including debug/d
 
 The control PCB provides an 8-pin JST-XH connector (J15) for the ESP32 display module:
 
-| Pin | Signal      | Direction | Voltage | Notes                                        |
-| --- | ----------- | --------- | ------- | -------------------------------------------- |
-| 1   | 5V          | Power Out | 5V DC   | Power supply for ESP32 (300-500mA)           |
-| 2   | GND         | Ground    | 0V      | Common ground                                |
-| 3   | TX          | Input     | 3.3V    | Pico TX → ESP32 RX (GPIO0)                   |
-| 4   | RX          | Output    | 3.3V    | ESP32 TX → Pico RX (GPIO1)                   |
-| 5   | RUN         | Output    | 3.3V    | ESP32 GPIO8 → Pico RUN pin (reset control)   |
-| 6   | SPARE1      | I/O       | 3.3V    | ESP32 GPIO9 ↔ Pico GPIO16 (4.7kΩ pull-down)  |
-| 7   | WEIGHT_STOP | Output    | 3.3V    | ESP32 GPIO10 → Pico GPIO21 (4.7kΩ pull-down) |
-| 8   | SPARE2      | I/O       | 3.3V    | ESP32 GPIO22 ↔ Pico GPIO22 (4.7kΩ pull-down) |
+| Pin | Signal      | Direction | Voltage | Notes                                                  |
+| --- | ----------- | --------- | ------- | ------------------------------------------------------ |
+| 1   | 5V          | Power Out | 5V DC   | Power supply for ESP32 (300-500mA)                     |
+| 2   | GND         | Ground    | 0V      | Common ground                                          |
+| 3   | TX          | Input     | 3.3V    | Pico TX → ESP32 RX (GPIO0, 1kΩ series R40)             |
+| 4   | RX          | Output    | 3.3V    | ESP32 TX → Pico RX (GPIO1, 1kΩ series R41)             |
+| 5   | RUN         | Output    | 3.3V    | ESP32 GPIO8 → Pico RUN pin (reset control)             |
+| 6   | SPARE1      | I/O       | 3.3V    | ESP32 GPIO9 ↔ Pico GPIO16 (4.7kΩ pull-down)            |
+| 7   | WEIGHT_STOP | Output    | 3.3V    | ESP32 GPIO10 → Pico GPIO21 (4.7kΩ pull-down)           |
+| 8   | SPARE2      | I/O       | 3.3V    | ESP32 GPIO22 ↔ Pico GPIO22 (4.7kΩ pull-down)           |
+
+**⚠️ CRITICAL:** Always power the control PCB BEFORE connecting USB to ESP32 module. See [Safety - 5V Tolerance](spec/09-Safety.md#rp2350-5v-tolerance-and-power-sequencing) for details.
 
 ## ESP32 GPIO Pin Assignment
 

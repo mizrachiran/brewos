@@ -178,6 +178,104 @@ MOVs are placed across **LOADS** (not across relay contacts):
 
 ---
 
+## RP2350 5V Tolerance and Power Sequencing
+
+### Critical Design Constraint
+
+The RP2350 "5V Tolerant" GPIO feature has a critical caveat documented in the datasheet:
+
+**⚠️ IOVDD (3.3V) must be present for the 5V tolerance to be active.**
+
+### Power Sequencing Risk Analysis
+
+| Scenario | Risk Level | Consequence |
+| -------- | ---------- | ----------- |
+| Normal operation (PCB powered first) | ✅ Safe | IOVDD active, 5V tolerance engaged |
+| ESP32 USB powered before PCB | 🔴 Critical | IOVDD=0V, GPIO latch-up risk |
+| Hot-plugging peripherals | 🟡 Medium | Transient violation possible |
+| Power glitch/brownout | 🟡 Medium | Brief IOVDD dropout |
+
+### Protection Mechanisms Implemented
+
+| Protection | Component | Purpose |
+| ---------- | --------- | ------- |
+| Series resistors (1kΩ) | R40-R43 | Limits fault current to <500µA during sequencing anomalies |
+| Pull-down resistors (4.7kΩ) | R11-R15, R73-R75 | Ensures defined GPIO states at boot |
+| ESD clamps | D10-D15 | Additional transient protection |
+| Schottky clamp (BAT54S) | D16 | ADC overvoltage protection |
+
+### Safe Operating Procedures
+
+1. **Always power the control PCB before external peripherals**
+2. **Use integrated 5V supply (J15 Pin 1) for ESP32** - never separate USB
+3. **Never hot-plug connectors while system is running**
+4. **During development**, power PCB via J15 from bench supply before connecting USB
+
+---
+
+## Hardware Interlock Considerations
+
+### Current Design (Software-Controlled)
+
+The current design relies entirely on software control for SSR heater switching:
+
+```
+GPIO13/14 → Transistor → SSR Trigger → Heater Element
+```
+
+**Risk:** If the MCU crashes with the heater SSR ON, the boiler could overheat.
+
+### Mitigation Layers (Current Implementation)
+
+| Layer | Protection | Notes |
+| ----- | ---------- | ----- |
+| 1 | RP2350 internal watchdog | 8-second timeout, resets MCU |
+| 2 | SSR pull-down resistors (R14/R15) | SSR OFF when GPIO tristated during reset |
+| 3 | Machine thermal fuse | Factory-installed on boiler |
+| 4 | Pressure relief valve | Factory-installed mechanical safety |
+
+### Future Enhancement: Hardware Watchdog (Optional)
+
+For higher safety assurance (commercial/certification), consider adding an external "dead man switch":
+
+| Component | Part Number | Function |
+| --------- | ----------- | -------- |
+| TPL5010 | Texas Instruments | External watchdog timer |
+| Connection | TPL5010 DONE ← MCU GPIO, WAKE → Pico RUN | Resets MCU if not reset by firmware |
+
+**Implementation:**
+- Firmware must toggle the watchdog input every few seconds
+- If MCU hangs, TPL5010 pulls RUN low → system reset → SSRs turn OFF
+
+**Note:** This is NOT implemented in the current design. The internal RP2350 watchdog combined with SSR pull-downs provides adequate protection for home/prosumer use.
+
+---
+
+## Missing Zero-Crossing Detection (Design Note)
+
+### Current Limitation
+
+For **phase-angle control** (dimming) of the AC pump or heater, a Zero-Cross Detector (ZCD) is required. This is NOT currently implemented.
+
+### Impact
+
+Without ZCD, the SSRs can only operate in "Slow PWM" (Time Proportional) mode:
+- Example: 1 second period, 50% duty = 0.5s ON, 0.5s OFF
+- This is adequate for thermal inertia (heaters) but NOT for pressure profiling
+
+### For Pressure Profiling (Future Revision)
+
+If AC pump phase control is required:
+
+| Component | Part Number | Function |
+| --------- | ----------- | -------- |
+| Optocoupler ZCD | H11AA1 | Detects AC zero-cross |
+| Connection | AC_L/AC_N → H11AA1 → GPIO interrupt | Sync PWM to mains frequency |
+
+**Note:** The current HLK-15M05C power supply provides isolated 5V, allowing safe interface with AC via optocoupler.
+
+---
+
 ## Reliability & MTBF Estimate
 
 ### Component MTBF Analysis

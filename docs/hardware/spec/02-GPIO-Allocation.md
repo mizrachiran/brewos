@@ -59,8 +59,8 @@
 │                                                                                 │
 │  ┌─────────────────────────────────────────────────────────────────────────┐  │
 │  │  UART0 - ESP32 DISPLAY MODULE (8-pin JST-XH)                            │  │
-│  │  ├── GPIO0 (UART0 TX) ─── ESP32 RX (33Ω series protection)             │  │
-│  │  ├── GPIO1 (UART0 RX) ─── ESP32 TX (33Ω series protection)             │  │
+│  │  ├── GPIO0 (UART0 TX) ─── ESP32 RX (1kΩ series protection - R40)       │  │
+│  │  ├── GPIO1 (UART0 RX) ─── ESP32 TX (1kΩ series protection - R41)       │  │
 │  │  ├── PICO RUN ◄──────── ESP32 GPIO8 (ESP32 resets Pico)                │  │
 │  │  ├── GPIO16 (SPARE1) ↔── ESP32 GPIO9 (J15 Pin 6, 4.7kΩ pull-down)     │  │
 │  │  ├── GPIO21 (WEIGHT_STOP) ◄─ ESP32 GPIO10 (J15 Pin 7, 4.7kΩ pull-down)│  │
@@ -69,8 +69,8 @@
 │                                                                                 │
 │  ┌─────────────────────────────────────────────────────────────────────────┐  │
 │  │  SERVICE/DEBUG PORT (4-pin header) - Shared with ESP32 on GPIO0/1       │  │
-│  │  ├── GPIO0 (UART0 TX) ─── J15 (ESP32) + J16 (Service) - 33Ω protected  │  │
-│  │  └── GPIO1 (UART0 RX) ─── J15 (ESP32) + J16 (Service) - 33Ω protected  │  │
+│  │  ├── GPIO0 (UART0 TX) ─── J15 (ESP32) + J16 (Service) - 1kΩ protected  │  │
+│  │  └── GPIO1 (UART0 RX) ─── J15 (ESP32) + J16 (Service) - 1kΩ protected  │  │
 │  │  ⚠️ Disconnect ESP32 cable when using service port for flashing         │  │
 │  └─────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                 │
@@ -117,14 +117,14 @@
 
 | GPIO | Function                        | Direction | Type    | Pull          | Protection                        |
 | ---- | ------------------------------- | --------- | ------- | ------------- | --------------------------------- |
-| 0    | UART0 TX → ESP32                | Output    | Digital | None          | 33Ω series                        |
-| 1    | UART0 RX ← ESP32                | Input     | Digital | None          | 33Ω series                        |
+| 0    | UART0 TX → ESP32                | Output    | Digital | None          | 1kΩ series (R40)                  |
+| 1    | UART0 RX ← ESP32                | Input     | Digital | None          | 1kΩ series (R41)                  |
 | 2    | Water Reservoir Switch          | Input     | Digital | Internal PU   | ESD clamp                         |
 | 3    | Tank Level Sensor               | Input     | Digital | Internal PU   | ESD clamp                         |
 | 4    | Steam Boiler Level (Comparator) | Input     | Digital | None          | TLV3201 output                    |
 | 5    | Brew Handle Switch              | Input     | Digital | Internal PU   | ESD clamp                         |
-| 6    | Meter TX (UART1)                | Output    | Digital | None          | 33Ω series (to meter RX/RS485 DI) |
-| 7    | Meter RX (UART1)                | Input     | Digital | None          | 33Ω series (from meter TX/RS485)  |
+| 6    | Meter TX (UART1)                | Output    | Digital | None          | 1kΩ series R42 (5V tolerance)     |
+| 7    | Meter RX (UART1)                | Input     | Digital | None          | 1kΩ series R43 (5V tolerance)     |
 | 8    | I2C0 SDA (Accessory)            | I/O       | Digital | 4.7kΩ ext. PU | Accessory expansion               |
 | 9    | I2C0 SCL (Accessory)            | Output    | Digital | 4.7kΩ ext. PU | Accessory expansion               |
 | 10   | Relay K1 + LED                  | Output    | Digital | None          | -                                 |
@@ -145,6 +145,32 @@
 | 28   | ADC2 - Pressure                 | Input     | Analog  | None          | RC filter, divider                |
 
 ## RP2350 GPIO Considerations
+
+### 5V Tolerance and Power Sequencing (CRITICAL)
+
+The RP2350 datasheet highlights a critical constraint regarding "5V Tolerant" GPIOs: **IOVDD (3.3V) must be present for the tolerance to be active.**
+
+**⚠️ RISK SCENARIO:**
+If the BrewOS controller is powered via USB (VBUS), but an external peripheral (like the ESP32 module if self-powered from a separate USB cable) is powered from a different source that initializes faster than the Pico's onboard buck converter, a condition exists where V_GPIO = 5V and IOVDD = 0V.
+
+**Failure Mechanism:**
+In this state, the internal protection diodes are unpowered. The 5V input will forward-bias the parasitic diode to the 3.3V rail, effectively trying to power the entire Pico board through the GPIO pin. This usually results in immediate silicon latch-up or burnout.
+
+**Protection Implemented:**
+Series current-limiting resistors (1kΩ) are mandatory on all GPIO lines that may interface with 5V-capable peripherals:
+
+| GPIO | Signal   | Resistor | Purpose                                                |
+| ---- | -------- | -------- | ------------------------------------------------------ |
+| 0    | UART0 TX | R40 1kΩ  | Limits fault current to <500µA during power sequencing |
+| 1    | UART0 RX | R41 1kΩ  | Limits fault current to <500µA during power sequencing |
+| 6    | Meter TX | R42 1kΩ  | Protection for external meter interface                |
+| 7    | Meter RX | R43 1kΩ  | Protection for external meter interface                |
+
+**Safe Operating Procedure:**
+
+1. Always power the control PCB BEFORE connecting USB to ESP32 module
+2. Never hot-plug peripherals while system is running
+3. Use the integrated 5V supply (J15 Pin 1) for ESP32, not separate USB power
 
 ### Internal GPIOs (NOT available on Pico 2 header)
 

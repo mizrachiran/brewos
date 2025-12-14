@@ -216,11 +216,47 @@ Without buffer, R7 provides only 0.3mA to share between LM4040 and NTC loads:
 
 ### Decoupling Capacitor Placement
 
-| Location                | Capacitor  | Type           | Notes                    |
-| ----------------------- | ---------- | -------------- | ------------------------ |
-| 5V rail main            | 470µF      | Polymer (6.3V) | Near HLK-15M05C output   |
-| 5V at Pico VSYS         | 100nF      | Ceramic (0805) | Adjacent to pin          |
-| 5V at each relay driver | 100nF      | Ceramic (0805) | Suppress switching noise |
-| 3.3V Buck output (U3)   | 2×22µF     | Ceramic (1206) | For stability            |
-| 3.3V at each ADC input  | 100nF      | Ceramic (0603) | Filter network           |
-| ADC_VREF                | 22µF+100nF | Ceramic        | Reference stability      |
+| Location                | Capacitor  | Type           | Notes                                |
+| ----------------------- | ---------- | -------------- | ------------------------------------ |
+| 5V rail main            | 470µF      | Polymer (6.3V) | Near HLK-15M05C output               |
+| 5V at Pico VSYS         | 100nF      | Ceramic (0805) | Adjacent to pin                      |
+| 5V at each relay driver | 100nF      | Ceramic (0805) | Suppress switching noise             |
+| 3.3V Buck output (U3)   | 2×22µF     | Ceramic (1206) | For stability                        |
+| **3.3V Rail bulk (C5)** | **47µF**   | **Ceramic (1206)** | **WiFi/relay transient stabilization** |
+| 3.3V at each ADC input  | 100nF      | Ceramic (0603) | Filter network                       |
+| ADC_VREF                | 22µF+100nF | Ceramic        | Reference stability                  |
+
+### 3.3V Rail Bulk Capacitance (ECO-05)
+
+**⚠️ CRITICAL:** The Pico 2 module has limited onboard capacitance. When driving external loads (ESP32 logic, sensor buffers), additional bulk capacitance is required to prevent brownouts during:
+
+- **WiFi transmission bursts** (if using Pico 2 W)
+- **Relay switching transients** (back-EMF coupling)
+- **ESP32 current spikes** (up to 500mA during WiFi TX)
+
+**Required Addition:**
+- **C5**: 47µF 10V X5R ceramic capacitor (1206 package)
+- **Placement**: Adjacent to TPS563200 output, parallel with C4/C4A
+
+```
+    TPS563200 Output
+         │
+    ┌────┴────┐
+    │  22µF   │  C4 (existing)
+    │   10V   │
+    └────┬────┘
+         │
+    ┌────┴────┐
+    │  22µF   │  C4A (existing)
+    │   10V   │
+    └────┬────┘
+         │
+    ┌────┴────┐
+    │  47µF   │  C5 (NEW - ECO-05)
+    │   10V   │  Bulk for transient stability
+    └────┬────┘
+         │
+         └──────────────────► +3.3V Rail
+```
+
+**Total 3.3V Rail Capacitance:** 22µF + 22µF + 47µF = **91µF** (adequate for ~1A transient load)

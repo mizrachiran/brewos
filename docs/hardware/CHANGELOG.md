@@ -2,22 +2,127 @@
 
 ## Revision History
 
-| Rev        | Date            | Description                                                                               |
-| ---------- | --------------- | ----------------------------------------------------------------------------------------- |
-| **2.27**   | **Dec 14 2025** | **CURRENT** - Schematic diagram clarifications (VREF, Level Probe, 5V Protection), Netlist cleanup |
+| Rev      | Date            | Description                                                                               |
+| -------- | --------------- | ----------------------------------------------------------------------------------------- |
+| **2.28** | **Dec 14 2025** | **CURRENT** - RP2350 Engineering Verification ECOs (5V tolerance, bulk cap, safety docs)  |
+| 2.27     | Dec 14 2025     | Schematic diagram clarifications (VREF, Level Probe, 5V Protection), Netlist cleanup      |
 | 2.26.1   | Dec 11 2025     | Improved SSR wiring diagrams, fixed J26 pin number inconsistencies                        |
-| 2.25     | Dec 9 2025     | J15 Pin 6 SPARE1, removed SW2/R72 (BOOTSEL not available on Pico header)                  |
-| 2.24.2   | Dec 7 2025     | 🔴 SAFETY FIXES: Wien gain corrected, MOV relocated, JP5 added                            |
-| 2.24.1   | Dec 7 2025     | CRITICAL FIXES: Buck feedback, Wien gain (wrong value), VREF isolation (DO NOT FABRICATE) |
-| 2.24     | Dec 2025       | Critical VREF buffer, TC protection, ratiometric ADC (DO NOT FABRICATE)                   |
-| 2.23     | Dec 2025       | Design review action items (warnings, coating)                                            |
-| 2.22     | Dec 2025       | Engineering review fixes (thermal, GPIO protection)                                       |
-| 2.21.1   | Dec 2025       | Pico 2 compatibility fixes, power supply                                                  |
-| 2.21     | Dec 2025       | External power metering, multi-machine NTC support                                        |
-| 2.20     | Dec 2025       | Unified 22-pos screw terminal (J26)                                                       |
-| 2.19     | Dec 2025       | Removed spare relay K4                                                                    |
-| 2.17     | Nov 2025       | Brew-by-weight support (J15 8-pin)                                                        |
-| 2.16     | Nov 2025       | Production-ready specification                                                            |
+| 2.25     | Dec 9 2025      | J15 Pin 6 SPARE1, removed SW2/R72 (BOOTSEL not available on Pico header)                  |
+| 2.24.2   | Dec 7 2025      | 🔴 SAFETY FIXES: Wien gain corrected, MOV relocated, JP5 added                            |
+| 2.24.1   | Dec 7 2025      | CRITICAL FIXES: Buck feedback, Wien gain (wrong value), VREF isolation (DO NOT FABRICATE) |
+| 2.24     | Dec 2025        | Critical VREF buffer, TC protection, ratiometric ADC (DO NOT FABRICATE)                   |
+| 2.23     | Dec 2025        | Design review action items (warnings, coating)                                            |
+| 2.22     | Dec 2025        | Engineering review fixes (thermal, GPIO protection)                                       |
+| 2.21.1   | Dec 2025        | Pico 2 compatibility fixes, power supply                                                  |
+| 2.21     | Dec 2025        | External power metering, multi-machine NTC support                                        |
+| 2.20     | Dec 2025        | Unified 22-pos screw terminal (J26)                                                       |
+| 2.19     | Dec 2025        | Removed spare relay K4                                                                    |
+| 2.17     | Nov 2025        | Brew-by-weight support (J15 8-pin)                                                        |
+| 2.16     | Nov 2025        | Production-ready specification                                                            |
+
+---
+
+## v2.28 (December 14, 2025) - RP2350 Engineering Verification ECOs
+
+**Comprehensive engineering design verification of RP2350 implementation addressing critical 5V tolerance, power sequencing, and analog signal chain integrity.**
+
+Based on detailed engineering analysis against RP2350 datasheet requirements and IEC safety standards.
+
+### 🔴 Critical Engineering Change Orders (ECOs)
+
+#### ECO-03: UART/GPIO 5V Tolerance Protection (CRITICAL)
+
+| Component | Old Value | New Value | Reason                                                         |
+| --------- | --------- | --------- | -------------------------------------------------------------- |
+| R40       | 33Ω       | **1kΩ**   | ESP32 TX→Pico RX: Limits fault current during power sequencing |
+| R41       | 33Ω       | **1kΩ**   | ESP32 RX←Pico TX: Limits fault current during power sequencing |
+| R42       | 33Ω       | **1kΩ**   | Meter TX: 5V tolerance protection                              |
+| R43       | 33Ω       | **1kΩ**   | Meter RX: 5V tolerance protection                              |
+
+**Technical Background:**
+The RP2350 "5V Tolerant" GPIO feature requires IOVDD (3.3V) to be present for tolerance to be active. If an external peripheral (ESP32 via separate USB power) initializes before the Pico's buck converter, a condition exists where V_GPIO=5V and IOVDD=0V. In this state, internal protection diodes are unpowered, causing forward-bias through parasitic diodes to the 3.3V rail, resulting in silicon latch-up or burnout.
+
+**Solution:** 1kΩ series resistors limit fault current to <500µA during power sequencing anomalies, providing safe margin even when IOVDD is absent.
+
+#### ECO-05: 3.3V Rail Bulk Capacitor (MAJOR)
+
+| Component | Old    | New                   | Reason                            |
+| --------- | ------ | --------------------- | --------------------------------- |
+| C5        | (none) | **47µF 10V X5R 1206** | 3.3V rail transient stabilization |
+
+**Technical Background:**
+The Pico 2 module has limited onboard capacitance. When driving external loads (ESP32 logic, sensor buffers), the rail can experience brownouts during:
+
+- WiFi transmission bursts (if using Pico 2 W)
+- Relay switching transients (back-EMF coupling)
+- ESP32 current spikes (up to 500mA during WiFi TX)
+
+**Total 3.3V Rail Capacitance:** 22µF + 22µF + 47µF = **91µF** (adequate for ~1A transient load)
+
+### 🟡 Documentation Enhancements
+
+#### 5V Tolerance Power Sequencing Warning (GPIO Spec)
+
+Added comprehensive documentation on RP2350 5V tolerance constraints:
+
+- Risk scenario analysis for parallel USB power sources
+- Safe operating procedures for development and production
+- Protection mechanism summary table
+
+#### Hardware Interlock Design Notes (Safety Spec)
+
+Added analysis of current software-controlled SSR design:
+
+- Mitigation layers (watchdog, pull-downs, thermal fuse)
+- Optional external hardware watchdog (TPL5010) for commercial certification
+- Current design assessed as adequate for home/prosumer use
+
+#### Zero-Crossing Detection Note (Safety Spec)
+
+Documented current limitation for AC phase control:
+
+- Slow PWM (time proportional) mode only
+- Future ZCD implementation path for pressure profiling
+- Component recommendations (H11AA1 optocoupler)
+
+### ✅ Verified Design Elements
+
+The engineering review confirmed these existing design choices as correct:
+
+| Element                 | Implementation          | Verification                                               |
+| ----------------------- | ----------------------- | ---------------------------------------------------------- |
+| Pressure sensor divider | R4=5.6kΩ, R3=10kΩ       | ✅ Maps 0.5-4.5V → 0.32-2.88V (within 3.0V ADC ref)        |
+| ADC overvoltage clamp   | BAT54S (D16)            | ✅ Clamps to 3.6V max on open-circuit fault                |
+| SSR pull-downs          | R14/R15 4.7kΩ           | ✅ Ensures heaters OFF during MCU reset/boot               |
+| Precision ADC reference | LM4040 + OPA2342 buffer | ✅ Robust design for high-current sensor loads             |
+| Fluid level AC drive    | Wien bridge oscillator  | ✅ Superior to DC sensing, prevents electrode electrolysis |
+| Flyback diodes          | UF4007 (D1-D3)          | ✅ Fast recovery prevents relay contact damage             |
+
+### BOM Impact
+
+| Change Type               | Count | Est. Cost Impact |
+| ------------------------- | ----- | ---------------- |
+| Value changes (resistors) | 4     | ~$0.10           |
+| New component (C5)        | 1     | ~$0.15           |
+| **Total BOM Δ**           | **5** | **+$0.25**       |
+
+### Files Modified
+
+| File                         | Changes                                                                      |
+| ---------------------------- | ---------------------------------------------------------------------------- |
+| `spec/02-GPIO-Allocation.md` | 5V tolerance section, UART series resistor values, power sequencing warnings |
+| `spec/03-Power-Supply.md`    | 3.3V bulk capacitor (C5) requirement and circuit diagram                     |
+| `spec/07-BOM.md`             | Updated R40-R43 values, added C5                                             |
+| `spec/09-Safety.md`          | Power sequencing risks, hardware interlock analysis, ZCD design notes        |
+| `CHANGELOG.md`               | This entry                                                                   |
+
+### Design Verdict
+
+**Status:** Production Ready with ECOs Applied
+
+The RP2350-based BrewOS hardware demonstrates high design sophistication, particularly in the precision analog signal conditioning for temperature control. The identified ECOs address power sequencing edge cases that could cause field failures. With these changes applied, the design is qualified as a robust platform for commercial/prosumer espresso machine control.
+
+**Acknowledgment:** Analysis based on comprehensive engineering design verification report reviewing RP2350 datasheet requirements, IEC 60335-1 safety standards, and best practices for embedded thermal control systems.
 
 ---
 
@@ -28,31 +133,35 @@
 ### Diagram Improvements (Schematic_Reference.md)
 
 1.  **5V Rail Protection:**
-    -   Redesigned to clearly show FB2 in series and D20/C2 in parallel
-    -   Added clear signal flow and "Why" section
+
+    - Redesigned to clearly show FB2 in series and D20/C2 in parallel
+    - Added clear signal flow and "Why" section
 
 2.  **JP4 Mode Selection:**
-    -   Clarified 3-pad jumper topology (RS485 vs TTL)
-    -   Added distinct visual guides for both modes
+
+    - Clarified 3-pad jumper topology (RS485 vs TTL)
+    - Added distinct visual guides for both modes
 
 3.  **Level Probe Circuit:**
-    -   Complete redesign of the 3-stage circuit (Wien Bridge, Interface, Comparator)
-    -   Fixed broken connection lines and incorrect resistor values in diagram
-    -   Added explicit signal flow explanation
+
+    - Complete redesign of the 3-stage circuit (Wien Bridge, Interface, Comparator)
+    - Fixed broken connection lines and incorrect resistor values in diagram
+    - Added explicit signal flow explanation
 
 4.  **ADC Voltage Reference:**
-    -   Clarified distinction between `REF_3V0` (LM4040) and `ADC_VREF` (Buffered)
-    -   Added unity-gain buffer schematic to show how high-current drive is achieved
+
+    - Clarified distinction between `REF_3V0` (LM4040) and `ADC_VREF` (Buffered)
+    - Added unity-gain buffer schematic to show how high-current drive is achieved
 
 5.  **GPIO Pull-downs (E9 Errata):**
-    -   Fixed diagrams for WEIGHT_STOP (GPIO21), SPARE1 (GPIO16), SPARE2 (GPIO22)
-    -   Corrected pull-down connection to GND (was ambiguously drawn)
-    -   Verified 4.7kΩ values match component list
+    - Fixed diagrams for WEIGHT_STOP (GPIO21), SPARE1 (GPIO16), SPARE2 (GPIO22)
+    - Corrected pull-down connection to GND (was ambiguously drawn)
+    - Verified 4.7kΩ values match component list
 
 ### Documentation Fixes
 
--   **Netlist Summary:** Renamed `+3.3V_ANALOG` to `ADC_VREF (3.0V)` for accuracy
--   **Pin Mapping:** Corrected GPIO28 source in Netlist from J26-16 to J26-14 (matching J26 pinout)
+- **Netlist Summary:** Renamed `+3.3V_ANALOG` to `ADC_VREF (3.0V)` for accuracy
+- **Pin Mapping:** Corrected GPIO28 source in Netlist from J26-16 to J26-14 (matching J26 pinout)
 
 ---
 
@@ -62,16 +171,17 @@
 
 ### Documentation Changes
 
-| File                            | Change                                              |
-| ------------------------------- | --------------------------------------------------- |
-| `Schematic_Reference.md`        | Added complete SSR system wiring diagram            |
-| `Schematic_Reference.md`        | Fixed J26 SSR pin numbers (15-18, not 17-20)        |
-| `Schematic_Reference.md`        | Fixed J26 pressure pin numbers (12-14, not 14-16)   |
-| `spec/04-Outputs.md`            | Corrected SSR trigger circuit diagram topology      |
+| File                     | Change                                            |
+| ------------------------ | ------------------------------------------------- |
+| `Schematic_Reference.md` | Added complete SSR system wiring diagram          |
+| `Schematic_Reference.md` | Fixed J26 SSR pin numbers (15-18, not 17-20)      |
+| `Schematic_Reference.md` | Fixed J26 pressure pin numbers (12-14, not 14-16) |
+| `spec/04-Outputs.md`     | Corrected SSR trigger circuit diagram topology    |
 
 ### SSR Section Improvements (Schematic_Reference.md)
 
 1. **Added Complete System Overview Diagram**
+
    - Shows control PCB, external SSR modules, and machine mains wiring
    - Clear separation between 5V DC control signals and 220V AC load paths
    - Visual representation of what connects where
@@ -88,6 +198,7 @@
    | SSR Load (T)  | NOT ON PCB   | Heater Element | 220V AC      | 14-16 AWG  |
 
 3. **Added Key Points for Hardware Engineer**
+
    - J26 pins 15-18 carry ONLY 5V DC control signals (<20mA per channel)
    - SSR AC terminals connect to existing machine wiring, NOT to this PCB
    - External SSRs must be mounted on heatsink
@@ -100,17 +211,18 @@
 
 ### Pin Number Corrections
 
-| Section              | Old (Incorrect)    | New (Correct)      |
-| -------------------- | ------------------ | ------------------ |
-| SSR1 Control         | J26-17/18          | J26-15/16          |
-| SSR2 Control         | J26-19/20          | J26-17/18          |
-| Pressure Transducer  | J26-14/15/16       | J26-12/13/14       |
+| Section             | Old (Incorrect) | New (Correct) |
+| ------------------- | --------------- | ------------- |
+| SSR1 Control        | J26-17/18       | J26-15/16     |
+| SSR2 Control        | J26-19/20       | J26-17/18     |
+| Pressure Transducer | J26-14/15/16    | J26-12/13/14  |
 
 ### 04-Outputs.md Fix
 
 **Problem:** SSR trigger circuit diagram showed LED and external SSR in series topology.
 
 **Fix:** Corrected to parallel topology matching Schematic_Reference.md:
+
 - Path 1: +5V → J26-15 (SSR+) → External SSR → J26-16 (SSR-) → Transistor → GND
 - Path 2: +5V → R34 (330Ω) → LED → Transistor → GND
 

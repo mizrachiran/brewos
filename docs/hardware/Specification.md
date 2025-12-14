@@ -1,6 +1,6 @@
 # ECM Synchronika Custom Control Board
 
-## Production Design Specification v2.24.3
+## Production Design Specification v2.28
 
 **Target:** Plug & play replacement for GICAR control board and PID controller  
 **Status:** Draft specification - Ready for review and prototype
@@ -120,10 +120,11 @@
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
-| Version | Date     | Changes                                                 |
-| ------- | -------- | ------------------------------------------------------- |
-| 2.24.3  | Dec 2025 | Removed thermocouple, fixed F2 fuse, netlist validation |
-| 2.24.2  | Dec 2025 | Initial production specification                        |
+| Version | Date     | Changes                                                        |
+| ------- | -------- | -------------------------------------------------------------- |
+| 2.28    | Dec 2025 | RP2350 Engineering Verification ECOs (5V tolerance, bulk cap)  |
+| 2.27    | Dec 2025 | Schematic diagram clarifications, netlist cleanup              |
+| 2.24.3  | Dec 2025 | Removed thermocouple, fixed F2 fuse, netlist validation        |
 
 ---
 

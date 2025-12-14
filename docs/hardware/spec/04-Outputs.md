@@ -37,8 +37,8 @@ All relays use identical driver circuits with integrated indicator LEDs.
 │              │              └────┬────┘                                        │
 │         ┌────┴────┐              │                                             │
 │         │  4.7kΩ  │             GND                                            │
-│         │R11+n    │  ← Pull-down (relay OFF at boot, RP2350 errata E9)        │
-│         └────┬────┘                                                            │
+│         │R11+n    │  ← Pull-down: Ensures relay OFF at boot and during        │
+│         └────┬────┘    MCU reset (RP2350 errata E9 + safety requirement)      │
 │              │                                                                  │
 │             GND                                                                │
 │                                                                                 │
@@ -140,8 +140,8 @@ External SSRs require 4-30V DC trigger input. Pico's 3.3V GPIO cannot drive SSR 
 │            │                                      │  4.7kΩ  │     │              │
 │            │                                      │ R14/15  │    ─┴─             │
 │            │                                      └────┬────┘    GND             │
-│            │                                          ─┴─                        │
-│            │                                          GND                        │
+│            │  ⚠️ CRITICAL: Pull-down ensures SSR      ─┴─                        │
+│            │     is OFF during MCU reset/boot        GND                        │
 │            │                                                                     │
 └────────────┴─────────────────────────────────────────────────────────────────────┘
 
