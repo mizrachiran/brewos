@@ -9,6 +9,7 @@
 #include "state/state_manager.h"
 #include <LittleFS.h>
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include <Update.h>
 #include <esp_heap_caps.h>
 #include <esp_partition.h>
@@ -130,6 +131,10 @@ static void pauseServicesForOTA(CloudConnection* cloudConnection) {
     // 0. Disable watchdog - OTA has long-blocking operations
     disableWatchdogForOTA();
     
+    // Ensure WiFi is in high performance mode (no sleep)
+    // This significantly improves OTA download speed (prevents ~100ms latency per packet)
+    WiFi.setSleep(false);
+    
     // 1. Pause cloud connection (SSL WebSocket)
     if (cloudConnection) {
         LOG_I("  - Pausing cloud connection...");
@@ -200,7 +205,7 @@ static void handleOTAFailure(AsyncWebSocket* ws) {
 
 // Timeouts (in milliseconds)
 constexpr unsigned long OTA_TOTAL_TIMEOUT_MS = 300000;     // 5 minutes total OTA timeout
-constexpr unsigned long OTA_DOWNLOAD_TIMEOUT_MS = 120000;  // 2 minutes per download
+constexpr unsigned long OTA_DOWNLOAD_TIMEOUT_MS = 300000;  // 5 minutes per download (accommodate slow networks)
 constexpr unsigned long OTA_HTTP_TIMEOUT_MS = 30000;       // 30 seconds HTTP timeout
 constexpr unsigned long OTA_WATCHDOG_FEED_INTERVAL_MS = 50;// Feed watchdog every 50ms
 
@@ -425,6 +430,11 @@ static bool downloadToFile(const char* url, const char* filePath,
                            size_t* outFileSize = nullptr) {
     LOG_I("Downloading: %s", url);
     
+    // Configure secure client for maximum throughput
+    WiFiClientSecure client;
+    client.setInsecure();
+    client.setRxBufferSize(16384);
+    
     HTTPClient http;
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
     http.setTimeout(OTA_HTTP_TIMEOUT_MS);
@@ -436,7 +446,7 @@ static bool downloadToFile(const char* url, const char* filePath,
     for (int retry = 0; retry < OTA_MAX_RETRIES; retry++) {
         feedWatchdog();
         
-        if (!http.begin(url)) {
+        if (!http.begin(client, url)) {
             LOG_E("HTTP begin failed (attempt %d/%d)", retry + 1, OTA_MAX_RETRIES);
             if (retry < OTA_MAX_RETRIES - 1) {
                 for (int i = 0; i < 30; i++) { delay(100); feedWatchdog(); }
@@ -826,6 +836,11 @@ void WebServer::startGitHubOTA(const String& version) {
     
     broadcastOtaProgress(&_ws, "download", 65, "Downloading ESP32 firmware...");
     
+    // Configure secure client for maximum throughput
+    WiFiClientSecure client;
+    client.setInsecure(); // Skip cert verification for speed/simplicity
+    client.setRxBufferSize(16384); // 16KB buffer for SSL/TCP
+    
     // Download ESP32 firmware
     HTTPClient http;
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
@@ -836,7 +851,7 @@ void WebServer::startGitHubOTA(const String& version) {
     for (int retry = 0; retry < OTA_MAX_RETRIES; retry++) {
         feedWatchdog();
         
-        if (!http.begin(downloadUrl)) {
+        if (!http.begin(client, downloadUrl)) {
             LOG_E("HTTP begin failed (attempt %d/%d)", retry + 1, OTA_MAX_RETRIES);
             if (retry < OTA_MAX_RETRIES - 1) {
                 for (int i = 0; i < 30; i++) { delay(100); feedWatchdog(); }
