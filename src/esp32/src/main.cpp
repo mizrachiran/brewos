@@ -119,11 +119,8 @@ static bool scaleEnabled = false;
 // Machine state from Pico
 ui_state_t machineState = {0};  // Made non-static so it can be accessed from other files
 
-// Demo mode - simulates Pico data when Pico not connected
-#define DEMO_MODE_TIMEOUT_MS  20000  // Enter demo after 20s without Pico (from server ready)
-#define DEMO_MODE_GRACE_PERIOD_MS 5000  // Grace period after server starts before checking
-static bool demoMode = false;
-static unsigned long demoStartTime = 0;
+// Note: Demo mode is handled by the web UI only (via URL parameters)
+// ESP32 does not simulate data when Pico is not connected
 static unsigned long wifiConnectedTime = 0;
 static unsigned long serverReadyTime = 0;  // Track when server is ready to serve requests
 static bool mDNSStarted = false;
@@ -139,7 +136,6 @@ unsigned long lastUIUpdate = 0;
 // Forward declarations
 void parsePicoStatus(const uint8_t* payload, uint8_t length);
 void handleEncoderEvent(int32_t diff, button_state_t btn);
-void updateDemoMode();
 static void onPicoPacket(const PicoPacket& packet);
 
 // =============================================================================
@@ -582,72 +578,6 @@ static void onPicoPacket(const PicoPacket& packet) {
     }
 }
 
-/**
- * Demo mode - simulates machine behavior when Pico not connected
- * Useful for testing the UI without any hardware
- */
-void updateDemoMode() {
-    static unsigned long lastDemoUpdate = 0;
-    static float demoCycle = 0;
-    
-    // Only update every 100ms
-    if (millis() - lastDemoUpdate < 100) return;
-    lastDemoUpdate = millis();
-    
-    // Cycle through demo states
-    demoCycle += 0.01f;
-    if (demoCycle > 1.0f) demoCycle = 0;
-    
-    // Simulate heating up
-    float heatProgress = demoCycle;
-    
-    // Simulate temperatures approaching setpoints
-    machineState.brew_temp = 25.0f + (machineState.brew_setpoint - 25.0f) * heatProgress;
-    machineState.steam_temp = 25.0f + (machineState.steam_setpoint - 25.0f) * heatProgress;
-    
-    // Simulate pressure (varies slightly)
-    machineState.pressure = 9.0f + sin(millis() / 1000.0f) * 0.3f;
-    
-    // Update state based on temperature
-    if (heatProgress < 0.95f) {
-        machineState.machine_state = STATE_HEATING;
-        machineState.is_heating = true;
-    } else {
-        machineState.machine_state = STATE_READY;
-        machineState.is_heating = false;
-    }
-    
-    // Simulate periodic brewing - DISABLED (too noisy, not needed)
-    // Users can test brewing manually via the web UI if needed
-    // static unsigned long brewStart = 0;
-    // if (demoCycle > 0.5f && demoCycle < 0.7f) {
-    //     if (!machineState.is_brewing) {
-    //         brewStart = millis();
-    //         machineState.is_brewing = true;
-    //         machineState.machine_state = STATE_BREWING;
-    //         LOG_I("[DEMO] Simulated brew started");
-    //     }
-    //     machineState.brew_time_ms = millis() - brewStart;
-    //     machineState.brew_weight = machineState.brew_time_ms / 1000.0f * 1.5f;  // ~1.5g/s
-    //     machineState.flow_rate = 1.5f + sin(millis() / 500.0f) * 0.3f;
-    // } else {
-    //     if (machineState.is_brewing) {
-    //         machineState.is_brewing = false;
-    //         LOG_I("[DEMO] Simulated brew ended: %.1fs, %.1fg", 
-    //               machineState.brew_time_ms / 1000.0f, machineState.brew_weight);
-    //     }
-    // }
-    
-    // Keep machine in ready state (not brewing) in demo mode
-    machineState.is_brewing = false;
-    machineState.brew_time_ms = 0;
-    machineState.brew_weight = 0.0f;
-    machineState.flow_rate = 0.0f;
-    
-    // Always connected in demo mode
-    machineState.pico_connected = true;  // Pretend Pico is connected
-}
-
 void setup() {
     // CRITICAL: Initialize serial FIRST
     // With ARDUINO_USB_CDC_ON_BOOT=1, Serial goes to USB CDC (appears as /dev/cu.usbmodem* or /dev/cu.usbserial*)
@@ -942,7 +872,7 @@ void setup() {
         }
         
         if (!picoConnected) {
-            Serial.println("Continuing without Pico (demo mode)");
+            Serial.println("Continuing without Pico");
             Serial.flush();
         }
     }
@@ -996,8 +926,7 @@ void setup() {
     Serial.println("Web server started OK");
     Serial.flush();
     
-    // Record server ready time for demo mode timeout calculation
-    // This ensures we give Pico time to initialize even if both devices boot simultaneously
+    // Record server ready time
     serverReadyTime = millis();
     
     // Initialize MQTT
@@ -1303,34 +1232,15 @@ void loop() {
     machineState.cloud_connected = cloudConnection ? cloudConnection->isConnected() : false;
     
     // =========================================================================
-    // PHASE 5: Demo mode management
-    // Provides simulated data when Pico is not connected
+    // PHASE 5: Pico connection status
     // =========================================================================
     
-    // Only check for demo mode after server is ready and grace period has passed
-    // This allows both ESP32 and Pico to initialize when powering on simultaneously
-    bool canEnterDemoMode = (serverReadyTime > 0) && 
-                           (millis() - serverReadyTime > DEMO_MODE_GRACE_PERIOD_MS);
+    // Update Pico connection status (no automatic demo mode - demo is web UI only)
+    machineState.pico_connected = picoConnected;
     
-    if (!picoConnected && picoUart->getPacketsReceived() == 0) {
-        // No Pico detected - enter demo mode after timeout (from server ready time)
-        if (!demoMode && canEnterDemoMode && 
-            (millis() - serverReadyTime) > DEMO_MODE_TIMEOUT_MS) {
-            demoMode = true;
-            demoStartTime = millis();
-            LOG_I("=== DEMO MODE ENABLED (no Pico detected after %lu ms) ===", 
-                  millis() - serverReadyTime);
-        }
-    } else {
-        // Pico connected - exit demo mode
-        if (demoMode) {
-            demoMode = false;
-            LOG_I("=== DEMO MODE DISABLED (Pico connected) ===");
-        }
-        machineState.pico_connected = picoConnected;
-        
-        // If Pico is connected but machine type is unknown, request boot info
-        // This handles the case where MSG_BOOT was missed (e.g., ESP32 rebooted while Pico was running)
+    // If Pico is connected but machine type is unknown, request boot info
+    // This handles the case where MSG_BOOT was missed (e.g., ESP32 rebooted while Pico was running)
+    if (picoConnected) {
         static unsigned long lastBootInfoRequest = 0;
         if (State.getMachineType() == 0 && (millis() - lastBootInfoRequest > 5000)) {
             lastBootInfoRequest = millis();
@@ -1345,17 +1255,11 @@ void loop() {
         }
     }
     
-    // Update demo simulation (sets is_brewing = false, prevents false triggers)
-    if (demoMode) {
-        updateDemoMode();
-    }
-    
     // =========================================================================
     // PHASE 6: Brew-by-Weight (only when actively brewing with scale)
     // This is DISABLED when:
     // - Scale not enabled or not connected
     // - Not brewing
-    // - In demo mode (is_brewing is always false)
     // =========================================================================
     
     // Only process BBW if we're actually brewing with a connected scale
