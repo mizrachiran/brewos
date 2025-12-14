@@ -1374,8 +1374,22 @@ export const useStore = create<BrewOSState>()(
             `[Store] Cloud connected, device online: ${deviceOnline}`
           );
 
-          // If device is offline, update machine state (but keep cloud connected)
-          if (!deviceOnline) {
+          if (deviceOnline) {
+            // Device is online - clear any previous offline state
+            // Set to "unknown" until we receive actual status messages
+            set((state) => ({
+              machine: {
+                ...state.machine,
+                state:
+                  state.machine.state === "offline"
+                    ? ("unknown" as const)
+                    : state.machine.state,
+              },
+              cloud: { ...state.cloud, connected: true },
+              wifi: { ...state.wifi, connected: true },
+            }));
+          } else {
+            // Device is offline, update machine state (but keep cloud connected)
             set((state) => ({
               machine: {
                 ...state.machine,
