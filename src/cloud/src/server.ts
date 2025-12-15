@@ -1,5 +1,11 @@
 import "dotenv/config";
 import express from "express";
+
+// Extend global to include gc (available with --expose-gc flag)
+declare global {
+  // eslint-disable-next-line no-var
+  var gc: (() => void) | undefined;
+}
 import rateLimit from "express-rate-limit";
 import cors from "cors";
 import path from "path";
@@ -382,6 +388,9 @@ app.get("/api/health/detailed", (_req, res) => {
   const deviceStats = deviceRelay.getStats();
   const clientStats = clientProxy.getStats();
 
+  // Check if GC is available and when last run occurred
+  const gcAvailable = typeof global.gc === "function";
+
   res.json({
     status: "ok",
     timestamp: new Date().toISOString(),
@@ -394,15 +403,50 @@ app.get("/api/health/detailed", (_req, res) => {
     memory: {
       heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
       heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+      heapUsedBytes: memUsage.heapUsed,
+      heapTotalBytes: memUsage.heapTotal,
       external: Math.round(memUsage.external / 1024 / 1024),
       rss: Math.round(memUsage.rss / 1024 / 1024),
+      arrayBuffers: Math.round(memUsage.arrayBuffers / 1024 / 1024),
+      heapUsagePercent: ((memUsage.heapUsed / memUsage.heapTotal) * 100).toFixed(1),
+      // Note: High percentage is normal - Node.js grows heap on demand
+      note: "Node.js dynamically grows heap as needed (up to ~4GB on 64-bit). High % is normal.",
     },
     sessionCache: getCacheStats(),
     node: {
       version: process.version,
       platform: process.platform,
       arch: process.arch,
+      gcAvailable,
     },
+  });
+});
+
+// Force garbage collection (requires --expose-gc flag)
+// Useful for debugging memory issues
+app.post("/api/health/gc", (_req, res) => {
+  if (typeof global.gc !== "function") {
+    res.status(400).json({
+      error: "GC not exposed. Start node with --expose-gc flag to enable this endpoint.",
+    });
+    return;
+  }
+
+  const beforeMem = process.memoryUsage();
+  global.gc();
+  const afterMem = process.memoryUsage();
+
+  res.json({
+    status: "gc_complete",
+    before: {
+      heapUsed: Math.round(beforeMem.heapUsed / 1024 / 1024),
+      heapTotal: Math.round(beforeMem.heapTotal / 1024 / 1024),
+    },
+    after: {
+      heapUsed: Math.round(afterMem.heapUsed / 1024 / 1024),
+      heapTotal: Math.round(afterMem.heapTotal / 1024 / 1024),
+    },
+    freed: Math.round((beforeMem.heapUsed - afterMem.heapUsed) / 1024 / 1024),
   });
 });
 

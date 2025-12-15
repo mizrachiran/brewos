@@ -30,7 +30,8 @@ const REFRESH_TOKEN_EXPIRY_DAYS = 30; // 30 days
 const TOKEN_BYTES = 32; // 256-bit tokens
 
 // Cache configuration
-const CACHE_MAX_SIZE = 10000; // Max cached sessions
+// Note: Lower values reduce memory usage on constrained servers
+const CACHE_MAX_SIZE = 1000; // Max cached sessions (reduced from 10000 for memory efficiency)
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes (shorter than token expiry for security)
 
 // Batch update configuration

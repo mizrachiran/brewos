@@ -278,10 +278,13 @@ function MemoryBar({
   total: number;
 }) {
   const percentage = (used / total) * 100;
+  // Node.js dynamically grows heap on demand. High % at low total is normal.
+  // Only show warning colors if both percentage is high AND total heap is significant (>100MB)
+  const isSignificant = total > 100;
   const color =
-    percentage > 80
+    isSignificant && percentage > 80
       ? "bg-admin-danger"
-      : percentage > 60
+      : isSignificant && percentage > 60
         ? "bg-admin-warning"
         : "bg-admin-accent";
 
@@ -299,6 +302,11 @@ function MemoryBar({
           style={{ width: `${percentage}%` }}
         />
       </div>
+      {!isSignificant && percentage > 80 && (
+        <p className="text-xs text-admin-text-secondary mt-1">
+          ℹ️ High % at low heap is normal - Node.js grows heap on demand
+        </p>
+      )}
     </div>
   );
 }
