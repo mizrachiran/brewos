@@ -18,6 +18,7 @@ import {
 } from "../services/session.js";
 import { ensureProfile } from "../services/device.js";
 import { sessionAuthMiddleware } from "../middleware/auth.js";
+import { checkUserIsAdmin } from "../middleware/admin.js";
 
 const router = Router();
 
@@ -129,7 +130,10 @@ router.post(
 
       const tokens = createSession(payload.sub, metadata);
 
-      console.log(`[Auth] User ${payload.email} logged in via Google`);
+      // Check if user is admin (after profile is created/updated)
+      const isAdmin = checkUserIsAdmin(payload.sub);
+
+      console.log(`[Auth] User ${payload.email} logged in via Google${isAdmin ? " (admin)" : ""}`);
 
       res.json({
         accessToken: tokens.accessToken,
@@ -140,6 +144,7 @@ router.post(
           email: payload.email,
           name: payload.name || null,
           picture: payload.picture || null,
+          isAdmin,
         },
       });
     } catch (error) {
@@ -327,7 +332,7 @@ router.delete(
 /**
  * GET /api/auth/me
  *
- * Get current user info.
+ * Get current user info including admin status.
  */
 router.get(
   "/me",
@@ -341,12 +346,15 @@ router.get(
         return res.status(401).json({ error: "Not authenticated" });
       }
 
+      const isAdmin = checkUserIsAdmin(user.id);
+
       res.json({
         user: {
           id: user.id,
           email: user.email,
           name: user.displayName,
           picture: user.avatarUrl,
+          isAdmin,
         },
       });
     } catch (error) {

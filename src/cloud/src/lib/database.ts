@@ -200,6 +200,46 @@ export async function initDatabase(): Promise<SqlJsDatabase> {
     // Column already exists
   }
 
+  // Add is_admin column to profiles for admin role management
+  try {
+    db.run(`ALTER TABLE profiles ADD COLUMN is_admin INTEGER DEFAULT 0`);
+    console.log("[DB] Added is_admin column to profiles table");
+  } catch {
+    // Column already exists
+  }
+
+  // Create index for admin lookups
+  db.run(
+    `CREATE INDEX IF NOT EXISTS idx_profiles_admin ON profiles(is_admin)`
+  );
+
+  // Ensure at least one admin exists - promote first user if needed
+  try {
+    const adminCount = db.exec(
+      `SELECT COUNT(*) FROM profiles WHERE is_admin = 1`
+    );
+    const hasNoAdmins =
+      adminCount.length === 0 ||
+      adminCount[0].values.length === 0 ||
+      (adminCount[0].values[0][0] as number) === 0;
+
+    if (hasNoAdmins) {
+      // Get the first user by creation date
+      const firstUser = db.exec(
+        `SELECT id, email FROM profiles ORDER BY created_at ASC LIMIT 1`
+      );
+      if (firstUser.length > 0 && firstUser[0].values.length > 0) {
+        const userId = firstUser[0].values[0][0] as string;
+        const email = firstUser[0].values[0][1] as string;
+        db.run(`UPDATE profiles SET is_admin = 1 WHERE id = ?`, [userId]);
+        console.log(`[DB] Auto-promoted first user ${email} to admin`);
+        saveDatabase();
+      }
+    }
+  } catch (error) {
+    console.error("[DB] Error checking/promoting admin:", error);
+  }
+
   // Migration: Migrate existing owner_id relationships to user_devices table
   // This preserves existing data when upgrading to the new schema
   try {
@@ -333,6 +373,7 @@ export interface Profile {
   email: string | null;
   display_name: string | null;
   avatar_url: string | null;
+  is_admin: number; // 0 = not admin, 1 = admin
   created_at: string;
   updated_at: string;
 }

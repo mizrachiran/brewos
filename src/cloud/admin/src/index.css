@@ -1,0 +1,151 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base styles */
+:root {
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-admin-bg text-admin-text;
+  font-family: "JetBrains Mono", "SF Mono", Monaco, monospace;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-admin-bg;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-admin-border rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-admin-text-secondary;
+}
+
+/* Selection */
+::selection {
+  @apply bg-admin-accent/30;
+}
+
+/* Table styles */
+@layer components {
+  .admin-table {
+    @apply w-full text-sm;
+  }
+
+  .admin-table th {
+    @apply text-left text-admin-text-secondary font-medium py-2 px-3 sm:py-3 sm:px-4 border-b border-admin-border whitespace-nowrap;
+  }
+
+  .admin-table td {
+    @apply py-2 px-3 sm:py-3 sm:px-4 border-b border-admin-border/50;
+  }
+
+  .admin-table tr:hover td {
+    @apply bg-admin-hover;
+  }
+
+  /* Buttons */
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 text-sm;
+  }
+
+  .btn-primary {
+    @apply bg-admin-accent text-white hover:bg-admin-accent-hover;
+  }
+
+  .btn-secondary {
+    @apply bg-admin-card text-admin-text border border-admin-border hover:bg-admin-hover;
+  }
+
+  .btn-danger {
+    @apply bg-admin-danger/20 text-admin-danger border border-admin-danger/30 hover:bg-admin-danger/30;
+  }
+
+  .btn-success {
+    @apply bg-admin-success/20 text-admin-success border border-admin-success/30 hover:bg-admin-success/30;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  /* Cards */
+  .admin-card {
+    @apply bg-admin-card border border-admin-border rounded-xl p-4 sm:p-6 shadow-admin;
+  }
+
+  /* Inputs */
+  .admin-input {
+    @apply bg-admin-surface border border-admin-border rounded-lg px-4 py-2 text-admin-text placeholder:text-admin-text-secondary focus:outline-none focus:border-admin-accent transition-colors;
+  }
+
+  /* Badge */
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-admin {
+    @apply bg-admin-accent/20 text-admin-accent;
+  }
+
+  .badge-online {
+    @apply bg-admin-success/20 text-admin-success;
+  }
+
+  .badge-offline {
+    @apply bg-admin-text-secondary/20 text-admin-text-secondary;
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slide-in-up {
+  animation: slideInUp 0.3s ease-out;
+}
+
+/* Staggered animation */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.1s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.2s; }
+.stagger-5 { animation-delay: 0.25s; }
+

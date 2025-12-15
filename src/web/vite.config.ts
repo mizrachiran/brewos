@@ -127,9 +127,9 @@ export default defineConfig(({ mode, command }) => {
   // Version from RELEASE_VERSION env var (set by CI) or 'dev' for local builds
   const version = process.env.RELEASE_VERSION || "dev";
   // ESP32 builds should use "production" mode (not mock data), cloud defaults to env var or "development"
-  const environment = isEsp32 
-    ? "production" 
-    : (env.VITE_ENVIRONMENT || "development");
+  const environment = isEsp32
+    ? "production"
+    : env.VITE_ENVIRONMENT || "development";
 
   return {
     plugins: [
@@ -138,15 +138,16 @@ export default defineConfig(({ mode, command }) => {
       !isEsp32 && serviceWorkerVersionPlugin(version, isDev),
       // Gzip compression for ESP32 builds - pre-compress files for faster serving
       // ESPAsyncWebServer's serveStatic automatically serves .gz files when available
-      isEsp32 && viteCompression({
-        algorithm: "gzip",
-        ext: ".gz",
-        threshold: 1024, // Only compress files > 1KB
-        deleteOriginFile: true, // Delete originals to fit in 1.5MB partition
-        // Exclude index.html - keep it uncompressed for SPA fallback handler
-        // (only 2.5KB, not worth the complexity of handling gzipped default file)
-        filter: (file) => !/index\.html$/.test(file),
-      }),
+      isEsp32 &&
+        viteCompression({
+          algorithm: "gzip",
+          ext: ".gz",
+          threshold: 1024, // Only compress files > 1KB
+          deleteOriginFile: true, // Delete originals to fit in 1.5MB partition
+          // Exclude index.html - keep it uncompressed for SPA fallback handler
+          // (only 2.5KB, not worth the complexity of handling gzipped default file)
+          filter: (file) => !/index\.html$/.test(file),
+        }),
     ].filter(Boolean),
     resolve: {
       alias: {
@@ -178,7 +179,10 @@ export default defineConfig(({ mode, command }) => {
             // For ESP32 builds, use aggressive code splitting to reduce initial bundle
             if (isEsp32) {
               // Core React libraries
-              if (id.includes("node_modules/react") || id.includes("node_modules/react-dom")) {
+              if (
+                id.includes("node_modules/react") ||
+                id.includes("node_modules/react-dom")
+              ) {
                 return "react-vendor";
               }
               // Router
@@ -200,7 +204,10 @@ export default defineConfig(({ mode, command }) => {
                 return "oauth";
               }
               // Utilities (small, can be bundled)
-              if (id.includes("node_modules/clsx") || id.includes("node_modules/tailwind-merge")) {
+              if (
+                id.includes("node_modules/clsx") ||
+                id.includes("node_modules/tailwind-merge")
+              ) {
                 return "utils";
               }
               // Large pages - split by route
@@ -210,7 +217,10 @@ export default defineConfig(({ mode, command }) => {
               if (id.includes("/pages/Stats")) {
                 return "page-stats";
               }
-              if (id.includes("/pages/Settings") || id.includes("/pages/settings")) {
+              if (
+                id.includes("/pages/Settings") ||
+                id.includes("/pages/settings")
+              ) {
                 return "page-settings";
               }
               if (id.includes("/pages/Diagnostics")) {
@@ -221,7 +231,11 @@ export default defineConfig(({ mode, command }) => {
               }
             } else {
               // Cloud builds: simpler chunking
-              if (id.includes("node_modules/react") || id.includes("node_modules/react-dom") || id.includes("node_modules/react-router-dom")) {
+              if (
+                id.includes("node_modules/react") ||
+                id.includes("node_modules/react-dom") ||
+                id.includes("node_modules/react-router-dom")
+              ) {
                 return "vendor";
               }
             }
@@ -247,6 +261,11 @@ export default defineConfig(({ mode, command }) => {
         },
         "/api": {
           target: isEsp32 ? "http://brewos.local" : "http://localhost:3001",
+        },
+        // Admin UI is served by cloud server (separate React app)
+        // Note: Express redirects /admin to /admin/, so we need both patterns
+        "^/admin": {
+          target: "http://localhost:3001",
         },
       },
     },

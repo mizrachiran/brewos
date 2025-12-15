@@ -91,22 +91,36 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: src/cloud/package-lock.json
+          cache-dependency-path: |
+            src/cloud/package-lock.json
+            src/cloud/admin/package-lock.json
 
-      - name: Install Dependencies
+      - name: Install Cloud Dependencies
         working-directory: src/cloud
         run: npm ci
 
-      - name: Lint
+      - name: Lint Cloud
         working-directory: src/cloud
         run: npm run lint
 
-      - name: Type Check
+      - name: Type Check Cloud
         working-directory: src/cloud
         run: npx tsc --noEmit
 
-      - name: Build
+      - name: Build Cloud
         working-directory: src/cloud
+        run: npm run build
+
+      - name: Install Admin Dependencies
+        working-directory: src/cloud/admin
+        run: npm ci
+
+      - name: Type Check Admin
+        working-directory: src/cloud/admin
+        run: npx tsc --noEmit
+
+      - name: Build Admin
+        working-directory: src/cloud/admin
         run: npm run build
 
   # ==========================================================================

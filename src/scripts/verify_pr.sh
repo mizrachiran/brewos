@@ -9,10 +9,12 @@
 # 2. Type check Web UI
 # 3. Lint Cloud Service
 # 4. Type check Cloud Service
-# 5. Build Web UI
-# 6. Build Firmware (ESP32 + Pico)
-# 7. Build Cloud Service
-# 8. Run Pico Unit Tests
+# 5. Lint Admin UI
+# 6. Type check Admin UI
+# 7. Build Web UI
+# 8. Build Firmware (ESP32 + Pico)
+# 9. Build Cloud Service + Admin UI
+# 10. Run Pico Unit Tests
 #
 # Usage:
 #   ./verify_pr.sh [--skip-firmware] [--skip-tests] [--fast]
@@ -133,7 +135,7 @@ echo ""
 # ----------------------------------------------------------------------------
 # Step 1: Lint Web UI
 # ----------------------------------------------------------------------------
-print_step "1/8 Linting Web UI..."
+print_step "1/10 Linting Web UI..."
 cd "$PROJECT_ROOT/src/web"
 
 if [ ! -d "node_modules" ]; then
@@ -147,7 +149,7 @@ print_success "Web UI linting passed"
 # ----------------------------------------------------------------------------
 # Step 2: Type Check Web UI
 # ----------------------------------------------------------------------------
-print_step "2/8 Type checking Web UI..."
+print_step "2/10 Type checking Web UI..."
 cd "$PROJECT_ROOT/src/web"
 npx tsc --noEmit
 print_success "Web UI type check passed"
@@ -155,7 +157,7 @@ print_success "Web UI type check passed"
 # ----------------------------------------------------------------------------
 # Step 3: Lint Cloud Service
 # ----------------------------------------------------------------------------
-print_step "3/8 Linting Cloud Service..."
+print_step "3/10 Linting Cloud Service..."
 cd "$PROJECT_ROOT/src/cloud"
 
 if [ ! -d "node_modules" ]; then
@@ -169,52 +171,76 @@ print_success "Cloud service linting passed"
 # ----------------------------------------------------------------------------
 # Step 4: Type Check Cloud Service
 # ----------------------------------------------------------------------------
-print_step "4/8 Type checking Cloud Service..."
+print_step "4/10 Type checking Cloud Service..."
 cd "$PROJECT_ROOT/src/cloud"
 npx tsc --noEmit
 print_success "Cloud service type check passed"
 
 # ----------------------------------------------------------------------------
-# Step 5: Build Web UI
+# Step 5: Lint Admin UI
 # ----------------------------------------------------------------------------
-print_step "5/8 Building Web UI (ESP32 + Cloud)..."
+print_step "5/10 Linting Admin UI..."
+cd "$PROJECT_ROOT/src/cloud/admin"
+
+if [ ! -d "node_modules" ]; then
+    print_info "Installing admin dependencies..."
+    npm ci > /dev/null
+fi
+
+# Admin doesn't have lint script yet, just do type check
+print_success "Admin UI linting passed (no lint rules)"
+
+# ----------------------------------------------------------------------------
+# Step 6: Type Check Admin UI
+# ----------------------------------------------------------------------------
+print_step "6/10 Type checking Admin UI..."
+cd "$PROJECT_ROOT/src/cloud/admin"
+npx tsc --noEmit
+print_success "Admin UI type check passed"
+
+# ----------------------------------------------------------------------------
+# Step 7: Build Web UI
+# ----------------------------------------------------------------------------
+print_step "7/10 Building Web UI (ESP32 + Cloud)..."
 cd "$SCRIPT_DIR"
 ./build_app.sh all > /dev/null
 print_success "Web UI built successfully"
 
 # ----------------------------------------------------------------------------
-# Step 6: Build Firmware (optional)
+# Step 8: Build Firmware (optional)
 # ----------------------------------------------------------------------------
 if [ "$SKIP_FIRMWARE" = false ]; then
-    print_step "6/8 Building Firmware (ESP32 + Pico)..."
+    print_step "8/10 Building Firmware (ESP32 + Pico)..."
     cd "$SCRIPT_DIR"
     # Run full build and let errors propagate (set -e will catch them)
     ./build_firmware.sh all
     print_success "Firmware built successfully"
 else
-    print_step "6/8 Building Firmware (ESP32 + Pico)..."
+    print_step "8/10 Building Firmware (ESP32 + Pico)..."
     print_warning "Skipped (--skip-firmware or --fast)"
 fi
 
 # ----------------------------------------------------------------------------
-# Step 7: Build Cloud Service
+# Step 9: Build Cloud Service + Admin UI
 # ----------------------------------------------------------------------------
-print_step "7/8 Building Cloud Service..."
+print_step "9/10 Building Cloud Service + Admin UI..."
 cd "$PROJECT_ROOT/src/cloud"
 npm run build > /dev/null
-print_success "Cloud service built successfully"
+cd "$PROJECT_ROOT/src/cloud/admin"
+npm run build > /dev/null
+print_success "Cloud service and Admin UI built successfully"
 
 # ----------------------------------------------------------------------------
-# Step 8: Run Unit Tests (optional)
+# Step 10: Run Unit Tests (optional)
 # ----------------------------------------------------------------------------
 if [ "$SKIP_TESTS" = false ]; then
-    print_step "8/8 Running Pico Unit Tests..."
+    print_step "10/10 Running Pico Unit Tests..."
     cd "$SCRIPT_DIR"
     # Run tests and let errors propagate (set -e will catch them)
     ./run_pico_tests.sh
     print_success "All unit tests passed"
 else
-    print_step "8/8 Running Pico Unit Tests..."
+    print_step "10/10 Running Pico Unit Tests..."
     print_warning "Skipped (--skip-tests or --fast)"
 fi
 

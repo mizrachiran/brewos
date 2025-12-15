@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
+    "build:admin": "cd admin && npm install && npm run build",
+    "build:all": "npm run build && npm run build:admin",
     "start": "node dist/server.js",
     "lint": "eslint src"
   },

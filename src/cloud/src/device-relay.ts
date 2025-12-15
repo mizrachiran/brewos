@@ -246,6 +246,21 @@ export class DeviceRelay {
   }
 
   /**
+   * Force disconnect a device (admin action)
+   * Returns true if device was connected and disconnected, false if not connected
+   */
+  disconnectDevice(deviceId: string): boolean {
+    const connection = this.devices.get(deviceId);
+    if (!connection) {
+      return false;
+    }
+
+    console.log(`[Device] Force disconnecting device ${deviceId} (admin action)`);
+    connection.ws.close(4000, "Disconnected by admin");
+    return true;
+  }
+
+  /**
    * Get detailed stats for health endpoint
    */
   getStats(): {

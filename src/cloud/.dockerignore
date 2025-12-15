@@ -1,0 +1,27 @@
+# Dependencies (installed in container)
+node_modules
+admin/node_modules
+
+# Build outputs (only dist is needed)
+admin/src
+
+# Development files
+*.log
+.env
+.env.local
+.env.*.local
+*.md
+
+# IDE
+.vscode
+.idea
+
+# Data (volume mounted)
+data/
+
+# Source maps (not needed in production)
+dist/*.map
+
+# TypeScript build info
+*.tsbuildinfo
+

@@ -737,6 +737,7 @@ export function claimDeviceWithShareToken(
 
 /**
  * Ensure user profile exists (upsert from auth provider)
+ * Auto-promotes the first user to admin if no admins exist
  */
 export function ensureProfile(
   userId: string,
@@ -749,8 +750,9 @@ export function ensureProfile(
 
   // Check if profile exists
   const result = db.exec(`SELECT id FROM profiles WHERE id = ?`, [userId]);
+  const isNewUser = result.length === 0 || result[0].values.length === 0;
 
-  if (result.length > 0 && result[0].values.length > 0) {
+  if (!isNewUser) {
     // Update existing profile
     db.run(
       `UPDATE profiles SET 
@@ -762,11 +764,32 @@ export function ensureProfile(
       [email || null, displayName || null, avatarUrl || null, now, userId]
     );
   } else {
-    // Insert new profile
-    db.run(
-      `INSERT INTO profiles (id, email, display_name, avatar_url, updated_at) VALUES (?, ?, ?, ?, ?)`,
-      [userId, email || null, displayName || null, avatarUrl || null, now]
+    // Check if any admin exists before inserting new user
+    const adminCount = db.exec(
+      `SELECT COUNT(*) as count FROM profiles WHERE is_admin = 1`
     );
+    const hasNoAdmins =
+      adminCount.length === 0 ||
+      adminCount[0].values.length === 0 ||
+      (adminCount[0].values[0][0] as number) === 0;
+
+    // Insert new profile - make admin if first user
+    const shouldBeAdmin = hasNoAdmins ? 1 : 0;
+    db.run(
+      `INSERT INTO profiles (id, email, display_name, avatar_url, is_admin, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        userId,
+        email || null,
+        displayName || null,
+        avatarUrl || null,
+        shouldBeAdmin,
+        now,
+      ]
+    );
+
+    if (shouldBeAdmin) {
+      console.log(`[Auth] First user ${email} auto-promoted to admin`);
+    }
   }
 
   saveDatabase();

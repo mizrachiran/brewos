@@ -45,6 +45,12 @@ jobs:
           npm ci
           npx tsc --noEmit
 
+      - name: Build Admin UI
+        run: |
+          cd src/cloud/admin
+          npm ci
+          npm run build
+
   deploy-staging:
     name: Deploy to Staging
     needs: build-check
@@ -96,8 +102,15 @@ jobs:
             # Copy built web UI to cloud service
             cp -r dist ../cloud/web
 
+            # Build Admin UI
+            cd ../cloud/admin
+            npm ci
+            npm run build
+
+            # Admin dist is already in place (src/cloud/admin/dist)
+
             # Build new container without stopping old one
-            cd ../cloud
+            cd ..
             docker compose build
 
             # Only restart after successful build

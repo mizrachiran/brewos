@@ -16,6 +16,7 @@ import { ClientProxy } from "./client-proxy.js";
 import authRouter from "./routes/auth.js";
 import devicesRouter from "./routes/devices.js";
 import pushRouter from "./routes/push.js";
+import adminRouter from "./routes/admin.js";
 import { initDatabase } from "./lib/database.js";
 import {
   cleanupExpiredTokens,
@@ -110,6 +111,11 @@ const webDistPath = path.resolve(
   process.env.WEB_DIST_PATH || path.join(process.cwd(), "../web/dist")
 );
 
+// Admin UI path (relative to cloud service)
+const adminDistPath = path.resolve(
+  process.env.ADMIN_DIST_PATH || path.join(process.cwd(), "admin/dist")
+);
+
 // Rate limiter for static file endpoints (prevents abuse)
 const staticFileLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
@@ -117,6 +123,40 @@ const staticFileLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+// Serve admin UI at /admin
+// Admin assets with long cache (hashed files)
+app.use(
+  "/admin/assets",
+  express.static(path.join(adminDistPath, "assets"), {
+    maxAge: "1y",
+    immutable: true,
+  })
+);
+
+// Admin SPA fallback - serve index.html for all admin routes
+// MUST come before the static middleware to prevent redirect from /admin to /admin/
+app.get("/admin", staticFileLimiter, (_req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.sendFile(path.join(adminDistPath, "index.html"));
+});
+
+app.get("/admin/*", staticFileLimiter, (_req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.sendFile(path.join(adminDistPath, "index.html"));
+});
+
+// Admin static files (for favicon.svg and other static assets)
+// Note: redirect: false prevents Express from redirecting /admin to /admin/
+app.use(
+  "/admin",
+  express.static(adminDistPath, {
+    maxAge: "1h",
+    etag: true,
+    lastModified: true,
+    redirect: false,
+  })
+);
 
 // Cache control for service worker - MUST never be cached by browsers
 // This ensures new deployments are detected immediately
@@ -449,6 +489,27 @@ app.use("/api/auth", authRouter);
 app.use("/api/devices", devicesRouter);
 app.use("/api/push", pushRouter);
 
+// Admin routes - inject device relay and client proxy functions
+app.use(
+  "/api/admin",
+  (req, _res, next) => {
+    // Inject helper functions for admin routes
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (req as any).disconnectDevice = (deviceId: string) => {
+      return deviceRelay.disconnectDevice(deviceId);
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (req as any).getConnectionStats = () => {
+      return {
+        devices: deviceRelay.getStats(),
+        clients: clientProxy.getStats(),
+      };
+    };
+    next();
+  },
+  adminRouter
+);
+
 // SPA fallback
 app.get("*", staticFileLimiter, (_req, res) => {
   res.sendFile(path.join(webDistPath, "index.html"));
@@ -504,7 +565,18 @@ async function start() {
     // Start session cache batch update interval
     startBatchUpdateInterval();
 
-    // Cleanup expired tokens and sessions periodically (every 1 hours)
+    // Run cleanup immediately on startup
+    try {
+      const deletedTokens = cleanupExpiredTokens();
+      const deletedSessions = cleanupExpiredSessions();
+      if (deletedTokens > 0 || deletedSessions > 0) {
+        console.log(`[Cleanup] Startup: ${deletedTokens} tokens, ${deletedSessions} sessions deleted`);
+      }
+    } catch (error) {
+      console.error("[Cleanup] Startup cleanup error:", error);
+    }
+
+    // Cleanup expired tokens and sessions periodically (every hour)
     setInterval(() => {
       try {
         // Cleanup expired claim tokens
@@ -515,10 +587,10 @@ async function start() {
           );
         }
 
-        // Cleanup expired sessions
+        // Cleanup expired sessions (expired OR unused for 7 days)
         const deletedSessions = cleanupExpiredSessions();
         if (deletedSessions > 0) {
-          console.log(`[Cleanup] Deleted ${deletedSessions} expired sessions`);
+          console.log(`[Cleanup] Deleted ${deletedSessions} expired/stale sessions`);
         }
       } catch (error) {
         console.error("[Cleanup] Error:", error);

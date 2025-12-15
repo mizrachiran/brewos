@@ -508,18 +508,30 @@ export function getUserSessions(userId: string): Session[] {
   );
 }
 
+// Cleanup: delete sessions not used in this many days
+const STALE_SESSION_DAYS = 7;
+
 /**
- * Cleanup expired sessions
+ * Cleanup expired and stale sessions
  * Should be called periodically (e.g., every hour)
+ * 
+ * Removes:
+ * 1. Sessions with expired refresh tokens
+ * 2. Sessions not used in STALE_SESSION_DAYS (even if refresh token is still valid)
  */
 export function cleanupExpiredSessions(): number {
   const db = getDb();
   const now = nowUTC();
+  
+  // Calculate stale threshold (sessions not used in X days)
+  const staleThreshold = new Date(Date.now() - STALE_SESSION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  // Get expired sessions for cache invalidation
+  // Get sessions to delete for cache invalidation
+  // Delete if: refresh expired OR last_used_at is older than stale threshold
   const expiredResult = db.exec(
-    `SELECT id, access_token_hash FROM sessions WHERE refresh_expires_at < ?`,
-    [now]
+    `SELECT id, access_token_hash FROM sessions 
+     WHERE refresh_expires_at < ? OR last_used_at < ?`,
+    [now, staleThreshold]
   );
 
   if (expiredResult.length > 0) {
@@ -531,12 +543,15 @@ export function cleanupExpiredSessions(): number {
     }
   }
 
-  db.run(`DELETE FROM sessions WHERE refresh_expires_at < ?`, [now]);
+  db.run(
+    `DELETE FROM sessions WHERE refresh_expires_at < ? OR last_used_at < ?`,
+    [now, staleThreshold]
+  );
   const deleted = db.getRowsModified();
 
   if (deleted > 0) {
     saveDatabase();
-    console.log(`[Session] Cleaned up ${deleted} expired sessions`);
+    console.log(`[Session] Cleaned up ${deleted} expired/stale sessions`);
   }
 
   return deleted;
@@ -566,4 +581,46 @@ export function clearCaches(): void {
   cacheHits = 0;
   cacheMisses = 0;
   console.log("[Session] Cleared all caches");
+}
+
+/**
+ * Get session statistics for admin monitoring
+ */
+export function getSessionStats(): {
+  totalSessions: number;
+  activeSessions: number;
+  staleSessions: number;
+  expiredSessions: number;
+} {
+  const db = getDb();
+  const now = nowUTC();
+  const staleThreshold = new Date(Date.now() - STALE_SESSION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+  const totalResult = db.exec(`SELECT COUNT(*) FROM sessions`);
+  const totalSessions = totalResult.length > 0 ? (totalResult[0].values[0][0] as number) : 0;
+
+  const activeResult = db.exec(
+    `SELECT COUNT(*) FROM sessions WHERE refresh_expires_at > ? AND last_used_at > ?`,
+    [now, staleThreshold]
+  );
+  const activeSessions = activeResult.length > 0 ? (activeResult[0].values[0][0] as number) : 0;
+
+  const staleResult = db.exec(
+    `SELECT COUNT(*) FROM sessions WHERE refresh_expires_at > ? AND last_used_at <= ?`,
+    [now, staleThreshold]
+  );
+  const staleSessions = staleResult.length > 0 ? (staleResult[0].values[0][0] as number) : 0;
+
+  const expiredResult = db.exec(
+    `SELECT COUNT(*) FROM sessions WHERE refresh_expires_at <= ?`,
+    [now]
+  );
+  const expiredSessions = expiredResult.length > 0 ? (expiredResult[0].values[0][0] as number) : 0;
+
+  return {
+    totalSessions,
+    activeSessions,
+    staleSessions,
+    expiredSessions,
+  };
 }
