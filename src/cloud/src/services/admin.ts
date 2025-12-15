@@ -5,16 +5,10 @@
  * All functions require admin authorization (handled by middleware).
  */
 
-import {
-  getDb,
-  saveDatabase,
-  resultToObjects,
-  type Profile,
-  type Device,
-} from "../lib/database.js";
+import { getDb, saveDatabase } from "../lib/database.js";
 import { nowUTC } from "../lib/date.js";
 import { createSession } from "./session.js";
-import { checkUserIsAdmin, getAdminCount } from "../middleware/admin.js";
+import { getAdminCount } from "../middleware/admin.js";
 
 // =============================================================================
 // Types

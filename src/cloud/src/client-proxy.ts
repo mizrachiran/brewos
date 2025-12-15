@@ -1,7 +1,6 @@
 import { WebSocketServer, WebSocket, RawData } from "ws";
 import { IncomingMessage } from "http";
 import { v4 as uuidv4 } from "uuid";
-import { verifyWebSocketToken } from "./middleware/auth.js";
 import { userOwnsDevice } from "./services/device.js";
 import { verifyAccessToken } from "./services/session.js";
 import type { DeviceRelay } from "./device-relay.js";

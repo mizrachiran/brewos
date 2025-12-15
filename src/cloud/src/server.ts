@@ -494,12 +494,10 @@ app.use(
   "/api/admin",
   (req, _res, next) => {
     // Inject helper functions for admin routes
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (req as any).disconnectDevice = (deviceId: string) => {
+    (req as unknown as Record<string, unknown>).disconnectDevice = (deviceId: string) => {
       return deviceRelay.disconnectDevice(deviceId);
     };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (req as any).getConnectionStats = () => {
+    (req as unknown as Record<string, unknown>).getConnectionStats = () => {
       return {
         devices: deviceRelay.getStats(),
         clients: clientProxy.getStats(),
