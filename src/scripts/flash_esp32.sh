@@ -498,7 +498,8 @@ if [ "$FIRMWARE_ONLY" = false ] && [ -f "$LITTLEFS_IMAGE" ]; then
     echo -e "${BLUE}Starting flash operation...${NC}"
     
     # Build flash command arguments
-    FLASH_ARGS="--chip esp32s3 --port $PORT --baud 921600 --after no_reset write_flash --verify --flash_mode dio --flash_freq 80m --flash_size 8MB"
+    # Use --after hard_reset to automatically reset ESP32 after flashing (boots firmware)
+    FLASH_ARGS="--chip esp32s3 --port $PORT --baud 921600 --after hard_reset write_flash --verify --flash_mode dio --flash_freq 80m --flash_size 8MB"
     
     # Include bootloader if it exists (at 0x0) - REQUIRED for ESP32-S3
     BOOTLOADER="$ESP32_DIR/.pio/build/esp32s3/bootloader.bin"
@@ -535,9 +536,7 @@ if [ "$FIRMWARE_ONLY" = false ] && [ -f "$LITTLEFS_IMAGE" ]; then
         else
             echo ""
             echo -e "${GREEN}✓ Firmware and filesystem flashed and verified successfully!${NC}"
-            echo ""
-            echo -e "${YELLOW}⚠ IMPORTANT: Manually reset the ESP32 now!${NC}"
-            echo -e "${CYAN}Press and release the RESET button on the ESP32 to boot.${NC}"
+            echo -e "${CYAN}ESP32 will now reset and boot automatically.${NC}"
             echo ""
             FLASH_SUCCESS=true
         fi
@@ -593,8 +592,18 @@ if [ "$FLASH_SUCCESS" = true ]; then
     echo -e "${GREEN}✓ Flash complete!${NC}"
     echo -e "${CYAN}Firmware hash: $FIRMWARE_HASH${NC}"
     echo ""
-    echo "Monitor serial output with:"
-    echo -e "  ${CYAN}cd src/esp32 && pio device monitor -p $PORT${NC}"
+    
+    # Start serial monitor automatically
+    echo -e "${BLUE}Starting serial monitor on $PORT...${NC}"
+    echo -e "${YELLOW}Press Ctrl+C to exit monitor${NC}"
+    echo ""
+    
+    # Brief delay to let ESP32 reset and start booting
+    sleep 1
+    
+    # Start PlatformIO device monitor (exec replaces shell, so Ctrl+C exits cleanly)
+    cd "$ESP32_DIR"
+    exec pio device monitor -p "$PORT"
 else
     # This shouldn't be reached if exit 1 was called, but just in case
     echo ""
