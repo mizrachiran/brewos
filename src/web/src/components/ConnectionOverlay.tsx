@@ -2,28 +2,24 @@ import { useStore } from "@/lib/store";
 import { getActiveConnection } from "@/lib/connection";
 import { Wifi, RefreshCw, X, Download, AlertCircle, Power } from "lucide-react";
 import { Button } from "./Button";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 
 // Allow bypassing overlay in development for easier testing
 const DEV_MODE = import.meta.env.DEV;
 const DEV_BYPASS_KEY = "brewos-dev-bypass-overlay";
 
-// Debounce time before hiding overlay after connection
-const HIDE_DELAY_MS = 1500;
-
-// Minimum time to show any overlay state before allowing transitions
-// This prevents rapid flickering between states
-const STATE_STABLE_MS = 3000;
-
-// Grace period before showing offline state after device first detected offline
-// This gives the device time to respond (e.g., after cloud connection establishes)
-// Reduced from 8s since we now track offline detection time, not connection time
-const OFFLINE_GRACE_PERIOD_MS = 5000;
-
 // Key to track OTA in progress across page reloads (shared with store.ts)
 const OTA_IN_PROGRESS_KEY = "brewos-ota-in-progress";
 
-// Overlay display states for stable transitions
+// Grace period before showing offline state
+// During this time, we show "Connecting..." to give the device time to respond
+const OFFLINE_GRACE_PERIOD_MS = 5000;
+
+// Delay before hiding overlay after successful connection
+// This ensures we don't flicker if connection drops again quickly
+const HIDE_DELAY_MS = 2000;
+
+// Overlay display states
 type OverlayState = "hidden" | "connecting" | "offline" | "updating";
 
 export function ConnectionOverlay() {
@@ -32,60 +28,47 @@ export function ConnectionOverlay() {
   const ota = useStore((s) => s.ota);
   const [retrying, setRetrying] = useState(false);
 
-  // Check localStorage for dev bypass preference
+  // Dev bypass preference
   const [devBypassed, setDevBypassed] = useState(() => {
     if (!DEV_MODE) return false;
     return localStorage.getItem(DEV_BYPASS_KEY) === "true";
   });
 
+  // Core state values
   const isConnected = connectionState === "connected";
-  // Device is offline in cloud mode: this specifically detects when the cloud connection is established,
-  // but the physical machine is unreachable.
   const isDeviceOffline = machineState === "offline";
 
   // Check localStorage for OTA state to persist across disconnects
   const storedOtaInProgress =
     localStorage.getItem(OTA_IN_PROGRESS_KEY) === "true";
 
-  // Consider updating if store says so, OR if we have stored state AND not fully connected
-  // This ensures overlay stays visible during OTA even if connection drops during reboot
-  // But once connected and device is online, we should clear the flag and show normal state
-  // Note: Don't check ota.stage === "complete" here - let the page reload logic handle completion
   const isUpdating =
     ota.isUpdating ||
-    (storedOtaInProgress && (!isConnected || isDeviceOffline || machineState === "unknown"));
+    (storedOtaInProgress &&
+      (!isConnected || isDeviceOffline || machineState === "unknown"));
 
-  // Track stable overlay state with debouncing to prevent flickering
-  const [overlayState, setOverlayState] = useState<OverlayState>(() => {
-    if (isUpdating) return "updating";
-    if (isDeviceOffline) return "offline";
-    if (!isConnected) return "connecting";
-    return "hidden";
-  });
+  // Simple state tracking
+  const [overlayState, setOverlayState] = useState<OverlayState>("connecting");
+  
+  // Track when we first detected offline (for grace period)
+  const offlineStartTime = useRef<number | null>(null);
+  // Track if we've confirmed offline (sticky - don't go back to connecting)
+  const offlineConfirmed = useRef(false);
+  // Timer for delayed hide
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Timer for grace period check
+  const graceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Track when we entered current overlay state to enforce minimum display time
-  const stateEnteredAt = useRef<number>(Date.now());
-  const pendingStateChange = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Track if device has been confirmed offline (persists across cloud reconnects)
-  const deviceConfirmedOffline = useRef<boolean>(false);
-  // Track when device was first detected as offline (for grace period)
-  // This persists across connection fluctuations
-  const offlineDetectedAt = useRef<number | null>(null);
-
-  // Track OTA state in localStorage so store.ts can detect it after reconnect
+  // Track OTA state in localStorage
   useEffect(() => {
     if (ota.isUpdating) {
       localStorage.setItem(OTA_IN_PROGRESS_KEY, "true");
     }
   }, [ota.isUpdating]);
 
-  // Clear OTA state on error or when device is confirmed back online after OTA
-  // Don't clear on "complete" - the page reload logic in store.ts handles that case
-  // (when the device reboots and reconnects, store.ts will detect the flag and reload)
+  // Clear OTA state on error or when device is confirmed back online
   useEffect(() => {
     const isError = ota.stage === "error";
-    // Device is back online if state is valid (not unknown/offline) and connected
-    // Only clear localStorage if OTA is not in progress (device truly back to normal)
     const isBackOnline =
       machineState !== "offline" &&
       machineState !== "unknown" &&
@@ -98,192 +81,92 @@ export function ConnectionOverlay() {
     }
   }, [ota.stage, ota.isUpdating, machineState, isConnected]);
 
-  // Track when device was first detected offline (persists across connection fluctuations)
+  // Main state machine - simplified
   useEffect(() => {
+    // Clear any pending timers
+    if (hideTimer.current) {
+      clearTimeout(hideTimer.current);
+      hideTimer.current = null;
+    }
+    if (graceTimer.current) {
+      clearTimeout(graceTimer.current);
+      graceTimer.current = null;
+    }
+
+    // OTA always takes priority
+    if (isUpdating) {
+      setOverlayState("updating");
+      return;
+    }
+
+    // Device is offline
     if (isDeviceOffline) {
-      // Start tracking offline time when device first goes offline
-      if (offlineDetectedAt.current === null) {
-        offlineDetectedAt.current = Date.now();
+      // Start tracking offline time if not already
+      if (offlineStartTime.current === null) {
+        offlineStartTime.current = Date.now();
       }
-    } else {
-      // Device is no longer offline - clear tracking
-      offlineDetectedAt.current = null;
-      deviceConfirmedOffline.current = false;
-    }
-  }, [isDeviceOffline]);
 
-  // Track device offline state - once grace period passes, mark as confirmed
-  useEffect(() => {
-    if (isDeviceOffline && offlineDetectedAt.current !== null) {
-      const elapsed = Date.now() - offlineDetectedAt.current;
-      if (elapsed >= OFFLINE_GRACE_PERIOD_MS) {
-        deviceConfirmedOffline.current = true;
+      const elapsed = Date.now() - offlineStartTime.current;
+
+      if (elapsed >= OFFLINE_GRACE_PERIOD_MS || offlineConfirmed.current) {
+        // Grace period passed - show offline and mark as confirmed
+        offlineConfirmed.current = true;
+        setOverlayState("offline");
+      } else {
+        // Still in grace period - show connecting
+        setOverlayState("connecting");
+        // Schedule check after grace period ends
+        const remaining = OFFLINE_GRACE_PERIOD_MS - elapsed;
+        graceTimer.current = setTimeout(() => {
+          // Re-check - if still offline, transition to offline state
+          const currentState = useStore.getState().machine.state;
+          if (currentState === "offline") {
+            offlineConfirmed.current = true;
+            setOverlayState("offline");
+          }
+        }, remaining + 100);
       }
-    }
-  }, [isDeviceOffline, isConnected]);
-
-  // Determine the target state based on current conditions
-  const getTargetState = useCallback((): OverlayState => {
-    if (isUpdating) return "updating";
-
-    // Device is offline - check grace period based on when offline was first detected
-    if (isDeviceOffline) {
-      const timeSinceOffline = offlineDetectedAt.current 
-        ? Date.now() - offlineDetectedAt.current 
-        : 0;
-      
-      if (timeSinceOffline < OFFLINE_GRACE_PERIOD_MS) {
-        // Still in grace period - show connecting instead of offline
-        return "connecting";
-      }
-      // Grace period passed - confirm offline
-      deviceConfirmedOffline.current = true;
-      return "offline";
+      return;
     }
 
-    // Not connected to server - show connecting or offline based on previous state
+    // Not connected to cloud - show connecting (or offline if previously confirmed)
     if (!isConnected) {
-      return deviceConfirmedOffline.current ? "offline" : "connecting";
-    }
-
-    // Connected to cloud and device is not offline - hide overlay
-    return "hidden";
-  }, [isUpdating, isDeviceOffline, isConnected]);
-
-  // Stabilized state transition logic
-  useEffect(() => {
-    const targetState = getTargetState();
-
-    // Clear any pending state change
-    if (pendingStateChange.current) {
-      clearTimeout(pendingStateChange.current);
-      pendingStateChange.current = null;
-    }
-
-    // OTA always takes priority immediately
-    if (targetState === "updating") {
-      if (overlayState !== "updating") {
-        stateEnteredAt.current = Date.now();
-        setOverlayState("updating");
+      // If we confirmed offline before, stay offline
+      if (offlineConfirmed.current) {
+        setOverlayState("offline");
+      } else {
+        setOverlayState("connecting");
       }
       return;
     }
 
-    // If already in target state, check if we need to schedule a grace period re-check
-    if (targetState === overlayState) {
-      // During offline grace period, we return "connecting" even though device is offline
-      // Schedule a re-check after grace period ends to properly transition to "offline"
-      if (targetState === "connecting" && isDeviceOffline && offlineDetectedAt.current) {
-        const timeSinceOffline = Date.now() - offlineDetectedAt.current;
-        const timeUntilGraceEnds = OFFLINE_GRACE_PERIOD_MS - timeSinceOffline;
-        
-        if (timeUntilGraceEnds > 0) {
-          // Schedule re-check after grace period
-          pendingStateChange.current = setTimeout(() => {
-            // Force a re-evaluation by updating the state
-            const currentMachineState = useStore.getState().machine.state;
-            if (currentMachineState === "offline") {
-              // Grace period ended and still offline - show offline screen
-              deviceConfirmedOffline.current = true;
-              setOverlayState("offline");
-            }
-          }, timeUntilGraceEnds + 100); // Small buffer
-        }
-      }
-      return;
-    }
+    // Connected and device is not offline - can hide overlay
+    // Reset offline tracking
+    offlineStartTime.current = null;
+    offlineConfirmed.current = false;
 
-    // Transitioning to hidden (connected and online) - add delay
-    if (targetState === "hidden") {
-      // Enforce minimum time in current state before hiding
-      const elapsed = Date.now() - stateEnteredAt.current;
-      const remainingTime = Math.max(0, STATE_STABLE_MS - elapsed);
-
-      pendingStateChange.current = setTimeout(() => {
-        // Re-check conditions before transitioning - use current store state
-        // not the ref, as the ref might be stale due to React batching
-        const currentMachineState = useStore.getState().machine.state;
-        const currentConnectionState = useStore.getState().connectionState;
-        const isStillOffline = currentMachineState === "offline";
-        
-        if (!isStillOffline && currentConnectionState === "connected") {
-          deviceConfirmedOffline.current = false; // Sync the ref
+    // Delay hiding to prevent flicker on brief disconnects
+    if (overlayState !== "hidden") {
+      hideTimer.current = setTimeout(() => {
+        // Double-check we're still in good state before hiding
+        const state = useStore.getState();
+        const stillConnected = state.connectionState === "connected";
+        const stillOnline = state.machine.state !== "offline";
+        if (stillConnected && stillOnline) {
           setOverlayState("hidden");
         }
-      }, remainingTime + HIDE_DELAY_MS);
-      return;
+      }, HIDE_DELAY_MS);
     }
-
-    // For any other transition, enforce minimum display time
-    const elapsed = Date.now() - stateEnteredAt.current;
-    const remainingTime = Math.max(0, STATE_STABLE_MS - elapsed);
-
-    if (remainingTime > 0 && overlayState !== "hidden") {
-      // Wait before transitioning
-      pendingStateChange.current = setTimeout(() => {
-        // Re-check conditions using current store state (not stale closure values)
-        const currentState = useStore.getState();
-        const currentMachineState = currentState.machine.state;
-        const currentConnectionState = currentState.connectionState;
-        const currentOta = currentState.ota;
-        
-        const isCurrentlyOffline = currentMachineState === "offline";
-        const isCurrentlyConnected = currentConnectionState === "connected";
-        // Check if OTA is in progress - localStorage flag should only keep overlay if not fully connected
-        const storedOta = localStorage.getItem(OTA_IN_PROGRESS_KEY) === "true";
-        const isCurrentlyUpdating = currentOta.isUpdating || 
-          (storedOta && (!isCurrentlyConnected || isCurrentlyOffline || currentMachineState === "unknown"));
-        
-        // Determine current target state
-        let newTarget: OverlayState;
-        if (isCurrentlyUpdating) {
-          newTarget = "updating";
-        } else if (isCurrentlyOffline) {
-          // Device is offline - check if grace period has passed
-          const timeSinceOffline = offlineDetectedAt.current
-            ? Date.now() - offlineDetectedAt.current
-            : 0;
-          newTarget = timeSinceOffline >= OFFLINE_GRACE_PERIOD_MS ? "offline" : "connecting";
-        } else if (!isCurrentlyConnected) {
-          newTarget = deviceConfirmedOffline.current ? "offline" : "connecting";
-        } else {
-          newTarget = "hidden";
-        }
-        
-        if (newTarget !== overlayState) {
-          stateEnteredAt.current = Date.now();
-          if (newTarget === "hidden") {
-            deviceConfirmedOffline.current = false; // Sync the ref
-          }
-          setOverlayState(newTarget);
-        }
-      }, remainingTime);
-      return;
-    }
-
-    // Direct transition
-    stateEnteredAt.current = Date.now();
-    setOverlayState(targetState);
 
     return () => {
-      if (pendingStateChange.current) {
-        clearTimeout(pendingStateChange.current);
-      }
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+      if (graceTimer.current) clearTimeout(graceTimer.current);
     };
-  }, [
-    isConnected,
-    isUpdating,
-    isDeviceOffline,
-    overlayState,
-    getTargetState,
-    connectionState,
-    machineState,
-  ]);
-
-  // Derived visibility from overlay state
-  const isVisible = overlayState !== "hidden";
+  }, [isConnected, isDeviceOffline, isUpdating, overlayState]);
 
   // Lock body scroll when overlay is visible
+  const isVisible = overlayState !== "hidden";
+
   useEffect(() => {
     if (isVisible) {
       const scrollY = window.scrollY;
@@ -294,7 +177,6 @@ export function ConnectionOverlay() {
       document.body.style.overflow = "hidden";
       document.body.style.width = "100%";
 
-      // Also prevent touch scrolling on mobile
       const preventScroll = (e: TouchEvent) => {
         e.preventDefault();
       };
@@ -322,7 +204,6 @@ export function ConnectionOverlay() {
   if (!isVisible) return null;
 
   // Dev bypass only works for connection issues, not device offline or OTA
-  // This allows testing the UI without a real connection but still shows important overlays
   if (DEV_MODE && devBypassed && !isDeviceOffline && !isUpdating) return null;
 
   const handleRetry = async () => {
@@ -332,23 +213,17 @@ export function ConnectionOverlay() {
     } catch (e) {
       console.error("Retry failed:", e);
     }
-    setRetrying(false);
+    // Keep retrying state for a bit to prevent button flicker
+    setTimeout(() => setRetrying(false), 2000);
   };
 
-  // Determine status based on OTA state or connection state
-  const isRetryingOrConnecting =
-    retrying ||
-    connectionState === "connecting" ||
-    connectionState === "reconnecting";
-
-  // Build status based on stable overlay state (not raw connection state)
-  // This ensures the UI matches the debounced overlay state
+  // Build status based on overlay state
   const getStatus = () => {
-    // OTA in progress - show simple animation without progress bar
-    // Use isUpdating which correctly handles localStorage + connection state
+    // OTA in progress
     if (overlayState === "updating" || isUpdating) {
-      // Use OTA message if available, otherwise use default
-      const otaMessage = ota.message || "Please wait while the update is being installed. The device will restart automatically.";
+      const otaMessage =
+        ota.message ||
+        "Please wait while the update is being installed. The device will restart automatically.";
       return {
         icon: <Download className="w-16 h-16 text-accent" />,
         title: "Updating BrewOS...",
@@ -356,7 +231,6 @@ export function ConnectionOverlay() {
         showRetry: false,
         showPulse: true,
         isOTA: true,
-        isDeviceOffline: false,
       };
     }
 
@@ -369,12 +243,10 @@ export function ConnectionOverlay() {
         showRetry: false,
         showPulse: false,
         isOTA: false,
-        isDeviceOffline: false,
       };
     }
 
-    // Device offline (cloud mode - connected to cloud but device is offline)
-    // Use overlayState for stable display
+    // Device offline
     if (overlayState === "offline") {
       return {
         icon: <Power className="w-16 h-16 text-theme-muted" />,
@@ -384,31 +256,24 @@ export function ConnectionOverlay() {
         showRetry: false,
         showPulse: false,
         isOTA: false,
-        isDeviceOffline: true,
       };
     }
 
-    // Normal connection state (connecting)
+    // Connecting state - never show retry button (it causes flicker)
     return {
       icon: <Wifi className="w-16 h-16 text-accent" />,
       title: "Connecting to your machine...",
       subtitle: "Please wait while we establish a connection",
-      showRetry: !isRetryingOrConnecting,
+      showRetry: false, // Removed retry button to prevent flicker
       showPulse: true,
       isOTA: false,
-      isDeviceOffline: false,
     };
   };
 
   const status = getStatus();
 
-  // set z-index when device is offline so header (z-50) remains accessible
-  const zIndex = "z-[40]";
-
   return (
-    <div
-      className={`fixed inset-0 ${zIndex} flex items-center justify-center p-6 bg-theme/95 backdrop-blur-md overflow-hidden touch-none overscroll-none`}
-    >
+    <div className="fixed inset-0 z-[40] flex items-center justify-center p-6 bg-theme/95 backdrop-blur-md overflow-hidden touch-none overscroll-none">
       {/* Dev mode bypass button */}
       {DEV_MODE && (
         <button
@@ -423,7 +288,6 @@ export function ConnectionOverlay() {
       <div className="max-w-md w-full text-center space-y-6">
         {/* Animated Icon */}
         <div className="relative inline-flex items-center justify-center">
-          {/* Pulsing ring for connecting state */}
           {status.showPulse && (
             <>
               <div className="absolute inset-0 w-24 h-24 -m-4 rounded-full bg-accent/20 animate-ping" />
@@ -463,21 +327,21 @@ export function ConnectionOverlay() {
           </div>
         )}
 
-        {/* Retry Button */}
-        {status.showRetry && (
+        {/* Retry Button - only in offline state */}
+        {overlayState === "offline" && (
           <Button
             onClick={handleRetry}
             loading={retrying}
-            variant="primary"
+            variant="secondary"
             size="lg"
             className="min-w-40"
           >
             <RefreshCw className="w-5 h-5" />
-            Retry Connection
+            Try Again
           </Button>
         )}
 
-        {/* Connection attempts indicator (not during OTA - has its own animation) */}
+        {/* Connection animation (not during OTA) */}
         {status.showPulse && !status.isOTA && (
           <div className="flex items-center justify-center gap-1.5 text-xs text-theme-muted">
             <span
