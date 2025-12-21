@@ -200,22 +200,16 @@ void Encoder::update() {
 void Encoder::readCallback(lv_indev_drv_t* drv, lv_indev_data_t* data) {
     Encoder* enc = (Encoder*)drv->user_data;
     
-    // Get encoder difference for LVGL (uses separate tracking to not interfere with callback)
-    int32_t diff = enc->_position - enc->_lastLvglPosition;
+    // Don't send encoder rotation to LVGL - we handle navigation via direct callbacks
+    // This prevents double navigation (once from LVGL, once from our callback)
+    // Keep LVGL position tracking synced to prevent accumulation
     enc->_lastLvglPosition = enc->_position;
+    data->enc_diff = 0;
     
-    // Report to LVGL (1:1 mapping, no division needed with ESP32_Knob)
-    data->enc_diff = diff;
-    
-    // Report button state
+    // Report button state (still needed for LVGL focus)
     if (enc->_buttonPressed) {
         data->state = LV_INDEV_STATE_PRESSED;
     } else {
         data->state = LV_INDEV_STATE_RELEASED;
-    }
-    
-    // Reset display idle on any input
-    if (diff != 0 || enc->_buttonPressed) {
-        display.resetIdleTimer();
     }
 }

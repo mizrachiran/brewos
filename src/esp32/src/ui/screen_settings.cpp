@@ -151,25 +151,9 @@ lv_obj_t* screen_settings_create(void) {
     lv_obj_set_style_text_color(hint, COLOR_TEXT_MUTED, 0);
     lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -80);
     
-    // === Make container focusable for encoder input ===
-    lv_group_t* group = lv_group_get_default();
-    if (group) {
-        lv_obj_add_flag(container, LV_OBJ_FLAG_CLICKABLE);
-        lv_group_add_obj(group, container);
-        
-        // Handle encoder events
-        lv_obj_add_event_cb(container, [](lv_event_t* e) {
-            lv_event_code_t code = lv_event_get_code(e);
-            if (code == LV_EVENT_KEY) {
-                uint32_t key = lv_event_get_key(e);
-                if (key == LV_KEY_RIGHT || key == LV_KEY_DOWN) {
-                    screen_settings_navigate(1);
-                } else if (key == LV_KEY_LEFT || key == LV_KEY_UP) {
-                    screen_settings_navigate(-1);
-                }
-            }
-        }, LV_EVENT_KEY, NULL);
-    }
+    // Note: Encoder navigation is handled via direct callbacks in main.cpp (handleEncoderEvent)
+    // This avoids double navigation that occurred when both LVGL input device and direct 
+    // callbacks were processing encoder events
     
     LOG_I("Settings screen created");
     return screen;

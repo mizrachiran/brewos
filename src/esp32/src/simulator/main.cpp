@@ -84,7 +84,7 @@ static bool handle_sdl_events(void) {
                     // Direct call to screen-specific rotation handlers
                     screen_id_t current = ui.getCurrentScreen();
                     if (current == SCREEN_IDLE) {
-                        screen_idle_select_strategy(screen_idle_get_selected_strategy() + dir);
+                        screen_idle_select_power_mode((int)screen_idle_get_selected_power_mode() + dir);
                     } else if (current == SCREEN_SETTINGS) {
                         screen_settings_navigate(dir);
                     }
@@ -120,7 +120,7 @@ static bool handle_sdl_events(void) {
                             LOG_I("🔄 Rotate CCW");
                             screen_id_t current = ui.getCurrentScreen();
                             if (current == SCREEN_IDLE) {
-                                screen_idle_select_strategy(screen_idle_get_selected_strategy() - 1);
+                                screen_idle_select_power_mode((int)screen_idle_get_selected_power_mode() - 1);
                             } else if (current == SCREEN_SETTINGS) {
                                 screen_settings_navigate(-1);
                             }
@@ -133,7 +133,7 @@ static bool handle_sdl_events(void) {
                             LOG_I("🔄 Rotate CW");
                             screen_id_t current = ui.getCurrentScreen();
                             if (current == SCREEN_IDLE) {
-                                screen_idle_select_strategy(screen_idle_get_selected_strategy() + 1);
+                                screen_idle_select_power_mode((int)screen_idle_get_selected_power_mode() + 1);
                             } else if (current == SCREEN_SETTINGS) {
                                 screen_settings_navigate(1);
                             }
@@ -191,6 +191,14 @@ static bool handle_sdl_events(void) {
                     case SDLK_9: 
                         LOG_I("📺 Screen: Alarm");
                         ui.showScreen(SCREEN_ALARM); 
+                        break;
+                    case SDLK_o: 
+                        LOG_I("📺 Screen: OTA");
+                        ui.showScreen(SCREEN_OTA); 
+                        break;
+                    case SDLK_p: 
+                        LOG_I("📺 Screen: Splash");
+                        ui.showScreen(SCREEN_SPLASH); 
                         break;
                     
                     // Theme toggle
@@ -336,6 +344,7 @@ int main(int argc, char* argv[]) {
     printf("║    2 = Home            7 = Scale                     ║\n");
     printf("║    3 = Brewing         8 = Cloud                     ║\n");
     printf("║    4 = Complete        9 = Alarm                     ║\n");
+    printf("║    O = OTA Update      P = Splash                    ║\n");
     printf("║                                                      ║\n");
     printf("║  T = Toggle Theme (Dark/Light)                       ║\n");
     printf("║  ESC = Exit                                          ║\n");

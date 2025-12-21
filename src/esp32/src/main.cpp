@@ -134,6 +134,9 @@ unsigned long lastStatusBroadcast = 0;
 unsigned long lastPowerMeterBroadcast = 0;
 unsigned long lastUIUpdate = 0;
 
+// Flag to trigger immediate UI refresh on encoder activity
+static volatile bool encoderActivityFlag = false;
+
 // Forward declarations
 void parsePicoStatus(const uint8_t* payload, uint8_t length);
 void handleEncoderEvent(int32_t diff, button_state_t btn);
@@ -1349,16 +1352,20 @@ void loop() {
     State.loop();
     
     // Update display and encoder
-    // Fixed 10 FPS (100ms) for stability and low memory bandwidth usage
-    // This is sufficient for the UI and significantly reduces PSRAM contention
     unsigned long now = millis();
-    unsigned long uiUpdateInterval = 100; // 10 FPS fixed
+    unsigned long uiUpdateInterval = 100; // 10 FPS for normal updates
     
     // Update encoder state FAST (every loop) to ensure responsiveness
     // Do not throttle input polling!
     encoder.update();
     
-    if (now - lastUIUpdate >= uiUpdateInterval) {
+    // Check if encoder activity triggered immediate refresh
+    bool needsImmediateRefresh = encoderActivityFlag;
+    encoderActivityFlag = false;  // Clear flag
+    
+    // Update UI immediately on encoder activity, or at regular interval
+    // This makes encoder navigation feel snappy while keeping idle updates low
+    if (needsImmediateRefresh || (now - lastUIUpdate >= uiUpdateInterval)) {
         lastUIUpdate = now;
         
         // Check if OTA is in progress - show OTA screen if so
@@ -1603,17 +1610,28 @@ void parsePicoStatus(const uint8_t* payload, uint8_t length) {
 void handleEncoderEvent(int32_t diff, button_state_t btn) {
     if (diff != 0) {
         LOG_I("Encoder rotate: %+d (screen=%d)", diff, (int)ui.getCurrentScreen());
-        ui.handleEncoder(diff);
+        
+        // Process each step individually to prevent lost steps when diff > 1
+        // This can happen when main loop is blocked (e.g., during SSL handshake)
+        int direction = (diff > 0) ? 1 : -1;
+        int steps = (diff > 0) ? diff : -diff;
+        for (int i = 0; i < steps; i++) {
+            ui.handleEncoder(direction);
+        }
+        encoderActivityFlag = true;  // Trigger immediate UI refresh
     }
     
     if (btn == BTN_PRESSED) {
         LOG_I("Encoder button: PRESS (screen=%d)", (int)ui.getCurrentScreen());
         ui.handleButtonPress();
+        encoderActivityFlag = true;  // Trigger immediate UI refresh
     } else if (btn == BTN_LONG_PRESSED) {
         LOG_I("Encoder button: LONG_PRESS (screen=%d)", (int)ui.getCurrentScreen());
         ui.handleLongPress();
+        encoderActivityFlag = true;
     } else if (btn == BTN_DOUBLE_PRESSED) {
         LOG_I("Encoder button: DOUBLE_PRESS (screen=%d)", (int)ui.getCurrentScreen());
         ui.handleDoublePress();
+        encoderActivityFlag = true;
     }
 }

@@ -112,7 +112,7 @@
 // Auto-dim settings
 #define BACKLIGHT_DIM_TIMEOUT   30000   // Dim after 30s idle
 #define BACKLIGHT_DIM_LEVEL     50      // Dimmed brightness
-#define BACKLIGHT_OFF_TIMEOUT   0       // Turn off after 60s idle (0 = never) - DISABLED to prevent screen turning off
+#define BACKLIGHT_OFF_TIMEOUT   60000   // Turn off after 60s idle (1 minute)
 
 // =============================================================================
 // LVGL Display Buffer
