@@ -1,7 +1,7 @@
 /**
  * BrewOS Coffee Theme Implementation
  * 
- * Supports Dark and Light themes using official BrewOS brand colors
+ * Dark theme using official BrewOS brand colors
  */
 
 #include "display/theme.h"
@@ -14,36 +14,6 @@ static lv_style_t style_btn_secondary;
 static lv_style_t style_arc;
 static bool styles_initialized = false;
 
-// Current theme mode
-static theme_mode_t current_mode = THEME_MODE_DARK;
-
-// Theme change callback
-static theme_change_callback_t theme_change_cb = nullptr;
-
-// =============================================================================
-// Theme Mode Functions
-// =============================================================================
-
-theme_mode_t theme_get_mode(void) {
-    return current_mode;
-}
-
-void theme_set_mode(theme_mode_t mode) {
-    if (current_mode != mode) {
-        current_mode = mode;
-        theme_refresh();
-        
-        // Notify UI to rebuild screens
-        if (theme_change_cb) {
-            theme_change_cb();
-        }
-    }
-}
-
-void theme_set_change_callback(theme_change_callback_t callback) {
-    theme_change_cb = callback;
-}
-
 // =============================================================================
 // Theme Initialization
 // =============================================================================
@@ -51,13 +21,12 @@ void theme_set_change_callback(theme_change_callback_t callback) {
 void theme_init(void) {
     if (styles_initialized) return;
     
-    // Get the default theme
-    bool is_dark = (current_mode == THEME_MODE_DARK);
+    // Initialize dark theme
     lv_theme_t* theme = lv_theme_default_init(
         lv_disp_get_default(),
         COLOR_ACCENT_PRIMARY,       // Primary color (caramel)
         COLOR_ACCENT_COPPER,        // Secondary color (medium brown)
-        is_dark ? LV_THEME_DEFAULT_DARK : 0,  // Dark or light mode
+        LV_THEME_DEFAULT_DARK,      // Dark mode
         FONT_NORMAL                 // Default font
     );
     lv_disp_set_theme(lv_disp_get_default(), theme);
@@ -93,22 +62,6 @@ void theme_init(void) {
     lv_style_set_arc_rounded(&style_arc, true);
     
     styles_initialized = true;
-}
-
-void theme_refresh(void) {
-    // Reinitialize the LVGL theme with new mode
-    bool is_dark = (current_mode == THEME_MODE_DARK);
-    lv_theme_t* theme = lv_theme_default_init(
-        lv_disp_get_default(),
-        COLOR_ACCENT_PRIMARY,
-        COLOR_ACCENT_COPPER,
-        is_dark ? LV_THEME_DEFAULT_DARK : 0,
-        FONT_NORMAL
-    );
-    lv_disp_set_theme(lv_disp_get_default(), theme);
-    
-    // Force redraw of all screens
-    lv_obj_invalidate(lv_scr_act());
 }
 
 // =============================================================================

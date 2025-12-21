@@ -65,11 +65,6 @@ bool UI::begin() {
     // Initialize theme
     theme_init();
     
-    // Register theme change callback to rebuild screens
-    theme_set_change_callback([]() {
-        ui.rebuildScreens();
-    });
-    
     // Create all screens
     createSetupScreen();
     createIdleScreen();
@@ -533,16 +528,6 @@ void UI::createSettingsScreen() {
             case SETTINGS_CLOUD:
                 // Cloud pairing
                 ui.showScreen(SCREEN_CLOUD);
-                break;
-            case SETTINGS_THEME:
-                // Toggle theme between dark/light
-                if (theme_get_mode() == THEME_MODE_DARK) {
-                    theme_set_mode(THEME_MODE_LIGHT);
-                    ui.showNotification("Light Theme", 1500);
-                } else {
-                    theme_set_mode(THEME_MODE_DARK);
-                    ui.showNotification("Dark Theme", 1500);
-                }
                 break;
             case SETTINGS_WIFI:
                 // Enter WiFi setup mode - callback will reset to DHCP and start AP

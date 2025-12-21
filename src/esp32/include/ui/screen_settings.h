@@ -2,10 +2,10 @@
  * BrewOS Settings Screen
  * 
  * Simplified settings menu:
- * - WiFi (enter setup mode)
- * - Scale (connect)
  * - Temperature
- * - Theme (dark/light toggle)
+ * - Scale (connect)
+ * - Cloud
+ * - WiFi (enter setup mode)
  * - About
  * 
  * Note: MQTT, System settings are configurable via web UI
@@ -24,7 +24,6 @@ typedef enum {
     SETTINGS_TEMP,
     SETTINGS_SCALE,
     SETTINGS_CLOUD,
-    SETTINGS_THEME,
     SETTINGS_WIFI,
     SETTINGS_ABOUT,
     SETTINGS_EXIT,

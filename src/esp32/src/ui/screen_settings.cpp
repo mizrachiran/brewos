@@ -15,7 +15,6 @@ static const char* item_icons[] = {
     LV_SYMBOL_SETTINGS,  // Temp
     LV_SYMBOL_BLUETOOTH, // Scale
     LV_SYMBOL_UPLOAD,    // Cloud
-    LV_SYMBOL_EYE_OPEN,  // Theme
     LV_SYMBOL_WIFI,      // WiFi
     LV_SYMBOL_FILE,      // About
     LV_SYMBOL_LEFT       // Exit
@@ -25,7 +24,6 @@ static const char* item_names[] = {
     "Temperature",
     "Scale",
     "Cloud",
-    "Theme",
     "WiFi",
     "About",
     "Exit"
@@ -35,7 +33,6 @@ static const char* item_descriptions[] = {
     "Boiler temperatures",
     "Connect scale",
     "Pair with cloud",
-    "Dark / Light mode",
     "Enter setup mode",
     "Device info",
     "Return to home"

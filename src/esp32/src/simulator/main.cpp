@@ -201,16 +201,6 @@ static bool handle_sdl_events(void) {
                         ui.showScreen(SCREEN_SPLASH); 
                         break;
                     
-                    // Theme toggle
-                    case SDLK_t:
-                        if (theme_get_mode() == THEME_MODE_DARK) {
-                            theme_set_mode(THEME_MODE_LIGHT);
-                            LOG_I("🎨 Theme: Light");
-                        } else {
-                            theme_set_mode(THEME_MODE_DARK);
-                            LOG_I("🎨 Theme: Dark");
-                        }
-                        break;
                 }
                 break;
                 
@@ -346,7 +336,6 @@ int main(int argc, char* argv[]) {
     printf("║    4 = Complete        9 = Alarm                     ║\n");
     printf("║    O = OTA Update      P = Splash                    ║\n");
     printf("║                                                      ║\n");
-    printf("║  T = Toggle Theme (Dark/Light)                       ║\n");
     printf("║  ESC = Exit                                          ║\n");
     printf("╚══════════════════════════════════════════════════════╝\n");
     printf("\n");
