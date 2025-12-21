@@ -57,6 +57,9 @@ public:
     // Get client count
     size_t getClientCount();
     
+    // Check if OTA update is in progress
+    bool isOtaInProgress() const { return _otaInProgress; }
+    
     // Process a command from any source (local WebSocket or cloud)
     // Used by CloudConnection to forward cloud commands to the same handler
     void processCommand(JsonDocument& doc);

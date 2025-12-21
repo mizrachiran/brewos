@@ -14,6 +14,7 @@
 #include "ui/screen_settings.h"
 #include "ui/screen_cloud.h"
 #include "ui/screen_alarm.h"
+#include "ui/screen_ota.h"
 #include "ui/screen_splash.h"
 #ifndef SIMULATOR
 #include "ui/screen_temp.h"
@@ -80,6 +81,7 @@ bool UI::begin() {
     createScaleScreen();
     createCloudScreen();
     createAlarmScreen();
+    createOtaScreen();
     createSplashScreen();
     
     // Show splash screen immediately (no animation for first load)
@@ -185,6 +187,9 @@ void UI::update(const ui_state_t& state) {
         case SCREEN_ALARM:
             updateAlarmScreen();
             break;
+        case SCREEN_OTA:
+            updateOtaScreen();
+            break;
         default:
             break;
     }
@@ -196,10 +201,11 @@ void UI::showScreen(screen_id_t screen) {
         return;
     }
     
-    // Rate limit screen switches to prevent rapid toggling (min 500ms between switches)
+    // Rate limit screen switches to prevent rapid toggling (min 100ms between switches)
+    // Reduced from 500ms for snappier navigation
     static uint32_t last_switch_time = 0;
     uint32_t now = lv_tick_get();
-    if (now - last_switch_time < 500 && _currentScreen != screen) {
+    if (now - last_switch_time < 100 && _currentScreen != screen) {
         // Too fast - skip this switch (unless it's the same screen)
         return;
     }
@@ -213,8 +219,9 @@ void UI::showScreen(screen_id_t screen) {
     _previousScreen = _currentScreen;
     _currentScreen = screen;
     
-    // Use fade animation for transitions
-    lv_scr_load_anim(_screens[screen], LV_SCR_LOAD_ANIM_FADE_ON, 200, 0, false);
+    // Use instant screen load for snappy transitions (no animation)
+    // Animation was causing slow top-to-bottom drawing with the small LVGL buffer
+    lv_scr_load(_screens[screen]);
     
     // Focus an object on the new screen (for encoder navigation)
     lv_group_t* group = lv_group_get_default();
@@ -626,6 +633,10 @@ void UI::createAlarmScreen() {
     _screens[SCREEN_ALARM] = screen_alarm_create();
 }
 
+void UI::createOtaScreen() {
+    _screens[SCREEN_OTA] = screen_ota_create();
+}
+
 void UI::createSplashScreen() {
     _screens[SCREEN_SPLASH] = screen_splash_create();
 }
@@ -662,11 +673,18 @@ void UI::updateAlarmScreen() {
     // Alarm screen is updated when set
 }
 
+void UI::updateOtaScreen() {
+    // OTA screen is updated when set
+}
+
 // =============================================================================
 // Helper Methods
 // =============================================================================
 
 void UI::checkAutoScreenSwitch() {
+    // OTA takes absolute priority - don't show alarm screen during OTA
+    // OTA screen is managed externally (in main.cpp) when webServer->isOtaInProgress() is true
+    
     // Handle alarm screen transitions with debouncing
     // Debounce alarm state changes to prevent rapid toggling (min 500ms between changes)
     uint32_t now = platform_millis();
@@ -678,12 +696,13 @@ void UI::checkAutoScreenSwitch() {
         
         if (_state.alarm_active) {
             // Alarm just activated - show alarm screen
-            // Don't interrupt settings navigation
+            // Don't interrupt settings navigation or OTA screen
             if (_currentScreen != SCREEN_ALARM && 
                 _currentScreen != SCREEN_SETTINGS && 
                 _currentScreen != SCREEN_TEMP_SETTINGS && 
                 _currentScreen != SCREEN_SCALE && 
-                _currentScreen != SCREEN_CLOUD) {
+                _currentScreen != SCREEN_CLOUD &&
+                _currentScreen != SCREEN_OTA) {
                 showAlarm(_state.alarm_code, nullptr);
             }
         } else {
@@ -707,10 +726,11 @@ void UI::checkAutoScreenSwitch() {
     }
     
     // Show alarm screen if alarm is active (fallback for initial state)
-    // Don't interrupt settings navigation
+    // Don't interrupt settings navigation or OTA screen
     if (_state.alarm_active && _currentScreen != SCREEN_ALARM && !alarm_state_changed &&
         _currentScreen != SCREEN_SETTINGS && _currentScreen != SCREEN_TEMP_SETTINGS && 
-        _currentScreen != SCREEN_SCALE && _currentScreen != SCREEN_CLOUD) {
+        _currentScreen != SCREEN_SCALE && _currentScreen != SCREEN_CLOUD &&
+        _currentScreen != SCREEN_OTA) {
         showAlarm(_state.alarm_code, nullptr);
         last_alarm_state = true;
         return;

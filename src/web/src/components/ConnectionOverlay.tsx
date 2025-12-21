@@ -47,12 +47,13 @@ export function ConnectionOverlay() {
   const storedOtaInProgress =
     localStorage.getItem(OTA_IN_PROGRESS_KEY) === "true";
 
-  // Consider updating if store says so, OR if we have stored state
-  // This ensures overlay stays visible even if connection drops or store resets during reboot
+  // Consider updating if store says so, OR if we have stored state AND not fully connected
+  // This ensures overlay stays visible during OTA even if connection drops during reboot
+  // But once connected and device is online, we should clear the flag and show normal state
   // Note: Don't check ota.stage === "complete" here - let the page reload logic handle completion
   const isUpdating =
     ota.isUpdating ||
-    (storedOtaInProgress && (!isConnected || isDeviceOffline));
+    (storedOtaInProgress && (!isConnected || isDeviceOffline || machineState === "unknown"));
 
   // Track stable overlay state with debouncing to prevent flickering
   const [overlayState, setOverlayState] = useState<OverlayState>(() => {
@@ -173,8 +174,27 @@ export function ConnectionOverlay() {
       return;
     }
 
-    // If already in target state, nothing to do
+    // If already in target state, check if we need to schedule a grace period re-check
     if (targetState === overlayState) {
+      // During offline grace period, we return "connecting" even though device is offline
+      // Schedule a re-check after grace period ends to properly transition to "offline"
+      if (targetState === "connecting" && isDeviceOffline && isConnected && cloudConnectedAt.current) {
+        const timeSinceConnect = Date.now() - cloudConnectedAt.current;
+        const timeUntilGraceEnds = OFFLINE_GRACE_PERIOD_MS - timeSinceConnect;
+        
+        if (timeUntilGraceEnds > 0) {
+          // Schedule re-check after grace period
+          pendingStateChange.current = setTimeout(() => {
+            // Force a re-evaluation by updating the state
+            const currentMachineState = useStore.getState().machine.state;
+            if (currentMachineState === "offline") {
+              // Grace period ended and still offline - show offline screen
+              deviceConfirmedOffline.current = true;
+              setOverlayState("offline");
+            }
+          }, timeUntilGraceEnds + 100); // Small buffer
+        }
+      }
       return;
     }
 
@@ -214,8 +234,10 @@ export function ConnectionOverlay() {
         
         const isCurrentlyOffline = currentMachineState === "offline";
         const isCurrentlyConnected = currentConnectionState === "connected";
+        // Check if OTA is in progress - localStorage flag should only keep overlay if not fully connected
+        const storedOta = localStorage.getItem(OTA_IN_PROGRESS_KEY) === "true";
         const isCurrentlyUpdating = currentOta.isUpdating || 
-          (localStorage.getItem(OTA_IN_PROGRESS_KEY) === "true" && (!isCurrentlyConnected || isCurrentlyOffline));
+          (storedOta && (!isCurrentlyConnected || isCurrentlyOffline || currentMachineState === "unknown"));
         
         // Determine current target state
         let newTarget: OverlayState;
@@ -324,12 +346,14 @@ export function ConnectionOverlay() {
   // This ensures the UI matches the debounced overlay state
   const getStatus = () => {
     // OTA in progress - show simple animation without progress bar
-    if (overlayState === "updating" || ota.isUpdating) {
+    // Use isUpdating which correctly handles localStorage + connection state
+    if (overlayState === "updating" || isUpdating) {
+      // Use OTA message if available, otherwise use default
+      const otaMessage = ota.message || "Please wait while the update is being installed. The device will restart automatically.";
       return {
         icon: <Download className="w-16 h-16 text-accent" />,
         title: "Updating BrewOS...",
-        subtitle:
-          "Please wait while the update is being installed. The device will restart automatically.",
+        subtitle: otaMessage,
         showRetry: false,
         showPulse: true,
         isOTA: true,

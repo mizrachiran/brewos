@@ -25,6 +25,7 @@ typedef enum {
     SCREEN_SCALE,       // Scale pairing
     SCREEN_CLOUD,       // Cloud pairing QR code
     SCREEN_ALARM,       // Alarm display
+    SCREEN_OTA,         // OTA update in progress
     SCREEN_SPLASH,      // Boot splash screen
     SCREEN_COUNT
 } screen_id_t;
@@ -249,6 +250,7 @@ private:
     void createScaleScreen();
     void createCloudScreen();
     void createAlarmScreen();
+    void createOtaScreen();
     void createSplashScreen();
     
     // Update methods
@@ -259,6 +261,7 @@ private:
     void updateCompleteScreen();
     void updateSettingsScreen();
     void updateAlarmScreen();
+    void updateOtaScreen();
     
     // Helper methods
     const char* getStateText(uint8_t state);

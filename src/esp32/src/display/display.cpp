@@ -319,19 +319,19 @@ void Display::initLVGL() {
     lv_fs_littlefs_init();
     
     // Allocate LVGL draw buffer
-    // Use Internal RAM to prevent display noise (PSRAM bandwidth contention)
-    // Keep buffer very small (5 lines) to save critical RAM for SSL
-    // 5 lines = 480 * 5 * 2 = 4800 bytes
-    size_t buf_size = DISPLAY_WIDTH * 5;
+    // Use PSRAM for larger buffer - internal RAM is too precious (needed for SSL)
+    // 40 lines in PSRAM = 480 * 40 * 2 = 38,400 bytes (12 flushes per full screen)
+    // Note: May have slight display noise due to PSRAM bandwidth contention with RGB panel
+    size_t buf_size = DISPLAY_WIDTH * 40;
     
-    // Try Internal RAM first (critical for noise-free display)
-    _buf1 = (lv_color_t *)heap_caps_malloc(buf_size * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    // Allocate in PSRAM to preserve internal heap for SSL
+    _buf1 = (lv_color_t *)heap_caps_malloc(buf_size * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
     
     if (!_buf1) {
-        LOG_W("Internal RAM allocation failed for LVGL buffer, trying PSRAM (may cause noise)");
-        // If internal fails, use larger PSRAM buffer
-        buf_size = DISPLAY_WIDTH * 40; 
-        _buf1 = (lv_color_t *)heap_caps_malloc(buf_size * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
+        LOG_W("PSRAM allocation failed, trying smaller internal RAM buffer");
+        // Fallback to small internal RAM buffer
+        buf_size = DISPLAY_WIDTH * 5;
+        _buf1 = (lv_color_t *)heap_caps_malloc(buf_size * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     }
     
     _buf2 = nullptr;

@@ -33,6 +33,7 @@
 #include "display/theme.h"
 #include "ui/ui.h"
 #include "ui/screen_setup.h"
+#include "ui/screen_ota.h"
 
 // MQTT
 #include "mqtt_client.h"
@@ -1360,8 +1361,19 @@ void loop() {
     if (now - lastUIUpdate >= uiUpdateInterval) {
         lastUIUpdate = now;
         
-        // Update UI with machine state
-        ui.update(machineState);
+        // Check if OTA is in progress - show OTA screen if so
+        if (webServer && webServer->isOtaInProgress()) {
+            // OTA is in progress - show OTA screen
+            static screen_id_t lastScreenBeforeOta = SCREEN_HOME;
+            if (ui.getCurrentScreen() != SCREEN_OTA) {
+                lastScreenBeforeOta = ui.getCurrentScreen();
+                ui.showScreen(SCREEN_OTA);
+                screen_ota_set("Update in progress...");
+            }
+        } else {
+            // OTA not in progress - update UI with machine state normally
+            ui.update(machineState);
+        }
         
         // Run LVGL timer
         display.update();
