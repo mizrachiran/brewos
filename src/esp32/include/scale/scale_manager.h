@@ -5,10 +5,11 @@
  * Automatically detects scale type and uses appropriate driver.
  * 
  * Supported scales:
- * - Acaia (Lunar, Pearl, Pyxis, Cinco)
+ * - Acaia (Lunar, Pearl, Pyxis, Cinco, Orion)
+ * - Bookoo (Themis Mini, Themis Ultra)
  * - Felicita (Arc, Parallel, Incline)
  * - Decent Scale
- * - Timemore (Black Mirror)
+ * - Timemore (Black Mirror, Basic)
  * - Hiroia (Jimmy)
  * - Generic BLE Weight Scale Service
  */
@@ -227,18 +228,21 @@ private:
     bool setupFelicita();
     bool setupDecent();
     bool setupTimemore();
+    bool setupBookoo();
     bool setupGenericWSS();
     
     void parseAcaiaWeight(const uint8_t* data, size_t length);
     void parseFelicitaWeight(const uint8_t* data, size_t length);
     void parseDecentWeight(const uint8_t* data, size_t length);
     void parseTimemoreWeight(const uint8_t* data, size_t length);
+    void parseBookooWeight(const uint8_t* data, size_t length);
     void parseGenericWeight(const uint8_t* data, size_t length);
     
     void sendAcaiaTare();
     void sendFelicitaTare();
     void sendDecentTare();
     void sendTimemoreTare();
+    void sendBookooTare();
     
     // Notification callback wrapper
     static void notifyCallback(NimBLERemoteCharacteristic* chr, uint8_t* data, 

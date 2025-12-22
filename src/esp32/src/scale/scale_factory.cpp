@@ -23,9 +23,15 @@ scale_type_t detectScaleType(const char* name) {
         n.startsWith("pearl") || 
         n.startsWith("pyxis") ||
         n.startsWith("cinco") || 
-        n.startsWith("orion") ||
-        n.startsWith("bookoo")) {
+        n.startsWith("orion")) {
         return SCALE_TYPE_ACAIA;
+    }
+    
+    // Bookoo Themis scales (use Acaia-compatible protocol)
+    if (n.startsWith("bookoo") || 
+        n.startsWith("themis") ||
+        n.indexOf("themis") >= 0) {
+        return SCALE_TYPE_BOOKOO;
     }
     
     // Felicita scales
@@ -76,6 +82,7 @@ const char* getScaleTypeName(scale_type_t type) {
         case SCALE_TYPE_DECENT:     return "Decent";
         case SCALE_TYPE_TIMEMORE:   return "Timemore";
         case SCALE_TYPE_HIROIA:     return "Hiroia";
+        case SCALE_TYPE_BOOKOO:     return "Bookoo";
         case SCALE_TYPE_GENERIC_WSS: return "Generic";
         default:                    return "Unknown";
     }

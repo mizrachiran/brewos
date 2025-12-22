@@ -170,8 +170,8 @@ void ScaleManager::loop() {
         }
     }
     
-    // Send heartbeat to Acaia scales
-    if (_connected && _scaleType == SCALE_TYPE_ACAIA) {
+    // Send heartbeat to Acaia and Bookoo scales (same protocol)
+    if (_connected && (_scaleType == SCALE_TYPE_ACAIA || _scaleType == SCALE_TYPE_BOOKOO)) {
         static uint32_t lastHeartbeat = 0;
         if (now - lastHeartbeat > 3000) {
             lastHeartbeat = now;
@@ -301,6 +301,9 @@ void ScaleManager::tare() {
         case SCALE_TYPE_ACAIA:
             sendAcaiaTare();
             break;
+        case SCALE_TYPE_BOOKOO:
+            sendBookooTare();
+            break;
         case SCALE_TYPE_FELICITA:
             sendFelicitaTare();
             break;
@@ -321,7 +324,7 @@ void ScaleManager::tare() {
 void ScaleManager::startTimer() {
     if (!_connected || !_commandChar) return;
     
-    if (_scaleType == SCALE_TYPE_ACAIA) {
+    if (_scaleType == SCALE_TYPE_ACAIA || _scaleType == SCALE_TYPE_BOOKOO) {
         uint8_t cmd[5];
         cmd[0] = ACAIA_HEADER[0];
         cmd[1] = ACAIA_HEADER[1];
@@ -334,7 +337,7 @@ void ScaleManager::startTimer() {
 void ScaleManager::stopTimer() {
     if (!_connected || !_commandChar) return;
     
-    if (_scaleType == SCALE_TYPE_ACAIA) {
+    if (_scaleType == SCALE_TYPE_ACAIA || _scaleType == SCALE_TYPE_BOOKOO) {
         uint8_t cmd[5];
         cmd[0] = ACAIA_HEADER[0];
         cmd[1] = ACAIA_HEADER[1];
@@ -347,7 +350,7 @@ void ScaleManager::stopTimer() {
 void ScaleManager::resetTimer() {
     if (!_connected || !_commandChar) return;
     
-    if (_scaleType == SCALE_TYPE_ACAIA) {
+    if (_scaleType == SCALE_TYPE_ACAIA || _scaleType == SCALE_TYPE_BOOKOO) {
         uint8_t cmd[5];
         cmd[0] = ACAIA_HEADER[0];
         cmd[1] = ACAIA_HEADER[1];
@@ -526,6 +529,9 @@ bool ScaleManager::setupCharacteristics() {
         case SCALE_TYPE_ACAIA:
             success = setupAcaia();
             break;
+        case SCALE_TYPE_BOOKOO:
+            success = setupBookoo();
+            break;
         case SCALE_TYPE_FELICITA:
             success = setupFelicita();
             break;
@@ -551,6 +557,9 @@ void ScaleManager::processWeightData(const uint8_t* data, size_t length) {
     switch (_scaleType) {
         case SCALE_TYPE_ACAIA:
             parseAcaiaWeight(data, length);
+            break;
+        case SCALE_TYPE_BOOKOO:
+            parseBookooWeight(data, length);
             break;
         case SCALE_TYPE_FELICITA:
             parseFelicitaWeight(data, length);
@@ -675,6 +684,61 @@ void ScaleManager::sendAcaiaTare() {
     cmd[2] = ACAIA_TARE_CMD[0];
     cmd[3] = ACAIA_TARE_CMD[1];
     _commandChar->writeValue(cmd, 4, false);
+}
+
+// =============================================================================
+// Bookoo Themis Scale Support (Acaia-compatible protocol)
+// =============================================================================
+
+bool ScaleManager::setupBookoo() {
+    LOG_I("Setting up Bookoo Themis scale (Acaia-compatible)");
+    
+    // Bookoo Themis uses the same service and characteristics as Acaia
+    NimBLERemoteService* service = _client->getService(ACAIA_SERVICE_UUID);
+    if (!service) {
+        LOG_E("Bookoo/Acaia service not found");
+        return false;
+    }
+    
+    _weightChar = service->getCharacteristic(ACAIA_CHAR_UUID);
+    _commandChar = _weightChar;  // Same characteristic for Bookoo (like Acaia)
+    
+    if (!_weightChar) {
+        LOG_E("Bookoo/Acaia characteristic not found");
+        return false;
+    }
+    
+    // Subscribe to notifications
+    if (!_weightChar->subscribe(true, notifyCallback, true)) {
+        LOG_E("Failed to subscribe to Bookoo notifications");
+        return false;
+    }
+    
+    // Send identification sequence (same as Acaia)
+    uint8_t identCmd[17];
+    identCmd[0] = ACAIA_HEADER[0];
+    identCmd[1] = ACAIA_HEADER[1];
+    memcpy(&identCmd[2], ACAIA_IDENT, 15);
+    _weightChar->writeValue(identCmd, 17, false);
+    
+    delay(100);
+    
+    // Request weight updates (same as Acaia)
+    uint8_t notifyCmd[] = {0xEF, 0xDD, 0x00, 0x0C, 0x09, 0x00, 0x01, 0x01, 0x02, 0x02, 0x05, 0x03, 0x04};
+    _weightChar->writeValue(notifyCmd, sizeof(notifyCmd), false);
+    
+    LOG_I("Bookoo setup complete");
+    return true;
+}
+
+void ScaleManager::parseBookooWeight(const uint8_t* data, size_t length) {
+    // Bookoo uses same weight format as Acaia
+    parseAcaiaWeight(data, length);
+}
+
+void ScaleManager::sendBookooTare() {
+    // Bookoo uses same tare command as Acaia
+    sendAcaiaTare();
 }
 
 // =============================================================================

@@ -1,7 +1,7 @@
 # BLE Scale Integration
 
 > **Status:** ✅ Implemented  
-> **Last Updated:** 2025-11-29
+> **Last Updated:** 2025-12-22
 
 ## Overview
 
@@ -12,6 +12,7 @@ BrewOS supports Bluetooth Low Energy (BLE) coffee scales for brew-by-weight func
 | Brand | Models | Status | Notes |
 |-------|--------|--------|-------|
 | **Acaia** | Lunar, Pearl, Pyxis, Cinco, Orion | ✅ Implemented | Encrypted protocol, heartbeat required |
+| **Bookoo** | Themis Mini, Themis Ultra | ✅ Implemented | Acaia-compatible protocol |
 | **Felicita** | Arc, Parallel, Incline | ✅ Implemented | ASCII weight format |
 | **Decent** | Decent Scale | ✅ Implemented | Well-documented protocol |
 | **Timemore** | Black Mirror 2 only | ✅ Implemented | Basic/Nano/Mini have no Bluetooth |
@@ -47,6 +48,26 @@ void onWeight(float weight) {
     Serial.printf("Weight: %.1f g\n", weight);
 }
 ```
+
+### Bookoo Themis Scales
+
+Bookoo Themis scales (Mini and Ultra) use an Acaia-compatible protocol:
+
+- **Service UUID:** `49535343-FE7D-4AE5-8FA9-9FAFD205E455` (same as Acaia)
+- **Characteristic:** Same as Acaia
+- **Authentication:** Same handshake sequence as Acaia
+- **Features:** Weight, tare, timer (start/stop/reset)
+
+**Detected Names:**
+- `BOOKOO-XXXX`
+- `Themis-XXXX`
+- Any name containing `Themis`
+
+The Bookoo Themis scales are popular due to their:
+- 0.1g precision
+- IP67 waterproof rating (Ultra model)
+- Built-in flow rate display
+- Competitive pricing vs Acaia
 
 ### Felicita Scales
 
@@ -85,28 +106,28 @@ Few coffee scales implement this standard, but some generic scales do.
 ## Implementation Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                   ScaleManager                       │
-│  - Scanning                                          │
-│  - Auto-detection                                    │
-│  - Connection management                             │
-└────────────────────────┬────────────────────────────┘
-                         │
-         ┌───────────────┼───────────────┐
-         │               │               │
-         ▼               ▼               ▼
-┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│ AcaiaScale  │  │FelicitaScale│  │ DecentScale │
-│  (driver)   │  │  (driver)   │  │  (driver)   │
-└─────────────┘  └─────────────┘  └─────────────┘
-         │               │               │
-         └───────────────┴───────────────┘
-                         │
-                         ▼
-              ┌─────────────────────┐
-              │    NimBLE Stack     │
-              │   (ESP32 Bluetooth) │
-              └─────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                        ScaleManager                              │
+│  - Scanning and auto-detection                                   │
+│  - Connection management                                         │
+│  - Protocol routing based on scale type                         │
+└─────────────────────────────┬───────────────────────────────────┘
+                              │
+     ┌────────────┬───────────┼───────────┬────────────┐
+     │            │           │           │            │
+     ▼            ▼           ▼           ▼            ▼
+┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐
+│  Acaia  │ │ Bookoo  │ │Felicita │ │ Decent  │ │Timemore │
+│ (driver)│ │ (driver)│ │ (driver)│ │ (driver)│ │ (driver)│
+└─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘
+     │            │           │           │            │
+     └────────────┴───────────┴───────────┴────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │    NimBLE Stack     │
+                   │   (ESP32 Bluetooth) │
+                   └─────────────────────┘
 ```
 
 ## Interface
@@ -203,8 +224,9 @@ Scales typically update at 5-10 Hz.
 ## Resources
 
 ### Libraries
-- [AcaiaArduinoBLE](https://github.com/tatemazer/AcaiaArduinoBLE) - Acaia scales
+- [AcaiaArduinoBLE](https://github.com/tatemazer/AcaiaArduinoBLE) - Acaia and Bookoo scales
 - [NimBLE-Arduino](https://github.com/h2zero/NimBLE-Arduino) - ESP32 BLE stack
+- [Bookoo Home Assistant](https://github.com/makerwolf/bookoo) - HA integration for Bookoo
 
 ### Protocol Documentation
 - [Decent Scale Protocol](https://decentespresso.com/support/scale/protocol)
@@ -222,10 +244,11 @@ All major scale types are now implemented with auto-detection:
 | Phase | Scale Type | Status |
 |-------|------------|--------|
 | 1 | Acaia | ✅ Complete |
-| 2 | Felicita | ✅ Complete |
-| 3 | Decent | ✅ Complete |
-| 4 | Timemore | ✅ Complete |
-| 5 | Generic WSS | ✅ Complete |
+| 2 | Bookoo Themis | ✅ Complete |
+| 3 | Felicita | ✅ Complete |
+| 4 | Decent | ✅ Complete |
+| 5 | Timemore | ✅ Complete |
+| 6 | Generic WSS | ✅ Complete |
 
 ### Files
 

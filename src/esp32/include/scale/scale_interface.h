@@ -21,6 +21,7 @@ typedef enum {
     SCALE_TYPE_DECENT,      // Decent Scale
     SCALE_TYPE_TIMEMORE,    // Timemore Black Mirror
     SCALE_TYPE_HIROIA,      // Hiroia Jimmy
+    SCALE_TYPE_BOOKOO,      // Bookoo Themis Mini, Themis Ultra
     SCALE_TYPE_GENERIC_WSS, // Standard Bluetooth Weight Scale Service
 } scale_type_t;
 
