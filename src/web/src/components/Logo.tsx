@@ -116,7 +116,7 @@ export function LogoIcon({
 
   return (
     <img
-      src="/logo-app.svg"
+      src="/logo-icon.svg"
       alt="BrewOS"
       className={cn(sizeConfig.icon, className)}
     />
