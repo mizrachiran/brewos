@@ -10,39 +10,61 @@ Custom control PCB for ECM Synchronika dual-boiler espresso machine.
 
 ### Main Specification
 
-| Document | Description |
-|----------|-------------|
+| Document                                 | Description                                              |
+| ---------------------------------------- | -------------------------------------------------------- |
 | [**Specification.md**](Specification.md) | **Start here** - Overview and navigation to all sections |
 
 ### Detailed Specifications (`spec/` folder)
 
-| Document | Description |
-|----------|-------------|
-| [Overview](spec/01-Overview.md) | System architecture, design goals, electrical specs |
-| [GPIO Allocation](spec/02-GPIO-Allocation.md) | Complete Pico 2 pin mapping, RP2350 errata |
-| [Power Supply](spec/03-Power-Supply.md) | AC/DC isolation, buck converter, ADC reference |
-| [Outputs](spec/04-Outputs.md) | Relay drivers, SSR triggers, indicator LEDs |
-| [Analog Inputs](spec/05-Analog-Inputs.md) | NTC thermistors, pressure transducer |
-| [Connectors](spec/06-Connectors.md) | J1-J26 pinouts, wiring diagrams |
-| [BOM](spec/07-BOM.md) | Complete bill of materials |
-| [PCB Layout](spec/08-PCB-Layout.md) | Layout guidelines, trace widths, zones |
-| [Safety](spec/09-Safety.md) | Protection circuits, compliance |
+| Document                                      | Description                                         |
+| --------------------------------------------- | --------------------------------------------------- |
+| [Overview](spec/01-Overview.md)               | System architecture, design goals, electrical specs |
+| [GPIO Allocation](spec/02-GPIO-Allocation.md) | Complete Pico 2 pin mapping, RP2350 errata          |
+| [Power Supply](spec/03-Power-Supply.md)       | AC/DC isolation, buck converter, ADC reference      |
+| [Outputs](spec/04-Outputs.md)                 | Relay drivers, SSR triggers, indicator LEDs         |
+| [Analog Inputs](spec/05-Analog-Inputs.md)     | NTC thermistors, pressure transducer                |
+| [Connectors](spec/06-Connectors.md)           | J1-J26 pinouts, wiring diagrams                     |
+| [BOM](spec/07-BOM.md)                         | Complete bill of materials                          |
+| [PCB Layout](spec/08-PCB-Layout.md)           | Layout guidelines, trace widths, zones              |
+| [Safety](spec/09-Safety.md)                   | Protection circuits, compliance                     |
 
 ### Schematics & Reference
 
-| Document | Description |
-|----------|-------------|
-| [Schematic Reference](schematics/Schematic_Reference.md) | Detailed ASCII circuit schematics |
-| [Component Reference](schematics/Component_Reference_Guide.md) | Component numbering and cross-reference |
-| [netlist.csv](schematics/netlist.csv) | Machine-readable net connections |
+| Document                                                       | Description                                            |
+| -------------------------------------------------------------- | ------------------------------------------------------ |
+| [Schematic Reference](schematics/Schematic_Reference.md)       | Detailed ASCII circuit schematics with embedded images |
+| [Component Reference](schematics/Component_Reference_Guide.md) | Component numbering and cross-reference                |
+| [netlist.csv](schematics/netlist.csv)                          | Machine-readable net connections                       |
+
+#### Schematic Images (December 2025)
+
+All 9 schematic sheets are embedded in the [Schematic Reference](schematics/Schematic_Reference.md). Quick links:
+
+| Sheet                                                                                                                      | Description                                    |
+| -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| 1 - [Power Supply](schematics/SCH_Schematic1_1-Power%20Supply_2025-12-22.png)                                              | AC/DC isolation, buck converter, ADC reference |
+| 2 - [Microcontroller](schematics/SCH_Schematic1_2-Microcontroller%20%28Raspberry%20Pi%20Pico%202%29_2025-12-22.png)        | Pico 2 GPIO connections                        |
+| 3 - [Relay Drivers](schematics/SCH_Schematic1_3-Relay%20Drivers_2025-12-22.png)                                            | K1-K3 driver circuits                          |
+| 4 - [SSR Drivers](schematics/SCH_Schematic1_4-SSR%20Drivers_2025-12-22.png)                                                | Heater SSR triggers                            |
+| 5 - [Sensor Inputs](schematics/SCH_Schematic1_5-Sensor%20Inputs_2025-12-22.png)                                            | NTC, pressure, level probe                     |
+| 6 - [Communication](schematics/SCH_Schematic1_6-Communication%20Interfaces_2025-12-22.png)                                 | ESP32, RS485, debug port                       |
+| 7 - [User Interface](schematics/SCH_Schematic1_7-User%20Interface_2025-12-22.png)                                          | LEDs, buzzer, reset                            |
+| 8 - [Power Metering](schematics/SCH_Schematic1_8-Power%20Metering%20%28Universal%20External%20Interface%29_2025-12-22.png) | External meter interface                       |
+| 9 - [Protection](schematics/SCH_Schematic1_9-Protection%20%26%20Filtering_2025-12-22.png)                                  | TVS, ESD, filtering                            |
+
+#### PCB Layout
+
+| Top Layer               | Bottom Layer                  |
+| ----------------------- | ----------------------------- |
+| ![PCB Top](pcb_top.png) | ![PCB Bottom](pcb_bottom.png) |
 
 ### Testing & Support
 
-| Document | Description |
-|----------|-------------|
-| [Test Procedures](Test_Procedures.md) | Manufacturing test and validation |
-| [ESP32 Wiring](ESP32_Wiring.md) | Display module integration |
-| [CHANGELOG](CHANGELOG.md) | Version history and design changes |
+| Document                              | Description                        |
+| ------------------------------------- | ---------------------------------- |
+| [Test Procedures](Test_Procedures.md) | Manufacturing test and validation  |
+| [ESP32 Wiring](ESP32_Wiring.md)       | Display module integration         |
+| [CHANGELOG](CHANGELOG.md)             | Version history and design changes |
 
 ---
 

@@ -4,8 +4,90 @@
 
 **Board Size:** 130mm × 80mm (2-layer, 2oz copper)  
 **Enclosure:** 150mm × 100mm mounting area  
-**Revision:** v2.24.3  
+**Revision:** v2.28  
 **Date:** December 2025
+
+---
+
+## 📐 Schematic Images
+
+High-resolution schematic captures from EasyEDA. Click to enlarge.
+
+> **Note:** The ASCII schematics in each section below provide detailed component values and design notes.
+
+---
+
+### Sheet 1: Power Supply
+
+Mains input, AC/DC isolation, buck converter, ADC reference
+
+![Power Supply Schematic](SCH_Schematic1_1-Power%20Supply_2025-12-22.png)
+
+---
+
+### Sheet 2: Microcontroller (Raspberry Pi Pico 2)
+
+GPIO allocation and connections
+
+![Microcontroller Schematic](SCH_Schematic1_2-Microcontroller%20%28Raspberry%20Pi%20Pico%202%29_2025-12-22.png)
+
+---
+
+### Sheet 3: Relay Drivers
+
+K1-K3 relay driver circuits with flyback protection
+
+![Relay Drivers Schematic](SCH_Schematic1_3-Relay%20Drivers_2025-12-22.png)
+
+---
+
+### Sheet 4: SSR Drivers
+
+Solid-state relay trigger circuits for heaters
+
+![SSR Drivers Schematic](SCH_Schematic1_4-SSR%20Drivers_2025-12-22.png)
+
+---
+
+### Sheet 5: Sensor Inputs
+
+NTC thermistors, pressure transducer, level probe
+
+![Sensor Inputs Schematic](SCH_Schematic1_5-Sensor%20Inputs_2025-12-22.png)
+
+---
+
+### Sheet 6: Communication Interfaces
+
+ESP32, RS485, service port, I2C
+
+![Communication Interfaces Schematic](SCH_Schematic1_6-Communication%20Interfaces_2025-12-22.png)
+
+---
+
+### Sheet 7: User Interface
+
+LEDs, buzzer, reset button
+
+![User Interface Schematic](SCH_Schematic1_7-User%20Interface_2025-12-22.png)
+
+---
+
+### Sheet 8: Power Metering (Universal External Interface)
+
+External power meter interface (PZEM, JSY, Eastron)
+
+![Power Metering Schematic](SCH_Schematic1_8-Power%20Metering%20%28Universal%20External%20Interface%29_2025-12-22.png)
+
+---
+
+### Sheet 9: Protection & Filtering
+
+TVS, ESD protection, filtering
+
+![Protection & Filtering Schematic](SCH_Schematic1_9-Protection%20%26%20Filtering_2025-12-22.png)
+
+---
 
 ---
 

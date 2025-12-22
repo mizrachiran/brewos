@@ -1,7 +1,7 @@
 # ECM Synchronika Control Board - Component Reference Guide
 
 **Document Purpose:** Standardized component numbering scheme and cross-reference  
-**Revision:** 2.24.3  
+**Revision:** 2.28  
 **Date:** December 2025
 
 ---
