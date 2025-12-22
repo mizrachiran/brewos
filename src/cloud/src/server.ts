@@ -91,8 +91,25 @@ if (process.env.NODE_ENV === "production") {
 app.use((_req, res, next) => {
   // COOP: same-origin-allow-popups allows the Google Sign-In popup to communicate back
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
-  // Prevent clickjacking
-  res.setHeader("X-Frame-Options", "DENY");
+  
+  // Content Security Policy - Allow Google Sign-In iframes while preventing clickjacking
+  // frame-src allows Google Sign-In button iframes
+  // script-src allows Google Sign-In scripts
+  const csp = [
+    "default-src 'self'",
+    "frame-src 'self' https://accounts.google.com https://*.google.com",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://*.google.com https://www.googletagmanager.com https://www.google-analytics.com",
+    "connect-src 'self' https://accounts.google.com https://*.google.com wss://cloud.brewos.io ws://localhost:* http://localhost:*",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: https: blob:",
+  ].join("; ");
+  res.setHeader("Content-Security-Policy", csp);
+  
+  // X-Frame-Options is less flexible than CSP, but keep it for older browsers
+  // SAMEORIGIN allows same-origin iframes (our app) but blocks cross-origin except where CSP allows
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  
   // Prevent MIME type sniffing
   res.setHeader("X-Content-Type-Options", "nosniff");
   // Enable XSS protection (legacy browsers)
