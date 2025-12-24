@@ -4,6 +4,9 @@
 #include <Arduino.h>
 #include <WebSocketsClient.h>
 #include <ArduinoJson.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+#include <freertos/queue.h>
 
 /**
  * CloudConnection
@@ -93,6 +96,12 @@ public:
      * Pause connection to free up resources (e.g. for Web UI loading)
      */
     void pause();
+    
+    /**
+     * Notify of user activity - defers reconnection attempts to keep UI responsive
+     * Call this when encoder/button events occur
+     */
+    void notifyUserActivity();
 
 private:
     WebSocketsClient _ws;
@@ -108,6 +117,22 @@ private:
     CommandCallback _onCommand = nullptr;
     RegisterCallback _onRegister = nullptr;
     bool _registered = false;
+    unsigned long _lastUserActivity = 0;  // For deferring connection during user interaction
+    unsigned long _pausedUntil = 0;       // For pausing connection during web server activity
+    int _failureCount = 0;                // Track consecutive failures for backoff
+    
+    // FreeRTOS task for non-blocking operation
+    TaskHandle_t _taskHandle = nullptr;
+    static void taskCode(void* parameter);
+    
+    // Thread safety - WebSocketsClient is NOT thread-safe
+    SemaphoreHandle_t _mutex = nullptr;
+    QueueHandle_t _sendQueue = nullptr;  // Queue of messages to send
+    static const int SEND_QUEUE_SIZE = 5;
+    static const int MAX_MSG_SIZE = 2048;
+    
+    // Process queued messages (called from task)
+    void processSendQueue();
     
     // Parse URL into host, port, path
     bool parseUrl(const String& url, String& host, uint16_t& port, String& path, bool& useSSL);

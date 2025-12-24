@@ -26,7 +26,7 @@ static unsigned long _wifiConnectRequestTime = 0;
 
 // Track when WiFi is ready to serve requests (prevents PSRAM crashes from early HTTP requests)
 static unsigned long _wifiReadyTime = 0;
-static const unsigned long WIFI_READY_DELAY_MS = 5000;  // 5 seconds after WiFi connects
+static const unsigned long WIFI_READY_DELAY_MS = 1000;  // Reduced from 5s to 1s - faster responsiveness
 
 // External reference to machine state defined in main.cpp
 extern ui_state_t machineState;
@@ -159,9 +159,22 @@ void WebServer::loop() {
 }
 
 void WebServer::setupRoutes() {
-    // Simple test endpoint - no LittleFS needed
-    _server.on("/test", HTTP_GET, [](AsyncWebServerRequest* request) {
-        request->send(200, "text/plain", "BrewOS Web Server OK");
+    // Simple test endpoint - no LittleFS needed - for diagnosing web server performance
+    _server.on("/test", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        unsigned long startTime = millis();
+        // Pause cloud to ensure web server is responsive
+        if (_cloudConnection) {
+            _cloudConnection->pause();
+        }
+        char response[128];
+        snprintf(response, sizeof(response), "BrewOS Web Server OK\nHeap: %zu bytes\nTime: %lu ms", 
+                 ESP.getFreeHeap(), millis() - startTime);
+        request->send(200, "text/plain", response);
+    });
+    
+    // Health check endpoint - fastest possible response
+    _server.on("/health", HTTP_GET, [](AsyncWebServerRequest* request) {
+        request->send(200, "text/plain", "OK");
     });
     
     // WiFi Setup page - inline HTML (no file operations, no PSRAM issues)
@@ -417,23 +430,26 @@ void WebServer::setupRoutes() {
     
     // Root route - serve React app
     _server.on("/", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        LOG_I("/ hit - serving index.html");
+        unsigned long startTime = millis();
+        size_t freeHeap = ESP.getFreeHeap();
+        LOG_I("/ hit - serving index.html (heap: %zu bytes)", freeHeap);
         
-        // Pause cloud connection to free up memory for web assets
+        // Pause cloud connection IMMEDIATELY to free network/memory
         if (_cloudConnection) {
             _cloudConnection->pause();
         }
         
-        File file = LittleFS.open("/index.html", "r");
-        if (file) {
-            size_t fileSize = file.size();
-            AsyncWebServerResponse* response = request->beginResponse(
-                LittleFS, "/index.html", "text/html", false
-            );
-            response->addHeader("Content-Length", String(fileSize));
-            request->send(response);
-            file.close();
+        // Check memory before serving
+        if (freeHeap < 20000) {
+            LOG_W("Low heap (%zu bytes) - web response may be slow", freeHeap);
+        }
+        
+        // Use direct file send - more efficient than beginResponse
+        if (LittleFS.exists("/index.html")) {
+            request->send(LittleFS, "/index.html", "text/html", false);
+            LOG_I("/ served in %lu ms", millis() - startTime);
         } else {
+            LOG_E("index.html not found!");
             request->send(404, "text/plain", "index.html not found");
         }
     });

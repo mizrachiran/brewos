@@ -248,10 +248,11 @@ void Display::initHardware() {
     LOG_I("Creating RGB panel...");
     esp_lcd_rgb_panel_config_t panel_config = {};
     panel_config.clk_src = LCD_CLK_SRC_PLL160M;
-    // Pixel clock set to 14MHz to avoid WiFi channel interference
-    // 16MHz harmonics land exactly on WiFi channels (16*150=2400, 16*154=2464)
-    // 14MHz avoids most common channels
-    panel_config.timings.pclk_hz = 14 * 1000 * 1000;  // 14 MHz
+    
+    // Pixel clock - with GPIO drive strength reduced, we can use higher PCLK
+    // 10 MHz provides good display quality while EMI is controlled by low drive strength
+    panel_config.timings.pclk_hz = 10 * 1000 * 1000;  // 10 MHz
+    LOG_I("PCLK set to 10MHz (EMI controlled via low GPIO drive strength)");
     panel_config.timings.h_res = 480;
     panel_config.timings.v_res = 480;
     panel_config.timings.hsync_pulse_width = 8;
@@ -285,9 +286,7 @@ void Display::initHardware() {
     panel_config.data_gpio_nums[14] = 2;   // DATA14 - R6
     panel_config.data_gpio_nums[15] = 1;   // DATA15 - R7
     panel_config.flags.fb_in_psram = 1;
-    // Note: double_fb flag may not be available in all ESP-IDF versions
-    // Double buffering is handled by the RGB panel driver automatically when using PSRAM
-    // If needed, can use: panel_config.num_fbs = 2; (but check ESP-IDF version support)
+    // WiFi stability achieved via GPIO_DRIVE_CAP_0 (see below)
     
     // Register callback to synchronize with DMA transfers
     panel_config.on_frame_trans_done = on_frame_trans_done;
@@ -302,6 +301,37 @@ void Display::initHardware() {
         LOG_E("Failed to create RGB panel: %s", esp_err_to_name(ret));
         return;
     }
+    
+    // =========================================================================
+    // CRITICAL FIX FOR WIFI INTERFERENCE (EMI REDUCTION)
+    // =========================================================================
+    // The RGB panel signals (PCLK/DATA) generate noise that jams the WiFi radio.
+    // We reduce the GPIO drive strength to the minimum (0) to reduce this noise (EMI).
+    // Before: Sharp square waves on 20 pins → Massive harmonics → WiFi jammed
+    // After: Softer edges on 20 pins → Reduced harmonics → WiFi works
+    
+    const gpio_num_t lcd_pins[] = {
+        (gpio_num_t)DISPLAY_PCLK_PIN,
+        (gpio_num_t)DISPLAY_VSYNC_PIN,
+        (gpio_num_t)DISPLAY_HSYNC_PIN,
+        (gpio_num_t)DISPLAY_DE_PIN,
+        // Blue
+        (gpio_num_t)DISPLAY_B0_PIN, (gpio_num_t)DISPLAY_B1_PIN, 
+        (gpio_num_t)DISPLAY_B2_PIN, (gpio_num_t)DISPLAY_B3_PIN, (gpio_num_t)DISPLAY_B4_PIN,
+        // Green
+        (gpio_num_t)DISPLAY_G0_PIN, (gpio_num_t)DISPLAY_G1_PIN, (gpio_num_t)DISPLAY_G2_PIN,
+        (gpio_num_t)DISPLAY_G3_PIN, (gpio_num_t)DISPLAY_G4_PIN, (gpio_num_t)DISPLAY_G5_PIN,
+        // Red
+        (gpio_num_t)DISPLAY_R0_PIN, (gpio_num_t)DISPLAY_R1_PIN, (gpio_num_t)DISPLAY_R2_PIN,
+        (gpio_num_t)DISPLAY_R3_PIN, (gpio_num_t)DISPLAY_R4_PIN
+    };
+
+    LOG_I("Reducing LCD pin drive strength to minimize WiFi interference...");
+    for (size_t i = 0; i < sizeof(lcd_pins)/sizeof(lcd_pins[0]); i++) {
+        gpio_set_drive_capability(lcd_pins[i], GPIO_DRIVE_CAP_0);
+    }
+    LOG_I("LCD pin drive strength set to minimum (GPIO_DRIVE_CAP_0)");
+    // =========================================================================
     
     esp_lcd_panel_reset(panel_handle);
     esp_lcd_panel_init(panel_handle);
@@ -418,6 +448,12 @@ void Display::setBacklight(uint8_t brightness) {
 }
 
 void Display::backlightOn() {
+    // Re-enable RGB signals BEFORE turning on backlight
+    // esp_lcd_panel_disp_off(handle, false) = turn display ON
+    if (panel_handle) {
+        esp_lcd_panel_disp_off(panel_handle, false);  // false = display ON
+    }
+    
     _isDimmed = false;
     gpio_set_level((gpio_num_t)DISPLAY_BL_PIN, 0);  // Active LOW = ON
     setBacklight(_backlightSaved);
@@ -427,11 +463,22 @@ void Display::backlightOff() {
     _backlightSaved = _backlightLevel;
     setBacklight(0);
     gpio_set_level((gpio_num_t)DISPLAY_BL_PIN, 1);  // Active LOW = OFF
+    
+    // Stop RGB signals to eliminate WiFi interference when screen is off
+    // This silences the 20+ data pins that generate EMI
+    if (panel_handle) {
+        esp_lcd_panel_disp_off(panel_handle, true);  // true = display OFF
+    }
 }
 
 void Display::resetIdleTimer() {
     _lastActivityTime = millis();
     if (_isDimmed) {
+        // If screen was fully OFF (0 brightness), re-enable RGB signals first
+        if (_backlightLevel == 0 && panel_handle) {
+            esp_lcd_panel_disp_off(panel_handle, false);  // false = display ON
+        }
+        
         _isDimmed = false;
         setBacklight(_backlightSaved);
     }
@@ -445,6 +492,12 @@ void Display::updateBacklightIdle() {
     if (idleTime >= BACKLIGHT_OFF_TIMEOUT && _backlightLevel > 0) {
         if (!_isDimmed) _backlightSaved = _backlightLevel;
         setBacklight(0);
+        
+        // Stop RGB signals to eliminate WiFi interference
+        if (panel_handle) {
+            esp_lcd_panel_disp_off(panel_handle, true);  // true = display OFF
+        }
+        
         _isDimmed = true;
         return;
     }

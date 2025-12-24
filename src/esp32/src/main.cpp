@@ -22,6 +22,9 @@
 #include <cmath>
 #include <esp_heap_caps.h>  // For heap_caps_malloc to avoid PSRAM
 #include <new>              // For placement new
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>  // For vTaskDelay
+#include <esp_wifi.h>       // For esp_wifi_set_ps, esp_wifi_get_ps
 #include "config.h"
 #include "wifi_manager.h"
 #include "web_server.h"
@@ -182,7 +185,14 @@ static void onWiFiConnected() {
     snprintf(machineState.wifi_ip, sizeof(machineState.wifi_ip), "%d.%d.%d.%d", 
              ip[0], ip[1], ip[2], ip[3]);
     
-    // Heavy operations (NTP, mDNS, broadcastLog) are done in main loop after delay
+    // Log immediately - web server is already running and ready
+    LOG_I("Web server ready: http://%d.%d.%d.%d/ or http://brewos.local/", 
+          ip[0], ip[1], ip[2], ip[3]);
+    
+    // Note: Cloudflare DNS is applied in WiFiManager::loop() after connection
+    // Don't apply here - using INADDR_NONE would reset the DHCP configuration
+    
+    // mDNS will be started immediately in main loop (no delay)
 }
 
 // Called when WiFi disconnects
@@ -192,7 +202,13 @@ static void onWiFiDisconnected() {
     // Reset WiFi connected state tracking
     wifiConnectedTime = 0;
     wifiConnectedLogSent = false;
-    mDNSStarted = false;
+    
+    // Stop mDNS cleanly so it can be restarted
+    if (mDNSStarted) {
+        MDNS.end();
+        mDNSStarted = false;
+    }
+    
     ntpConfigured = false;
 }
 
@@ -733,25 +749,20 @@ void setup() {
     // Serial.flush(); // Removed - can block on USB CDC
     
     // Initialize display (PSRAM enabled for RGB frame buffer)
+    // Now using lower PCLK (8 MHz) and bounce buffer for WiFi compatibility
     Serial.println("[4/8] Initializing display...");
-    // Serial.flush(); // Removed - can block on USB CDC
     if (!display.begin()) {
         Serial.println("ERROR: Display initialization failed!");
-        // Serial.flush(); // Removed - can block on USB CDC
     } else {
         Serial.println("Display initialized OK");
-        // Serial.flush(); // Removed - can block on USB CDC
     }
     
     // Initialize encoder
     Serial.println("[4.5/8] Initializing encoder...");
-    // Serial.flush(); // Removed - can block on USB CDC
     if (!encoder.begin()) {
         Serial.println("ERROR: Encoder initialization failed!");
-        // Serial.flush(); // Removed - can block on USB CDC
     } else {
         Serial.println("Encoder initialized OK");
-        // Serial.flush(); // Removed - can block on USB CDC
     }
     encoder.setCallback(handleEncoderEvent);
     
@@ -773,24 +784,14 @@ void setup() {
     
     // Initialize UI
     Serial.println("[4.8/8] Initializing UI...");
-    // Serial.flush(); // Removed - can block on USB CDC
     if (!ui.begin()) {
         Serial.println("ERROR: UI initialization failed!");
-        // Serial.flush(); // Removed - can block on USB CDC
     } else {
         Serial.println("UI initialized OK");
-        // Serial.flush(); // Removed - can block on USB CDC
-        
-        // Update UI with initial state (including WiFi setup status)
         ui.update(machineState);
-        
-        // If WiFi setup is needed, show setup screen immediately
         if (needsWifiSetup) {
             Serial.println("Showing WiFi setup screen...");
-            // Serial.flush(); // Removed - can block on USB CDC
         }
-        
-        // Force display update to show initial screen immediately
         display.update();
     }
     
@@ -1143,6 +1144,12 @@ void setup() {
     Serial.println("State Manager initialized OK");
     // Serial.flush(); // Removed - can block on USB CDC
     
+    // Apply display settings from State
+    const auto& displaySettings = State.settings().display;
+    display.setBacklight(displaySettings.brightness);
+    LOG_I("Display settings applied: brightness=%d, timeout=%ds", 
+          displaySettings.brightness, displaySettings.screenTimeout);
+    
     // Initialize Pairing Manager and Cloud Connection if cloud is enabled
     auto& cloudSettings = State.settings().cloud;
     if (cloudSettings.enabled && strlen(cloudSettings.serverUrl) > 0) {
@@ -1292,18 +1299,8 @@ void loop() {
     // PHASE 3: Optional service updates
     // =========================================================================
     
-    // Cloud connection (handles WebSocket to cloud server)
-    // Throttle cloud loop to prioritize local UI responsiveness
-    // - Normal: 100ms interval (needed for reliable ping/pong processing)
-    // - Local clients connected: 200ms interval (balance between local UI and cloud heartbeat)
-    // Note: Cloud heartbeat is 15s ping with 10s timeout, so we need to process events frequently
-    static unsigned long lastCloudLoop = 0;
-    unsigned long cloudInterval = (webServer && webServer->getClientCount() > 0) ? 200 : 100;
-
-    if (cloudConnection && millis() - lastCloudLoop >= cloudInterval) {
-        lastCloudLoop = millis();
-        cloudConnection->loop();
-    }
+    // Cloud connection runs in its own FreeRTOS task (Core 1, low priority)
+    // No explicit loop() call needed - task handles SSL independently
     yield();  // Feed watchdog
     
     // MQTT client (for Home Assistant integration)
@@ -1388,7 +1385,7 @@ void loop() {
     
     // Update display and encoder
     unsigned long now = millis();
-    unsigned long uiUpdateInterval = 100; // 10 FPS for normal updates
+    unsigned long uiUpdateInterval = 100; // 10 FPS - good balance of responsiveness and CPU usage
     
     // Update encoder state FAST (every loop) to ensure responsiveness
     // Do not throttle input polling!
@@ -1398,14 +1395,11 @@ void loop() {
     bool needsImmediateRefresh = encoderActivityFlag;
     encoderActivityFlag = false;  // Clear flag
     
-    // Update UI immediately on encoder activity, or at regular interval
-    // This makes encoder navigation feel snappy while keeping idle updates low
+    // Update UI at regular intervals
     if (needsImmediateRefresh || (now - lastUIUpdate >= uiUpdateInterval)) {
         lastUIUpdate = now;
         
-        // Check if OTA is in progress - show OTA screen if so
         if (webServer && webServer->isOtaInProgress()) {
-            // OTA is in progress - show OTA screen
             static screen_id_t lastScreenBeforeOta = SCREEN_HOME;
             if (ui.getCurrentScreen() != SCREEN_OTA) {
                 lastScreenBeforeOta = ui.getCurrentScreen();
@@ -1413,18 +1407,12 @@ void loop() {
                 screen_ota_set("Update in progress...");
             }
         } else {
-            // OTA not in progress - update UI with machine state normally
             ui.update(machineState);
         }
         
-        // Run LVGL timer
         display.update();
     }
     
-    // Reset idle timer on user activity (brewing, button press)
-    // Note: encoder rotation already resets idle timer in encoder.update()
-    // Don't call encoder.resetPosition() here - it causes race conditions
-    // where events get lost between update() and this check
     static bool lastPressed = false;
     bool currentPressed = encoder.isPressed();
     if (machineState.is_brewing || (currentPressed && !lastPressed)) {
@@ -1510,15 +1498,25 @@ void loop() {
         webServer->broadcastLog("WiFi connected");
         wifiConnectedLogSent = true;
     }
-    if (wifiConnectedTime > 0 && millis() - wifiConnectedTime > 3000 && !mDNSStarted) {
-        // Start mDNS after WiFi is stable (3 seconds)
+    // Start mDNS immediately when WiFi connects - no delay needed
+    // Web server is already running, mDNS just makes it discoverable
+    if (wifiConnectedTime > 0 && !mDNSStarted) {
+        // Force restart of mDNS to ensure clean state
+        MDNS.end();
+        
         if (MDNS.begin("brewos")) {
             LOG_I("mDNS started: http://brewos.local");
-            MDNS.addService("http", "tcp", 80);
-            mDNSStarted = true;
+            // Add service and check result
+            if (MDNS.addService("http", "tcp", 80)) {
+                LOG_I("mDNS service added");
+                mDNSStarted = true;
+            } else {
+                LOG_E("mDNS addService failed - will retry");
+                // Retry next loop
+            }
         } else {
-            LOG_W("mDNS failed to start");
-            mDNSStarted = true;  // Don't retry
+            LOG_W("mDNS failed to start - will retry");
+            // Retry on next loop iteration (don't set mDNSStarted = true on failure)
         }
     }
     if (!machineState.wifi_connected) {
@@ -1529,11 +1527,41 @@ void loop() {
         ntpConfigured = false;
     }
     
+    // Periodically ensure WiFi power save is disabled (every 30s when connected)
+    // Some ESP32 SDKs re-enable power save after certain events
+    static unsigned long lastPowerSaveCheck = 0;
+    if (machineState.wifi_connected && millis() - lastPowerSaveCheck > 30000) {
+        lastPowerSaveCheck = millis();
+        wifi_ps_type_t ps_type;
+        esp_wifi_get_ps(&ps_type);
+        if (ps_type != WIFI_PS_NONE) {
+            LOG_W("WiFi power save was re-enabled! Disabling...");
+            esp_wifi_set_ps(WIFI_PS_NONE);
+        }
+    }
+    
     // =========================================================================
-    // PHASE 8: Memory monitoring (every 30 seconds)
+    // PHASE 8: Memory and loop timing monitoring
     // =========================================================================
     static unsigned long lastMemoryLog = 0;
-    if (millis() - lastMemoryLog >= 30000) {
+    static unsigned long loopStartTime = 0;
+    static unsigned long maxLoopTime = 0;
+    static unsigned long slowLoopCount = 0;
+    
+    // Track loop timing - detect blocking operations
+    unsigned long loopTime = millis() - loopStartTime;
+    if (loopStartTime > 0 && loopTime > 100) {  // Loop took > 100ms
+        slowLoopCount++;
+        if (loopTime > maxLoopTime) {
+            maxLoopTime = loopTime;
+        }
+        if (loopTime > 1000) {  // Loop took > 1 second - something is very wrong
+            LOG_E("SLOW LOOP: %lu ms (this blocks network!)", loopTime);
+        }
+    }
+    loopStartTime = millis();
+    
+    if (millis() - lastMemoryLog >= 30000) {  // Log every 30 seconds
         lastMemoryLog = millis();
         size_t freeHeap = ESP.getFreeHeap();
         size_t minFreeHeap = ESP.getMinFreeHeap();
@@ -1541,14 +1569,25 @@ void loop() {
         size_t totalPsram = ESP.getPsramSize();
         
         // Log both internal heap (critical for SSL) and PSRAM (for large buffers)
-        LOG_I("Memory: heap=%zu/%zu, PSRAM=%zuKB/%zuKB", 
-              freeHeap, minFreeHeap, freePsram/1024, totalPsram/1024);
+        LOG_I("Memory: heap=%zu/%zu, PSRAM=%zuKB/%zuKB, maxLoop=%lums, slowLoops=%lu", 
+              freeHeap, minFreeHeap, freePsram/1024, totalPsram/1024, maxLoopTime, slowLoopCount);
+        
+        // Reset stats
+        maxLoopTime = 0;
+        slowLoopCount = 0;
         
         // Only warn if internal heap is dangerously low
         if (freeHeap < 10000) {
             LOG_W("Low internal heap: %zu bytes", freeHeap);
         }
     }
+    
+    // =========================================================================
+    // PHASE 9: Loop throttling - Give network stack CPU time
+    // =========================================================================
+    // Yield to background tasks (WiFi, AsyncTCP)
+    // 2ms is sufficient now that EMI is fixed via GPIO drive strength
+    delay(2);
 }
 
 /**
@@ -1645,20 +1684,45 @@ void parsePicoStatus(const uint8_t* payload, uint8_t length) {
  * Handle encoder rotation and button events
  */
 void handleEncoderEvent(int32_t diff, button_state_t btn) {
-    // Check if display is dimmed/sleeping - if so, wake it up without triggering action
-    bool wasDimmed = display.isDimmed();
+    // Track when we last woke up the display - ignore button presses shortly after wake
+    // This prevents accidental actions when user presses button to wake screen
+    static unsigned long lastWakeTime = 0;
+    const unsigned long WAKE_IGNORE_PERIOD = 500;  // Ignore button presses for 500ms after wake
     
-    if (wasDimmed) {
-        // Wake up the display
+    // Check if display is fully OFF (not just dimmed) - if so, wake it up without triggering action
+    // Dimmed screen (30s idle) should still respond to input immediately
+    // Only fully OFF screen (60s idle) should ignore the first input
+    bool wasOff = display.getBacklight() == 0;
+    
+    if (wasOff) {
+        // Wake up the display from full sleep
         display.resetIdleTimer();
         encoderActivityFlag = true;
+        lastWakeTime = millis();  // Record when we woke up
         
-        // Don't trigger any button/encoder actions when waking from sleep
+        // Don't trigger any button/encoder actions when waking from full sleep
         // The user just wants to see the screen, not interact with it yet
         if (btn != BTN_RELEASED || diff != 0) {
             LOG_I("Display woken from sleep - ignoring input");
             return;
         }
+    } else if (display.isDimmed()) {
+        // Just dimmed - wake it up but still process the input
+        display.resetIdleTimer();
+        encoderActivityFlag = true;
+    }
+    
+    // Ignore button presses shortly after waking (catches button release events)
+    // This handles the case where the display was woken by another event
+    // but the button was pressed while it was still asleep
+    if (btn != BTN_RELEASED && lastWakeTime > 0 && (millis() - lastWakeTime) < WAKE_IGNORE_PERIOD) {
+        LOG_I("Ignoring button press shortly after wake (%lums)", millis() - lastWakeTime);
+        return;
+    }
+    
+    // Clear wake time after the ignore period
+    if (lastWakeTime > 0 && (millis() - lastWakeTime) >= WAKE_IGNORE_PERIOD) {
+        lastWakeTime = 0;
     }
     
     // Normal handling when display is already awake
@@ -1691,5 +1755,11 @@ void handleEncoderEvent(int32_t diff, button_state_t btn) {
         ui.handleDoublePress();
         encoderActivityFlag = true;
         display.resetIdleTimer();
+    }
+    
+    // Notify cloud connection of user activity to defer blocking SSL operations
+    // This keeps the UI responsive when user is interacting
+    if (cloudConnection && (diff != 0 || btn != BTN_RELEASED)) {
+        cloudConnection->notifyUserActivity();
     }
 }

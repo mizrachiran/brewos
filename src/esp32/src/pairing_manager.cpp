@@ -158,10 +158,10 @@ bool PairingManager::registerTokenWithCloud() {
         generateToken();
     }
     
-    // Retry up to 2 times with shorter delay (network stack may need time after WiFi connects)
-    // Reduced retries and timeout for faster response
-    const int maxRetries = 2;
-    const int retryDelayMs = 500;  // Reduced from 1000ms
+    // Single attempt with longer timeout since we are now in a background task
+    // Cloud registration will retry on next connection attempt if it fails
+    const int maxRetries = 1;
+    const int retryDelayMs = 100;
     
     // Convert WebSocket URL to HTTP URL
     // wss://cloud.brewos.io -> https://cloud.brewos.io
@@ -177,34 +177,96 @@ bool PairingManager::registerTokenWithCloud() {
     }
     
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
+        // Test DNS resolution first
+        IPAddress resolvedIP;
+        String host = httpUrl;
+        // Extract host from URL
+        if (host.startsWith("https://")) host = host.substring(8);
+        else if (host.startsWith("http://")) host = host.substring(7);
+        int slashPos = host.indexOf('/');
+        if (slashPos > 0) host = host.substring(0, slashPos);
+        
+        Serial.printf("[Pairing] Resolving DNS for: %s\n", host.c_str());
+        unsigned long dnsStart = millis();
+        int dnsResult = WiFi.hostByName(host.c_str(), resolvedIP);
+        unsigned long dnsTime = millis() - dnsStart;
+        
+        if (dnsResult == 1) {
+            Serial.printf("[Pairing] DNS resolved to %s in %lu ms\n", 
+                resolvedIP.toString().c_str(), dnsTime);
+        } else {
+            Serial.printf("[Pairing] DNS FAILED after %lu ms (result=%d)\n", dnsTime, dnsResult);
+        }
+        
+        // Log network diagnostics
+        Serial.printf("[Pairing] WiFi RSSI: %d dBm\n", WiFi.RSSI());
+        
+        
+        // Time each step to find the bottleneck
+        unsigned long stepStart = millis();
+        
         WiFiClientSecure client;
-        client.setInsecure(); // Skip certificate validation for speed/memory
-        // Reduce buffer sizes to save RAM (default is often 4096+16384)
-        // 512 bytes is enough for handshake and small JSON response
-        // But need enough for certificate chain... use 1024 RX / 512 TX
-        // Actually, let's stick to defaults but ensure we destroy it
+        client.setInsecure();  // Skip certificate validation
+        client.setTimeout(15000);  // 15 second SSL timeout
         
-        HTTPClient http;
-        String url = httpUrl + "/api/devices/register-claim";
+        // Step 1: TCP connect
+        Serial.printf("[Pairing] Step 1: TCP connect to %s:443...\n", host.c_str());
+        stepStart = millis();
+        bool tcpOk = client.connect(host.c_str(), 443);
+        Serial.printf("[Pairing] Step 1 done: %s (%lu ms)\n", tcpOk ? "OK" : "FAIL", millis() - stepStart);
         
-        http.begin(client, url);
-        http.addHeader("Content-Type", "application/json");
-        http.setTimeout(5000);  // Reduced from 10 to 5 seconds for faster failure
+        if (!tcpOk) {
+            Serial.println("[Pairing] TCP/SSL connect failed");
+            return false;
+        }
         
-        // Create request body - include device key for authentication setup
+        // Step 2: Send HTTP request
+        Serial.println("[Pairing] Step 2: Sending HTTP POST...");
+        stepStart = millis();
+        
         JsonDocument doc;
         doc["deviceId"] = _deviceId;
         doc["token"] = _currentToken;
-        doc["deviceKey"] = _deviceKey;  // Send device key for cloud to store
+        doc["deviceKey"] = _deviceKey;
         
         String body;
         serializeJson(doc, body);
         
-        // Allow other tasks to run during HTTP request
-        yield();
-        int httpCode = http.POST(body);
-        yield();
-        http.end();
+        client.printf("POST /api/devices/register-claim HTTP/1.1\r\n");
+        client.printf("Host: %s\r\n", host.c_str());
+        client.printf("Content-Type: application/json\r\n");
+        client.printf("Content-Length: %d\r\n", body.length());
+        client.printf("Connection: close\r\n\r\n");
+        client.print(body);
+        
+        Serial.printf("[Pairing] Step 2 done (%lu ms)\n", millis() - stepStart);
+        
+        // Step 3: Read response
+        Serial.println("[Pairing] Step 3: Reading response...");
+        stepStart = millis();
+        
+        // Wait for response with timeout
+        unsigned long timeout = millis() + 10000;
+        while (client.connected() && !client.available() && millis() < timeout) {
+            delay(10);
+        }
+        
+        String response = "";
+        while (client.available()) {
+            response += (char)client.read();
+        }
+        client.stop();
+        
+        Serial.printf("[Pairing] Step 3 done (%lu ms), response: %d bytes\n", millis() - stepStart, response.length());
+        
+        // Check for success (200 OK in response)
+        int httpCode = -1;
+        if (response.indexOf("200 OK") > 0 || response.indexOf("200 ") > 0) {
+            httpCode = 200;
+        } else if (response.indexOf("HTTP/1.") >= 0) {
+            int codeStart = response.indexOf("HTTP/1.") + 9;
+            httpCode = response.substring(codeStart, codeStart + 3).toInt();
+        }
         
         if (httpCode == 200) {
             Serial.println("[Pairing] Token and device key registered with cloud");

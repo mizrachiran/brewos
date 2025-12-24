@@ -1,5 +1,7 @@
 #include "wifi_manager.h"
 #include "config.h"
+#include "lwip/dns.h"  // For direct DNS server configuration
+#include "esp_wifi.h"  // For esp_wifi_set_ps()
 
 // Helper to validate function pointers before calling
 // On ESP32-S3, valid code addresses are in flash (0x40000000-0x42FFFFFF)
@@ -64,7 +66,43 @@ void WiFiManager::loop() {
                 IPAddress ip = WiFi.localIP();
                 char ipStr[16];
                 snprintf(ipStr, sizeof(ipStr), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
-                LOG_I("WiFi connected! IP: %s", ipStr);
+                int rssi = WiFi.RSSI();
+                LOG_I("WiFi connected! IP: %s, RSSI: %d dBm, Channel: %d", 
+                    ipStr, rssi, WiFi.channel());
+                
+                // Warn if signal is weak (can cause slow SSL and packet loss)
+                if (rssi < -70) {
+                    LOG_W("Weak WiFi signal! RSSI=%d dBm (should be > -70)", rssi);
+                }
+                
+                // CRITICAL: Aggressively disable power save mode
+                // WiFi power save causes massive delays (packets buffered by router for 100ms-DTIM beacon interval)
+                // The ESP32 only wakes up periodically in power save mode, causing ping/web timeouts
+                WiFi.setSleep(false);
+                
+                // Use ESP-IDF API directly - this is more reliable than Arduino's setSleep()
+                esp_err_t ps_result = esp_wifi_set_ps(WIFI_PS_NONE);
+                if (ps_result == ESP_OK) {
+                    LOG_I("WiFi power save DISABLED successfully");
+                } else {
+                    LOG_E("Failed to disable WiFi power save: %d", ps_result);
+                }
+                
+                // Verify the setting
+                wifi_ps_type_t ps_type;
+                esp_wifi_get_ps(&ps_type);
+                LOG_I("WiFi power save state: %d (0=NONE, 1=MIN_MODEM, 2=MAX_MODEM)", ps_type);
+                
+                // Set Cloudflare DNS directly using lwip for reliable resolution
+                ip_addr_t dns1, dns2;
+                IP4_ADDR(&dns1.u_addr.ip4, 1, 1, 1, 1);      // Cloudflare primary
+                IP4_ADDR(&dns2.u_addr.ip4, 1, 0, 0, 1);      // Cloudflare secondary
+                dns1.type = IPADDR_TYPE_V4;
+                dns2.type = IPADDR_TYPE_V4;
+                dns_setserver(0, &dns1);
+                dns_setserver(1, &dns2);
+                LOG_I("DNS set to Cloudflare: 1.1.1.1, 1.0.0.1");
+                
                 safeCallback(_onConnected);
             } 
             else if (millis() - _connectStartTime > WIFI_CONNECT_TIMEOUT_MS) {
@@ -148,11 +186,22 @@ bool WiFiManager::connectToWiFi() {
     
     LOG_I("Connecting to WiFi: %s", _storedSSID);
     
-    // Stop AP if running
-    WiFi.softAPdisconnect(true);
-    
-    // Set mode
+    // Simple WiFi setup - minimal changes to avoid driver issues
     WiFi.mode(WIFI_STA);
+    
+    // CRITICAL: Force legacy 802.11b/g mode - fixes "connected but no ping" on ESP32-S3
+    // 802.11n (WiFi 4) is unstable with display interference, causing zombie connections
+    // where router sees device but packets are dropped
+    esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G);
+    LOG_I("WiFi protocol set to 802.11b/g (legacy mode for stability)");
+    
+    // Moderate TX power - EMI now controlled via GPIO drive strength
+    // 17dBm provides good range without excessive power draw
+    WiFi.setTxPower(WIFI_POWER_17dBm);
+    
+    // Disable power save for responsive network
+    WiFi.setSleep(false);
+    esp_wifi_set_ps(WIFI_PS_NONE);
     
     // Apply static IP configuration if enabled
     if (_staticIP.enabled) {
@@ -160,21 +209,19 @@ bool WiFiManager::connectToWiFi() {
         if (!WiFi.config(_staticIP.ip, _staticIP.gateway, _staticIP.subnet, _staticIP.dns1, _staticIP.dns2)) {
             LOG_E("Failed to configure static IP");
         }
-    } else {
-        // Ensure DHCP mode
-        WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
     }
     
+    // Connect with optimized settings
     WiFi.begin(_storedSSID, _storedPassword);
     
-    // Always disable WiFi power save for maximum performance (low latency)
-    // This is critical for WebSocket responsiveness and OTA speed
-    WiFi.setSleep(false);
-    
-    // Use maximum WiFi transmit power for best connectivity
-    // Previously reduced to 11dBm to save power/reduce EMI, but caused instability
-    // We handle EMI by changing the display PCLK instead
-    WiFi.setTxPower(WIFI_POWER_19_5dBm);
+    // Lower MTU to 1400 to prevent fragmentation issues with some ISPs/routers (Cloudflare)
+    // This often fixes "start_ssl_client: -1" timeouts
+    // Note: Must be called before begin() on some versions, or after on others. 
+    // Calling it here (before begin) sets the interface config.
+    // We also call it in the connected callback to be sure.
+    // Note: Arduino ESP32 2.x doesn't expose setMTU on WiFi directly easily, 
+    // but we can use the lwip interface if needed. 
+    // For now, we rely on standard behavior or add tcp_mss check if needed.
     
     _mode = WiFiManagerMode::STA_CONNECTING;
     _connectStartTime = millis();

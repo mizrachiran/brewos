@@ -7,10 +7,19 @@
 #define LOG_E(fmt, ...) Serial.printf("[Cloud] ERROR: " fmt "\n", ##__VA_ARGS__)
 #define LOG_D(fmt, ...) Serial.printf("[Cloud] DEBUG: " fmt "\n", ##__VA_ARGS__)
 
-// Simple, robust reconnection settings
-#define RECONNECT_DELAY_MS 30000  // Wait 30 seconds between connection attempts (prevents UI freeze loop)
+// Reconnection settings - stay connected as much as possible
+#define RECONNECT_DELAY_MS 5000  // 5s between attempts
+#define STARTUP_GRACE_PERIOD_MS 5000  // 5s grace period for WiFi to stabilize
+#define MIN_HEAP_FOR_CONNECT 40000  // Need 40KB heap for SSL buffers
+#define SSL_HANDSHAKE_TIMEOUT_MS 15000  // 15s timeout (RSA should take 5-10s)
+#define CLOUD_TASK_STACK_SIZE 8192  // 8KB stack for SSL operations
+#define CLOUD_TASK_PRIORITY 1  // Low priority - below web server
 
 CloudConnection::CloudConnection() {
+    _failureCount = 0;
+    _mutex = xSemaphoreCreateMutex();
+    // Queue holds pointers to PSRAM-allocated message buffers
+    _sendQueue = xQueueCreate(SEND_QUEUE_SIZE, sizeof(char*));
 }
 
 void CloudConnection::begin(const String& serverUrl, const String& deviceId, const String& deviceKey) {
@@ -28,72 +37,160 @@ void CloudConnection::begin(const String& serverUrl, const String& deviceId, con
     // Disable automatic reconnection - we handle it ourselves
     _ws.setReconnectInterval(0);
     
+    // Start background task for cloud connection
+    // This runs SSL operations without blocking the main loop
+    if (_taskHandle == nullptr) {
+        xTaskCreatePinnedToCore(
+            taskCode,
+            "CloudTask",
+            CLOUD_TASK_STACK_SIZE,
+            this,
+            CLOUD_TASK_PRIORITY,
+            &_taskHandle,
+            1  // Run on Core 1 (same as Arduino loop)
+        );
+        LOG_I("Cloud task started on Core 1");
+    }
+    
     LOG_I("Initialized: server=%s, device=%s", serverUrl.c_str(), deviceId.c_str());
 }
 
 void CloudConnection::end() {
-    // Step 1: Disable immediately to prevent loop() from interfering
     _enabled = false;
     
-    // Step 2: Mark as not connected/connecting to prevent send() calls
+    // Stop background task
+    if (_taskHandle != nullptr) {
+        vTaskDelete(_taskHandle);
+        _taskHandle = nullptr;
+        LOG_I("Cloud task stopped");
+    }
+    
     bool wasConnected = _connected;
     bool wasConnecting = _connecting;
     _connected = false;
     _connecting = false;
     
     if (wasConnected || wasConnecting) {
-        // Step 3: Give any in-flight SSL operations time to complete
-        // This prevents the "CIPHER - Bad input parameters" error
-        yield();
-        delay(100);
-        yield();
-        
-        // Step 4: Process pending WebSocket events before disconnect
-        // This allows clean shutdown of the SSL layer
-        for (int i = 0; i < 5; i++) {
-            _ws.loop();
-            yield();
-            delay(20);
+        if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+            _ws.disconnect();
+            xSemaphoreGive(_mutex);
         }
-        
-        // Step 5: Now safely disconnect
-        _ws.disconnect();
-        
-        // Step 6: Allow disconnect to fully complete
-        yield();
         delay(100);
-        yield();
+    }
+    
+    // Clear send queue
+    if (_sendQueue) {
+        char* msg = nullptr;
+        while (xQueueReceive(_sendQueue, &msg, 0) == pdTRUE && msg) {
+            free(msg);
+        }
     }
     
     LOG_I("Disabled");
 }
 
 void CloudConnection::loop() {
-    if (!_enabled) {
-        return;
-    }
+    // Cloud connection runs in its own FreeRTOS task
+    // This function is kept for API compatibility but does nothing
+    // The task handles all connection logic independently
+}
+
+// FreeRTOS task that runs cloud connection in background
+void CloudConnection::taskCode(void* parameter) {
+    CloudConnection* self = static_cast<CloudConnection*>(parameter);
     
-    // Check WiFi
-    if (WiFi.status() != WL_CONNECTED || WiFi.localIP() == IPAddress(0, 0, 0, 0)) {
-        if (_connected) {
-            _connected = false;
-            _connecting = false;
-            LOG_W("WiFi disconnected");
+    LOG_I("Task started, waiting for WiFi...");
+    
+    // Wait for startup grace period
+    vTaskDelay(pdMS_TO_TICKS(STARTUP_GRACE_PERIOD_MS));
+    
+    while (self->_enabled) {
+        // Check WiFi
+        if (WiFi.status() != WL_CONNECTED || WiFi.localIP() == IPAddress(0, 0, 0, 0)) {
+            if (self->_connected) {
+                self->_connected = false;
+                self->_connecting = false;
+                LOG_W("WiFi disconnected");
+            }
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            continue;
         }
-        return;
-    }
-    
-    // If not connected, try to connect after delay
-    if (!_connected && !_connecting) {
-        unsigned long now = millis();
-        if (now - _lastConnectAttempt >= _reconnectDelay) {
-            connect();
+        
+        // If not connected, try to connect
+        if (!self->_connected && !self->_connecting) {
+            unsigned long now = millis();
+            
+            if (now - self->_lastConnectAttempt >= self->_reconnectDelay) {
+                // Check heap before attempting connection
+                size_t freeHeap = ESP.getFreeHeap();
+                if (freeHeap < MIN_HEAP_FOR_CONNECT) {
+                    LOG_W("Low heap (%d bytes) - deferring cloud connection", freeHeap);
+                    self->_lastConnectAttempt = now;
+                } else {
+                    self->connect();
+                }
+            }
         }
-        return;
+        
+        // Check for SSL handshake timeout
+        if (self->_connecting) {
+            unsigned long now = millis();
+            unsigned long connectTime = now - self->_lastConnectAttempt;
+            
+            // Log progress every 5 seconds
+            static unsigned long lastProgressLog = 0;
+            if (connectTime - lastProgressLog >= 5000) {
+                LOG_I("SSL handshake in progress... (%lu s)", connectTime / 1000);
+                lastProgressLog = connectTime;
+            }
+            
+            if (connectTime > SSL_HANDSHAKE_TIMEOUT_MS) {
+                LOG_E("SSL handshake timeout (%ds)", SSL_HANDSHAKE_TIMEOUT_MS/1000);
+                if (xSemaphoreTake(self->_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+                    self->_ws.disconnect();
+                    xSemaphoreGive(self->_mutex);
+                }
+                self->_connecting = false;
+                self->_connected = false;
+                self->_lastConnectAttempt = now;
+                lastProgressLog = 0;
+                
+                // Quick retry - always stay connected
+                self->_failureCount++;
+                self->_reconnectDelay = 10000; // Always retry in 10s
+                LOG_W("Timeout (%d), retry in 10s", self->_failureCount);
+            }
+        }
+        
+        // All WebSocket operations under mutex
+        if (xSemaphoreTake(self->_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+            // Process WebSocket events - this drives the SSL handshake
+            self->_ws.loop();
+            
+            // Send queued messages (only when connected)
+            if (self->_connected) {
+                self->processSendQueue();
+            }
+            
+            xSemaphoreGive(self->_mutex);
+        }
+        
+        // Yield to other tasks
+        if (self->_connected) {
+            vTaskDelay(pdMS_TO_TICKS(100));  // Connected: responsive but not too aggressive
+        } else if (self->_connecting) {
+            vTaskDelay(pdMS_TO_TICKS(20));   // Handshake: fast loop
+        } else {
+            vTaskDelay(pdMS_TO_TICKS(500));  // Idle: save CPU
+        }
     }
     
-    // Process WebSocket events
-    _ws.loop();
+    LOG_I("Task ending");
+    vTaskDelete(NULL);
+}
+
+void CloudConnection::notifyUserActivity() {
+    _lastUserActivity = millis();
 }
 
 void CloudConnection::connect() {
@@ -102,10 +199,35 @@ void CloudConnection::connect() {
         return;
     }
     
-    // Register device with cloud on first connection
-    if (!_registered && _onRegister) {
-        LOG_I("Registering device with cloud...");
-        _registered = _onRegister();
+    // CRITICAL: Never start connection during grace period or pause
+    // SSL handshake blocks entire LWIP stack - must not start during web server activity
+    unsigned long now = millis();
+    if (now < _pausedUntil || now < STARTUP_GRACE_PERIOD_MS) {
+        LOG_I("Skipping connection - paused or in grace period");
+        _connecting = false;
+        _lastConnectAttempt = now;
+        return;
+    }
+    
+    // Skip registration if we already have a device key (device already paired)
+    // Registration is only needed for initial pairing - it adds 5-15s SSL overhead
+    if (!_registered) {
+        if (!_deviceKey.isEmpty()) {
+            // Device key exists - already paired, skip registration
+            LOG_I("Device key present - skipping registration (already paired)");
+            _registered = true;
+        } else if (_onRegister) {
+            // No device key - need to register for pairing
+            LOG_I("No device key - registering with cloud...");
+            _registered = _onRegister();
+            if (!_registered) {
+                LOG_W("Registration failed - will retry in 30s");
+                _failureCount++;
+                _lastConnectAttempt = millis();
+                _reconnectDelay = 30000;
+                return;
+            }
+        }
     }
     
     _lastConnectAttempt = millis();
@@ -131,28 +253,33 @@ void CloudConnection::connect() {
     
     LOG_I("Connecting to %s:%d (SSL=%d)", host.c_str(), port, useSSL);
     
-    // Enable heartbeat (ping every 30s, timeout 15s, 2 failures to disconnect)
-    _ws.enableHeartbeat(30000, 15000, 2);
+    // NOTE: Removed blocking TCP test - it was blocking the LwIP stack for 3s
+    // and causing ping/web server to become unresponsive.
+    // The WebSocket library handles connection failures gracefully on its own.
     
-    // Connect
-    if (useSSL) {
-        _ws.beginSSL(host.c_str(), port, wsPath.c_str());
+    // Enable heartbeat (ping every 15s, timeout 10s, 2 failures to disconnect)
+    // Mutex protection for all _ws calls
+    if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        _ws.enableHeartbeat(15000, 10000, 2);
+        
+        // Connect WebSocket
+        if (useSSL) {
+            LOG_I("Starting SSL WebSocket...");
+            _ws.beginSSL(host.c_str(), port, wsPath.c_str());
+        } else {
+            _ws.begin(host.c_str(), port, wsPath.c_str());
+        }
+        xSemaphoreGive(_mutex);
     } else {
-        _ws.begin(host.c_str(), port, wsPath.c_str());
+        LOG_W("Could not acquire mutex for connect");
+        _connecting = false;
     }
 }
 
 void CloudConnection::pause() {
-    if (_connected || _connecting) {
-        LOG_I("Pausing cloud connection to free resources");
-        _ws.disconnect();
-        _connected = false;
-        _connecting = false;
-        
-        // Wait 30 seconds before reconnecting
-        _reconnectDelay = 30000;
-        _lastConnectAttempt = millis();
-    }
+    // No-op: Cloud connection is always on
+    // Cloud runs in separate FreeRTOS task and doesn't interfere with web server
+    LOG_D("Cloud pause requested (ignored - always on)");
 }
 
 bool CloudConnection::parseUrl(const String& url, String& host, uint16_t& port, String& path, bool& useSSL) {
@@ -212,13 +339,20 @@ void CloudConnection::handleEvent(WStype_t type, uint8_t* payload, size_t length
             }
             _connected = false;
             _connecting = false;
-            _lastConnectAttempt = millis();  // Will reconnect after RECONNECT_DELAY_MS
+            _lastConnectAttempt = millis();
+            
+            // Quick retry - always stay connected
+            _failureCount++;
+            _reconnectDelay = 10000; // Retry in 10s
+            LOG_W("Cloud disconnected, reconnecting in 10s");
             break;
             
         case WStype_CONNECTED:
             LOG_I("Connected to cloud!");
             _connected = true;
             _connecting = false;
+            _failureCount = 0; // Reset failures
+            _reconnectDelay = RECONNECT_DELAY_MS; // Reset to default (2 min)
             break;
             
         case WStype_TEXT:
@@ -233,6 +367,10 @@ void CloudConnection::handleEvent(WStype_t type, uint8_t* payload, size_t length
                 String errorMsg = (length > 0 && payload) ? String((char*)payload, length) : "unknown";
                 LOG_E("WebSocket error: %s", errorMsg.c_str());
                 _connecting = false;
+                _connected = false;
+                _lastConnectAttempt = millis();
+                _failureCount++;
+                _reconnectDelay = 120000; // 2 min
             }
             break;
             
@@ -279,21 +417,34 @@ void CloudConnection::handleMessage(uint8_t* payload, size_t length) {
 }
 
 void CloudConnection::send(const String& json) {
-    if (!_connected) {
-        return;
-    }
-    
-    // Use const char* overload to avoid unnecessary string copy
-    _ws.sendTXT(json.c_str(), json.length());
+    send(json.c_str());
 }
 
 void CloudConnection::send(const char* json) {
-    if (!_connected || !json) {
+    if (!_connected || !json || !_sendQueue) {
         return;
     }
     
-    // Send directly without String allocation
-    _ws.sendTXT(json, strlen(json));
+    size_t len = strlen(json);
+    if (len >= MAX_MSG_SIZE) {
+        LOG_W("Message too large (%d bytes), dropping", len);
+        return;
+    }
+    
+    // Allocate in PSRAM and queue the pointer
+    char* msgCopy = (char*)heap_caps_malloc(len + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!msgCopy) {
+        msgCopy = (char*)malloc(len + 1);
+    }
+    
+    if (msgCopy) {
+        memcpy(msgCopy, json, len + 1);
+        // Non-blocking queue - drop if full
+        if (xQueueSend(_sendQueue, &msgCopy, 0) != pdTRUE) {
+            LOG_W("Send queue full, dropping message");
+            free(msgCopy);
+        }
+    }
 }
 
 void CloudConnection::send(const JsonDocument& doc) {
@@ -301,19 +452,42 @@ void CloudConnection::send(const JsonDocument& doc) {
         return;
     }
     
-    // Use PSRAM for serialization buffer to save Internal RAM
+    // Serialize to PSRAM buffer and queue
     size_t jsonSize = measureJson(doc) + 1;
-    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (jsonSize >= MAX_MSG_SIZE) {
+        LOG_W("JSON too large (%d bytes), dropping", jsonSize);
+        return;
+    }
     
+    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!jsonBuffer) {
-        // Fallback to internal RAM if PSRAM allocation fails
         jsonBuffer = (char*)malloc(jsonSize);
     }
     
     if (jsonBuffer) {
         serializeJson(doc, jsonBuffer, jsonSize);
-        _ws.sendTXT(jsonBuffer); // library calculates strlen
-        free(jsonBuffer);
+        // Non-blocking queue
+        if (xQueueSend(_sendQueue, &jsonBuffer, 0) != pdTRUE) {
+            LOG_W("Send queue full, dropping message");
+            free(jsonBuffer);
+        }
+    }
+}
+
+void CloudConnection::processSendQueue() {
+    if (!_sendQueue || !_connected) {
+        return;
+    }
+    
+    char* msg = nullptr;
+    // Process up to 3 messages per loop to avoid blocking
+    for (int i = 0; i < 3; i++) {
+        if (xQueueReceive(_sendQueue, &msg, 0) == pdTRUE && msg) {
+            _ws.sendTXT(msg);
+            free(msg);
+        } else {
+            break;
+        }
     }
 }
 
