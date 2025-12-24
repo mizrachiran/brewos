@@ -251,18 +251,25 @@ void CloudConnection::connect() {
         wsPath += "&key=" + _deviceKey;
     }
     
-    LOG_I("Connecting to %s:%d (SSL=%d)", host.c_str(), port, useSSL);
+    // Resolve DNS first - WebSocketsClient doesn't handle DNS failures well
+    // This prevents repeated SSL timeout errors when DNS fails
+    IPAddress serverIP;
+    if (!WiFi.hostByName(host.c_str(), serverIP)) {
+        LOG_W("DNS failed for %s - will retry", host.c_str());
+        _connecting = false;
+        _failureCount++;
+        _reconnectDelay = 10000;  // Retry in 10s
+        return;
+    }
     
-    // NOTE: Removed blocking TCP test - it was blocking the LwIP stack for 3s
-    // and causing ping/web server to become unresponsive.
-    // The WebSocket library handles connection failures gracefully on its own.
+    LOG_I("Connecting to %s (%s):%d (SSL=%d)", host.c_str(), serverIP.toString().c_str(), port, useSSL);
     
     // Enable heartbeat (ping every 15s, timeout 10s, 2 failures to disconnect)
     // Mutex protection for all _ws calls
     if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
         _ws.enableHeartbeat(15000, 10000, 2);
         
-        // Connect WebSocket
+        // Connect WebSocket using resolved IP (more reliable than hostname)
         if (useSSL) {
             LOG_I("Starting SSL WebSocket...");
             _ws.beginSSL(host.c_str(), port, wsPath.c_str());
