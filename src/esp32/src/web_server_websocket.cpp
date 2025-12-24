@@ -33,6 +33,11 @@ void WebServer::handleWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* clie
     switch (type) {
         case WS_EVT_DISCONNECT:
             LOG_I("WebSocket client %u disconnected", client->id());
+            // Resume cloud connection when last local client disconnects
+            // Note: count() still includes the disconnecting client at this point
+            if (server->count() <= 1 && _cloudConnection) {
+                _cloudConnection->resume();
+            }
             break;
             
         case WS_EVT_CONNECT:
@@ -45,6 +50,12 @@ void WebServer::handleWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* clie
                 }
                 
                 LOG_I("WebSocket client %u connected from %s", client->id(), client->remoteIP().toString().c_str());
+                
+                // Pause cloud connection while serving local clients
+                if (_cloudConnection) {
+                    _cloudConnection->pause();
+                }
+                
                 // Check if we have enough memory to send device info (needs ~3KB for JSON)
                 size_t freeHeap = ESP.getFreeHeap();
                 if (freeHeap > 10000) {

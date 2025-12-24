@@ -94,8 +94,14 @@ public:
     
     /**
      * Pause connection to free up resources (e.g. for Web UI loading)
+     * Cloud will auto-resume after 30 seconds
      */
     void pause();
+    
+    /**
+     * Resume connection immediately (e.g. when local WebSocket client disconnects)
+     */
+    void resume();
     
     /**
      * Notify of user activity - defers reconnection attempts to keep UI responsive

@@ -9,8 +9,9 @@
 
 // Reconnection settings - stay connected as much as possible
 #define RECONNECT_DELAY_MS 5000  // 5s between attempts
-#define STARTUP_GRACE_PERIOD_MS 5000  // 5s grace period for WiFi to stabilize
-#define MIN_HEAP_FOR_CONNECT 40000  // Need 40KB heap for SSL buffers
+#define STARTUP_GRACE_PERIOD_MS 15000  // 15s grace period after WiFi for local access
+#define MIN_HEAP_FOR_CONNECT 50000  // Need 50KB heap for SSL buffers + web server headroom
+#define MIN_HEAP_TO_STAY_CONNECTED 35000  // Disconnect if heap drops below this
 #define SSL_HANDSHAKE_TIMEOUT_MS 15000  // 15s timeout (RSA should take 5-10s)
 #define CLOUD_TASK_STACK_SIZE 8192  // 8KB stack for SSL operations
 #define CLOUD_TASK_PRIORITY 1  // Low priority - below web server
@@ -37,8 +38,8 @@ void CloudConnection::begin(const String& serverUrl, const String& deviceId, con
     // Disable automatic reconnection - we handle it ourselves
     _ws.setReconnectInterval(0);
     
-    // Start background task for cloud connection
-    // This runs SSL operations without blocking the main loop
+    // Start background task for cloud connection on Core 0
+    // Core 0 is separate from Arduino loop (Core 1) so SSL doesn't block web server
     if (_taskHandle == nullptr) {
         xTaskCreatePinnedToCore(
             taskCode,
@@ -47,9 +48,9 @@ void CloudConnection::begin(const String& serverUrl, const String& deviceId, con
             this,
             CLOUD_TASK_PRIORITY,
             &_taskHandle,
-            1  // Run on Core 1 (same as Arduino loop)
+            0  // Run on Core 0 (separate from Arduino loop on Core 1)
         );
-        LOG_I("Cloud task started on Core 1");
+        LOG_I("Cloud task started on Core 0");
     }
     
     LOG_I("Initialized: server=%s, device=%s", serverUrl.c_str(), deviceId.c_str());
@@ -101,10 +102,42 @@ void CloudConnection::taskCode(void* parameter) {
     
     LOG_I("Task started, waiting for WiFi...");
     
-    // Wait for startup grace period
+    // Wait for WiFi to connect first, then apply grace period
+    while (WiFi.status() != WL_CONNECTED && self->_enabled) {
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+    
+    // Now wait for grace period AFTER WiFi connects
+    // This ensures local web server has time to serve initial requests
+    LOG_I("WiFi connected, waiting %d seconds grace period...", STARTUP_GRACE_PERIOD_MS/1000);
     vTaskDelay(pdMS_TO_TICKS(STARTUP_GRACE_PERIOD_MS));
     
     while (self->_enabled) {
+        unsigned long now = millis();
+        
+        // Check if paused for local activity - skip all connection logic
+        if (now < self->_pausedUntil) {
+            vTaskDelay(pdMS_TO_TICKS(500));
+            continue;
+        }
+        
+        // Emergency heap check - disconnect if memory is critically low
+        // This ensures web server has enough memory to serve requests
+        size_t currentHeap = ESP.getFreeHeap();
+        if (currentHeap < MIN_HEAP_TO_STAY_CONNECTED && (self->_connected || self->_connecting)) {
+            LOG_W("Critical heap (%d bytes) - disconnecting cloud, retry in 30s", currentHeap);
+            if (xSemaphoreTake(self->_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+                self->_ws.disconnect();
+                xSemaphoreGive(self->_mutex);
+            }
+            self->_connected = false;
+            self->_connecting = false;
+            self->_lastConnectAttempt = now;
+            self->_reconnectDelay = 30000;  // Wait 30s before retrying after heap issue
+            vTaskDelay(pdMS_TO_TICKS(30000));  // Sleep 30s to let heap recover
+            continue;
+        }
+        
         // Check WiFi
         if (WiFi.status() != WL_CONNECTED || WiFi.localIP() == IPAddress(0, 0, 0, 0)) {
             if (self->_connected) {
@@ -118,9 +151,12 @@ void CloudConnection::taskCode(void* parameter) {
         
         // If not connected, try to connect
         if (!self->_connected && !self->_connecting) {
-            unsigned long now = millis();
-            
             if (now - self->_lastConnectAttempt >= self->_reconnectDelay) {
+                // Double-check not paused (could have been set between checks)
+                if (now < self->_pausedUntil) {
+                    continue;
+                }
+                
                 // Check heap before attempting connection
                 size_t freeHeap = ESP.getFreeHeap();
                 if (freeHeap < MIN_HEAP_FOR_CONNECT) {
@@ -132,16 +168,32 @@ void CloudConnection::taskCode(void* parameter) {
             }
         }
         
-        // Check for SSL handshake timeout
+        // Check for SSL handshake timeout or abort if paused
         if (self->_connecting) {
             unsigned long now = millis();
             unsigned long connectTime = now - self->_lastConnectAttempt;
+            
+            // Abort handshake immediately if paused (local web access takes priority)
+            bool shouldAbort = (now < self->_pausedUntil);
             
             // Log progress every 5 seconds
             static unsigned long lastProgressLog = 0;
             if (connectTime - lastProgressLog >= 5000) {
                 LOG_I("SSL handshake in progress... (%lu s)", connectTime / 1000);
                 lastProgressLog = connectTime;
+            }
+            
+            if (shouldAbort) {
+                LOG_I("Aborting SSL handshake for local web access");
+                if (xSemaphoreTake(self->_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+                    self->_ws.disconnect();
+                    xSemaphoreGive(self->_mutex);
+                }
+                self->_connecting = false;
+                self->_connected = false;
+                lastProgressLog = 0;
+                vTaskDelay(pdMS_TO_TICKS(500));
+                continue;  // Skip to next iteration, check pause again
             }
             
             if (connectTime > SSL_HANDSHAKE_TIMEOUT_MS) {
@@ -162,8 +214,22 @@ void CloudConnection::taskCode(void* parameter) {
             }
         }
         
+        // Skip WebSocket operations when paused - don't let SSL handshake block local access
+        unsigned long nowForWs = millis();
+        if (nowForWs < self->_pausedUntil) {
+            vTaskDelay(pdMS_TO_TICKS(500));
+            continue;
+        }
+        
         // All WebSocket operations under mutex
         if (xSemaphoreTake(self->_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+            // Double-check pause (could have been set while waiting for mutex)
+            if (millis() < self->_pausedUntil) {
+                xSemaphoreGive(self->_mutex);
+                vTaskDelay(pdMS_TO_TICKS(500));
+                continue;
+            }
+            
             // Process WebSocket events - this drives the SSL handshake
             self->_ws.loop();
             
@@ -284,9 +350,38 @@ void CloudConnection::connect() {
 }
 
 void CloudConnection::pause() {
-    // No-op: Cloud connection is always on
-    // Cloud runs in separate FreeRTOS task and doesn't interfere with web server
-    LOG_D("Cloud pause requested (ignored - always on)");
+    unsigned long now = millis();
+    unsigned long newPauseUntil = now + 30000; // Pause for 30s
+    
+    // Extend pause if already paused (web browsing session)
+    if (now < _pausedUntil) {
+        _pausedUntil = newPauseUntil;
+        LOG_D("Extended cloud pause until %lu", _pausedUntil);
+        return;
+    }
+    
+    LOG_I("Pausing cloud for local activity (30s)");
+    _pausedUntil = newPauseUntil;
+    
+    // Disconnect to free memory and network for local requests
+    if (_connected || _connecting) {
+        LOG_I("Disconnecting cloud to free resources for local");
+        if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+            _ws.disconnect();
+            xSemaphoreGive(_mutex);
+        }
+        _connected = false;
+        _connecting = false;
+        _lastConnectAttempt = now;
+    }
+}
+
+void CloudConnection::resume() {
+    if (_pausedUntil > 0) {
+        LOG_I("Resuming cloud connection (local client disconnected)");
+        _pausedUntil = 0;
+        _lastConnectAttempt = 0;  // Allow immediate reconnection
+    }
 }
 
 bool CloudConnection::parseUrl(const String& url, String& host, uint16_t& port, String& path, bool& useSSL) {
@@ -346,12 +441,14 @@ void CloudConnection::handleEvent(WStype_t type, uint8_t* payload, size_t length
             }
             _connected = false;
             _connecting = false;
-            _lastConnectAttempt = millis();
             
-            // Quick retry - always stay connected
-            _failureCount++;
-            _reconnectDelay = 10000; // Retry in 10s
-            LOG_W("Cloud disconnected, reconnecting in 10s");
+            // Only set quick retry if not already set to longer delay (e.g., from heap issue)
+            if (_reconnectDelay < 30000) {
+                _lastConnectAttempt = millis();
+                _failureCount++;
+                _reconnectDelay = 30000; // Retry in 30s for stability
+                LOG_W("Cloud disconnected, reconnecting in 30s");
+            }
             break;
             
         case WStype_CONNECTED:
