@@ -33,6 +33,7 @@
 #include "diagnostics.h"
 #include "flash_safe.h"
 #include "class_b.h"
+#include "log_forward.h"
 
 // -----------------------------------------------------------------------------
 // Globals
@@ -170,6 +171,8 @@ static const char* get_msg_name(uint8_t type) {
         case MSG_CMD_POWER_METER_CONFIG:  return "POWER_METER_CONFIG";
         case MSG_CMD_POWER_METER_DISCOVER: return "POWER_METER_DISCOVER";
         case MSG_CMD_GET_BOOT:            return "GET_BOOT";
+        case MSG_CMD_LOG_CONFIG:          return "LOG_CONFIG";
+        case MSG_LOG:                     return "LOG";
         default:                          return "UNKNOWN";
     }
 }
@@ -462,6 +465,13 @@ void handle_packet(const packet_t* packet) {
             // ESP32 requested boot info (version, machine type)
             // Useful when ESP32 missed initial MSG_BOOT
             protocol_send_boot();
+            break;
+        }
+        
+        case MSG_CMD_LOG_CONFIG: {
+            // Enable/disable log forwarding to ESP32 (dev mode feature)
+            log_forward_handle_command(packet->payload, packet->length);
+            protocol_send_ack(MSG_CMD_LOG_CONFIG, packet->seq, ACK_SUCCESS);
             break;
         }
         
@@ -823,6 +833,10 @@ int main(void) {
     // Initialize cleaning mode
     cleaning_init();
     DEBUG_PRINT("Cleaning mode initialized\n");
+    
+    // Initialize log forwarding (dev mode feature)
+    log_forward_init();
+    DEBUG_PRINT("Log forwarding initialized\n");
     
     // Note: Statistics are now tracked by ESP32 (has NTP for accurate timestamps)
     // Pico only sends brew completion events to ESP32 via alarms

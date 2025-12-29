@@ -261,6 +261,22 @@ bool protocol_send_debug(const char* message) {
     return send_packet(MSG_DEBUG, (const uint8_t*)message, len);
 }
 
+bool protocol_send_log(uint8_t level, const char* message) {
+    if (!message) return false;
+    
+    size_t msg_len = strlen(message);
+    if (msg_len > PROTOCOL_MAX_PAYLOAD - 1) {
+        msg_len = PROTOCOL_MAX_PAYLOAD - 1;  // Leave room for level byte
+    }
+    
+    // Payload format: [level (1 byte)] [message (rest)]
+    uint8_t payload[PROTOCOL_MAX_PAYLOAD];
+    payload[0] = level;
+    memcpy(&payload[1], message, msg_len);
+    
+    return send_packet(MSG_LOG, payload, msg_len + 1);
+}
+
 bool protocol_send_diag_header(const diag_header_payload_t* header) {
     return send_packet(MSG_DIAGNOSTICS, (const uint8_t*)header, sizeof(diag_header_payload_t));
 }

@@ -110,6 +110,7 @@ set(COMMON_SOURCES
     src/flash_safe.c          # Flash safety utilities (XIP crash prevention)
     src/power_meter.c         # Generic power meter (PZEM, JSY, Eastron)
     src/cleaning.c
+    src/log_forward.c         # Log forwarding to ESP32 (dev mode)
     src/bootloader.c
     src/diagnostics.c         # Hardware diagnostics tests
     src/class_b.c             # Class B safety self-tests (IEC 60730)

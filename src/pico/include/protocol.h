@@ -214,6 +214,8 @@ bool protocol_send_env_config(const env_config_payload_t* env_config);
 bool protocol_send_statistics(const statistics_payload_t* stats);
 bool protocol_send_ack(uint8_t for_type, uint8_t seq, uint8_t result);
 bool protocol_send_debug(const char* message);
+// Log forwarding (MSG_LOG)
+bool protocol_send_log(uint8_t level, const char* message);
 // Diagnostics
 bool protocol_send_diag_header(const diag_header_payload_t* header);
 bool protocol_send_diag_result(const diag_result_payload_t* result);

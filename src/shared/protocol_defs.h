@@ -146,6 +146,8 @@ extern "C" {
 #define MSG_CMD_POWER_METER_CONFIG 0x21 // Configure power meter
 #define MSG_CMD_POWER_METER_DISCOVER 0x22 // Start power meter auto-discovery
 #define MSG_CMD_GET_BOOT        0x23    // Request boot info (version, machine type)
+#define MSG_CMD_LOG_CONFIG      0x24    // Configure log forwarding (Pico -> ESP32)
+#define MSG_LOG                 0x25    // Log message from Pico
 
 // =============================================================================
 // Alarm Codes

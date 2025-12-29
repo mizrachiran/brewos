@@ -70,8 +70,11 @@ typedef struct __attribute__((packed)) {
     // Power meter settings
     power_meter_config_t power_meter;     // Power meter configuration (8 bytes)
     
-    // Reserved for future use (reduced from 23 to accommodate power_meter)
-    uint8_t reserved[15];
+    // Log forwarding to ESP32 (dev mode feature)
+    bool log_forwarding_enabled;          // Whether to forward logs to ESP32
+    
+    // Reserved for future use (reduced from 15 to accommodate log_forwarding_enabled)
+    uint8_t reserved[14];
     
     // CRC32 for integrity check
     uint32_t crc32;
@@ -164,6 +167,17 @@ bool config_persistence_save_power_meter(const power_meter_config_t* config);
  * Get power meter settings from persisted config
  */
 void config_persistence_get_power_meter(power_meter_config_t* config);
+
+/**
+ * Save log forwarding setting to flash
+ * @return true on success, false on failure
+ */
+bool config_persistence_save_log_forwarding(bool enabled);
+
+/**
+ * Get log forwarding setting from persisted config
+ */
+bool config_persistence_get_log_forwarding(void);
 
 #endif // CONFIG_PERSISTENCE_H
 

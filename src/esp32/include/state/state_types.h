@@ -80,6 +80,7 @@ struct NetworkSettings {
 
 struct SystemSettings {
     bool setupComplete = false;         // First-run wizard completed
+    bool logBufferEnabled = false;      // Dev mode: Enable 50KB log buffer (disabled by default)
     
     void toJson(JsonObject& obj) const;
     bool fromJson(JsonObjectConst obj);

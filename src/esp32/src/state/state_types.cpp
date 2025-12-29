@@ -239,10 +239,12 @@ bool UserPreferences::fromJson(JsonObjectConst obj) {
 
 void SystemSettings::toJson(JsonObject& obj) const {
     obj["setupComplete"] = setupComplete;
+    obj["logBufferEnabled"] = logBufferEnabled;
 }
 
 bool SystemSettings::fromJson(JsonObjectConst obj) {
     if (obj["setupComplete"].is<bool>()) setupComplete = obj["setupComplete"];
+    if (obj["logBufferEnabled"].is<bool>()) logBufferEnabled = obj["logBufferEnabled"];
     return true;
 }
 

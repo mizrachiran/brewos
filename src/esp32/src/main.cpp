@@ -30,6 +30,7 @@
 #include "wifi_manager.h"
 #include "web_server.h"
 #include "pico_uart.h"
+#include "log_manager.h"
 
 // Display and UI
 #include "display/display.h"
@@ -602,6 +603,14 @@ static void onPicoPacket(const PicoPacket& packet) {
             }
             break;
         }
+        
+        case MSG_LOG: {
+            // Log message from Pico - forward to log manager
+            if (g_logManager && packet.length > 0) {
+                g_logManager->handlePicoLog(packet.payload, packet.length);
+            }
+            break;
+        }
             
         default:
             LOG_D("Unknown packet type: 0x%02X", packet.type);
@@ -810,6 +819,10 @@ void setup() {
     } else {
         Serial.println("LittleFS mounted OK");
     }
+    
+    // Log Manager is initialized but NOT enabled by default
+    // Buffer is only allocated when enabled via settings (dev mode feature)
+    // This is done later after State is loaded, to check the setting
     
     // Turn on backlight so user knows device is running
     // IMPORTANT: Backlight is ACTIVE LOW on VIEWESMART UEDX48480021-MD80E!
@@ -1269,6 +1282,18 @@ void setup() {
     Serial.println(ESP.getFreeHeap());
     Serial.println("State Manager initialized OK");
     // Serial.flush(); // Removed - can block on USB CDC
+    
+    // Initialize Log Manager if enabled in settings (dev mode feature)
+    // Only allocates 50KB buffer when enabled - zero impact when disabled
+    if (State.settings().system.logBufferEnabled) {
+        Serial.println("Log buffer enabled in settings - initializing...");
+        if (LogManager::instance().enable()) {
+            Serial.print("Free heap after LogManager: ");
+            Serial.println(ESP.getFreeHeap());
+        }
+    } else {
+        Serial.println("Log buffer disabled (enable in settings/dev mode)");
+    }
     
     // Apply display settings from State
     const auto& displaySettings = State.settings().display;

@@ -502,3 +502,32 @@ void config_persistence_get_power_meter(power_meter_config_t* config) {
     }
 }
 
+bool config_persistence_save_log_forwarding(bool enabled) {
+    // Compare-before-write: Skip flash write if nothing changed
+    if (g_persisted_config.log_forwarding_enabled == enabled) {
+        DEBUG_PRINT("Config: Log forwarding unchanged, skipping flash write\n");
+        return true;
+    }
+    
+    // Update log forwarding value in persisted config
+    g_persisted_config.log_forwarding_enabled = enabled;
+    
+    // Ensure magic and version are set
+    g_persisted_config.magic = CONFIG_MAGIC;
+    g_persisted_config.version = CONFIG_VERSION;
+    
+    // Save to flash
+    if (flash_write_config(&g_persisted_config)) {
+        g_config_loaded = true;
+        DEBUG_PRINT("Config: Saved log forwarding setting (enabled=%d)\n", enabled);
+        return true;
+    }
+    
+    DEBUG_PRINT("Config: Failed to save log forwarding setting to flash\n");
+    return false;
+}
+
+bool config_persistence_get_log_forwarding(void) {
+    return g_persisted_config.log_forwarding_enabled;
+}
+

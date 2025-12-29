@@ -10,6 +10,7 @@
 #include "state/state_manager.h"
 #include "statistics/statistics_manager.h"
 #include "power_meter/power_meter_manager.h"
+#include "log_manager.h"
 #include "ui/ui.h"
 #include <WiFi.h>
 #include <LittleFS.h>
@@ -875,6 +876,112 @@ void BrewWebServer::setupRoutes() {
         snprintf(response, sizeof(response), 
             "{\"used\":%u,\"total\":%u,\"free\":%u,\"usedPercent\":%.1f}", 
             (unsigned)used, (unsigned)total, (unsigned)free, (used * 100.0f / total));
+        request->send(200, "application/json", response);
+    });
+    
+    // =========================================================================
+    // Log Management API (Dev Mode Feature)
+    // Log buffer is NOT allocated unless explicitly enabled - zero impact when off
+    // =========================================================================
+    
+    // GET /api/logs/info - Get log status (enabled, size, pico forwarding)
+    _server.on("/api/logs/info", HTTP_GET, [](AsyncWebServerRequest* request) {
+        bool enabled = g_logManager && g_logManager->isEnabled();
+        
+        char response[160];
+        snprintf(response, sizeof(response), 
+            "{\"enabled\":%s,\"size\":%u,\"maxSize\":%u,\"picoForwarding\":%s}",
+            enabled ? "true" : "false",
+            enabled ? (unsigned)g_logManager->getLogsSize() : 0,
+            LOG_BUFFER_SIZE,
+            (enabled && g_logManager->isPicoLogForwardingEnabled()) ? "true" : "false");
+        request->send(200, "application/json", response);
+    });
+    
+    // POST /api/logs/enable - Enable/disable log buffer (allocates/frees 50KB memory)
+    _server.on("/api/logs/enable", HTTP_POST, [this](AsyncWebServerRequest* request) {
+        bool enable = false;
+        if (request->hasParam("enabled", true)) {
+            enable = request->getParam("enabled", true)->value() == "true";
+        } else if (request->hasParam("enabled")) {
+            enable = request->getParam("enabled")->value() == "true";
+        }
+        
+        bool success = true;
+        if (enable) {
+            success = LogManager::instance().enable();
+        } else {
+            LogManager::instance().disable();
+            
+            // Also disable Pico log forwarding when disabling buffer
+            _picoUart.sendCommand(MSG_CMD_LOG_CONFIG, (uint8_t[]){0}, 1);
+        }
+        
+        if (success) {
+            // Persist the setting
+            State.settings().system.logBufferEnabled = enable;
+            State.saveSettings();
+            
+            char response[64];
+            snprintf(response, sizeof(response), 
+                "{\"status\":\"ok\",\"enabled\":%s}", 
+                enable ? "true" : "false");
+            request->send(200, "application/json", response);
+        } else {
+            request->send(500, "application/json", "{\"error\":\"Failed to allocate log buffer\"}");
+        }
+    });
+    
+    // GET /api/logs - Download system logs as text file
+    _server.on("/api/logs", HTTP_GET, [](AsyncWebServerRequest* request) {
+        if (!g_logManager || !g_logManager->isEnabled()) {
+            request->send(503, "application/json", "{\"error\":\"Log buffer not enabled\"}");
+            return;
+        }
+        
+        String logs = g_logManager->getLogs();
+        
+        // Set headers for file download
+        AsyncWebServerResponse* response = request->beginResponse(200, "text/plain", logs);
+        response->addHeader("Content-Disposition", "attachment; filename=\"brewos_logs.txt\"");
+        response->addHeader("Cache-Control", "no-cache");
+        request->send(response);
+    });
+    
+    // DELETE /api/logs - Clear all logs
+    _server.on("/api/logs", HTTP_DELETE, [](AsyncWebServerRequest* request) {
+        if (!g_logManager || !g_logManager->isEnabled()) {
+            request->send(503, "application/json", "{\"error\":\"Log buffer not enabled\"}");
+            return;
+        }
+        
+        g_logManager->clear();
+        request->send(200, "application/json", "{\"status\":\"ok\"}");
+    });
+    
+    // POST /api/logs/pico - Enable/disable Pico log forwarding
+    _server.on("/api/logs/pico", HTTP_POST, [this](AsyncWebServerRequest* request) {
+        if (!g_logManager || !g_logManager->isEnabled()) {
+            request->send(503, "application/json", "{\"error\":\"Log buffer not enabled - enable it first\"}");
+            return;
+        }
+        
+        bool enabled = false;
+        if (request->hasParam("enabled", true)) {
+            enabled = request->getParam("enabled", true)->value() == "true";
+        } else if (request->hasParam("enabled")) {
+            enabled = request->getParam("enabled")->value() == "true";
+        }
+        
+        // Send command to Pico via UART
+        g_logManager->setPicoLogForwarding(enabled, [this](uint8_t* payload, size_t len) {
+            return _picoUart.sendCommand(MSG_CMD_LOG_CONFIG, payload, len);
+        });
+        
+        char response[64];
+        snprintf(response, sizeof(response), 
+            "{\"status\":\"ok\",\"picoForwarding\":%s}", 
+            enabled ? "true" : "false");
         request->send(200, "application/json", response);
     });
     
