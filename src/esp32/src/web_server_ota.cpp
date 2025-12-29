@@ -231,11 +231,6 @@ constexpr unsigned long OTA_WATCHDOG_FEED_INTERVAL_MS = 50;// Feed watchdog ever
 // Buffer sizes
 constexpr size_t OTA_BUFFER_SIZE = 512;                    // Smaller buffer for stack safety
 
-// SSL buffer sizes - reduced for low memory (default is 16KB each!)
-// RX needs to be large enough for TLS records, TX can be small (HTTP requests)
-constexpr size_t OTA_SSL_RX_BUFFER = 4096;                 // 4KB RX buffer (down from 16KB)
-constexpr size_t OTA_SSL_TX_BUFFER = 512;                  // 512B TX buffer (down from 16KB)
-
 // Retry configuration
 constexpr int OTA_MAX_RETRIES = 3;
 constexpr unsigned long OTA_RETRY_DELAY_MS = 3000;
@@ -468,11 +463,9 @@ static bool downloadToFile(const char* url, const char* filePath,
                            size_t* outFileSize = nullptr) {
     LOG_I("Downloading: %s", url);
     
-    // Configure secure client with reduced buffer sizes for low memory
-    // Default 16KB buffers would fail with only ~40KB free heap
+    // Configure secure client (services are paused to free memory for SSL buffers)
     WiFiClientSecure client;
     client.setInsecure();
-    client.setBufferSizes(OTA_SSL_RX_BUFFER, OTA_SSL_TX_BUFFER);
     
     HTTPClient http;
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
@@ -875,10 +868,9 @@ void BrewWebServer::startGitHubOTA(const String& version) {
     
     broadcastOtaProgress(&_ws, "download", 65, "Downloading ESP32 firmware...");
     
-    // Configure secure client with reduced buffer sizes for low memory
+    // Configure secure client (services are paused to free memory for SSL buffers)
     WiFiClientSecure client;
     client.setInsecure(); // Skip cert verification for speed/simplicity
-    client.setBufferSizes(OTA_SSL_RX_BUFFER, OTA_SSL_TX_BUFFER);
     
     // Download ESP32 firmware
     HTTPClient http;
@@ -1083,10 +1075,9 @@ void BrewWebServer::updateLittleFS(const char* tag) {
              "https://github.com/" GITHUB_OWNER "/" GITHUB_REPO "/releases/download/%s/" GITHUB_ESP32_LITTLEFS_ASSET, 
              tag);
     
-    // Configure secure client with reduced buffer sizes for low memory
+    // Configure secure client (services are paused to free memory for SSL buffers)
     WiFiClientSecure client;
     client.setInsecure();
-    client.setBufferSizes(OTA_SSL_RX_BUFFER, OTA_SSL_TX_BUFFER);
     
     HTTPClient http;
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
