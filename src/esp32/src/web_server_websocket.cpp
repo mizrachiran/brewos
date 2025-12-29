@@ -93,6 +93,12 @@ void BrewWebServer::handleWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* 
 }
 
 void BrewWebServer::handleWsMessage(uint32_t clientNum, uint8_t* payload, size_t length) {
+    // Extend cloud pause on every WebSocket activity from local client
+    // This ensures cloud stays disconnected while user is actively using the local UI
+    if (_cloudConnection) {
+        _cloudConnection->pause();
+    }
+    
     // Parse JSON command from client - use stack allocation
     #pragma GCC diagnostic push
     #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
@@ -315,24 +321,56 @@ void BrewWebServer::processCommand(JsonDocument& doc) {
             }
         }
         else if (cmd == "mqtt_test") {
-            // Test MQTT connection
-            MQTTConfig config = _mqttClient.getConfig();
+            // Test MQTT connection with temporary config (doesn't modify permanent config)
+            MQTTConfig testConfig;
             
-            // Apply temporary config from command if provided
-            if (!doc["broker"].isNull()) strncpy(config.broker, doc["broker"].as<const char*>(), sizeof(config.broker) - 1);
-            if (!doc["port"].isNull()) config.port = doc["port"].as<uint16_t>();
-            if (!doc["username"].isNull()) strncpy(config.username, doc["username"].as<const char*>(), sizeof(config.username) - 1);
-            if (!doc["password"].isNull()) strncpy(config.password, doc["password"].as<const char*>(), sizeof(config.password) - 1);
+            // Start with current config as base
+            MQTTConfig currentConfig = _mqttClient.getConfig();
+            testConfig = currentConfig;
             
-            // Temporarily apply and test
-            config.enabled = true;
-            _mqttClient.setConfig(config);
+            // Apply test values from command if provided
+            if (!doc["broker"].isNull()) strncpy(testConfig.broker, doc["broker"].as<const char*>(), sizeof(testConfig.broker) - 1);
+            if (!doc["port"].isNull()) testConfig.port = doc["port"].as<uint16_t>();
+            if (!doc["username"].isNull()) strncpy(testConfig.username, doc["username"].as<const char*>(), sizeof(testConfig.username) - 1);
+            if (!doc["password"].isNull()) strncpy(testConfig.password, doc["password"].as<const char*>(), sizeof(testConfig.password) - 1);
             
-            if (_mqttClient.testConnection()) {
-                broadcastLogLevel("info", "MQTT connection test successful");
-            } else {
-                broadcastLogLevel("error", "MQTT connection test failed");
+            // Run test (doesn't modify permanent config)
+            int result = _mqttClient.testConnectionWithConfig(testConfig);
+            
+            // Send structured response to UI
+            StaticJsonDocument<256> response;
+            response["type"] = "mqtt_test_result";
+            response["success"] = (result == 0);
+            
+            switch (result) {
+                case 0:
+                    response["message"] = "Connection successful";
+                    broadcastLogLevel("info", "MQTT test: Connection successful");
+                    break;
+                case 1:
+                    response["message"] = "Broker address is empty";
+                    response["error"] = "broker_empty";
+                    broadcastLogLevel("error", "MQTT test: Broker address is empty");
+                    break;
+                case 2:
+                    response["message"] = "WiFi not connected";
+                    response["error"] = "wifi_disconnected";
+                    broadcastLogLevel("error", "MQTT test: WiFi not connected");
+                    break;
+                case 3:
+                    response["message"] = "Connection failed - check broker address and credentials";
+                    response["error"] = "connection_failed";
+                    broadcastLogLevel("error", "MQTT test: Connection failed");
+                    break;
+                default:
+                    response["message"] = "Unknown error";
+                    response["error"] = "unknown";
+                    break;
             }
+            
+            char jsonBuffer[256];
+            serializeJson(response, jsonBuffer);
+            broadcastRaw(jsonBuffer);
         }
         else if (cmd == "mqtt_config") {
             // Update MQTT config

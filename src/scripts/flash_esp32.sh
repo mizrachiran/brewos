@@ -56,6 +56,8 @@ for arg in "$@"; do
     esac
 done
 
+source ~/.pio-py313-venv/bin/activate
+
 # Note: Web files will be built during firmware build if needed
 
 # Always build firmware to ensure latest code is flashed

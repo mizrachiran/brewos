@@ -90,9 +90,15 @@ public:
     bool setConfig(const MQTTConfig& config);
     
     /**
-     * Test connection to MQTT broker
+     * Test connection to MQTT broker using current config
      */
     bool testConnection();
+    
+    /**
+     * Test connection with temporary config (doesn't modify permanent config)
+     * Returns: 0 = success, 1 = broker empty, 2 = WiFi not connected, 3 = connection failed
+     */
+    int testConnectionWithConfig(const MQTTConfig& testConfig);
     
     /**
      * Check if connected to broker

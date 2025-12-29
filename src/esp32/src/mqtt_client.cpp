@@ -210,6 +210,49 @@ bool MQTTClient::testConnection() {
     return connect();
 }
 
+int MQTTClient::testConnectionWithConfig(const MQTTConfig& testConfig) {
+    // Validate broker
+    if (strlen(testConfig.broker) == 0) {
+        LOG_E("MQTT broker cannot be empty");
+        return 1;  // Broker empty
+    }
+    
+    if (WiFi.status() != WL_CONNECTED) {
+        LOG_W("Cannot test MQTT: WiFi not connected");
+        return 2;  // WiFi not connected
+    }
+    
+    LOG_I("Testing MQTT connection to %s:%d...", testConfig.broker, testConfig.port);
+    
+    // Create temporary client for testing (don't disturb active connection)
+    WiFiClient testWifiClient;
+    PubSubClient testClient(testWifiClient);
+    testClient.setServer(testConfig.broker, testConfig.port);
+    testClient.setBufferSize(512);  // Small buffer for test
+    
+    // Generate temporary client ID
+    char testClientId[48];
+    snprintf(testClientId, sizeof(testClientId), "brewos_test_%lu", millis());
+    
+    // Attempt connection
+    bool connected = false;
+    if (strlen(testConfig.username) > 0) {
+        connected = testClient.connect(testClientId, testConfig.username, testConfig.password);
+    } else {
+        connected = testClient.connect(testClientId);
+    }
+    
+    if (connected) {
+        LOG_I("MQTT test connection successful!");
+        testClient.disconnect();
+        return 0;  // Success
+    } else {
+        int state = testClient.state();
+        LOG_W("MQTT test connection failed (state=%d)", state);
+        return 3;  // Connection failed
+    }
+}
+
 bool MQTTClient::connect() {
     if (WiFi.status() != WL_CONNECTED) {
         return false;
