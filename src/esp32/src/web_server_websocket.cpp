@@ -338,7 +338,10 @@ void BrewWebServer::processCommand(JsonDocument& doc) {
             int result = _mqttClient.testConnectionWithConfig(testConfig);
             
             // Send structured response to UI
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
             StaticJsonDocument<256> response;
+            #pragma GCC diagnostic pop
             response["type"] = "mqtt_test_result";
             response["success"] = (result == 0);
             

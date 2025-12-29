@@ -151,12 +151,12 @@ void Encoder::resetPosition() {
 }
 
 void Encoder::onKnobLeft(int count) {
-    _position--;
+    _position = _position - 1;
     LOG_I("Encoder rotate: -1 (count=%d)", count);
 }
 
 void Encoder::onKnobRight(int count) {
-    _position++;
+    _position = _position + 1;
     LOG_I("Encoder rotate: +1 (count=%d)", count);
 }
 
