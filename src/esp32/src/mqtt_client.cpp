@@ -108,7 +108,7 @@ void MQTTClient::taskLoop() {
         }
         
         if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-            // Check for disconnect event
+            // Check for disconnect event - sync _connected with actual connection state
             bool clientConnected = _client.connected();
             if (_wasConnected && !clientConnected) {
                 _connected = false;
@@ -119,6 +119,13 @@ void MQTTClient::taskLoop() {
                     _onDisconnected();
                 }
                 continue;
+            }
+            
+            // Sync _connected flag with actual connection state
+            if (clientConnected && !_connected) {
+                _connected = true;
+            } else if (!clientConnected && _connected) {
+                _connected = false;
             }
             
             if (!clientConnected) {
@@ -338,7 +345,17 @@ void MQTTClient::setEnabled(bool enabled) {
 }
 
 void MQTTClient::publishStatus(const ui_state_t& state) {
-    if (!_connected) return;
+    // Thread-safe publish with connection check
+    if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+        return;  // Couldn't acquire mutex, skip this publish
+    }
+    
+    // Check actual connection state (not just flag)
+    if (!_client.connected()) {
+        _connected = false;
+        xSemaphoreGive(_mutex);
+        return;
+    }
     
     // Build comprehensive status JSON - use StaticJsonDocument on stack
     #pragma GCC diagnostic push
@@ -411,29 +428,69 @@ void MQTTClient::publishStatus(const ui_state_t& state) {
     snprintf(statusTopic, sizeof(statusTopic), "brewos/%s/status", _config.ha_device_id);
     if (!_client.publish(statusTopic, (const uint8_t*)statusBuffer, len, true)) {
         LOG_W("Failed to publish status");
+        // Check if connection was lost during publish
+        if (!_client.connected()) {
+            _connected = false;
+        }
     }
+    
+    xSemaphoreGive(_mutex);
 }
 
 void MQTTClient::publishShot(const char* shot_json) {
-    if (!_connected) return;
+    if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+        return;
+    }
+    
+    if (!_client.connected()) {
+        _connected = false;
+        xSemaphoreGive(_mutex);
+        return;
+    }
     
     String shotTopic = topic("shot");
     if (!_client.publish(shotTopic.c_str(), (const uint8_t*)shot_json, strlen(shot_json), false)) {
         LOG_W("Failed to publish shot data");
+        if (!_client.connected()) {
+            _connected = false;
+        }
     }
+    
+    xSemaphoreGive(_mutex);
 }
 
 void MQTTClient::publishStatisticsJson(const char* stats_json) {
-    if (!_connected) return;
+    if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+        return;
+    }
+    
+    if (!_client.connected()) {
+        _connected = false;
+        xSemaphoreGive(_mutex);
+        return;
+    }
     
     String statsTopic = topic("statistics");
     if (!_client.publish(statsTopic.c_str(), (const uint8_t*)stats_json, strlen(stats_json), true)) {
         LOG_W("Failed to publish statistics");
+        if (!_client.connected()) {
+            _connected = false;
+        }
     }
+    
+    xSemaphoreGive(_mutex);
 }
 
 void MQTTClient::publishStatistics(uint16_t shotsToday, uint32_t totalShots, float kwhToday) {
-    if (!_connected) return;
+    if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+        return;
+    }
+    
+    if (!_client.connected()) {
+        _connected = false;
+        xSemaphoreGive(_mutex);
+        return;
+    }
     
     // Build stats JSON - use stack allocation
     #pragma GCC diagnostic push
@@ -455,11 +512,24 @@ void MQTTClient::publishStatistics(uint16_t shotsToday, uint32_t totalShots, flo
     snprintf(statsTopic, sizeof(statsTopic), "brewos/%s/statistics", _config.ha_device_id);
     if (!_client.publish(statsTopic, (const uint8_t*)statsBuffer, len, true)) {
         LOG_W("Failed to publish statistics");
+        if (!_client.connected()) {
+            _connected = false;
+        }
     }
+    
+    xSemaphoreGive(_mutex);
 }
 
 void MQTTClient::publishPowerMeter(const PowerMeterReading& reading) {
-    if (!_connected) return;
+    if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+        return;
+    }
+    
+    if (!_client.connected()) {
+        _connected = false;
+        xSemaphoreGive(_mutex);
+        return;
+    }
     
     // Build power JSON - use stack allocation
     #pragma GCC diagnostic push
@@ -492,24 +562,50 @@ void MQTTClient::publishPowerMeter(const PowerMeterReading& reading) {
     snprintf(powerTopic, sizeof(powerTopic), "brewos/%s/power", _config.ha_device_id);
     if (!_client.publish(powerTopic, (const uint8_t*)powerBuffer, len, true)) {
         LOG_W("Failed to publish power meter data");
+        if (!_client.connected()) {
+            _connected = false;
+        }
     }
+    
+    xSemaphoreGive(_mutex);
 }
 
 void MQTTClient::publishAvailability(bool online) {
     // Allow publishing "offline" even if not connected (for graceful disconnect)
     if (!_client.connected() && online) return;
     
+    // Use mutex for thread safety
+    if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+        return;
+    }
+    
     String availTopic = topic("availability");
     const char* msg = online ? "online" : "offline";
     if (!_client.publish(availTopic.c_str(), (const uint8_t*)msg, strlen(msg), true)) {
         LOG_W("Failed to publish availability: %s", msg);
+        if (!_client.connected()) {
+            _connected = false;
+        }
     } else {
         LOG_D("Published availability: %s", msg);
     }
+    
+    xSemaphoreGive(_mutex);
 }
 
 void MQTTClient::publishHomeAssistantDiscovery() {
-    if (!_connected) return;
+    // Acquire mutex for thread-safe publishing
+    if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
+        LOG_W("Failed to acquire mutex for HA discovery");
+        return;
+    }
+    
+    // Check actual connection state
+    if (!_client.connected()) {
+        _connected = false;
+        xSemaphoreGive(_mutex);
+        return;
+    }
     
     LOG_I("Publishing Home Assistant discovery...");
     
@@ -522,6 +618,7 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     
     // Counter for pacing publishes (prevents network stack saturation)
     int publishCount = 0;
+    bool connectionLost = false;
     
     // Device info helper - returns a consistent device object
     auto addDeviceInfo = [&](JsonDocument& doc) {
@@ -539,6 +636,12 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     auto publishSensor = [&](const char* name, const char* sensorId, const char* valueTemplate, 
                              const char* unit, const char* deviceClass, const char* stateClass,
                              const char* stateTopic = nullptr, const char* icon = nullptr) {
+        // Check connection before each publish
+        if (!_client.connected() || connectionLost) {
+            connectionLost = true;
+            return;
+        }
+        
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         StaticJsonDocument<512> doc;
@@ -569,6 +672,12 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         
         if (!_client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true)) {
             LOG_W("Failed to publish HA discovery for %s", sensorId);
+            // Check if connection was lost
+            if (!_client.connected()) {
+                connectionLost = true;
+                _connected = false;
+                return;
+            }
         }
         yield();  // Yield to prevent blocking network stack
         // Delay after each publish to prevent broker overwhelm
@@ -580,6 +689,12 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     // Publish binary sensors for status
     auto publishBinarySensor = [&](const char* name, const char* sensorId, const char* valueTemplate, 
                                    const char* deviceClass, const char* icon = nullptr) {
+        // Check connection before each publish
+        if (!_client.connected() || connectionLost) {
+            connectionLost = true;
+            return;
+        }
+        
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         StaticJsonDocument<512> doc;
@@ -607,7 +722,14 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         char configTopic[128];
         snprintf(configTopic, sizeof(configTopic), "homeassistant/binary_sensor/brewos_%s/%s/config",
                  deviceId.c_str(), sensorId);
-        _client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true);
+        if (!_client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true)) {
+            LOG_W("Failed to publish HA discovery for %s", sensorId);
+            if (!_client.connected()) {
+                connectionLost = true;
+                _connected = false;
+                return;
+            }
+        }
         yield();
         delay(50);  // Prevent broker overwhelm
         publishCount++;
@@ -617,6 +739,12 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     auto publishSwitch = [&](const char* name, const char* switchId, const char* icon,
                              const char* payloadOn, const char* payloadOff, 
                              const char* stateTemplate) {
+        // Check connection before each publish
+        if (!_client.connected() || connectionLost) {
+            connectionLost = true;
+            return;
+        }
+        
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         StaticJsonDocument<512> doc;
@@ -644,7 +772,14 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         char configTopic[128];
         snprintf(configTopic, sizeof(configTopic), "homeassistant/switch/brewos_%s/%s/config",
                  deviceId.c_str(), switchId);
-        _client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true);
+        if (!_client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true)) {
+            LOG_W("Failed to publish HA discovery for %s", switchId);
+            if (!_client.connected()) {
+                connectionLost = true;
+                _connected = false;
+                return;
+            }
+        }
         yield();
         delay(50);  // Prevent broker overwhelm
         publishCount++;
@@ -653,6 +788,12 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     // Helper to publish a button
     auto publishButton = [&](const char* name, const char* buttonId, const char* icon,
                              const char* payload) {
+        // Check connection before each publish
+        if (!_client.connected() || connectionLost) {
+            connectionLost = true;
+            return;
+        }
+        
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         StaticJsonDocument<512> doc;
@@ -675,7 +816,14 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         char configTopic[128];
         snprintf(configTopic, sizeof(configTopic), "homeassistant/button/brewos_%s/%s/config",
                  deviceId.c_str(), buttonId);
-        _client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true);
+        if (!_client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true)) {
+            LOG_W("Failed to publish HA discovery for %s", buttonId);
+            if (!_client.connected()) {
+                connectionLost = true;
+                _connected = false;
+                return;
+            }
+        }
         yield();
         delay(50);  // Prevent broker overwhelm
         publishCount++;
@@ -685,6 +833,12 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     auto publishNumber = [&](const char* name, const char* numberId, const char* icon,
                              float min, float max, float step, const char* unit,
                              const char* valueTemplate, const char* commandTemplate) {
+        // Check connection before each publish
+        if (!_client.connected() || connectionLost) {
+            connectionLost = true;
+            return;
+        }
+        
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         StaticJsonDocument<512> doc;
@@ -714,7 +868,14 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         char configTopic[128];
         snprintf(configTopic, sizeof(configTopic), "homeassistant/number/brewos_%s/%s/config",
                  deviceId.c_str(), numberId);
-        _client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true);
+        if (!_client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true)) {
+            LOG_W("Failed to publish HA discovery for %s", numberId);
+            if (!_client.connected()) {
+                connectionLost = true;
+                _connected = false;
+                return;
+            }
+        }
         yield();
         delay(50);  // Prevent broker overwhelm
         publishCount++;
@@ -724,6 +885,12 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     auto publishSelect = [&](const char* name, const char* selectId, const char* icon,
                              std::initializer_list<const char*> options, const char* valueTemplate,
                              const char* commandTemplate) {
+        // Check connection before each publish
+        if (!_client.connected() || connectionLost) {
+            connectionLost = true;
+            return;
+        }
+        
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         StaticJsonDocument<512> doc;
@@ -753,7 +920,14 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         char configTopic[128];
         snprintf(configTopic, sizeof(configTopic), "homeassistant/select/brewos_%s/%s/config",
                  deviceId.c_str(), selectId);
-        _client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true);
+        if (!_client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true)) {
+            LOG_W("Failed to publish HA discovery for %s", selectId);
+            if (!_client.connected()) {
+                connectionLost = true;
+                _connected = false;
+                return;
+            }
+        }
         yield();
         delay(50);  // Prevent broker overwhelm
         publishCount++;
@@ -858,7 +1032,16 @@ void MQTTClient::publishHomeAssistantDiscovery() {
                   "{% set strategies = ['brew_only', 'sequential', 'parallel', 'smart_stagger'] %}{{ strategies[value_json.heating_strategy | int] | default('sequential') }}",
                   "{% set strategies = {'brew_only': 0, 'sequential': 1, 'parallel': 2, 'smart_stagger': 3} %}{\"cmd\":\"set_heating_strategy\",\"strategy\":{{ strategies[value] | default(1) }}}");
     
-    LOG_I("Home Assistant discovery published (%d entities)", HA_TOTAL_ENTITY_COUNT);
+    // Release mutex and log result
+    if (connectionLost) {
+        LOG_W("Home Assistant discovery incomplete - connection lost (%d/%d entities published)", 
+              publishCount, HA_TOTAL_ENTITY_COUNT);
+        _connected = false;
+    } else {
+        LOG_I("Home Assistant discovery published (%d entities)", HA_TOTAL_ENTITY_COUNT);
+    }
+    
+    xSemaphoreGive(_mutex);
 }
 
 void MQTTClient::onMessage(char* topicName, byte* payload, unsigned int length) {
