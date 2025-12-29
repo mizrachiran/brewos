@@ -288,25 +288,22 @@ void Display::initHardware() {
     panel_config.flags.fb_in_psram = 1;
     
     // =========================================================================
-    // DOUBLE BUFFERING FOR TEAR-FREE DISPLAY
+    // NOTE: BOUNCE BUFFER AND DOUBLE BUFFERING
     // =========================================================================
-    // Use 2 frame buffers in PSRAM for double buffering:
-    // - DMA reads from Buffer A while CPU draws to Buffer B
-    // - Buffers swap on VSYNC, eliminating tearing
-    // - Requires ~900KB additional PSRAM (480*480*2 bytes per buffer)
-    // - With 8MB PSRAM, this is easily accommodated
-    panel_config.num_fbs = 2;
-    LOG_I("Double buffering enabled: 2 frame buffers in PSRAM (~1.8MB total)");
-    
-    // =========================================================================
-    // BOUNCE BUFFER FOR WIFI STABILITY
-    // =========================================================================
-    // Allocate ~9.6KB of internal SRAM as intermediate buffer between PSRAM framebuffer
-    // and LCD DMA. This decouples display refresh from PSRAM bus contention during
-    // WiFi/Flash operations, preventing visual glitches when WiFi is active.
-    // 10 scanlines * 480 pixels * 2 bytes = 9600 bytes
-    panel_config.bounce_buffer_size_px = 480 * 10;
-    LOG_I("Bounce buffer enabled: 10 scanlines (~9.6KB internal SRAM)");
+    // The following features would improve display stability during WiFi operations
+    // but are NOT available in the current Arduino-ESP32 SDK (v2.x with ESP-IDF 4.4):
+    //
+    // 1. bounce_buffer_size_px - Decouples LCD DMA from PSRAM bus contention
+    //    Would prevent visual glitches when WiFi accesses flash
+    //
+    // 2. num_fbs = 2 - Double buffering for tear-free display
+    //    DMA reads from one buffer while CPU draws to another
+    //
+    // These fields are available in ESP-IDF 5.x+ and Arduino-ESP32 3.x+
+    // For now, display stability is achieved through:
+    // - GPIO drive strength reduction (GPIO_DRIVE_CAP_0) to reduce EMI
+    // - Lower PCLK frequency (10MHz) for more timing margin
+    // - WiFi/MQTT tasks on Core 0, display on Core 1 (task isolation)
     
     // Register callback to synchronize with DMA transfers
     panel_config.on_frame_trans_done = on_frame_trans_done;
