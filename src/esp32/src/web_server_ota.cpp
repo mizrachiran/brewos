@@ -115,17 +115,20 @@ static void handleOTAFailure(AsyncWebSocket* ws);
 // =============================================================================
 
 /**
- * Pause all background services before OTA
- * This prevents network/BLE interference and SSL crashes during update
- * Also frees memory needed for SSL buffers (~50KB for HTTPS)
+ * Stop all background services before OTA to free memory for SSL
  * 
- * Services paused:
- * - CloudConnection: SSL WebSocket to cloud server
- * - MQTTClient: MQTT broker connection
- * - ScaleManager: BLE scanning/connection (interferes with WiFi)
- * - PowerMeterManager: HTTP polling to Shelly/Tasmota
- * - NotificationManager: Push notifications to cloud
- * - Display: Backlight and RGB signals turned off (reduces DMA activity)
+ * SSL/TLS needs ~50KB contiguous memory. We stop (not just pause) services
+ * to free their FreeRTOS task stacks and internal buffers.
+ * 
+ * Services STOPPED (task deleted, memory freed):
+ * - CloudConnection: SSL WebSocket task (6KB stack) + SSL buffers
+ * - ScaleManager: NimBLE stack completely deinitialized
+ * 
+ * Services DISABLED (task still running, but idle):
+ * - MQTTClient: Disconnected from broker
+ * - PowerMeterManager: HTTP polling stopped
+ * - NotificationManager: Push notifications stopped
+ * - Display: Backlight and RGB signals turned off
  * 
  * Services NOT paused (needed for OTA):
  * - WiFiManager: Network connectivity
@@ -136,7 +139,8 @@ static void pauseServicesForOTA(CloudConnection* cloudConnection) {
     LOG_I("Pausing services for OTA...");
     
     size_t heapBefore = ESP.getFreeHeap();
-    LOG_I("Heap before pausing: %zu bytes", heapBefore);
+    size_t largestBlock = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    LOG_I("Heap before pausing: %zu bytes (largest block: %zu)", heapBefore, largestBlock);
     
     // 0. Disable watchdog - OTA has long-blocking operations
     disableWatchdogForOTA();
@@ -145,19 +149,20 @@ static void pauseServicesForOTA(CloudConnection* cloudConnection) {
     // This significantly improves OTA download speed (prevents ~100ms latency per packet)
     WiFi.setSleep(false);
     
-    // 1. Pause cloud connection (SSL WebSocket)
+    // 1. STOP cloud connection completely (not just disable)
+    // This deletes the FreeRTOS task and frees its 6KB stack
     if (cloudConnection) {
-        LOG_I("  - Pausing cloud connection...");
-        cloudConnection->setEnabled(false);
+        LOG_I("  - Stopping cloud connection (freeing task)...");
+        cloudConnection->end();  // This stops the task and frees memory
     }
     
-    // 2. Pause MQTT client
+    // 2. Disconnect MQTT (task still runs but disconnected saves buffer memory)
     if (mqttClient) {
-        LOG_I("  - Pausing MQTT...");
+        LOG_I("  - Disabling MQTT...");
         mqttClient->setEnabled(false);
     }
     
-    // 3. Stop BLE scale (can interfere with WiFi)
+    // 3. Stop BLE completely (frees NimBLE stack memory)
     if (scaleManager) {
         LOG_I("  - Stopping BLE scale...");
         scaleManager->end();
@@ -181,16 +186,17 @@ static void pauseServicesForOTA(CloudConnection* cloudConnection) {
     display.backlightOff();
     
     // Give all services time to cleanly shut down and memory to be freed
-    // Wait 2 seconds total for services to release their resources
+    // Wait 3 seconds total for tasks to terminate and memory to be freed
     LOG_I("Waiting for memory to be freed...");
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < 30; i++) {
         delay(100);
         yield();
     }
     
     size_t heapAfter = ESP.getFreeHeap();
-    LOG_I("All services paused for OTA. Heap: %zu bytes (freed %d bytes)", 
-          heapAfter, (int)(heapAfter - heapBefore));
+    largestBlock = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    LOG_I("All services stopped for OTA. Heap: %zu bytes (freed %d bytes, largest block: %zu)", 
+          heapAfter, (int)(heapAfter - heapBefore), largestBlock);
 }
 
 /**
