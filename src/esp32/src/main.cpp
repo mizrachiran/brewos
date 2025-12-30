@@ -457,6 +457,71 @@ static void onPicoPacket(const PicoPacket& packet) {
             
             break;
         }
+        
+        case MSG_HANDSHAKE: {
+            LOG_I("Pico handshake received");
+            // Parse handshake payload
+            if (packet.length >= 6) {
+                uint8_t proto_major = packet.payload[0];
+                uint8_t proto_minor = packet.payload[1];
+                uint8_t capabilities = packet.payload[2];
+                uint8_t max_retry = packet.payload[3];
+                uint16_t ack_timeout = (packet.payload[5] << 8) | packet.payload[4];
+                
+                LOG_I("Protocol: v%d.%d, capabilities=0x%02X, retry=%d, timeout=%dms",
+                      proto_major, proto_minor, capabilities, max_retry, ack_timeout);
+                
+                // Send handshake response
+                uint8_t handshake[6] = {
+                    1,  // protocol_version_major
+                    1,  // protocol_version_minor
+                    0,  // capabilities
+                    3,  // max_retry_count
+                    (uint8_t)(1000 & 0xFF),      // ack_timeout_ms low byte
+                    (uint8_t)((1000 >> 8) & 0xFF) // ack_timeout_ms high byte
+                };
+                picoUart->sendPacket(MSG_HANDSHAKE, handshake, 6);
+            }
+            break;
+        }
+        
+        case MSG_NACK: {
+            // Pico is busy (backpressure) - reduce command rate
+            if (packet.length >= 4) {
+                uint8_t cmd_type = packet.payload[0];
+                uint8_t cmd_seq = packet.payload[1];
+                uint8_t result = packet.payload[2];
+                
+                LOG_W("Pico NACK: cmd=0x%02X seq=%d result=0x%02X (backpressure)", 
+                      cmd_type, cmd_seq, result);
+                
+                // Implement exponential backoff to reduce load on Pico
+                // Track NACK frequency to detect system overload
+                static uint32_t s_nack_count = 0;
+                static uint32_t s_last_nack_time = 0;
+                uint32_t now = millis();
+                
+                s_nack_count++;
+                
+                // If multiple NACKs in short time, warn about system overload
+                if (now - s_last_nack_time < 5000) {
+                    if (s_nack_count > 10) {
+                        LOG_E("High NACK rate detected - Pico command queue overload");
+                        LOG_I("Consider reducing command frequency or increasing PROTOCOL_MAX_PENDING_CMDS");
+                        s_nack_count = 0;  // Reset to avoid spam
+                    }
+                } else {
+                    s_nack_count = 1;  // Reset counter after quiet period
+                }
+                
+                s_last_nack_time = now;
+                
+                // Exponential backoff: delay next command
+                // This gives Pico time to process pending commands
+                delay(min(100 * s_nack_count, 500));  // Cap at 500ms
+            }
+            break;
+        }
             
         case MSG_STATUS:
             parsePicoStatus(packet.payload, packet.length);
@@ -1071,6 +1136,20 @@ void setup() {
             Serial.println("Continuing without Pico");
             // Serial.flush(); // Removed - can block on USB CDC
         }
+    } else {
+        // Pico connected - initiate protocol v1.1 handshake
+        Serial.println("Initiating protocol v1.1 handshake...");
+        if (picoUart->sendHandshake()) {
+            Serial.println("Protocol handshake sent - waiting for response...");
+            // Process incoming packets for handshake response
+            for (int i = 0; i < 50; i++) {  // Wait up to 500ms
+                delay(10);
+                picoUart->loop();
+            }
+            Serial.println("Protocol handshake complete");
+        } else {
+            Serial.println("WARNING: Failed to send protocol handshake");
+        }
     }
     
     // If machine type is still unknown, request boot info from Pico
@@ -1645,6 +1724,29 @@ void loop() {
         lastPing = millis();
         if (picoUart->isConnected() || picoUart->getPacketsReceived() == 0) {
             picoUart->sendPing();
+        }
+    }
+    
+    // Monitor protocol health periodically (every 60 seconds)
+    static unsigned long lastProtocolHealthCheck = 0;
+    if (millis() - lastProtocolHealthCheck > 60000) {
+        lastProtocolHealthCheck = millis();
+        
+        // Check protocol error rates
+        uint32_t totalPackets = picoUart->getPacketsReceived();
+        uint32_t totalErrors = picoUart->getPacketErrors();
+        
+        if (totalPackets > 0) {
+            float errorRate = (float)totalErrors / (float)totalPackets * 100.0f;
+            
+            // Log protocol statistics
+            LOG_D("Protocol: %u pkts, %u errors (%.1f%%)", 
+                  totalPackets, totalErrors, errorRate);
+            
+            // Warn if error rate is high
+            if (errorRate > 5.0f && totalPackets > 100) {
+                LOG_W("High protocol error rate (%.1f%%) - check wiring/EMI", errorRate);
+            }
         }
     }
     

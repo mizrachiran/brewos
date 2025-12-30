@@ -34,6 +34,7 @@ public:
     bool sendCommand(uint8_t cmdType, const uint8_t* data, uint8_t len);
     bool requestConfig();
     bool requestBootInfo();  // Request boot info (version, machine type)
+    bool sendHandshake();    // Send protocol handshake
     
     // OTA control
     bool enterBootloader();

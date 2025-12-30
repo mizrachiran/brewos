@@ -58,6 +58,8 @@ extern "C" {
 #define MSG_STATISTICS          0x09    // Statistics response
 #define MSG_DIAGNOSTICS         0x0A    // Diagnostics response
 #define MSG_POWER_METER         0x0B    // Power meter reading (from Pico)
+#define MSG_HANDSHAKE           0x0C    // Protocol handshake for version negotiation
+#define MSG_NACK                0x0D    // Negative acknowledgment (busy/rejected)
 
 // =============================================================================
 // Diagnostic Test IDs

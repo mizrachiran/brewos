@@ -4,12 +4,7 @@
 
 Binary protocol for communication between the Pico (RP2350) and ESP32 display module.
 
-**See also:**
-
-- [Setup Guide](../../SETUP.md) - OTA firmware update instructions
-- [Architecture](Architecture.md) - System architecture and communication flow
-- [Feature Status](Feature_Status_Table.md) - Implementation status
-
+**Protocol Version:** 1.1  
 **Transport:** UART  
 **Baud Rate:** 921600  
 **Format:** 8N1  
@@ -22,8 +17,9 @@ Binary protocol for communication between the Pico (RP2350) and ESP32 display mo
 1. **Simple** - Single unified status message with all data
 2. **Compact** - ~44 bytes per status update (vs ~250 for JSON)
 3. **Fast** - 921600 baud, sub-millisecond packet transmission
-4. **Reliable** - CRC16 integrity check, sequence numbers
+4. **Reliable** - CRC16 integrity check, sequence numbers, automatic retry
 5. **Atomic** - Complete machine state in every packet
+6. **Robust** - Parser timeout, backpressure, protocol versioning (v1.1+)
 
 ---
 
@@ -94,6 +90,8 @@ CRC is transmitted little-endian (low byte first).
 | MSG_DEBUG_RESP  | 0x07  | Debug command response                                    | On debug command  |
 | MSG_ENV_CONFIG  | 0x08  | **Environmental config** (voltage, current limits)        | On request/change |
 | MSG_POWER_METER | 0x0B  | **Power meter reading** (voltage, current, power, energy) | 1 second          |
+| MSG_HANDSHAKE   | 0x0C  | **Protocol handshake** (version negotiation)              | Once on boot      |
+| MSG_NACK        | 0x0D  | **Negative ACK** (busy/backpressure signal)               | On overload       |
 
 ### ESP32 → Pico
 
@@ -723,6 +721,227 @@ ESP32 sends MSG_CMD_* → Pico sends MSG_ACK (with result code) → Pico sends M
 - `ACK_ERROR_TIMEOUT` (0x04) - Operation timed out
 - `ACK_ERROR_BUSY` (0x05) - System busy, try again later
 - `ACK_ERROR_NOT_READY` (0x06) - System not ready for this command
+
+---
+
+## Protocol v1.1 Features
+
+### Overview
+
+Protocol version 1.1 adds enterprise-grade robustness features:
+
+- **Parser Timeout:** 500ms watchdog prevents stuck state machine
+- **Sequence Validation:** Detects duplicate/out-of-order packets
+- **Automatic Retry:** Up to 3 retries with 1-second ACK timeout
+- **Protocol Handshake:** Version negotiation and capability exchange
+- **Backpressure:** NACK signaling when command queue is full
+- **Enhanced Diagnostics:** 15+ tracked metrics for monitoring
+
+### Handshake Flow
+
+The protocol handshake occurs at startup to negotiate capabilities and versions:
+
+```
+ESP32                                    Pico
+  |                                        |
+  |  MSG_HANDSHAKE (request)              |
+  |  Payload: [proto_ver_major,           |
+  |            proto_ver_minor,           |
+  |            capabilities_flags,        |
+  |            max_packet_size_hi,        |
+  |            max_packet_size_lo]        |
+  |--------------------------------------->|
+  |                                        |
+  |                 MSG_HANDSHAKE (reply) |
+  |                  Payload: [1, 1, 0,   |
+  |                            3, 0xE8,   |
+  |                            0x03]      |
+  |<---------------------------------------|
+  |                                        |
+  | (Protocol ready - normal operation)   |
+```
+
+**Handshake Payload (6 bytes):**
+
+```c
+typedef struct __attribute__((packed)) {
+    uint8_t proto_ver_major;        // Protocol major version (1)
+    uint8_t proto_ver_minor;        // Protocol minor version (1)
+    uint8_t capabilities_flags;     // Reserved for future use
+    uint8_t reserved;               // Reserved
+    uint16_t max_packet_size;       // Maximum packet size (1000 bytes)
+} handshake_payload_t;
+```
+
+**Capabilities Flags (future):**
+
+- Bit 0: Supports MSG_NACK
+- Bit 1: Supports retry mechanism
+- Bit 2-7: Reserved
+
+### Retry Mechanism
+
+Commands are automatically retried if no ACK is received within 1 second:
+
+```
+ESP32                                    Pico
+  |                                        |
+  |  MSG_CMD_SET_TEMP (seq=42)            |
+  |--------------------------------------->|
+  |                                        |
+  |  (waiting for ACK, timeout=1000ms)    |
+  |                                        |
+  |  ... 1000ms timeout ...               |
+  |                                        |
+  |  MSG_CMD_SET_TEMP (seq=42, retry 1)   |
+  |--------------------------------------->|
+  |                                        |
+  |                        MSG_ACK (seq=42)|
+  |<---------------------------------------|
+  |                                        |
+  | (Command succeeded on retry)          |
+```
+
+**Retry Parameters:**
+
+- `PROTOCOL_RETRY_COUNT`: 3 maximum retries
+- `PROTOCOL_ACK_TIMEOUT_MS`: 1000ms wait time
+- `PROTOCOL_MAX_PENDING_CMDS`: 4 simultaneous commands
+
+**Retry Logic:**
+
+1. Send command with sequence number
+2. Add to pending command array with timestamp
+3. Wait for ACK with matching sequence number
+4. If timeout expires, retry same sequence number
+5. After 3 retries, mark command as failed
+
+### Backpressure (NACK)
+
+When the Pico command queue is full (≥3 pending commands), it sends MSG_NACK:
+
+```
+ESP32                                    Pico
+  |                                        |
+  |  MSG_CMD_BREW                         |
+  |--------------------------------------->|
+  |                                        |
+  |  (Pico has 3 pending commands)        |
+  |                                        |
+  |                      MSG_NACK (BUSY)  |
+  |  Payload: [cmd_type=0x13,             |
+  |            cmd_seq=45,                |
+  |            result=ACK_ERROR_BUSY]     |
+  |<---------------------------------------|
+  |                                        |
+  | (ESP32 waits before retrying)         |
+```
+
+**NACK Payload (4 bytes):**
+
+```c
+typedef struct __attribute__((packed)) {
+    uint8_t cmd_type;          // Original command type
+    uint8_t cmd_seq;           // Original sequence number
+    uint8_t result;            // Error code (ACK_ERROR_BUSY = 0x03)
+    uint8_t reserved;          // Reserved
+} nack_payload_t;
+```
+
+**Backpressure Threshold:**
+
+- `PROTOCOL_BACKPRESSURE_THRESHOLD`: 3 pending commands
+- Prevents command queue overflow
+- ESP32 should implement exponential backoff
+
+### Parser Timeout
+
+The parser state machine has a 500ms watchdog to prevent stuck states:
+
+```c
+#define PROTOCOL_PARSER_TIMEOUT_MS 500
+
+// In protocol_process_byte():
+if (g_parser.state != PARSER_STATE_IDLE) {
+    if (time_since_last_byte > PROTOCOL_PARSER_TIMEOUT_MS) {
+        // Reset parser, log timeout error
+        g_stats.parser_timeouts++;
+        protocol_reset_parser();
+    }
+}
+```
+
+**Timeout Scenarios:**
+
+- Incomplete packet received
+- Communication interrupted mid-packet
+- Corrupted packet length field
+
+### Sequence Validation
+
+Each packet has an 8-bit sequence number that increments:
+
+```c
+// Validate sequence number
+if (seq == g_last_seq) {
+    g_stats.duplicate_packets++;
+    // Discard duplicate
+} else if (seq < g_last_seq && g_last_seq - seq > 128) {
+    // Sequence wrapped around (valid)
+    g_last_seq = seq;
+} else if (seq < g_last_seq) {
+    g_stats.out_of_order_packets++;
+    // Discard out-of-order
+} else {
+    g_last_seq = seq;
+    // Process packet
+}
+```
+
+**Sequence Rules:**
+
+- Wraps at 255 → 0
+- Duplicate detection prevents replay attacks
+- Out-of-order detection catches timing issues
+
+### Enhanced Diagnostics
+
+Protocol statistics available via `protocol_get_stats()`:
+
+```c
+typedef struct {
+    // Packet counters
+    uint32_t packets_received;      // Total valid packets
+    uint32_t packets_sent;          // Total packets transmitted
+    uint32_t bytes_received;        // Total bytes processed
+    uint32_t bytes_sent;            // Total bytes transmitted
+
+    // Error counters
+    uint16_t crc_errors;            // CRC checksum failures
+    uint16_t packet_errors;         // Malformed packets
+    uint16_t parser_timeouts;       // Parser watchdog triggers
+    uint16_t duplicate_packets;     // Duplicate sequence numbers
+    uint16_t out_of_order_packets;  // Out-of-order packets
+
+    // Command tracking
+    uint8_t pending_commands;       // Current pending count
+    uint16_t retry_attempts;        // Total retry count
+    uint16_t ack_timeouts;          // ACK timeout count
+    uint16_t nack_received;         // NACK (backpressure) count
+
+    // Protocol state
+    bool handshake_complete;        // Version negotiation done
+    uint8_t protocol_version;       // Negotiated protocol version
+} protocol_stats_t;
+```
+
+**Diagnostic Use Cases:**
+
+- Monitor `crc_errors` for EMI/wiring issues
+- Track `retry_attempts` for reliability metrics
+- Check `pending_commands` for flow control
+- Verify `handshake_complete` on connection
+- Alert on high `parser_timeouts` rate
 
 ---
 

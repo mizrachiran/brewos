@@ -7,6 +7,18 @@
 #include "config.h"  // Includes protocol_defs.h
 
 // -----------------------------------------------------------------------------
+// Protocol Configuration
+// -----------------------------------------------------------------------------
+#define PROTOCOL_VERSION_MAJOR      1
+#define PROTOCOL_VERSION_MINOR      1
+#define PROTOCOL_PARSER_TIMEOUT_MS  500   // Reset parser if incomplete packet > 500ms
+#define PROTOCOL_ACK_TIMEOUT_MS     1000  // Wait for ACK response
+#define PROTOCOL_RETRY_COUNT        3     // Number of command retries
+#define PROTOCOL_HANDSHAKE_TIMEOUT_MS 5000 // Handshake completion timeout
+#define PROTOCOL_MAX_PENDING_CMDS   4     // Maximum pending commands awaiting ACK
+#define PROTOCOL_BACKPRESSURE_THRESHOLD 3 // Send NACK when pending >= threshold
+
+// -----------------------------------------------------------------------------
 // Packet Structure
 // -----------------------------------------------------------------------------
 // | SYNC (0xAA) | TYPE | LENGTH | SEQ | PAYLOAD... | CRC16 |
@@ -19,7 +31,39 @@ typedef struct {
     uint8_t payload[PROTOCOL_MAX_PAYLOAD];
     uint16_t crc;
     bool valid;
+    uint32_t timestamp_ms;  // Packet receive timestamp for timeout tracking
 } packet_t;
+
+// Pending command structure for retry tracking
+typedef struct {
+    uint8_t type;                   // Command type
+    uint8_t seq;                    // Sequence number
+    uint8_t payload[PROTOCOL_MAX_PAYLOAD];
+    uint8_t length;                 // Payload length
+    uint8_t retry_count;            // Number of retries attempted
+    uint32_t sent_time_ms;          // Timestamp when sent
+    bool active;                    // Slot in use
+} pending_cmd_t;
+
+// Protocol diagnostics structure
+typedef struct {
+    uint32_t packets_received;      // Total valid packets received
+    uint32_t packets_sent;          // Total packets sent
+    uint32_t crc_errors;            // CRC validation failures
+    uint32_t packet_errors;         // Invalid packet format
+    uint32_t timeout_errors;        // Parser timeouts
+    uint32_t sequence_errors;       // Sequence number issues
+    uint32_t ack_timeouts;          // ACK response timeouts
+    uint32_t retries;               // Command retry count
+    uint32_t nacks_sent;            // Backpressure NACK sent
+    uint32_t nacks_received;        // Backpressure NACK received
+    uint32_t bytes_received;        // Total bytes received
+    uint32_t bytes_sent;            // Total bytes sent
+    uint8_t last_seq_received;      // Last sequence number received
+    uint8_t last_seq_sent;          // Last sequence number sent
+    uint8_t pending_cmd_count;      // Current pending commands
+    bool handshake_complete;        // Protocol handshake completed
+} protocol_stats_t;
 
 // -----------------------------------------------------------------------------
 // Status Payload (MSG_STATUS = 0x01)
@@ -68,7 +112,20 @@ typedef struct __attribute__((packed)) {
     uint32_t reset_reason;
     char build_date[12];        // "Dec 12 2024" (compile date)
     char build_time[9];         // "14:30:45" (compile time)
+    uint8_t protocol_version_major;  // Protocol version for compatibility check
+    uint8_t protocol_version_minor;
 } boot_payload_t;
+
+// -----------------------------------------------------------------------------
+// Protocol Handshake Payload (MSG_HANDSHAKE = 0x0C)
+// -----------------------------------------------------------------------------
+typedef struct __attribute__((packed)) {
+    uint8_t protocol_version_major;
+    uint8_t protocol_version_minor;
+    uint8_t capabilities;       // Bit flags for optional features
+    uint8_t max_retry_count;    // Maximum retry attempts
+    uint16_t ack_timeout_ms;    // ACK timeout in milliseconds
+} handshake_payload_t;
 
 // -----------------------------------------------------------------------------
 // Config Payload (MSG_CONFIG = 0x05)
@@ -224,6 +281,15 @@ bool protocol_send_diag_result(const diag_result_payload_t* result);
 uint32_t protocol_get_crc_errors(void);
 uint32_t protocol_get_packet_errors(void);
 void protocol_reset_error_counters(void);
+
+// Protocol diagnostics
+void protocol_get_stats(protocol_stats_t* stats);
+void protocol_reset_stats(void);
+
+// Protocol state
+bool protocol_is_ready(void);           // Returns true if handshake complete
+bool protocol_handshake_complete(void); // Check handshake status
+void protocol_request_handshake(void);  // Initiate handshake
 
 // Packet callback
 typedef void (*packet_callback_t)(const packet_t* packet);

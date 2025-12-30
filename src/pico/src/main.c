@@ -84,6 +84,10 @@ void core1_main(void) {
     // Initialize protocol
     protocol_init();
     
+    // Initiate protocol handshake with ESP32
+    protocol_request_handshake();
+    LOG_PRINT("Protocol v1.1 handshake initiated\n");
+    
     // Send boot message and environmental config
     protocol_send_boot();
     send_environmental_config();
@@ -93,6 +97,7 @@ void core1_main(void) {
     
     uint32_t last_status_send = 0;
     uint32_t last_boot_info_send = 0;  // For periodic boot info resend
+    uint32_t last_protocol_stats_log = 0;  // For periodic protocol diagnostics
     
     while (true) {
         uint32_t now = to_ms_since_boot(get_absolute_time());
@@ -138,6 +143,38 @@ void core1_main(void) {
             send_environmental_config();
             
             DEBUG_PRINT("Core 1: Periodic boot info resend complete\n");
+        }
+        
+        // Monitor protocol health and log statistics periodically
+        if (now - last_protocol_stats_log >= 60000) {  // Every 60 seconds
+            last_protocol_stats_log = now;
+            
+            protocol_stats_t stats;
+            protocol_get_stats(&stats);
+            
+            // Log protocol health metrics
+            LOG_INFO("Protocol: RX=%lu TX=%lu CRC_err=%u PKT_err=%u TO=%u\n",
+                     stats.packets_received, stats.packets_sent,
+                     stats.crc_errors, stats.packet_errors, stats.parser_timeouts);
+            
+            LOG_INFO("Protocol: Retry=%u ACK_TO=%u NACK=%u Pending=%u\n",
+                     stats.retry_attempts, stats.ack_timeouts,
+                     stats.nack_received, stats.pending_commands);
+            
+            // Check for protocol health issues
+            if (stats.crc_errors > 100) {
+                LOG_WARN("High CRC error rate detected - check wiring/EMI\n");
+            }
+            if (stats.parser_timeouts > 50) {
+                LOG_WARN("High parser timeout rate - possible UART issues\n");
+            }
+            if (stats.ack_timeouts > 20) {
+                LOG_WARN("High ACK timeout rate - ESP32 may be overloaded\n");
+            }
+            if (!stats.handshake_complete) {
+                LOG_WARN("Protocol handshake not complete - retrying\n");
+                protocol_request_handshake();
+            }
         }
         
         // Signal that Core 1 is alive (for watchdog monitoring by Core 0)

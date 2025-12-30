@@ -204,6 +204,18 @@ bool PicoUART::requestBootInfo() {
     return sendPacket(MSG_CMD_GET_BOOT, nullptr, 0);
 }
 
+bool PicoUART::sendHandshake() {
+    uint8_t handshake[6] = {
+        1,  // protocol_version_major
+        1,  // protocol_version_minor
+        0,  // capabilities
+        3,  // max_retry_count
+        (uint8_t)(1000 & 0xFF),      // ack_timeout_ms low byte
+        (uint8_t)((1000 >> 8) & 0xFF) // ack_timeout_ms high byte
+    };
+    return sendPacket(MSG_HANDSHAKE, handshake, 6);
+}
+
 bool PicoUART::enterBootloader() {
     // ⚠️ HARDWARE BOOTLOADER IS NOT AVAILABLE
     // The Pico's BOOTSEL button connects to QSPI_SS which is NOT exposed on the 40-pin header.

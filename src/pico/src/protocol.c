@@ -41,12 +41,23 @@ static uint8_t g_rx_buffer[64];
 static uint8_t g_rx_index = 0;
 static uint8_t g_rx_length = 0;
 static uint8_t g_tx_seq = 0;
+static uint32_t g_rx_last_byte_time = 0;  // Timestamp of last received byte
+static uint8_t g_last_seq_received = 0xFF; // Track last sequence number
 
 static packet_callback_t g_packet_callback = NULL;
 
-// Error tracking
-static uint32_t g_crc_errors = 0;
-static uint32_t g_packet_errors = 0;
+// Protocol statistics
+static protocol_stats_t g_stats = {0};
+
+// Handshake state
+static bool g_handshake_complete = false;
+static uint32_t g_handshake_request_time = 0;
+
+// Retry tracking - pending commands awaiting ACK
+static pending_cmd_t g_pending_cmds[PROTOCOL_MAX_PENDING_CMDS] = {0};
+
+// Backpressure state
+static bool g_backpressure_active = false;
 
 // -----------------------------------------------------------------------------
 // CRC-16-CCITT
@@ -66,6 +77,119 @@ uint16_t protocol_crc16(const uint8_t* data, size_t length) {
     }
     
     return crc;
+}
+
+// -----------------------------------------------------------------------------
+// Retry & Backpressure Helpers
+// -----------------------------------------------------------------------------
+
+// Add command to pending list for retry tracking
+static bool add_pending_command(uint8_t type, uint8_t seq, const uint8_t* payload, uint8_t length) {
+    // Find free slot
+    for (int i = 0; i < PROTOCOL_MAX_PENDING_CMDS; i++) {
+        if (!g_pending_cmds[i].active) {
+            g_pending_cmds[i].type = type;
+            g_pending_cmds[i].seq = seq;
+            g_pending_cmds[i].length = length;
+            g_pending_cmds[i].retry_count = 0;
+            g_pending_cmds[i].sent_time_ms = to_ms_since_boot(get_absolute_time());
+            g_pending_cmds[i].active = true;
+            if (length > 0 && payload != NULL) {
+                memcpy(g_pending_cmds[i].payload, payload, length);
+            }
+            g_stats.pending_cmd_count++;
+            
+            // Check backpressure threshold
+            if (g_stats.pending_cmd_count >= PROTOCOL_BACKPRESSURE_THRESHOLD) {
+                g_backpressure_active = true;
+            }
+            
+            return true;
+        }
+    }
+    return false; // No free slots
+}
+
+// Remove command from pending list (ACK received)
+static void remove_pending_command(uint8_t seq) {
+    for (int i = 0; i < PROTOCOL_MAX_PENDING_CMDS; i++) {
+        if (g_pending_cmds[i].active && g_pending_cmds[i].seq == seq) {
+            g_pending_cmds[i].active = false;
+            g_stats.pending_cmd_count--;
+            
+            // Release backpressure if below threshold
+            if (g_stats.pending_cmd_count < PROTOCOL_BACKPRESSURE_THRESHOLD) {
+                g_backpressure_active = false;
+            }
+            break;
+        }
+    }
+}
+
+// Check for ACK timeouts and retry commands
+static void process_pending_commands(void) {
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+    
+    for (int i = 0; i < PROTOCOL_MAX_PENDING_CMDS; i++) {
+        if (!g_pending_cmds[i].active) continue;
+        
+        pending_cmd_t* cmd = &g_pending_cmds[i];
+        
+        // Check if ACK timeout expired
+        if (now - cmd->sent_time_ms > PROTOCOL_ACK_TIMEOUT_MS) {
+            if (cmd->retry_count < PROTOCOL_RETRY_COUNT) {
+                // Retry command
+                cmd->retry_count++;
+                cmd->sent_time_ms = now;
+                g_stats.retries++;
+                
+                LOG_WARN("Protocol: Retrying command 0x%02X seq=%d (attempt %d/%d)\n",
+                       cmd->type, cmd->seq, cmd->retry_count, PROTOCOL_RETRY_COUNT);
+                
+                // Resend packet
+                uint8_t buffer[64];
+                uint8_t idx = 0;
+                buffer[idx++] = PROTOCOL_SYNC_BYTE;
+                buffer[idx++] = cmd->type;
+                buffer[idx++] = cmd->length;
+                buffer[idx++] = cmd->seq;
+                if (cmd->length > 0) {
+                    memcpy(&buffer[idx], cmd->payload, cmd->length);
+                    idx += cmd->length;
+                }
+                uint16_t crc = protocol_crc16(&buffer[1], 3 + cmd->length);
+                buffer[idx++] = crc & 0xFF;
+                buffer[idx++] = (crc >> 8) & 0xFF;
+                uart_write_blocking(ESP32_UART_ID, buffer, idx);
+                g_stats.bytes_sent += idx;
+            } else {
+                // Max retries exceeded
+                g_stats.ack_timeouts++;
+                LOG_ERROR("Protocol: Command 0x%02X seq=%d failed after %d retries\n",
+                        cmd->type, cmd->seq, PROTOCOL_RETRY_COUNT);
+                cmd->active = false;
+                g_stats.pending_cmd_count--;
+                
+                // Release backpressure
+                if (g_stats.pending_cmd_count < PROTOCOL_BACKPRESSURE_THRESHOLD) {
+                    g_backpressure_active = false;
+                }
+            }
+        }
+    }
+}
+
+// Send NACK for backpressure
+static void send_nack(uint8_t for_type, uint8_t seq) {
+    ack_payload_t nack = {
+        .cmd_type = for_type,
+        .cmd_seq = seq,
+        .result = ACK_ERROR_BUSY,
+        .reserved = 0
+    };
+    send_packet(MSG_NACK, (const uint8_t*)&nack, sizeof(ack_payload_t));
+    g_stats.nacks_sent++;
+    LOG_DEBUG("Protocol: Sent NACK for 0x%02X (busy)\n", for_type);
 }
 
 // -----------------------------------------------------------------------------
@@ -103,9 +227,12 @@ void protocol_init(void) {
     uart_set_hw_flow(ESP32_UART_ID, false, false);
     uart_set_fifo_enabled(ESP32_UART_ID, true);
     
-    // Reset error counters
-    g_crc_errors = 0;
-    g_packet_errors = 0;
+    // Initialize statistics
+    memset(&g_stats, 0, sizeof(protocol_stats_t));
+    g_handshake_complete = false;
+    g_handshake_request_time = 0;
+    g_rx_last_byte_time = 0;
+    g_last_seq_received = 0xFF;
     
     LOG_PRINT("Protocol: UART%d initialized at %d baud (TX=%d, RX=%d)\n",
                 ESP32_UART_ID == uart0 ? 0 : 1,
@@ -124,6 +251,15 @@ static bool send_packet(uint8_t type, const uint8_t* payload, uint8_t length) {
         return false;
     }
     
+    // Check if this is a command that requires ACK tracking
+    bool needs_ack = (type >= MSG_CMD_SET_TEMP && type <= MSG_LOG);
+    
+    // If backpressure is active and this needs ACK, check if we can send
+    if (needs_ack && g_backpressure_active) {
+        LOG_WARN("Protocol: Backpressure active, deferring command 0x%02X\n", type);
+        return false;  // Caller should retry later
+    }
+    
     uint8_t buffer[64];
     uint8_t idx = 0;
     
@@ -131,7 +267,8 @@ static bool send_packet(uint8_t type, const uint8_t* payload, uint8_t length) {
     buffer[idx++] = PROTOCOL_SYNC_BYTE;
     buffer[idx++] = type;
     buffer[idx++] = length;
-    buffer[idx++] = g_tx_seq++;
+    uint8_t seq = g_tx_seq++;
+    buffer[idx++] = seq;
     
     // Copy payload
     if (length > 0 && payload != NULL) {
@@ -146,6 +283,18 @@ static bool send_packet(uint8_t type, const uint8_t* payload, uint8_t length) {
     
     // Send
     uart_write_blocking(ESP32_UART_ID, buffer, idx);
+    
+    // Update statistics
+    g_stats.packets_sent++;
+    g_stats.bytes_sent += idx;
+    g_stats.last_seq_sent = seq;
+    
+    // Add to pending commands for retry tracking if needed
+    if (needs_ack) {
+        if (!add_pending_command(type, seq, payload, length)) {
+            LOG_WARN("Protocol: Failed to track command 0x%02X (pending queue full)\n", type);
+        }
+    }
     
     return true;
 }
@@ -218,7 +367,9 @@ bool protocol_send_boot(void) {
         .pcb_version_minor = pcb_ver.minor,
         .reset_reason = reset_reason,
         .build_date = {0},
-        .build_time = {0}
+        .build_time = {0},
+        .protocol_version_major = PROTOCOL_VERSION_MAJOR,
+        .protocol_version_minor = PROTOCOL_VERSION_MINOR
     };
     // Copy build date/time (compile-time constants)
     strncpy(boot.build_date, BUILD_DATE, sizeof(boot.build_date) - 1);
@@ -290,6 +441,10 @@ bool protocol_send_diag_result(const diag_result_payload_t* result) {
 // -----------------------------------------------------------------------------
 
 static void process_byte(uint8_t byte) {
+    // Update byte timestamp for timeout detection
+    g_rx_last_byte_time = to_ms_since_boot(get_absolute_time());
+    g_stats.bytes_received++;
+    
     switch (g_rx_state) {
         case RX_WAIT_SYNC:
             if (byte == PROTOCOL_SYNC_BYTE) {
@@ -333,15 +488,16 @@ static void process_byte(uint8_t byte) {
                 packet.type = g_rx_buffer[0];
                 packet.length = g_rx_buffer[1];
                 packet.seq = g_rx_buffer[2];
+                packet.timestamp_ms = g_rx_last_byte_time;
                 
                 if (packet.length > 0 && packet.length <= PROTOCOL_MAX_PAYLOAD) {
                     memcpy(packet.payload, &g_rx_buffer[3], packet.length);
                 }
                 
                 // Validate packet length field
-                if (packet.length > PROTOCOL_MAX_PAYLOAD) {
-                    g_packet_errors++;
+                if (pastats.packet_errors++;
                     LOG_PRINT("Protocol: ERROR - Invalid packet length %d (max %d, total errors: %lu)\n", 
+                               packet.length, PROTOCOL_MAX_PAYLOAD, g_stats. %d (max %d, total errors: %lu)\n", 
                                packet.length, PROTOCOL_MAX_PAYLOAD, g_packet_errors);
                     g_rx_state = RX_WAIT_SYNC;
                     g_rx_index = 0;
@@ -359,21 +515,58 @@ static void process_byte(uint8_t byte) {
                     packet.valid = true;
                     packet.crc = received_crc;
                     
-                    DEBUG_PRINT("Protocol: RX packet type=0x%02X len=%d seq=%d\n",
+                    // Sequence number validation (skip for status/control messages)
+                    bool check_sequence = (packet.type >= MSG_CMD_SET_TEMP);
+                    if (check_sequence && g_last_seq_received != 0xFF) {
+                        uint8_t expected_seq = (g_last_seq_received + 1) & 0xFF;
+                        if (packet.seq != expected_seq) {
+                            g_stats.sequence_errors++;
+                            LOG_WARN("Protocol: Sequence error (got=%d, expected=%d)\n",
+                                   packet.seq, expected_seq);
+                        }
+                    }
+                    g_last_seq_received = packet.seq;
+                    g_stats.crc_errors++;
+                    if (g_stats.crc_errors <= 5 || (g_stats.crc_errors % 10 == 0)) {
+                        LOG_PRINT("Protocol: CRC error (got=0x%04X exp=0x%04X, total: %lu)\n", 
+                                 received_crc, expected_crc, g_stats.X len=%d seq=%d\n",
                                packet.type, packet.length, packet.seq);
                     
+                    // Handle handshake message
+                    if (packet.type == MSG_HANDSHAKE) {
+                        g_handshake_complete = true;
+                        g_stats.handshake_complete = true;
+                        LOG_INFO("Protocol: Handshake complete\n");
+                    }
+                    
+                    // Handle ACK messages - remove from pending commands
+                    if (packet.type == MSG_ACK && packet.length >= sizeof(ack_payload_t)) {
+                        ack_payload_t ack;
+                        memcpy(&ack, packet.payload, sizeof(ack_payload_t));
+                        remove_pending_command(ack.cmd_seq);
+                        DEBUG_PRINT("Protocol: ACK received for seq=%d (result=%d)\n",
+                                  ack.cmd_seq, ack.result);
+                    }
+                    
+                    // Handle NACK messages - backpressure signal from ESP32
+                    if (packet.type == MSG_NACK) {
+                        g_stats.nacks_received++;
+                        LOG_WARN("Protocol: NACK received (ESP32 busy)\n");
+                        // ESP32 is busy - could slow down command sending
+                    }
+                    
                     // Call callback
-                    if (g_packet_callback) {
-                        g_packet_callback(&packet);
+          stats.packet_errors++;
+        LOG_PRINT("Protocol: ERROR - Buffer overflow, resetting state (total errors: %lu)\n", g_stats.
                     } else {
                         DEBUG_PRINT("Protocol: WARNING - No callback registered for packet 0x%02X\n",
                                    packet.type);
                     }
                 } else {
-                    g_crc_errors++;
-                    if (g_crc_errors <= 5 || (g_crc_errors % 10 == 0)) {
+                    g_stats.crc_errors++;
+                    if (g_stats.crc_errors <= 5 || (g_stats.crc_errors % 10 == 0)) {
                         LOG_PRINT("Protocol: CRC error (got=0x%04X exp=0x%04X, total: %lu)\n", 
-                                 received_crc, expected_crc, g_crc_errors);
+                                 received_crc, expected_crc, g_stats.crc_errors);
                     }
                 }
                 
@@ -384,8 +577,8 @@ static void process_byte(uint8_t byte) {
     
     // Buffer overflow protection
     if (g_rx_index >= sizeof(g_rx_buffer)) {
-        g_packet_errors++;
-        LOG_PRINT("Protocol: ERROR - Buffer overflow, resetting state (total errors: %lu)\n", g_packet_errors);
+        g_stats.packet_errors++;
+        LOG_PRINT("Protocol: ERROR - Buffer overflow, resetting state (total errors: %lu)\n", g_stats.packet_errors);
         g_rx_state = RX_WAIT_SYNC;
         g_rx_index = 0;
         g_rx_length = 0;
@@ -399,6 +592,23 @@ void protocol_process(void) {
         return;
     }
     
+    // Check for parser timeout - reset if incomplete packet has been waiting too long
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+    if (g_rx_state != RX_WAIT_SYNC && g_rx_last_byte_time > 0) {
+        if (now - g_rx_last_byte_time > PROTOCOL_PARSER_TIMEOUT_MS) {
+            g_stats.timeout_errors++;
+            LOG_WARN("Protocol: Parser timeout (state=%d, waited=%lums)\n",
+                   g_rx_state, now - g_rx_last_byte_time);
+            g_rx_state = RX_WAIT_SYNC;
+            g_rx_index = 0;
+            g_rx_length = 0;
+            g_rx_last_byte_time = 0;
+        }
+    }
+    
+    // Process pending commands (retry logic)
+    process_pending_commands();
+    
     // Process all available bytes
     while (uart_is_readable(ESP32_UART_ID)) {
         uint8_t byte = uart_getc(ESP32_UART_ID);
@@ -411,15 +621,50 @@ void protocol_set_callback(packet_callback_t callback) {
 }
 
 uint32_t protocol_get_crc_errors(void) {
-    return g_crc_errors;
+    return g_stats.crc_errors;
 }
 
 uint32_t protocol_get_packet_errors(void) {
-    return g_packet_errors;
+    return g_stats.packet_errors;
 }
 
 void protocol_reset_error_counters(void) {
-    g_crc_errors = 0;
-    g_packet_errors = 0;
+    g_stats.crc_errors = 0;
+    g_stats.packet_errors = 0;
+    g_stats.timeout_errors = 0;
+    g_stats.sequence_errors = 0;
+}
+
+void protocol_get_stats(protocol_stats_t* stats) {
+    if (stats) {
+        memcpy(stats, &g_stats, sizeof(protocol_stats_t));
+    }
+}
+
+void protocol_reset_stats(void) {
+    memset(&g_stats, 0, sizeof(protocol_stats_t));
+    g_handshake_complete = false;
+}
+
+bool protocol_is_ready(void) {
+    return g_handshake_complete;
+}
+
+bool protocol_handshake_complete(void) {
+    return g_handshake_complete;
+}
+
+void protocol_request_handshake(void) {
+    handshake_payload_t handshake = {
+        .protocol_version_major = PROTOCOL_VERSION_MAJOR,
+        .protocol_version_minor = PROTOCOL_VERSION_MINOR,
+        .capabilities = 0,  // No special capabilities yet
+        .max_retry_count = PROTOCOL_RETRY_COUNT,
+        .ack_timeout_ms = PROTOCOL_ACK_TIMEOUT_MS
+    };
+    send_packet(MSG_HANDSHAKE, (const uint8_t*)&handshake, sizeof(handshake_payload_t));
+    g_handshake_request_time = to_ms_since_boot(get_absolute_time());
+    LOG_INFO("Protocol: Handshake requested (v%d.%d)\n", 
+           PROTOCOL_VERSION_MAJOR, PROTOCOL_VERSION_MINOR);
 }
 

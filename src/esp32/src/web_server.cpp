@@ -683,6 +683,51 @@ void BrewWebServer::setupRoutes() {
         handleGetStatus(request);
     });
     
+    // Protocol diagnostics endpoint - exposes protocol v1.1 health metrics
+    _server.on("/api/protocol/diagnostics", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+        StaticJsonDocument<512> doc;
+        #pragma GCC diagnostic pop
+        
+        // Get protocol statistics from PicoUART
+        uint32_t packetsReceived = _picoUart.getPacketsReceived();
+        uint32_t packetErrors = _picoUart.getPacketErrors();
+        bool connected = _picoUart.isConnected();
+        
+        doc["connected"] = connected;
+        doc["packets_received"] = packetsReceived;
+        doc["packet_errors"] = packetErrors;
+        
+        // Calculate error rate
+        if (packetsReceived > 0) {
+            float errorRate = (float)packetErrors / (float)packetsReceived * 100.0f;
+            doc["error_rate_percent"] = errorRate;
+            
+            // Health status assessment
+            if (errorRate < 1.0f) {
+                doc["health"] = "excellent";
+            } else if (errorRate < 5.0f) {
+                doc["health"] = "good";
+            } else if (errorRate < 10.0f) {
+                doc["health"] = "fair";
+            } else {
+                doc["health"] = "poor";
+            }
+        } else {
+            doc["error_rate_percent"] = 0.0f;
+            doc["health"] = connected ? "initializing" : "disconnected";
+        }
+        
+        // Protocol version
+        doc["protocol_version"] = "1.1";
+        doc["features"] = "timeout,retry,handshake,backpressure,diagnostics";
+        
+        String response;
+        serializeJson(doc, response);
+        request->send(200, "application/json", response);
+    });
+    
     // ==========================================================================
     // Statistics API endpoints
     // ==========================================================================

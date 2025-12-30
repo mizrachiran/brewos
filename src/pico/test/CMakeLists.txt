@@ -59,6 +59,7 @@ set(TEST_SOURCES
     test_main.c
     test_sensor_utils.c
     test_protocol.c
+    test_protocol_advanced.c
     test_pid.c
     test_cleaning.c
     test_config_validation.c
@@ -67,6 +68,7 @@ set(TEST_SOURCES
     test_preinfusion.c
     test_validation.c
     ../src/validation.c
+    mocks/mock_protocol.c
 )
 
 # =============================================================================

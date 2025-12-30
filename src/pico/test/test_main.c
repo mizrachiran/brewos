@@ -35,6 +35,7 @@ void tearDown(void) {
 
 extern int run_sensor_utils_tests(void);
 extern int run_protocol_tests(void);
+extern int run_protocol_advanced_tests(void);
 extern int run_pid_tests(void);
 extern int run_cleaning_tests(void);
 extern int run_config_validation_tests(void);
@@ -63,6 +64,9 @@ int main(int argc, char** argv) {
     
     printf("Running Protocol Tests...\n");
     total_failures += run_protocol_tests();
+    
+    printf("Running Protocol Advanced Tests...\n");
+    total_failures += run_protocol_advanced_tests();
     
     printf("Running PID Controller Tests...\n");
     total_failures += run_pid_tests();
