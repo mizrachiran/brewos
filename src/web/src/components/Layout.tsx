@@ -246,8 +246,8 @@ export function Layout({ onExitDemo }: LayoutProps) {
       {/* Header - hides on scroll down (mobile only) */}
       <header
         className={cn(
-          "sticky top-0 z-50 header-glass border-b border-theme transition-transform duration-300",
-          "pt-[env(safe-area-inset-top)]",
+          "sticky z-50 header-glass border-b border-theme transition-transform duration-300",
+          "top-[env(safe-area-inset-top)]",
           headerVisible ? "translate-y-0" : "-translate-y-full"
         )}
       >
@@ -322,6 +322,7 @@ export function Layout({ onExitDemo }: LayoutProps) {
           className={cn(
             "sticky z-40 nav-bg border-b border-theme transition-transform duration-300",
             "top-[calc(4rem+env(safe-area-inset-top))]",
+            "-mt-px", // Negative margin to eliminate gap from header border
             headerVisible ? "translate-y-0" : "-translate-y-16"
           )}
         >
