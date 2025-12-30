@@ -765,15 +765,15 @@ ESP32                                    Pico
 
 ```c
 typedef struct __attribute__((packed)) {
-    uint8_t proto_ver_major;        // Protocol major version (1)
-    uint8_t proto_ver_minor;        // Protocol minor version (1)
-    uint8_t capabilities_flags;     // Reserved for future use
-    uint8_t reserved;               // Reserved
-    uint16_t max_packet_size;       // Maximum packet size (1000 bytes)
+    uint8_t protocol_version_major; // Protocol major version (1)
+    uint8_t protocol_version_minor; // Protocol minor version (1)
+    uint8_t capabilities;           // Bit flags for optional features
+    uint8_t max_retry_count;        // Maximum retry attempts (3)
+    uint16_t ack_timeout_ms;        // ACK timeout in milliseconds (1000)
 } handshake_payload_t;
 ```
 
-**Capabilities Flags (future):**
+**Capabilities Flags:**
 
 - Bit 0: Supports MSG_NACK
 - Bit 1: Supports retry mechanism

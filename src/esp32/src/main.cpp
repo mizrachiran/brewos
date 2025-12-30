@@ -501,20 +501,26 @@ static void onPicoPacket(const PicoPacket& packet) {
                 static uint32_t s_last_nack_time = 0;
                 uint32_t now = millis();
                 
-                s_nack_count++;
-                
-                // If multiple NACKs in short time, warn about system overload
-                if (now - s_last_nack_time < 5000) {
-                    if (s_nack_count > 10) {
-                        LOG_E("High NACK rate detected - Pico command queue overload");
-                        LOG_I("Consider reducing command frequency or increasing PROTOCOL_MAX_PENDING_CMDS");
-                        s_nack_count = 0;  // Reset to avoid spam
-                    }
+                // Initialize timing on first NACK
+                if (s_last_nack_time == 0) {
+                    s_last_nack_time = now;
+                    s_nack_count = 1;
                 } else {
-                    s_nack_count = 1;  // Reset counter after quiet period
+                    s_nack_count++;
+                    
+                    // If multiple NACKs in short time, warn about system overload
+                    if (now - s_last_nack_time < 5000) {
+                        if (s_nack_count > 10) {
+                            LOG_E("High NACK rate detected - Pico command queue overload");
+                            LOG_I("Consider reducing command frequency or increasing PROTOCOL_MAX_PENDING_CMDS");
+                            s_nack_count = 0;  // Reset to avoid spam
+                        }
+                    } else {
+                        s_nack_count = 1;  // Reset counter after quiet period
+                    }
+                    
+                    s_last_nack_time = now;
                 }
-                
-                s_last_nack_time = now;
                 
                 // Exponential backoff: delay next command
                 // This gives Pico time to process pending commands

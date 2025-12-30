@@ -143,7 +143,7 @@ static void process_pending_commands(void) {
                 cmd->sent_time_ms = now;
                 g_stats.retries++;
                 
-                LOG_WARN("Protocol: Retrying command 0x%02X seq=%d (attempt %d/%d)\n",
+                LOG_WARN("Protocol: Retrying command 0x%02X seq=%d (retry %d of %d)\n",
                        cmd->type, cmd->seq, cmd->retry_count, PROTOCOL_RETRY_COUNT);
                 
                 // Resend packet
@@ -529,11 +529,6 @@ static void process_byte(uint8_t byte) {
                         }
                     }
                     g_last_seq_received = packet.seq;
-                    g_stats.crc_errors++;
-                    if (g_stats.crc_errors <= 5 || (g_stats.crc_errors % 10 == 0)) {
-                        LOG_PRINT("Protocol: CRC error (got=0x%04X exp=0x%04X, total: %lu) type=0x%02X len=%d seq=%d\n", 
-                                 received_crc, expected_crc, g_stats.crc_errors,
-                                 packet.type, packet.length, packet.seq);
                     
                     // Handle handshake message
                     if (packet.type == MSG_HANDSHAKE) {
@@ -559,17 +554,19 @@ static void process_byte(uint8_t byte) {
                     }
                     
                     // Call callback
-                    g_stats.packet_errors++;
-                    LOG_PRINT("Protocol: ERROR - Buffer overflow, resetting state (total errors: %lu)\n", g_stats.packet_errors);
+                    if (g_packet_callback) {
+                        g_packet_callback(&packet);
                     } else {
                         DEBUG_PRINT("Protocol: WARNING - No callback registered for packet 0x%02X\n",
                                    packet.type);
                     }
                 } else {
+                    // CRC validation failed
                     g_stats.crc_errors++;
                     if (g_stats.crc_errors <= 5 || (g_stats.crc_errors % 10 == 0)) {
-                        LOG_PRINT("Protocol: CRC error (got=0x%04X exp=0x%04X, total: %lu)\n", 
-                                 received_crc, expected_crc, g_stats.crc_errors);
+                        LOG_PRINT("Protocol: CRC error (got=0x%04X exp=0x%04X, total: %lu) type=0x%02X len=%d seq=%d\n", 
+                                 received_crc, expected_crc, g_stats.crc_errors,
+                                 packet.type, packet.length, packet.seq);
                     }
                 }
                 
