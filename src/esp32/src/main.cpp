@@ -518,7 +518,7 @@ static void onPicoPacket(const PicoPacket& packet) {
                 
                 // Exponential backoff: delay next command
                 // This gives Pico time to process pending commands
-                delay(min(100 * s_nack_count, 500));  // Cap at 500ms
+                delay(min((uint32_t)(100 * s_nack_count), (uint32_t)500));  // Cap at 500ms
             }
             break;
         }
