@@ -173,6 +173,11 @@ static void send_lcd_init_commands(void) {
     // Send ALL init commands in one loop (EXACT match to reference)
     uint8_t i = 0;
     while (LCD_INIT_CMDS[i].data_bytes != 0xFF) {
+        // Skip the 0x36 (rotation) command - we'll send it separately with the correct value
+        if (LCD_INIT_CMDS[i].cmd == 0x36) {
+            i++;
+            continue;
+        }
         spi_write_cmd(LCD_INIT_CMDS[i].cmd);
         for (uint8_t j = 0; j < LCD_INIT_CMDS[i].data_bytes; j++) {
             spi_write_data(LCD_INIT_CMDS[i].data[j]);
@@ -182,6 +187,35 @@ static void send_lcd_init_commands(void) {
     
     // Wait 120ms after all commands (including Sleep Out which is now in the table)
     vTaskDelay(pdMS_TO_TICKS(120));
+    
+    // Set display rotation via 0x36 (Memory Access Control) command
+    // ST7701S rotation values:
+    // 0°:   0x00 (normal)
+    // 90°:  0x60 (MV + MX)
+    // 180°: 0xC0 (MX + MY)
+    // 270°: 0xA0 (MV + MY)
+    uint8_t rotation_value = 0x00;
+    switch (DISPLAY_ROTATION) {
+        case 0:
+            rotation_value = 0x00;
+            break;
+        case 90:
+            rotation_value = 0x60;
+            break;
+        case 180:
+            rotation_value = 0xC0;
+            break;
+        case 270:
+            rotation_value = 0xA0;
+            break;
+        default:
+            LOG_W("Invalid rotation %d, using 0°", DISPLAY_ROTATION);
+            rotation_value = 0x00;
+            break;
+    }
+    spi_write_cmd(0x36);
+    spi_write_data(rotation_value);
+    LOG_I("Display rotation set to %d° (0x36=0x%02X)", DISPLAY_ROTATION, rotation_value);
     
     // Display ON command (0x29)
     spi_write_cmd(0x29);
