@@ -84,3 +84,4 @@ src/esp32/data/
 .split-temp/
 
 reference_local
+src/esp32/scripts/__pycache__
