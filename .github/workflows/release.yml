@@ -1,6 +1,6 @@
-# Build firmware, create GitHub release, and deploy to production
+# Build firmware and create GitHub release
 # Triggered when a version tag (v*) is pushed
-name: "Release: Build Firmware & Deploy to Production"
+name: "Release: Build Firmware & Create Release"
 
 on:
   push:
