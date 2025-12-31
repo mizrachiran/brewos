@@ -56,6 +56,7 @@ public:
     // Usage: broadcastLog("Message: %s", value) or broadcastLogLevel("warn", "Message: %s", value)
     void broadcastLog(const char* format, ...) __attribute__((format(printf, 2, 3)));  // Variadic: defaults to "info"
     void broadcastLogLevel(const char* level, const char* format, ...) __attribute__((format(printf, 3, 4)));  // Level first, then format
+    void broadcastLogMessage(const char* level, const char* message);  // Direct message (no formatting) - for platform_log
     void broadcastEvent(const String& event, const JsonDocument* data = nullptr);  // Events (shot_start, shot_end, etc.)
     
     // Legacy/debug - raw pico message forwarding

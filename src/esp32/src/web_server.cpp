@@ -963,9 +963,9 @@ void BrewWebServer::setupRoutes() {
         }
         
         if (success) {
-            // Persist the setting
+            // Persist the setting to NVS
             State.settings().system.logBufferEnabled = enable;
-            State.saveSettings();
+            State.saveSystemSettings();  // Only save system settings (more efficient)
             
             char response[64];
             snprintf(response, sizeof(response), 

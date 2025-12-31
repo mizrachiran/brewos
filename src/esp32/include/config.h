@@ -138,30 +138,67 @@ BrewOSLogLevel stringToLogLevel(const char* str);
 // This is safe because we removed the config.h include from log_manager.h
 #include "log_manager.h"
 
-// Log macros with level checking (only define if platform.h wasn't included first)
+/**
+ * BrewOS Unified Logging Macros
+ * 
+ * Three outputs:
+ * 1. Serial - Always outputs for debugging
+ * 2. Log Buffer - Writes to 50KB buffer when enabled (for download)
+ * 3. WebSocket - Broadcasts to UI clients (INFO and above)
+ * 
+ * Note: Only defined if platform.h wasn't included first (avoids redefinition)
+ */
+
+#include <stdarg.h>  // For va_list in _brewos_log_broadcast
+
+// Forward declaration for WebSocket broadcast (defined in web_server_broadcast.cpp)
+extern "C" void platform_broadcast_log(const char* level, const char* message);
+
+// Helper to format and broadcast log message (used by LOG macros)
+static inline void _brewos_log_broadcast(const char* level, const char* fmt, ...) __attribute__((format(printf, 2, 3)));
+static inline void _brewos_log_broadcast(const char* level, const char* fmt, ...) {
+    char buf[256];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    platform_broadcast_log(level, buf);
+}
+
 #define LOG_TAG                 "BrewOS"
+
+// ERROR - always outputs (highest priority)
 #define LOG_E(fmt, ...)         do { \
     Serial.printf("[%lu] E: " fmt "\n", millis(), ##__VA_ARGS__); \
     if (g_logManager && g_logManager->isEnabled()) { \
         log_manager_add_logf(BREWOS_LOG_ERROR, LOG_SOURCE_ESP32, fmt, ##__VA_ARGS__); \
     } \
+    _brewos_log_broadcast("error", fmt, ##__VA_ARGS__); \
 } while(0)
+
+// WARN - outputs if level >= WARN
 #define LOG_W(fmt, ...)         do { \
     if (g_brewos_log_level >= BREWOS_LOG_WARN) { \
         Serial.printf("[%lu] W: " fmt "\n", millis(), ##__VA_ARGS__); \
         if (g_logManager && g_logManager->isEnabled()) { \
             log_manager_add_logf(BREWOS_LOG_WARN, LOG_SOURCE_ESP32, fmt, ##__VA_ARGS__); \
         } \
+        _brewos_log_broadcast("warn", fmt, ##__VA_ARGS__); \
     } \
 } while(0)
+
+// INFO - outputs if level >= INFO
 #define LOG_I(fmt, ...)         do { \
     if (g_brewos_log_level >= BREWOS_LOG_INFO) { \
         Serial.printf("[%lu] I: " fmt "\n", millis(), ##__VA_ARGS__); \
         if (g_logManager && g_logManager->isEnabled()) { \
             log_manager_add_logf(BREWOS_LOG_INFO, LOG_SOURCE_ESP32, fmt, ##__VA_ARGS__); \
         } \
+        _brewos_log_broadcast("info", fmt, ##__VA_ARGS__); \
     } \
 } while(0)
+
+// DEBUG - outputs if level >= DEBUG (no WebSocket broadcast to reduce traffic)
 #define LOG_D(fmt, ...)         do { \
     if (g_brewos_log_level >= BREWOS_LOG_DEBUG) { \
         Serial.printf("[%lu] D: " fmt "\n", millis(), ##__VA_ARGS__); \

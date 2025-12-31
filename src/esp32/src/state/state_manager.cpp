@@ -192,6 +192,7 @@ void StateManager::loadSettings() {
     
     // System
     _settings.system.setupComplete = prefs.getBool("setupDone", false);
+    _settings.system.logBufferEnabled = prefs.getBool("logBufEn", false);
     
     // User Preferences
     _settings.preferences.firstDayOfWeek = prefs.getUChar("prefDOW", 0);
@@ -356,13 +357,14 @@ void StateManager::saveNotificationSettings() {
 void StateManager::saveSystemSettings() {
     if (!_prefs.begin(NVS_SETTINGS, false)) {
         Serial.println("[State] ERROR: Failed to open NVS for system settings save");
-        // Serial.flush(); // Removed - can block on USB CDC
         return;
     }
     _prefs.putBool("setupDone", _settings.system.setupComplete);
+    _prefs.putBool("logBufEn", _settings.system.logBufferEnabled);
     _prefs.end();  // This commits the changes to flash
-    Serial.println("[State] System settings saved (setupComplete=" + String(_settings.system.setupComplete ? "true" : "false") + ")");
-    // Serial.flush(); // Removed - can block on USB CDC
+    Serial.printf("[State] System settings saved (setupComplete=%s, logBuffer=%s)\n",
+                  _settings.system.setupComplete ? "true" : "false",
+                  _settings.system.logBufferEnabled ? "true" : "false");
     notifySettingsChanged();
 }
 

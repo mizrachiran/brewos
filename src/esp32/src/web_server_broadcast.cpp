@@ -83,6 +83,26 @@ static void broadcastLogInternal(AsyncWebSocket* ws, CloudConnection* cloudConne
     }
 }
 
+// Direct message broadcast (no formatting) - for platform_log
+void BrewWebServer::broadcastLogMessage(const char* level, const char* message) {
+    if (!message) return;
+    broadcastLogInternal(&_ws, _cloudConnection, level, message);
+}
+
+// C wrapper for platform_log to broadcast via WebSocket
+// This allows platform_log (in arduino_impl.h) to broadcast logs without including web_server.h
+extern "C" void platform_broadcast_log(const char* level, const char* message) {
+    // Access global webServer pointer (defined in main.cpp)
+    extern BrewWebServer* webServer;
+    
+    if (!webServer || !message) {
+        return;
+    }
+    
+    // Use the direct message broadcast method (no formatting needed)
+    webServer->broadcastLogMessage(level ? level : "info", message);
+}
+
 // Variadic version - format string with arguments (like printf)
 // Variadic version - format string with arguments (like printf), defaults to "info"
 void BrewWebServer::broadcastLog(const char* format, ...) {

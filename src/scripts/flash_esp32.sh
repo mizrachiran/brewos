@@ -12,10 +12,12 @@ set -o pipefail  # Make pipes fail if any command in the pipeline fails
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ESP32_DIR="$SCRIPT_DIR/../esp32"
-WEB_DIR="$SCRIPT_DIR/../web"
+FIRMWARE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+APP_DIR="$FIRMWARE_DIR/../app"
 FIRMWARE="$ESP32_DIR/.pio/build/esp32s3/firmware.bin"
 LITTLEFS_IMAGE="$ESP32_DIR/.pio/build/esp32s3/littlefs.bin"
 WEB_DATA_DIR="$ESP32_DIR/data"
+BUILD_APP_SCRIPT="$SCRIPT_DIR/build_app_for_esp32.sh"
 
 # Configuration
 MAX_FILE_AGE_SECONDS=60  # Warn if web files are older than this
@@ -66,12 +68,9 @@ cd "$ESP32_DIR"
 
 # Build web UI if not firmware-only (always clean and rebuild for consistency)
 if [ "$FIRMWARE_ONLY" = false ]; then
-    if command -v npm &> /dev/null; then
-        cd "$WEB_DIR"
-        if [ ! -d "node_modules" ]; then
-            echo -e "${BLUE}Installing web dependencies...${NC}"
-            npm install
-        fi
+    if [ -f "$BUILD_APP_SCRIPT" ]; then
+        echo -e "${BLUE}Building web UI for ESP32...${NC}"
+        
         # Completely clear data directory before building (prevent ANY stale files)
         echo -e "${BLUE}Clearing data directory (removing all old web files)...${NC}"
         if [ -d "$WEB_DATA_DIR" ]; then
@@ -84,12 +83,8 @@ if [ "$FIRMWARE_ONLY" = false ]; then
             echo -e "${GREEN}✓ Data directory created${NC}"
         fi
         
-        # Also clear the web build output to ensure fresh build
-        echo -e "${BLUE}Clearing web build cache...${NC}"
-        rm -rf "$WEB_DIR/dist"
-        
-        echo -e "${BLUE}Building web UI for ESP32...${NC}"
-        if ! npm run build:esp32; then
+        # Use the build_app_for_esp32.sh script to build and sync web files
+        if ! "$BUILD_APP_SCRIPT" --build-only; then
             echo -e "${RED}✗ Web build failed!${NC}"
             exit 1
         fi
@@ -135,12 +130,11 @@ if [ "$FIRMWARE_ONLY" = false ]; then
         fi
         
         echo -e "${GREEN}✓ Web files verified: $WEB_FILE_COUNT files ($WEB_DATA_SIZE) in $WEB_DATA_DIR${NC}"
-        cd "$ESP32_DIR"
     else
-        echo -e "${YELLOW}⚠ npm not found - skipping web build${NC}"
+        echo -e "${YELLOW}⚠ Build script not found: $BUILD_APP_SCRIPT${NC}"
         if [ ! -d "$WEB_DATA_DIR" ] || [ -z "$(ls -A "$WEB_DATA_DIR" 2>/dev/null)" ]; then
             echo -e "${RED}✗ No web files found in $WEB_DATA_DIR${NC}"
-            echo -e "${YELLOW}Please run: ${CYAN}./scripts/sync_web_to_esp32.sh --build${NC}"
+            echo -e "${YELLOW}Please run: ${CYAN}./scripts/build_app_for_esp32.sh${NC}"
             exit 1
         fi
     fi
@@ -170,7 +164,7 @@ if [ "$FIRMWARE_ONLY" = false ]; then
         echo -e "${RED}✗ Data directory is empty or missing: $WEB_DATA_DIR${NC}"
         echo -e "${YELLOW}Cannot build LittleFS image without web files${NC}"
         echo -e "${CYAN}Please ensure web files are built and synced first:${NC}"
-        echo -e "  ${CYAN}./scripts/sync_web_to_esp32.sh --build${NC}"
+        echo -e "  ${CYAN}./scripts/build_app_for_esp32.sh${NC}"
         exit 1
     fi
     
