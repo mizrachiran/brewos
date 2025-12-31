@@ -328,8 +328,9 @@ void UI::showNotification(const char* message, uint16_t duration_ms) {
 }
 
 void UI::showAlarm(uint8_t code, const char* message) {
-    screen_alarm_set(code, message);
+    // Ensure screen exists before setting alarm data
     showScreen(SCREEN_ALARM);
+    screen_alarm_set(code, message);
 }
 
 void UI::clearAlarm() {

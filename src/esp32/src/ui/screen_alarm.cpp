@@ -69,6 +69,8 @@ void screen_alarm_set(uint8_t code, const char* message) {
     uint32_t child_cnt = lv_obj_get_child_cnt(screen);
     for (uint32_t i = 0; i < child_cnt; i++) {
         lv_obj_t* child = lv_obj_get_child(screen, i);
+        if (!child) continue;  // Safety check
+        
         void* user_data = lv_obj_get_user_data(child);
         
         if (user_data == (void*)1) {  // Code label
@@ -89,6 +91,8 @@ void screen_alarm_clear(void) {
     uint32_t child_cnt = lv_obj_get_child_cnt(screen);
     for (uint32_t i = 0; i < child_cnt; i++) {
         lv_obj_t* child = lv_obj_get_child(screen, i);
+        if (!child) continue;  // Safety check
+        
         void* user_data = lv_obj_get_user_data(child);
         
         if (user_data == (void*)1 || user_data == (void*)2) {  // Code or message label
