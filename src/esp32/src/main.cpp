@@ -133,8 +133,10 @@ static bool scaleEnabled = false;
 // CRITICAL: Mutex protects buffer operations to prevent lost updates from secondary writers
 static ui_state_t machineStateBufferA = {0};
 static ui_state_t machineStateBufferB = {0};
-static ui_state_t* machineState = &machineStateBufferA;  // Active buffer (readers)
-static ui_state_t* machineStateNext = &machineStateBufferB;  // Inactive buffer (writers)
+// Use volatile to prevent compiler reordering of pointer assignments
+// On ESP32, 32-bit pointer writes are atomic, but volatile ensures memory visibility
+static volatile ui_state_t* machineState = &machineStateBufferA;  // Active buffer (readers)
+static volatile ui_state_t* machineStateNext = &machineStateBufferB;  // Inactive buffer (writers)
 static SemaphoreHandle_t stateMutex = nullptr;  // Protects buffer copy/swap operations
 
 // Note: Demo mode is handled by the web UI only (via URL parameters)
@@ -154,6 +156,11 @@ unsigned long lastUIUpdate = 0;
 // Flag to trigger immediate UI refresh on encoder activity
 static volatile bool encoderActivityFlag = false;
 
+// Pre-allocated JSON buffer for diagnostics messages (reused to avoid heap fragmentation)
+// Size 512 bytes is sufficient for both diagnostic header and result messages
+static char diagnosticJsonBuffer[512] = {0};
+static bool diagnosticBufferInUse = false;  // Simple flag to prevent concurrent use
+
 // Forward declarations
 void parsePicoStatus(const uint8_t* payload, uint8_t length);
 void handleEncoderEvent(int32_t diff, button_state_t btn);
@@ -163,21 +170,27 @@ static void onPicoPacket(const PicoPacket& packet);
 // This prevents data tearing when readers access machineState while it's being updated
 static inline void swapMachineStateBuffers() {
     // Atomic pointer swap (single 32-bit write on ESP32)
-    ui_state_t* temp = machineState;
+    // volatile qualifier ensures compiler doesn't reorder these assignments
+    // On ESP32, 32-bit aligned pointer writes are guaranteed atomic by the architecture
+    volatile ui_state_t* temp = machineState;
     machineState = machineStateNext;
     machineStateNext = temp;
+    // Memory barrier not needed - mutex already provides synchronization
+    // The swap happens inside the mutex-protected section in parsePicoStatus()
 }
 
 // Get current machine state (for readers) - thread-safe, lock-free
 // Exported for use in other files (web_server, mqtt_client)
 const ui_state_t& getMachineState() {
-    return *machineState;
+    // Cast away volatile for read access - safe because we're only reading
+    return *const_cast<ui_state_t*>(machineState);
 }
 
 // Get writable machine state (for writers - updates inactive buffer)
 // Caller must call swapMachineStateBuffers() after completing all updates
 static inline ui_state_t& getMachineStateNext() {
-    return *machineStateNext;
+    // Cast away volatile for write access - safe because we're inside mutex protection
+    return *const_cast<ui_state_t*>(machineStateNext);
 }
 
 // Legacy accessor for compatibility - returns reference to active buffer
@@ -185,14 +198,17 @@ static inline ui_state_t& getMachineStateNext() {
 // Use updateMachineStateField() for secondary writers (WiFi, scale, etc.)
 // Only use this for immediate single-field updates that will be overwritten by next Pico status
 ui_state_t& getMachineStateRef() {
-    return *machineState;
+    // Cast away volatile for access - safe for immediate single-field updates
+    return *const_cast<ui_state_t*>(machineState);
 }
 
 // Convenience wrappers for common state updates
 // These update both buffers atomically to prevent lost updates
 void updateWiFiState(bool connected, bool apMode, int rssi) {
     if (stateMutex == nullptr) return;
-    if (xSemaphoreTake(stateMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+    // Use portMAX_DELAY to ensure state updates are never dropped
+    // Critical state updates must not be silently discarded
+    if (xSemaphoreTake(stateMutex, portMAX_DELAY) == pdTRUE) {
         machineState->wifi_connected = connected;
         machineState->wifi_ap_mode = apMode;
         if (rssi != 0) machineState->wifi_rssi = rssi;
@@ -200,24 +216,37 @@ void updateWiFiState(bool connected, bool apMode, int rssi) {
         machineStateNext->wifi_ap_mode = apMode;
         if (rssi != 0) machineStateNext->wifi_rssi = rssi;
         xSemaphoreGive(stateMutex);
+    } else {
+        // Defensive check - should never happen with portMAX_DELAY
+        LOG_E("CRITICAL: Failed to acquire state mutex in updateWiFiState");
     }
 }
 
 void updatePicoConnectedState(bool connected) {
     if (stateMutex == nullptr) return;
-    if (xSemaphoreTake(stateMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+    // Use portMAX_DELAY to ensure state updates are never dropped
+    // Critical state updates must not be silently discarded
+    if (xSemaphoreTake(stateMutex, portMAX_DELAY) == pdTRUE) {
         machineState->pico_connected = connected;
         machineStateNext->pico_connected = connected;
         xSemaphoreGive(stateMutex);
+    } else {
+        // Defensive check - should never happen with portMAX_DELAY
+        LOG_E("CRITICAL: Failed to acquire state mutex in updatePicoConnectedState");
     }
 }
 
 void updateScaleConnectedState(bool connected) {
     if (stateMutex == nullptr) return;
-    if (xSemaphoreTake(stateMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+    // Use portMAX_DELAY to ensure state updates are never dropped
+    // Critical state updates must not be silently discarded
+    if (xSemaphoreTake(stateMutex, portMAX_DELAY) == pdTRUE) {
         machineState->scale_connected = connected;
         machineStateNext->scale_connected = connected;
         xSemaphoreGive(stateMutex);
+    } else {
+        // Defensive check - should never happen with portMAX_DELAY
+        LOG_E("CRITICAL: Failed to acquire state mutex in updateScaleConnectedState");
     }
 }
 
@@ -249,7 +278,8 @@ static void onWiFiConnected() {
     IPAddress ip = WiFi.localIP();
     
     // Update SSID and IP in both buffers (these are string fields, need special handling)
-    if (stateMutex != nullptr && xSemaphoreTake(stateMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+    // Use portMAX_DELAY to ensure state updates are never dropped
+    if (stateMutex != nullptr && xSemaphoreTake(stateMutex, portMAX_DELAY) == pdTRUE) {
         // Get WiFi SSID directly from WiFiManager's stored value
         if (wifiManager) {
             const char* ssid = wifiManager->getStoredSSID();
@@ -384,8 +414,9 @@ static void onBBWTare() {
 // Cloud Command Callback - Static function to avoid std::function PSRAM issues
 // =============================================================================
 
-static void onCloudCommand(const String& type, JsonDocument& doc) {
+static void onCloudCommand(const char* type, JsonDocument& doc) {
     // Commands from cloud users are processed the same as local WebSocket
+    // Using const char* instead of String to avoid heap fragmentation
     if (webServer) {
         webServer->processCommand(doc);
     }
@@ -708,6 +739,14 @@ static void onPicoPacket(const PicoPacket& packet) {
             break;
             
         case MSG_DIAGNOSTICS: {
+            // Use pre-allocated buffer to avoid heap fragmentation
+            // Simple flag-based protection (diagnostics are infrequent, so contention is unlikely)
+            if (diagnosticBufferInUse) {
+                LOG_W("Diagnostic buffer in use, skipping message");
+                break;
+            }
+            diagnosticBufferInUse = true;
+            
             if (packet.length == 8) {
                 // Diagnostic header
                 LOG_I("Diag header: tests=%d, pass=%d, fail=%d, warn=%d, skip=%d, complete=%d",
@@ -728,12 +767,11 @@ static void onPicoPacket(const PicoPacket& packet) {
                 doc["durationMs"] = packet.payload[6] | (packet.payload[7] << 8);
                 
                 size_t jsonSize = measureJson(doc) + 1;
-                char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-                if (!jsonBuffer) jsonBuffer = (char*)malloc(jsonSize);
-                if (jsonBuffer && webServer) {
-                    serializeJson(doc, jsonBuffer, jsonSize);
-                    webServer->broadcastRaw(jsonBuffer);
-                    free(jsonBuffer);
+                if (jsonSize <= sizeof(diagnosticJsonBuffer) && webServer) {
+                    serializeJson(doc, diagnosticJsonBuffer, sizeof(diagnosticJsonBuffer));
+                    webServer->broadcastRaw(diagnosticJsonBuffer);
+                } else {
+                    LOG_W("Diagnostic JSON too large for buffer: %zu bytes", jsonSize);
                 }
                 
                 if (packet.payload[5] && webServer) {
@@ -760,14 +798,15 @@ static void onPicoPacket(const PicoPacket& packet) {
                 doc["message"] = msg;
                 
                 size_t jsonSize = measureJson(doc) + 1;
-                char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-                if (!jsonBuffer) jsonBuffer = (char*)malloc(jsonSize);
-                if (jsonBuffer && webServer) {
-                    serializeJson(doc, jsonBuffer, jsonSize);
-                    webServer->broadcastRaw(jsonBuffer);
-                    free(jsonBuffer);
+                if (jsonSize <= sizeof(diagnosticJsonBuffer) && webServer) {
+                    serializeJson(doc, diagnosticJsonBuffer, sizeof(diagnosticJsonBuffer));
+                    webServer->broadcastRaw(diagnosticJsonBuffer);
+                } else {
+                    LOG_W("Diagnostic JSON too large for buffer: %zu bytes", jsonSize);
                 }
             }
+            
+            diagnosticBufferInUse = false;
             break;
         }
         
@@ -797,6 +836,12 @@ void setup() {
     
     // Note: Watchdog is kept enabled - it helps catch hangs and crashes
     // Attempting to disable it causes errors on ESP32-S3
+    // 
+    // Watchdog Configuration:
+    // - Default timeout: 3-5 seconds (hardware watchdog)
+    // - If loop() takes >1 second, watchdog may reset the chip
+    // - All blocking operations must use yield() or vTaskDelay() to feed watchdog
+    // - Slow loop detection (Phase 8) is diagnostic only - doesn't prevent resets
     
     // Initialize mutex for state buffer protection (prevents race conditions)
     stateMutex = xSemaphoreCreateMutex();
@@ -2032,6 +2077,9 @@ void loop() {
     static unsigned long slowLoopCount = 0;
     
     // Track loop timing - detect blocking operations
+    // This is diagnostic only - if loop takes >1 second, hardware watchdog (3-5s timeout)
+    // may reset the chip before we can log the warning
+    // All blocking operations should use yield() or vTaskDelay() to feed watchdog
     unsigned long loopTime = millis() - loopStartTime;
     if (loopStartTime > 0 && loopTime > 100) {  // Loop took > 100ms
         slowLoopCount++;
@@ -2039,7 +2087,9 @@ void loop() {
             maxLoopTime = loopTime;
         }
         if (loopTime > 1000) {  // Loop took > 1 second - something is very wrong
-            LOG_E("SLOW LOOP: %lu ms (this blocks network!)", loopTime);
+            // WARNING: If loop takes >1 second, hardware watchdog (3-5s) may reset chip
+            // This log may not appear if watchdog resets before Serial output completes
+            LOG_E("SLOW LOOP: %lu ms (this blocks network and may trigger watchdog reset!)", loopTime);
         }
     }
     loopStartTime = millis();

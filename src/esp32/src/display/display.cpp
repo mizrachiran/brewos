@@ -18,6 +18,7 @@
 #include <esp_heap_caps.h>
 #include <esp_rom_sys.h>
 #include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <freertos/semphr.h>
 
 // Global display instance
@@ -243,7 +244,8 @@ Display::Display()
     , _backlightLevel(BACKLIGHT_DEFAULT)
     , _backlightSaved(BACKLIGHT_DEFAULT)
     , _isDimmed(false)
-    , _lastActivityTime(0) {
+    , _lastActivityTime(0)
+    , _lvglTaskHandle(nullptr) {
 }
 
 bool Display::begin() {
@@ -256,6 +258,9 @@ bool Display::begin() {
     // Don't call setBacklight() here as it may conflict with the GPIO
     _backlightLevel = BACKLIGHT_DEFAULT;
     resetIdleTimer();
+    
+    // Start LVGL timer handler task on Core 1
+    startLVGLTask();
     
     LOG_I("Display initialized: %dx%d", DISPLAY_WIDTH, DISPLAY_HEIGHT);
     return true;
@@ -488,9 +493,50 @@ void Display::flushCallback(lv_disp_drv_t* drv, const lv_area_t* area, lv_color_
     lv_disp_flush_ready(drv);
 }
 
-uint32_t Display::update() {
+void Display::update() {
+    // LVGL timer handler now runs in dedicated FreeRTOS task
+    // This function only handles backlight idle timeout
     updateBacklightIdle();
-    return lv_timer_handler();
+}
+
+void Display::startLVGLTask() {
+    if (_lvglTaskHandle != nullptr) {
+        LOG_W("LVGL task already started");
+        return;
+    }
+    
+    xTaskCreatePinnedToCore(
+        lvglTaskCode,
+        "LVGLTask",
+        LVGL_TASK_STACK_SIZE,
+        this,
+        LVGL_TASK_PRIORITY,
+        &_lvglTaskHandle,
+        LVGL_TASK_CORE
+    );
+    
+    if (_lvglTaskHandle != nullptr) {
+        LOG_I("LVGL task started on Core %d (priority %d)", LVGL_TASK_CORE, LVGL_TASK_PRIORITY);
+    } else {
+        LOG_E("Failed to create LVGL task!");
+    }
+}
+
+void Display::lvglTaskCode(void* parameter) {
+    Display* self = static_cast<Display*>(parameter);
+    
+    LOG_I("LVGL task running on Core %d", xPortGetCoreID());
+    
+    while (true) {
+        // Call LVGL timer handler - this processes animations and screen updates
+        // Returns time until next call needed (in ms), but we use fixed interval for smooth updates
+        uint32_t nextCall = lv_timer_handler();
+        
+        // Use fixed 5ms interval for consistent frame rate
+        // LVGL typically needs ~16ms for 60 FPS, but calling more frequently
+        // ensures smooth animations even during network operations
+        vTaskDelay(pdMS_TO_TICKS(LVGL_TASK_INTERVAL_MS));
+    }
 }
 
 void Display::setBacklight(uint8_t brightness) {

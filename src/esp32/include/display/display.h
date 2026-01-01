@@ -26,10 +26,11 @@ public:
     bool begin();
     
     /**
-     * LVGL timer handler - call this in your main loop
-     * Returns time until next call needed (in ms)
+     * Update display (backlight idle handling)
+     * Note: LVGL timer handler now runs in dedicated FreeRTOS task
+     * This function only handles backlight idle timeout
      */
-    uint32_t update();
+    void update();
     
     /**
      * Set backlight brightness (0-255)
@@ -85,10 +86,19 @@ private:
     bool _isDimmed;
     unsigned long _lastActivityTime;
     
+    // FreeRTOS task for LVGL timer handler
+    TaskHandle_t _lvglTaskHandle;
+    static void lvglTaskCode(void* parameter);
+    static const int LVGL_TASK_STACK_SIZE = 4096;  // 4KB stack
+    static const int LVGL_TASK_PRIORITY = 2;       // Above idle, below critical tasks
+    static const int LVGL_TASK_CORE = 1;           // Run on Core 1 (same as Arduino loop)
+    static const int LVGL_TASK_INTERVAL_MS = 5;    // 5ms = 200 FPS max (LVGL typically needs ~16ms for 60 FPS)
+    
     // Internal methods
     void initHardware();
     void initLVGL();
     void updateBacklightIdle();
+    void startLVGLTask();
     
     // Static callbacks for LVGL
     static void flushCallback(lv_disp_drv_t* drv, const lv_area_t* area, lv_color_t* color_p);

@@ -256,8 +256,14 @@ void WiFiManager::processCommand(WiFiCommand cmd) {
 
 void WiFiManager::loop() {
     // The main loop() now just provides API compatibility
-    // All WiFi work happens in the background task
+    // All WiFi work happens in the background task (taskLoop() on Core 0)
     // This prevents WiFi operations from blocking the main loop on Core 1
+    // 
+    // NON-BLOCKING GUARANTEE:
+    // - WiFi connection attempts run in FreeRTOS task (taskLoop)
+    // - Reconnection logic uses vTaskDelay() instead of delay()
+    // - All blocking operations yield to other tasks
+    // - Main loop() never blocks waiting for WiFi operations
 }
 
 bool WiFiManager::hasStoredCredentials() {

@@ -25,7 +25,8 @@ class CloudConnection {
 public:
     // Command handler callback - receives commands from cloud users
     // Simple function pointer to avoid std::function PSRAM allocation issues
-    typedef void (*CommandCallback)(const String& type, JsonDocument& doc);
+    // Uses const char* instead of String to avoid heap fragmentation
+    typedef void (*CommandCallback)(const char* type, JsonDocument& doc);
     
     // Registration callback - called before first connect to register device with cloud
     typedef bool (*RegisterCallback)();

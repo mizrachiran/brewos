@@ -43,7 +43,16 @@
     #define LV_MEM_CUSTOM 0
 #else
     /* ESP32: Use custom malloc/free to route LVGL allocations to PSRAM
-     * This frees ~128KB of internal RAM for WiFi/SSL operations */
+     * This frees ~128KB of internal RAM for WiFi/SSL operations
+     * 
+     * PSRAM Usage Strategy:
+     * - LVGL frame buffers and graphics objects are allocated in PSRAM
+     * - Internal RAM is reserved for:
+     *   - SSL handshake buffers (~16KB contiguous blocks needed)
+     *   - WiFi stack buffers
+     *   - Critical system objects (WiFiManager, MQTTClient, etc.)
+     * - Large JSON documents (>1KB) should also use PSRAM via SpiRamJsonDocument
+     */
     #define LV_MEM_CUSTOM 1
     #define LV_MEM_CUSTOM_INCLUDE <esp_heap_caps.h>
     #define LV_MEM_CUSTOM_ALLOC(size) heap_caps_malloc(size, MALLOC_CAP_SPIRAM)

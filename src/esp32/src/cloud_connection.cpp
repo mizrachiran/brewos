@@ -276,7 +276,7 @@ void CloudConnection::taskCode(void* parameter) {
                 JsonDocument doc;
                 doc["type"] = "request_state";
                 doc["source"] = "proactive";  // Mark as proactive for debugging
-                self->_onCommand("request_state", doc);
+                self->_onCommand("request_state", doc);  // String literal is const char*
             } else if (freeHeap < 35000) {
                 // Defer if heap too low
                 self->_pendingInitialStateBroadcast = true;
@@ -643,17 +643,18 @@ void CloudConnection::handleMessage(uint8_t* payload, size_t length) {
         return;
     }
     
-    String type = doc["type"] | "";
+    // Extract type as const char* to avoid String allocation
+    const char* type = doc["type"] | "";
     
     // Handle cloud-specific messages
-    if (type == "connected") {
+    if (strcmp(type, "connected") == 0) {
         LOG_I("Cloud acknowledged connection");
         return;
     }
     
-    if (type == "error") {
-        String errorMsg = doc["error"] | "Unknown error";
-        LOG_E("Cloud error: %s", errorMsg.c_str());
+    if (strcmp(type, "error") == 0) {
+        const char* errorMsg = doc["error"] | "Unknown error";
+        LOG_E("Cloud error: %s", errorMsg);
         return;
     }
     
@@ -661,7 +662,7 @@ void CloudConnection::handleMessage(uint8_t* payload, size_t length) {
     if (_onCommand) {
         _onCommand(type, doc);
     } else {
-        LOG_D("Received message type=%s (no handler)", type.c_str());
+        LOG_D("Received message type=%s (no handler)", type);
     }
 }
 

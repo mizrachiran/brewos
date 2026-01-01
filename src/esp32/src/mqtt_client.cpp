@@ -162,6 +162,14 @@ void MQTTClient::taskLoop() {
 
 void MQTTClient::loop() {
     // The main loop() now provides API compatibility only
+    // All MQTT work happens in the background task (taskLoop() on Core 0)
+    // This prevents MQTT operations from blocking the main loop on Core 1
+    // 
+    // NON-BLOCKING GUARANTEE:
+    // - MQTT connection attempts run in FreeRTOS task (taskLoop)
+    // - Reconnection logic uses vTaskDelay() instead of delay()
+    // - PubSubClient::loop() is called from task, not main loop
+    // - Main loop() never blocks waiting for MQTT operations
     // All MQTT work happens in the background task on Core 0
     // This prevents MQTT operations from blocking the main loop on Core 1
 }
