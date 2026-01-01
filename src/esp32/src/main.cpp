@@ -1275,15 +1275,17 @@ void setup() {
     // Set default state values from BBW settings
     LOG_I("Setting default machine state values...");
     // Serial.flush(); // Removed - can block on USB CDC
-    ui_state_t& state = runtimeState().beginUpdate();
-    state.brew_setpoint = 93.0f;
-    state.steam_setpoint = 145.0f;
-    state.target_weight = brewByWeight->getTargetWeight();
-    state.dose_weight = brewByWeight->getDoseWeight();
-    state.brew_max_temp = 105.0f;
-    state.steam_max_temp = 160.0f;
-    state.dose_weight = 18.0f;
-    runtimeState().endUpdate();
+    {
+        ui_state_t& defaultState = runtimeState().beginUpdate();
+        defaultState.brew_setpoint = 93.0f;
+        defaultState.steam_setpoint = 145.0f;
+        defaultState.target_weight = brewByWeight->getTargetWeight();
+        defaultState.dose_weight = brewByWeight->getDoseWeight();
+        defaultState.brew_max_temp = 105.0f;
+        defaultState.steam_max_temp = 160.0f;
+        defaultState.dose_weight = 18.0f;
+        runtimeState().endUpdate();
+    }
     LOG_I("Default values set");
     // Serial.flush(); // Removed - can block on USB CDC
     

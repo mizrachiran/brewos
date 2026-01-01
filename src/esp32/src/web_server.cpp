@@ -82,7 +82,8 @@ void BrewWebServer::setCloudConnection(CloudConnection* cloudConnection) {
 }
 
 // Static callback wrapper for cloud commands - avoids lambda capture issues
-static void cloudCommandCallback(const String& type, JsonDocument& doc) {
+// Note: Uses const char* instead of String to match CloudConnection::CommandCallback
+static void cloudCommandCallback(const char* type, JsonDocument& doc) {
     if (_wsInstance) {
         _wsInstance->processCommand(doc);
     }
