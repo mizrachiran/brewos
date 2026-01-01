@@ -111,7 +111,8 @@
  *-----------*/
 
 /* Enable logging */
-#define LV_USE_LOG 1
+/* Disabled for production to improve frame rates - re-enable for debugging */
+#define LV_USE_LOG 0
 
 #if LV_USE_LOG
     /* Log level */
