@@ -486,10 +486,7 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
         }
         lastCloudConnected = true;
         
-        cloudChanged = cloudChangeDetector.hasChanged(state);
-        if (cloudChanged) {
-            cloudChangedFields = cloudChangeDetector.getChangedFields(state);
-        }
+        cloudChanged = cloudChangeDetector.hasChanged(state, &cloudChangedFields);
         unsigned long now = millis();
         cloudHeartbeatDue = (now - lastCloudHeartbeat >= CLOUD_HEARTBEAT_INTERVAL);
     } else {
@@ -520,8 +517,8 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
     }
     
     // Sequence number for tracking updates and detecting missed messages
+    // Only increment when we're actually going to send a message
     static uint32_t statusSequence = 0;
-    statusSequence++;
     
     // Decide: delta or full status?
     // Send full status on:
@@ -538,6 +535,9 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
     // Clear the pre-allocated document for reuse
     g_statusDoc->clear();
     JsonDocument& doc = *g_statusDoc;
+    
+    // Increment sequence number only when we're actually sending
+    statusSequence++;
     
     // Build delta or full status
     if (!sendFullStatus && (cloudChanged || localChanged)) {

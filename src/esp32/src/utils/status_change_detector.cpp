@@ -155,11 +155,36 @@ ChangedFields StatusChangeDetector::getChangedFields(const ui_state_t& current) 
     return fields;
 }
 
-bool StatusChangeDetector::hasChanged(const ui_state_t& current) {
+bool StatusChangeDetector::hasChanged(const ui_state_t& current, ChangedFields* changedFields) {
     // First call - always return true and store current state
     if (!_initialized) {
         memcpy(&_previous, &current, sizeof(ui_state_t));
         _initialized = true;
+        if (changedFields) {
+            // Mark all fields as changed on first call
+            *changedFields = ChangedFields();
+            changedFields->machine_state = true;
+            changedFields->machine_mode = true;
+            changedFields->heating_strategy = true;
+            changedFields->is_heating = true;
+            changedFields->is_brewing = true;
+            changedFields->temps = true;
+            changedFields->pressure = true;
+            changedFields->power = true;
+            changedFields->scale_weight = true;
+            changedFields->scale_flow_rate = true;
+            changedFields->scale_connected = true;
+            changedFields->brew_time = true;
+            changedFields->target_weight = true;
+            changedFields->connections = true;
+            changedFields->water_low = true;
+            changedFields->alarm = true;
+            changedFields->cleaning = true;
+            changedFields->wifi = true;
+            changedFields->mqtt = true;
+            changedFields->stats = true;
+            changedFields->esp32 = true;
+        }
         if (_debug) {
             LOG_D("StatusChangeDetector: Initialized");
         }
@@ -169,65 +194,63 @@ bool StatusChangeDetector::hasChanged(const ui_state_t& current) {
     bool changed = false;
     const char* changedField = nullptr;
     
+    // Initialize changedFields if provided
+    if (changedFields) {
+        *changedFields = ChangedFields();
+    }
+    
     // Machine state - always check (critical)
     if (current.machine_state != _previous.machine_state) {
         changed = true;
         changedField = "machine_state";
+        if (changedFields) changedFields->machine_state = true;
     }
     
     // Heating strategy
     if (current.heating_strategy != _previous.heating_strategy) {
         changed = true;
         changedField = "heating_strategy";
+        if (changedFields) changedFields->heating_strategy = true;
     }
     
     // Heating/brewing flags
     if (current.is_heating != _previous.is_heating) {
         changed = true;
         changedField = "is_heating";
+        if (changedFields) changedFields->is_heating = true;
     }
     
     if (current.is_brewing != _previous.is_brewing) {
         changed = true;
         changedField = "is_brewing";
+        if (changedFields) changedFields->is_brewing = true;
     }
     
-    // Temperatures - with threshold
-    if (floatChanged(current.brew_temp, _previous.brew_temp, STATUS_TEMP_THRESHOLD)) {
+    // Temperatures - with threshold (grouped as "temps")
+    bool tempChanged = false;
+    if (floatChanged(current.brew_temp, _previous.brew_temp, STATUS_TEMP_THRESHOLD) ||
+        floatChanged(current.brew_setpoint, _previous.brew_setpoint, STATUS_TEMP_THRESHOLD) ||
+        floatChanged(current.steam_temp, _previous.steam_temp, STATUS_TEMP_THRESHOLD) ||
+        floatChanged(current.steam_setpoint, _previous.steam_setpoint, STATUS_TEMP_THRESHOLD) ||
+        floatChanged(current.group_temp, _previous.group_temp, STATUS_TEMP_THRESHOLD)) {
         changed = true;
-        changedField = "brew_temp";
-    }
-    
-    if (floatChanged(current.brew_setpoint, _previous.brew_setpoint, STATUS_TEMP_THRESHOLD)) {
-        changed = true;
-        changedField = "brew_setpoint";
-    }
-    
-    if (floatChanged(current.steam_temp, _previous.steam_temp, STATUS_TEMP_THRESHOLD)) {
-        changed = true;
-        changedField = "steam_temp";
-    }
-    
-    if (floatChanged(current.steam_setpoint, _previous.steam_setpoint, STATUS_TEMP_THRESHOLD)) {
-        changed = true;
-        changedField = "steam_setpoint";
-    }
-    
-    if (floatChanged(current.group_temp, _previous.group_temp, STATUS_TEMP_THRESHOLD)) {
-        changed = true;
-        changedField = "group_temp";
+        tempChanged = true;
+        changedField = "temps";
+        if (changedFields) changedFields->temps = true;
     }
     
     // Pressure - with threshold
     if (floatChanged(current.pressure, _previous.pressure, STATUS_PRESSURE_THRESHOLD)) {
         changed = true;
         changedField = "pressure";
+        if (changedFields) changedFields->pressure = true;
     }
     
     // Power - with threshold
     if (abs((int)current.power_watts - (int)_previous.power_watts) >= (int)STATUS_POWER_THRESHOLD) {
         changed = true;
-        changedField = "power_watts";
+        changedField = "power";
+        if (changedFields) changedFields->power = true;
     }
     
     // Brewing info - always check when brewing
@@ -236,99 +259,85 @@ bool StatusChangeDetector::hasChanged(const ui_state_t& current) {
         // Actually, let's always update when brewing to ensure real-time updates
         if (current.brew_time_ms != _previous.brew_time_ms) {
             changed = true;
-            changedField = "brew_time_ms";
+            changedField = "brew_time";
+            if (changedFields) changedFields->brew_time = true;
         }
     }
     
     // Weight - with threshold
     if (floatChanged(current.brew_weight, _previous.brew_weight, STATUS_WEIGHT_THRESHOLD)) {
         changed = true;
-        changedField = "brew_weight";
+        changedField = "scale_weight";
+        if (changedFields) changedFields->scale_weight = true;
     }
     
     // Flow rate - with threshold
     if (floatChanged(current.flow_rate, _previous.flow_rate, STATUS_FLOW_RATE_THRESHOLD)) {
         changed = true;
-        changedField = "flow_rate";
+        changedField = "scale_flow_rate";
+        if (changedFields) changedFields->scale_flow_rate = true;
     }
     
     // Target weight changes
     if (floatChanged(current.target_weight, _previous.target_weight, STATUS_WEIGHT_THRESHOLD)) {
         changed = true;
         changedField = "target_weight";
+        if (changedFields) changedFields->target_weight = true;
     }
     
-    // Connection status - always check
-    if (current.pico_connected != _previous.pico_connected) {
+    // Connection status - always check (grouped as "connections")
+    bool connChanged = false;
+    if (current.pico_connected != _previous.pico_connected ||
+        current.wifi_connected != _previous.wifi_connected ||
+        current.mqtt_connected != _previous.mqtt_connected ||
+        current.scale_connected != _previous.scale_connected ||
+        current.cloud_connected != _previous.cloud_connected) {
         changed = true;
-        changedField = "pico_connected";
-    }
-    
-    if (current.wifi_connected != _previous.wifi_connected) {
-        changed = true;
-        changedField = "wifi_connected";
-    }
-    
-    if (current.mqtt_connected != _previous.mqtt_connected) {
-        changed = true;
-        changedField = "mqtt_connected";
-    }
-    
-    if (current.scale_connected != _previous.scale_connected) {
-        changed = true;
-        changedField = "scale_connected";
-    }
-    
-    if (current.cloud_connected != _previous.cloud_connected) {
-        changed = true;
-        changedField = "cloud_connected";
+        connChanged = true;
+        changedField = "connections";
+        if (changedFields) {
+            changedFields->connections = true;
+            changedFields->scale_connected = (current.scale_connected != _previous.scale_connected);
+        }
     }
     
     // Water level and alarms - always check
     if (current.water_low != _previous.water_low) {
         changed = true;
         changedField = "water_low";
+        if (changedFields) changedFields->water_low = true;
     }
     
-    if (current.alarm_active != _previous.alarm_active) {
+    // Alarm (grouped)
+    if (current.alarm_active != _previous.alarm_active || current.alarm_code != _previous.alarm_code) {
         changed = true;
-        changedField = "alarm_active";
-    }
-    
-    if (current.alarm_code != _previous.alarm_code) {
-        changed = true;
-        changedField = "alarm_code";
+        changedField = "alarm";
+        if (changedFields) changedFields->alarm = true;
     }
     
     // Cleaning reminder
     if (current.cleaning_reminder != _previous.cleaning_reminder) {
         changed = true;
-        changedField = "cleaning_reminder";
+        changedField = "cleaning";
+        if (changedFields) changedFields->cleaning = true;
     }
     
-    // Brew count (less frequent, but check anyway)
-    if (current.brew_count != _previous.brew_count) {
+    // WiFi (grouped - RSSI, AP mode, IP)
+    bool wifiChanged = false;
+    if (abs(current.wifi_rssi - _previous.wifi_rssi) >= 10 ||
+        current.wifi_ap_mode != _previous.wifi_ap_mode ||
+        strcmp(current.wifi_ip, _previous.wifi_ip) != 0) {
         changed = true;
-        changedField = "brew_count";
+        wifiChanged = true;
+        changedField = "wifi";
+        if (changedFields) changedFields->wifi = true;
     }
     
-    // WiFi RSSI - significant changes only (10 dBm threshold)
-    if (abs(current.wifi_rssi - _previous.wifi_rssi) >= 10) {
-        changed = true;
-        changedField = "wifi_rssi";
-    }
+    // MQTT config changes (if we track them separately)
+    // For now, mqtt connection status is part of "connections"
     
-    // WiFi AP mode
-    if (current.wifi_ap_mode != _previous.wifi_ap_mode) {
-        changed = true;
-        changedField = "wifi_ap_mode";
-    }
-    
-    // WiFi IP address change (string comparison)
-    if (strcmp(current.wifi_ip, _previous.wifi_ip) != 0) {
-        changed = true;
-        changedField = "wifi_ip";
-    }
+    // Stats and ESP32 info are not in ui_state_t directly, so we don't check them here
+    // They would be set externally if needed
     
     // If something changed, update previous state
     if (changed) {
