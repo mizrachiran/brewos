@@ -87,9 +87,10 @@ public:
     /**
      * Check if the current status has changed meaningfully from the previous status
      * @param current Current device status
+     * @param changedFields Optional pointer to populate with specific changed fields
      * @return true if any meaningful field changed, false otherwise
      */
-    bool hasChanged(const ui_state_t& current);
+    bool hasChanged(const ui_state_t& current, ChangedFields* changedFields = nullptr);
     
     /**
      * Get which specific fields changed (for delta updates)
