@@ -6,8 +6,11 @@
 
 // Forward declarations
 class BrewWebServer;
-class StateManager;
 class PowerMeterManager;
+
+namespace BrewOS {
+    class StateManager;
+}
 
 /**
  * PicoProtocolHandler
@@ -27,7 +30,7 @@ public:
     /**
      * Initialize handler with required dependencies
      */
-    void begin(PicoUART* uart, BrewWebServer* server, StateManager* state, PowerMeterManager* powerMeter);
+    void begin(PicoUART* uart, BrewWebServer* server, BrewOS::StateManager* state, PowerMeterManager* powerMeter);
     
     /**
      * Handle incoming Pico packet
@@ -55,7 +58,7 @@ public:
 private:
     PicoUART* _uart;
     BrewWebServer* _server;
-    StateManager* _state;
+    BrewOS::StateManager* _state;
     PowerMeterManager* _powerMeter;
     
     // NACK backoff state

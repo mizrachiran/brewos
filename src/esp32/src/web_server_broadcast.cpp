@@ -1,6 +1,7 @@
 #include "web_server.h"
 #include "config.h"
 #include "memory_utils.h"
+#include "json_buffer_pool.h"
 #include "cloud_connection.h"
 #include "mqtt_client.h"
 #include "state/state_manager.h"
@@ -60,13 +61,9 @@ static void broadcastLogInternal(AsyncWebSocket* ws, CloudConnection* cloudConne
     doc["message"] = message;
     doc["timestamp"] = millis();
     
-    // Allocate JSON buffer in internal RAM (not PSRAM) to avoid crashes
+    // Use buffer pool to avoid heap fragmentation
     size_t jsonSize = measureJson(doc) + 1;
-    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!jsonBuffer) {
-        // Fallback to regular malloc if heap_caps_malloc fails
-        jsonBuffer = (char*)malloc(jsonSize);
-    }
+    char* jsonBuffer = JsonBufferPool::instance().allocate(jsonSize);
     
     if (jsonBuffer) {
         serializeJson(doc, jsonBuffer, jsonSize);
@@ -84,7 +81,8 @@ static void broadcastLogInternal(AsyncWebSocket* ws, CloudConnection* cloudConne
             cloudConnection->send(jsonBuffer);
         }
         
-        free(jsonBuffer);
+        // Release buffer back to pool (or free if dynamically allocated)
+        JsonBufferPool::instance().release(jsonBuffer);
     }
 }
 
@@ -157,12 +155,9 @@ void BrewWebServer::broadcastPicoMessage(uint8_t type, const uint8_t* payload, s
     doc["payload"] = hexPayload;
     doc["length"] = len;
     
-    // Allocate JSON buffer in internal RAM (not PSRAM) to avoid crashes
+    // Use buffer pool to avoid heap fragmentation
     size_t jsonSize = measureJson(doc) + 1;
-    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!jsonBuffer) {
-        jsonBuffer = (char*)malloc(jsonSize);
-    }
+    char* jsonBuffer = JsonBufferPool::instance().allocate(jsonSize);
     
     if (jsonBuffer) {
         serializeJson(doc, jsonBuffer, jsonSize);
@@ -173,7 +168,8 @@ void BrewWebServer::broadcastPicoMessage(uint8_t type, const uint8_t* payload, s
             _cloudConnection->send(jsonBuffer);
         }
         
-        free(jsonBuffer);
+        // Release buffer back to pool (or free if dynamically allocated)
+        JsonBufferPool::instance().release(jsonBuffer);
     }
 }
 
@@ -949,12 +945,9 @@ void BrewWebServer::broadcastDeviceInfo() {
     JsonObject scheduleObj = doc["schedule"].to<JsonObject>();
     scheduleSettings.toJson(scheduleObj);
     
-    // Allocate JSON buffer in internal RAM (not PSRAM) to avoid crashes
+    // Use buffer pool to avoid heap fragmentation
     size_t jsonSize = measureJson(doc) + 1;
-    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!jsonBuffer) {
-        jsonBuffer = (char*)malloc(jsonSize);
-    }
+    char* jsonBuffer = JsonBufferPool::instance().allocate(jsonSize);
     
     if (jsonBuffer) {
         serializeJson(doc, jsonBuffer, jsonSize);
@@ -965,7 +958,8 @@ void BrewWebServer::broadcastDeviceInfo() {
             _cloudConnection->send(jsonBuffer);
         }
         
-        free(jsonBuffer);
+        // Release buffer back to pool (or free if dynamically allocated)
+        JsonBufferPool::instance().release(jsonBuffer);
     }
 }
 
@@ -992,12 +986,9 @@ void BrewWebServer::broadcastBBWSettings() {
         doc["autoTare"] = brewByWeight->isAutoTareEnabled();
     }
     
-    // Allocate JSON buffer in internal RAM (not PSRAM) to avoid crashes
+    // Use buffer pool to avoid heap fragmentation
     size_t jsonSize = measureJson(doc) + 1;
-    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!jsonBuffer) {
-        jsonBuffer = (char*)malloc(jsonSize);
-    }
+    char* jsonBuffer = JsonBufferPool::instance().allocate(jsonSize);
     
     if (jsonBuffer) {
         serializeJson(doc, jsonBuffer, jsonSize);
@@ -1008,7 +999,8 @@ void BrewWebServer::broadcastBBWSettings() {
             _cloudConnection->send(jsonBuffer);
         }
         
-        free(jsonBuffer);
+        // Release buffer back to pool (or free if dynamically allocated)
+        JsonBufferPool::instance().release(jsonBuffer);
     }
 }
 
@@ -1059,7 +1051,8 @@ void BrewWebServer::broadcastMqttStatus() {
             _cloudConnection->send(jsonBuffer);
         }
         
-        free(jsonBuffer);
+        // Release buffer back to pool (or free if dynamically allocated)
+        JsonBufferPool::instance().release(jsonBuffer);
     }
 }
 
@@ -1079,12 +1072,9 @@ void BrewWebServer::broadcastPowerMeterStatus() {
     // Get status from power meter manager
     if (powerMeterManager) powerMeterManager->getStatus(doc);
     
-    // Allocate JSON buffer in internal RAM (not PSRAM) to avoid crashes
+    // Use buffer pool to avoid heap fragmentation
     size_t jsonSize = measureJson(doc) + 1;
-    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!jsonBuffer) {
-        jsonBuffer = (char*)malloc(jsonSize);
-    }
+    char* jsonBuffer = JsonBufferPool::instance().allocate(jsonSize);
     
     if (jsonBuffer) {
         serializeJson(doc, jsonBuffer, jsonSize);
@@ -1095,7 +1085,8 @@ void BrewWebServer::broadcastPowerMeterStatus() {
             _cloudConnection->send(jsonBuffer);
         }
         
-        free(jsonBuffer);
+        // Release buffer back to pool (or free if dynamically allocated)
+        JsonBufferPool::instance().release(jsonBuffer);
     }
 }
 
@@ -1117,12 +1108,9 @@ void BrewWebServer::broadcastEvent(const String& event, const JsonDocument* data
         doc["data"] = *data;
     }
     
-    // Allocate JSON buffer in internal RAM (not PSRAM) to avoid crashes
+    // Use buffer pool to avoid heap fragmentation
     size_t jsonSize = measureJson(doc) + 1;
-    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!jsonBuffer) {
-        jsonBuffer = (char*)malloc(jsonSize);
-    }
+    char* jsonBuffer = JsonBufferPool::instance().allocate(jsonSize);
     
     if (jsonBuffer) {
         serializeJson(doc, jsonBuffer, jsonSize);
@@ -1133,6 +1121,7 @@ void BrewWebServer::broadcastEvent(const String& event, const JsonDocument* data
             _cloudConnection->send(jsonBuffer);
         }
         
-        free(jsonBuffer);
+        // Release buffer back to pool (or free if dynamically allocated)
+        JsonBufferPool::instance().release(jsonBuffer);
     }
 }

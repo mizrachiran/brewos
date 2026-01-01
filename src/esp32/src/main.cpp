@@ -70,6 +70,9 @@
 // Status Change Detection
 #include "utils/status_change_detector.h"
 
+// Pico Protocol Handler
+#include "pico_protocol_handler.h"
+
 // Global instances - use pointers to defer construction until setup()
 // This prevents crashes in constructors before Serial is initialized
 WiFiManager* wifiManager = nullptr;
@@ -78,6 +81,9 @@ MQTTClient* mqttClient = nullptr;
 PairingManager* pairingManager = nullptr;
 CloudConnection* cloudConnection = nullptr;
 BrewWebServer* webServer = nullptr;
+
+// Pico Protocol Handler - encapsulates protocol V1.1 logic
+PicoProtocolHandler protocolHandler;
 
 // Captive portal DNS server for AP mode
 DNSServer dnsServer;
@@ -489,7 +495,20 @@ static void onPicoPacket(const PicoPacket& packet) {
     // The UI should use processed "status" messages instead, not low-level ESP32-Pico protocol
     // These messages are for ESP32-Pico communication only, not for the web UI
     
-    // Handle specific message types
+    // Delegate protocol-level messages to handler (handshake, NACK, status, power meter)
+    // These are handled by PicoProtocolHandler for better maintainability
+    if (packet.type == MSG_HANDSHAKE || packet.type == MSG_NACK || 
+        packet.type == MSG_STATUS || packet.type == MSG_POWER_METER) {
+        protocolHandler.handlePacket(packet);
+        // MSG_STATUS also needs to update connection state
+        if (packet.type == MSG_STATUS) {
+            updatePicoConnectedState(true);
+        }
+        return;
+    }
+    
+    // Handle message types that are tightly coupled to main.cpp state
+    // These remain in main.cpp for now but could be moved to handler in future refactoring
     switch (packet.type) {
         case MSG_BOOT: {
             LOG_I("Pico boot info received");
@@ -575,98 +594,6 @@ static void onPicoPacket(const PicoPacket& packet) {
             break;
         }
         
-        case MSG_HANDSHAKE: {
-            LOG_I("Pico handshake received");
-            // Parse handshake payload
-            if (packet.length >= 6) {
-                uint8_t proto_major = packet.payload[0];
-                uint8_t proto_minor = packet.payload[1];
-                uint8_t capabilities = packet.payload[2];
-                uint8_t max_retry = packet.payload[3];
-                uint16_t ack_timeout = (packet.payload[5] << 8) | packet.payload[4];
-                
-                LOG_I("Protocol: v%d.%d, capabilities=0x%02X, retry=%d, timeout=%dms",
-                      proto_major, proto_minor, capabilities, max_retry, ack_timeout);
-                
-                // Send handshake response
-                uint8_t handshake[6] = {
-                    1,  // protocol_version_major
-                    1,  // protocol_version_minor
-                    0,  // capabilities
-                    3,  // max_retry_count
-                    (uint8_t)(1000 & 0xFF),      // ack_timeout_ms low byte
-                    (uint8_t)((1000 >> 8) & 0xFF) // ack_timeout_ms high byte
-                };
-                picoUart->sendPacket(MSG_HANDSHAKE, handshake, 6);
-            }
-            break;
-        }
-        
-        case MSG_NACK: {
-            // Pico is busy (backpressure) - reduce command rate
-            // NOTE: Using non-blocking backoff to keep UI responsive
-            if (packet.length >= 4) {
-                uint8_t cmd_type = packet.payload[0];
-                uint8_t cmd_seq = packet.payload[1];
-                uint8_t result = packet.payload[2];
-                
-                LOG_W("Pico NACK: cmd=0x%02X seq=%d result=0x%02X (backpressure)", 
-                      cmd_type, cmd_seq, result);
-                
-                // Track NACK frequency to detect system overload (non-blocking)
-                static uint32_t s_nack_count = 0;
-                static uint32_t s_last_nack_time = 0;
-                static uint32_t s_backoff_until = 0;  // Non-blocking backoff timestamp
-                uint32_t now = millis();
-                
-                // Initialize timing on first NACK
-                if (s_last_nack_time == 0) {
-                    s_last_nack_time = now;
-                    s_nack_count = 1;
-                } else {
-                    s_nack_count++;
-                    
-                    // If multiple NACKs in short time, warn about system overload
-                    if (now - s_last_nack_time < 5000) {
-                        if (s_nack_count > 10) {
-                            LOG_E("High NACK rate detected - Pico command queue overload");
-                            LOG_I("Consider reducing command frequency or increasing PROTOCOL_MAX_PENDING_CMDS");
-                            s_nack_count = 0;  // Reset to avoid spam
-                        }
-                    } else {
-                        s_nack_count = 1;  // Reset counter after quiet period
-                    }
-                    
-                    s_last_nack_time = now;
-                }
-                
-                // Non-blocking exponential backoff: set timestamp for when commands can resume
-                // PicoUART should check this before sending commands
-                // This avoids blocking delay() which freezes UI (encoder, display)
-                uint32_t backoff_ms = min((uint32_t)(100 * s_nack_count), (uint32_t)500);
-                s_backoff_until = now + backoff_ms;
-                
-                // Set backoff in PicoUART so it defers next command
-                if (picoUart) {
-                    picoUart->setBackoffUntil(s_backoff_until);
-                }
-            }
-            break;
-        }
-            
-        case MSG_STATUS:
-            parsePicoStatus(packet.payload, packet.length);
-            updatePicoConnectedState(true);
-            break;
-        
-        case MSG_POWER_METER: {
-            if (packet.length >= sizeof(PowerMeterReading) && powerMeterManager) {
-                PowerMeterReading reading;
-                memcpy(&reading, packet.payload, sizeof(PowerMeterReading));
-                powerMeterManager->onPicoPowerData(reading);
-            }
-            break;
-        }
         
         case MSG_ALARM: {
             uint8_t alarmCode = packet.payload[0];
@@ -1202,6 +1129,11 @@ void setup() {
     Serial.println("[4.4/8] Setting up Pico packet handler...");
     // Serial.flush(); // Removed - can block on USB CDC
     picoUart->onPacket(onPicoPacket);
+    
+    // Initialize protocol handler with dependencies
+    // State is a macro for BrewOS::StateManager::getInstance(), which returns a reference
+    protocolHandler.begin(picoUart, webServer, &BrewOS::StateManager::getInstance(), powerMeterManager);
+    Serial.println("Protocol handler initialized");
     
     // NOTE: Skipping Pico reset during initialization because:
     // 1. PICO_RUN_PIN (GPIO8) conflicts with DISPLAY_RST_PIN (GPIO8)
