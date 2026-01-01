@@ -123,6 +123,14 @@ float pid_compute(pid_state_t* pid, float process_value, float dt) {
     // Lock for entire PID computation to prevent race with control_set_pid on Core 1
     // This protects all state fields: setpoint, integral, last_error, last_measurement,
     // last_derivative, first_run, output - which could be modified by control_set_pid
+    //
+    // PERFORMANCE NOTE: This is a blocking mutex, but the risk is low because:
+    // 1. control_set_pid() (called by Core 1) is very fast (just variable assignments)
+    // 2. Pico mutex implementation uses fast spinlocks (not OS-level blocking)
+    // 3. PID parameter updates are infrequent (user-initiated, not continuous)
+    //
+    // Alternative approaches (double-buffering PID params) would add complexity
+    // for minimal benefit. This trade-off prioritizes thread safety and code simplicity.
     control_lock();
     
     // Read parameters (protected by lock)
@@ -311,14 +319,22 @@ static void strategy_smart_stagger(
     uint32_t steam_time_ms = (uint32_t)(steam_duty_pct * 10.0f);
     
     // PHASE SHIFT: Brew starts at t=0, Steam starts AFTER brew finishes
-    // This ensures strict interleaving (no overlap)
+    // This ensures strict interleaving (no overlap) when total <= 100%
     uint32_t brew_start = 0;
     uint32_t steam_start = brew_time_ms;
     
-    // If total > 1000ms, steam wraps to beginning (creates controlled overlap)
+    // Wrap-around behavior when total > 100% (max_combined_duty > 100%)
+    // Example: Brew 80%, Steam 40% (total 120%, max_combined_duty = 120%)
+    //   - Brew runs 0ms-800ms
+    //   - Steam wraps to 0ms, runs 0ms-400ms
+    //   - Result: Parallel heating for first 400ms, then Brew-only for 400ms-800ms
+    // 
+    // IMPACT: Peak current draw (both heaters ON) occurs at the START of the period.
+    // This is acceptable as long as max_combined_duty in environmental_config
+    // correctly accounts for your hardware's breaker limits. The wrap-around ensures
+    // the average power over the 1-second period matches the requested duty cycles.
     if (steam_start + steam_time_ms > PHASE_SYNC_PERIOD_MS) {
-        steam_start = 0;  // Wrap to beginning
-        // Note: This creates overlap, but it's controlled and intentional
+        steam_start = 0;  // Wrap to beginning - creates controlled overlap
     }
     
     // Set schedules for phase-synchronized control
@@ -701,7 +717,10 @@ void control_set_pid(uint8_t target, float kp, float ki, float kd) {
     if (kp < 0.0f || ki < 0.0f || kd < 0.0f) return;
     if (kp > 100.0f || ki > 100.0f || kd > 100.0f) return;
     
-    // Lock to prevent torn reads by control loop
+    // Lock to prevent torn reads by control loop (Core 0)
+    // This function is called by Core 1 (protocol handler) and is very fast
+    // (just variable assignments), so blocking Core 0 is minimal (< 1µs typically).
+    // The mutex ensures atomic updates of all PID parameters together.
     control_lock();
     
     pid_state_t* pid = (target == 0) ? &g_brew_pid : &g_steam_pid;
