@@ -532,9 +532,8 @@ void Display::lvglTaskCode(void* parameter) {
         // Returns time until next call needed (in ms), but we use fixed interval for smooth updates
         uint32_t nextCall = lv_timer_handler();
         
-        // Use fixed 5ms interval for consistent frame rate
-        // LVGL typically needs ~16ms for 60 FPS, but calling more frequently
-        // ensures smooth animations even during network operations
+        // Use fixed ~16ms interval for ~60 FPS updates
+        // This avoids wasting CPU cycles with unnecessarily high update rates
         vTaskDelay(pdMS_TO_TICKS(LVGL_TASK_INTERVAL_MS));
     }
 }

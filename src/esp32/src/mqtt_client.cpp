@@ -170,8 +170,6 @@ void MQTTClient::loop() {
     // - Reconnection logic uses vTaskDelay() instead of delay()
     // - PubSubClient::loop() is called from task, not main loop
     // - Main loop() never blocks waiting for MQTT operations
-    // All MQTT work happens in the background task on Core 0
-    // This prevents MQTT operations from blocking the main loop on Core 1
 }
 
 bool MQTTClient::setConfig(const MQTTConfig& config) {

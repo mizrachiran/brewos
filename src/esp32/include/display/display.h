@@ -92,7 +92,7 @@ private:
     static const int LVGL_TASK_STACK_SIZE = 4096;  // 4KB stack
     static const int LVGL_TASK_PRIORITY = 2;       // Above idle, below critical tasks
     static const int LVGL_TASK_CORE = 1;           // Run on Core 1 (same as Arduino loop)
-    static const int LVGL_TASK_INTERVAL_MS = 5;    // 5ms = 200 FPS max (LVGL typically needs ~16ms for 60 FPS)
+    static const int LVGL_TASK_INTERVAL_MS = 16;   // ~16ms = ~60 FPS (optimal for smooth animations)
     
     // Internal methods
     void initHardware();

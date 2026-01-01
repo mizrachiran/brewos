@@ -159,7 +159,7 @@ static volatile bool encoderActivityFlag = false;
 // Pre-allocated JSON buffer for diagnostics messages (reused to avoid heap fragmentation)
 // Size 512 bytes is sufficient for both diagnostic header and result messages
 static char diagnosticJsonBuffer[512] = {0};
-static bool diagnosticBufferInUse = false;  // Simple flag to prevent concurrent use
+static SemaphoreHandle_t diagnosticBufferMutex = nullptr;  // Thread-safe access to diagnostic buffer
 
 // Forward declarations
 void parsePicoStatus(const uint8_t* payload, uint8_t length);
@@ -502,12 +502,17 @@ static void onPicoPacket(const PicoPacket& packet) {
             
         case MSG_DIAGNOSTICS: {
             // Use pre-allocated buffer to avoid heap fragmentation
-            // Simple flag-based protection (diagnostics are infrequent, so contention is unlikely)
-            if (diagnosticBufferInUse) {
+            // Thread-safe mutex protection for concurrent access
+            if (diagnosticBufferMutex == nullptr) {
+                // Mutex not initialized yet, skip (shouldn't happen in normal operation)
+                LOG_W("Diagnostic buffer mutex not initialized, skipping message");
+                break;
+            }
+            
+            if (xSemaphoreTake(diagnosticBufferMutex, pdMS_TO_TICKS(100)) != pdTRUE) {
                 LOG_W("Diagnostic buffer in use, skipping message");
                 break;
             }
-            diagnosticBufferInUse = true;
             
             if (packet.length == 8) {
                 // Diagnostic header
@@ -568,7 +573,7 @@ static void onPicoPacket(const PicoPacket& packet) {
                 }
             }
             
-            diagnosticBufferInUse = false;
+            xSemaphoreGive(diagnosticBufferMutex);
             break;
         }
         
@@ -607,6 +612,12 @@ void setup() {
     
     // Initialize runtime state (creates mutex for state buffer protection)
     runtimeState().begin();
+    
+    // Initialize diagnostic buffer mutex for thread-safe access
+    diagnosticBufferMutex = xSemaphoreCreateMutex();
+    if (diagnosticBufferMutex == nullptr) {
+        Serial.println("ERROR: Failed to create diagnostic buffer mutex");
+    }
     
     // Print startup info (will be lost if no USB host connected)
     Serial.println();
