@@ -11,6 +11,7 @@
 #include "pico/stdlib.h"
 #include "pico/time.h"
 #include "pico/mutex.h"     // For mutex_t
+#include "pico/platform.h"  // For __not_in_flash_func()
 #include "hardware/gpio.h"
 #include "hardware/pwm.h"
 #include "hardware/sync.h"  // For save_and_disable_interrupts/restore_interrupts
@@ -119,7 +120,9 @@ void pid_init(pid_state_t* pid, float setpoint) {
 // PID Computation with Derivative Filtering
 // =============================================================================
 
-float pid_compute(pid_state_t* pid, float process_value, float dt) {
+// CRITICAL: Execute from SRAM to prevent cache eviction stalls during flash CRC checks
+// This ensures deterministic timing for PID calculations regardless of flash access
+float __not_in_flash_func(pid_compute)(pid_state_t* pid, float process_value, float dt) {
     // Lock for entire PID computation to prevent race with control_set_pid on Core 1
     // This protects all state fields: setpoint, integral, last_error, last_measurement,
     // last_derivative, first_run, output - which could be modified by control_set_pid
@@ -354,7 +357,8 @@ static const strategy_func_t STRATEGIES[] = {
     strategy_smart_stagger   // HEAT_SMART_STAGGER = 3
 };
 
-void apply_heating_strategy(
+// CRITICAL: Execute from SRAM to prevent cache eviction stalls during flash CRC checks
+void __not_in_flash_func(apply_heating_strategy)(
     float brew_demand, float steam_demand,
     float brew_temp, float steam_temp,
     float* brew_duty, float* steam_duty
@@ -381,6 +385,9 @@ void apply_heating_strategy(
 /**
  * Timer callback for phase-synchronized SSR control
  * Called every 10ms to check and update SSR states based on schedules
+ * 
+ * OPTIMIZED: Uses simple tick counter instead of expensive time calculations
+ * to reduce ISR overhead and improve real-time performance.
  */
 static bool phase_sync_timer_callback(struct repeating_timer *t) {
     (void)t;  // Unused
@@ -388,8 +395,18 @@ static bool phase_sync_timer_callback(struct repeating_timer *t) {
     const pcb_config_t* pcb = pcb_config_get();
     if (!pcb) return true;
     
-    uint32_t now = to_ms_since_boot(get_absolute_time());
-    uint32_t period_offset = (now - g_phase_period_start) % PHASE_SYNC_PERIOD_MS;
+    // Use simple tick counter instead of expensive 64-bit time calculations
+    // Timer fires every 10ms, so 100 ticks = 1000ms period
+    static uint32_t tick_offset_10ms = 0;
+    
+    // Increment and wrap counter
+    tick_offset_10ms++;
+    if (tick_offset_10ms >= 100) {  // 100 * 10ms = 1000ms
+        tick_offset_10ms = 0;
+    }
+    
+    // Calculate period offset using simple multiplication (no modulo needed)
+    uint32_t period_offset = tick_offset_10ms * 10;
     
     // Update brew SSR based on schedule
     if (pcb->pins.ssr_brew >= 0 && g_brew_schedule.active) {
@@ -630,7 +647,8 @@ void control_init(void) {
 // Public API: Control Update
 // =============================================================================
 
-void control_update(void) {
+// CRITICAL: Execute from SRAM to prevent cache eviction stalls during flash CRC checks
+void __not_in_flash_func(control_update)(void) {
     // Don't update if in safe state
     if (safety_is_safe_state()) {
         g_outputs.brew_heater = 0;

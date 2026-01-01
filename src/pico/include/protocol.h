@@ -22,7 +22,7 @@
 // Packet Structure
 // -----------------------------------------------------------------------------
 // | SYNC (0xAA) | TYPE | LENGTH | SEQ | PAYLOAD... | CRC16 |
-// |     1       |   1  |    1   |  1  |  0-56      |   2   |
+// |     1       |   1  |    1   |  1  |  0-32      |   2   |
 
 typedef struct {
     uint8_t type;
@@ -298,11 +298,16 @@ void protocol_set_callback(packet_callback_t callback);
 // CRC calculation
 uint16_t protocol_crc16(const uint8_t* data, size_t length);
 
+// Buffer access (for Class B RAM testing - reuses RX buffer)
+// Returns pointer to RX buffer and its size
+// WARNING: Only use when protocol is not actively receiving data
+uint8_t* protocol_get_rx_buffer(size_t* buffer_size);
+
 // -----------------------------------------------------------------------------
 // Compile-time Payload Size Verification
 // -----------------------------------------------------------------------------
 // Static assertions to catch payload size mismatches at compile time
-// These ensure all payloads fit within PROTOCOL_MAX_PAYLOAD (56 bytes)
+// These ensure all payloads fit within PROTOCOL_MAX_PAYLOAD (32 bytes)
 
 _Static_assert(sizeof(config_payload_t) <= PROTOCOL_MAX_PAYLOAD,
                "config_payload_t exceeds PROTOCOL_MAX_PAYLOAD");

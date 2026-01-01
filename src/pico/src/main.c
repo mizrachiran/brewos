@@ -177,6 +177,10 @@ void core1_main(void) {
             }
         }
         
+        // Process pending log messages from ring buffer (non-blocking logging)
+        // This drains messages queued by Core 0 to prevent printf() from blocking
+        logging_process_pending();
+        
         // Signal that Core 1 is alive (for watchdog monitoring by Core 0)
         g_core1_alive = true;
         
@@ -321,6 +325,11 @@ int main(void) {
     // Initialize stdio (USB serial for logging)
     stdio_init_all();
     sleep_ms(100);  // Brief delay for USB enumeration
+    
+    // Disable stdout/stdin buffering to free malloc'd RAM (~1KB savings)
+    // For a control system with sporadic logging, buffering is unnecessary overhead
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stdin, NULL, _IONBF, 0);
     
     // Always print boot banner to USB serial
     LOG_PRINT("\n========================================\n");

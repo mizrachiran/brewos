@@ -37,7 +37,8 @@ typedef enum {
 } rx_state_t;
 
 static rx_state_t g_rx_state = RX_WAIT_SYNC;
-static uint8_t g_rx_buffer[64];
+// RX buffer sized for max packet: header (4) + payload (32) + CRC (2) = 38 bytes, round to 40 for safety
+static uint8_t g_rx_buffer[40];
 static uint8_t g_rx_index = 0;
 static uint8_t g_rx_length = 0;
 static uint8_t g_tx_seq = 0;
@@ -77,6 +78,17 @@ uint16_t protocol_crc16(const uint8_t* data, size_t length) {
     }
     
     return crc;
+}
+
+// -----------------------------------------------------------------------------
+// Buffer Access (for Class B RAM testing)
+// -----------------------------------------------------------------------------
+
+uint8_t* protocol_get_rx_buffer(size_t* buffer_size) {
+    if (buffer_size) {
+        *buffer_size = sizeof(g_rx_buffer);
+    }
+    return g_rx_buffer;
 }
 
 // -----------------------------------------------------------------------------

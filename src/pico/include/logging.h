@@ -97,4 +97,11 @@ void log_message_va(log_level_t level, const char* format, va_list args);
  */
 const char* log_level_name(log_level_t level);
 
+/**
+ * Process pending log messages from ring buffer
+ * Call this periodically (e.g., from Core 1 or background task) to drain the buffer
+ * This ensures non-blocking logging by deferring actual printf() calls
+ */
+void logging_process_pending(void);
+
 #endif // LOGGING_H

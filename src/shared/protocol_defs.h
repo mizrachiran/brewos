@@ -32,16 +32,20 @@ extern "C" {
 // Packet Structure
 // =============================================================================
 // | SYNC (0xAA) | TYPE | LENGTH | SEQ | PAYLOAD... | CRC16 |
-// |     1       |   1  |    1   |  1  |   0-56     |   2   |
+// |     1       |   1  |    1   |  1  |   0-32     |   2   |
 
 #define PROTOCOL_SYNC_BYTE      0xAA
-#define PROTOCOL_MAX_PAYLOAD    56
+#define PROTOCOL_MAX_PAYLOAD    32      // Reduced from 56 to save RAM (status_payload_t is 32 bytes)
 #define PROTOCOL_HEADER_SIZE    4       // sync + type + length + seq
 #define PROTOCOL_CRC_SIZE       2
 #define PROTOCOL_MAX_PACKET     (PROTOCOL_HEADER_SIZE + PROTOCOL_MAX_PAYLOAD + PROTOCOL_CRC_SIZE)
 
-// Note: config_payload_t is 14 bytes (well under PROTOCOL_MAX_PAYLOAD)
-// Environmental config is sent separately via MSG_ENV_CONFIG (18 bytes)
+// Note: All payload types fit within 32 bytes:
+//   - status_payload_t: 32 bytes (exact fit)
+//   - config_payload_t: 14 bytes
+//   - env_config_payload_t: 18 bytes
+//   - diag_result_payload_t: 32 bytes (exact fit)
+//   - All command payloads: < 10 bytes
 // Compile-time assertions in protocol.h verify payload sizes
 
 // =============================================================================

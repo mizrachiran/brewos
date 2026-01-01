@@ -6,6 +6,7 @@
  */
 
 #include "pico/stdlib.h"
+#include "pico/platform.h"  // For __not_in_flash_func()
 #include "hardware/watchdog.h"
 #include "safety.h"
 #include "config.h"
@@ -251,7 +252,9 @@ void safety_init(void) {
 // Main Safety Check
 // =============================================================================
 
-safety_state_t safety_check(void) {
+// CRITICAL: Execute from SRAM to prevent cache eviction stalls during flash CRC checks
+// This ensures deterministic timing for safety checks regardless of flash access
+safety_state_t __not_in_flash_func(safety_check)(void) {
     uint32_t now = to_ms_since_boot(get_absolute_time());
     safety_state_t result = SAFETY_OK;
     
