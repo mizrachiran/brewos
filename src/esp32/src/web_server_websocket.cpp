@@ -15,8 +15,7 @@
 
 // External reference to machine state defined in main.cpp
 // Use getter function for thread-safe access to machine state
-const ui_state_t& getMachineState();  // Defined in main.cpp
-ui_state_t& getMachineStateRef();  // For writes (defined in main.cpp)
+#include "runtime_state.h"
 
 /**
  * Helper function to allocate memory for JSON buffers.
@@ -69,7 +68,7 @@ void BrewWebServer::handleWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* 
                     broadcastDeviceInfo();
                     // Send full status on connect so client has complete state
                     // This ensures client can apply delta updates correctly
-                    broadcastFullStatus(getMachineState());
+                    broadcastFullStatus(runtimeState().get());
                 } else {
                     LOG_W("Low memory (%zu bytes), deferring device info broadcast", freeHeap);
                     // Client will request full state later when memory is available
@@ -161,7 +160,7 @@ void BrewWebServer::processCommand(JsonDocument& doc) {
         // Send full status and device info
         // Note: broadcastFullStatus will send full status (not delta) on next call
         // because the change detector will be reset or this is an explicit request
-        broadcastFullStatus(getMachineState());
+        broadcastFullStatus(runtimeState().get());
         broadcastDeviceInfo();
     }
     else if (type == "getConfig") {
@@ -241,13 +240,14 @@ void BrewWebServer::processCommand(JsonDocument& doc) {
             // Update machineState immediately so status broadcasts show the new value
             // This prevents Pico's old values from overwriting what we just set
             // (Pico will persist and echo back the new value in its next status message)
-            // NOTE: These are single-field updates (atomic), but ideally should use double buffer
-            ui_state_t& state = getMachineStateRef();
+            // Update setpoint using RuntimeState
+            ui_state_t& state = runtimeState().beginUpdate();
             if (boiler == "steam") {
                 state.steam_setpoint = temp;
             } else {
                 state.brew_setpoint = temp;
             }
+            runtimeState().endUpdate();
             
             // Pico expects: [target:1][temperature:int16] where temperature is Celsius * 10
             // Note: Pico (RP2350) is little-endian, so send LSB first
@@ -284,7 +284,7 @@ void BrewWebServer::processCommand(JsonDocument& doc) {
             if (mode == "on" || mode == "ready" || mode == "brew") {
                 // Validate machine state before allowing turn on
                 // Only allow turning on from IDLE, READY, or ECO states
-                uint8_t currentState = getMachineState().machine_state;
+                uint8_t currentState = runtimeState().get().machine_state;
                 if (currentState != UI_STATE_IDLE && 
                     currentState != UI_STATE_READY && 
                     currentState != UI_STATE_ECO) {
@@ -303,7 +303,7 @@ void BrewWebServer::processCommand(JsonDocument& doc) {
                 modeCmd = 0x00;  // MODE_IDLE
             } else if (mode == "eco") {
                 // Enter eco mode - also validate state
-                uint8_t currentState = getMachineState().machine_state;
+                uint8_t currentState = runtimeState().get().machine_state;
                 if (currentState != UI_STATE_IDLE && 
                     currentState != UI_STATE_READY && 
                     currentState != UI_STATE_ECO) {
@@ -332,9 +332,10 @@ void BrewWebServer::processCommand(JsonDocument& doc) {
                 // immediate response to the user command
                 if (modeCmd == 0x00) {  // MODE_IDLE
                     // Force state to IDLE immediately - will be confirmed by next status packet
-                    ui_state_t& state = getMachineStateRef();
+                    ui_state_t& state = runtimeState().beginUpdate();
                     state.machine_state = UI_STATE_IDLE;
                     state.is_heating = false;
+                    runtimeState().endUpdate();
                 }
             }
         }

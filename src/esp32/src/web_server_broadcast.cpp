@@ -17,8 +17,8 @@
 
 // External references for status broadcast
 extern BrewByWeight* brewByWeight;
-// Use getter function for thread-safe access to machine state
-const ui_state_t& getMachineState();  // Defined in main.cpp
+// Runtime state access
+#include "runtime_state.h"
 
 // =============================================================================
 // Pre-allocated Broadcast Buffers (initialized in initBroadcastBuffers)
@@ -917,7 +917,7 @@ void BrewWebServer::broadcastDeviceInfo() {
     
     // Include temperature setpoints (from Pico via machineState - Pico is source of truth)
     // These come from Pico's status messages, which reflect what Pico has persisted
-    const ui_state_t& state = getMachineState();
+    const ui_state_t& state = runtimeState().get();
     doc["brewSetpoint"] = state.brew_setpoint;
     doc["steamSetpoint"] = state.steam_setpoint;
     

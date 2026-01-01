@@ -51,6 +51,12 @@ public:
     void handleHandshake(const PicoPacket& packet);
     
     /**
+     * Handle boot message
+     * Parses version info, updates StateManager, and sends configuration
+     */
+    void handleBoot(const PicoPacket& packet);
+    
+    /**
      * Get current backoff timestamp (for PicoUART to check)
      */
     uint32_t getBackoffUntil() const { return _backoffUntil; }

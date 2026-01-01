@@ -3,7 +3,11 @@
 #include "web_server.h"
 #include "state/state_manager.h"
 #include "power_meter/power_meter_manager.h"
+#include "runtime_state.h"
+#include "ui/ui.h"
 #include "config.h"
+#include "log_manager.h"
+#include "../shared/protocol_defs.h"
 #include <string.h>
 
 // Forward declaration - parsePicoStatus is still in main.cpp
@@ -35,9 +39,7 @@ void PicoProtocolHandler::handlePacket(const PicoPacket& packet) {
     // Route packet to appropriate handler
     switch (packet.type) {
         case MSG_BOOT:
-            // Boot handling is complex and tightly coupled to main.cpp state
-            // Keep it in main.cpp for now, but could be moved here in future refactoring
-            // For now, this is handled directly in main.cpp::onPicoPacket()
+            handleBoot(packet);
             break;
             
         case MSG_HANDSHAKE:
@@ -130,6 +132,107 @@ void PicoProtocolHandler::handleHandshake(const PicoPacket& packet) {
     
     if (_uart) {
         _uart->sendPacket(MSG_HANDSHAKE, handshake, 6);
+    }
+}
+
+// Pre-infusion pause time constant (matches main.cpp)
+static constexpr uint16_t DEFAULT_PREINFUSION_PAUSE_MS = 5000;
+
+void PicoProtocolHandler::handleBoot(const PicoPacket& packet) {
+    LOG_I("Pico boot info received");
+    if (_server) _server->broadcastLog("Pico booted");
+    
+    // Update Pico connection state
+    runtimeState().updatePicoConnection(true);
+    
+    // Parse boot payload (boot_payload_t structure)
+    // Layout: ver(3) + machine(1) + pcb(1) + pcb_ver(2) + reset(4) + build_date(12) + build_time(9) = 32 bytes
+    if (packet.length >= 4) {
+        uint8_t ver_major = packet.payload[0];
+        uint8_t ver_minor = packet.payload[1];
+        uint8_t ver_patch = packet.payload[2];
+        
+        // Update machine type in runtime state
+        ui_state_t& bootState = runtimeState().beginUpdate();
+        bootState.machine_type = packet.payload[3];
+        uint8_t machineType = bootState.machine_type;  // Save for later use
+        runtimeState().endUpdate();
+        
+        // Store in StateManager
+        if (_state) {
+            _state->setPicoVersion(ver_major, ver_minor, ver_patch);
+            _state->setMachineType(machineType);
+        }
+        
+        LOG_I("Pico version: %d.%d.%d, Machine type: %d", 
+              ver_major, ver_minor, ver_patch, machineType);
+        
+        // Parse reset reason if available (offset 7-10, uint32_t)
+        if (packet.length >= 11) {
+            // reset_reason is at offset 7 (after pcb_type and pcb_version), 4 bytes (uint32_t, little-endian)
+            uint32_t reset_reason = 
+                (static_cast<uint32_t>(packet.payload[7])      ) |
+                (static_cast<uint32_t>(packet.payload[8]) << 8 ) |
+                (static_cast<uint32_t>(packet.payload[9]) << 16) |
+                (static_cast<uint32_t>(packet.payload[10]) << 24);
+            if (_state) {
+                _state->setPicoResetReason(reset_reason);
+            }
+        }
+        
+        // Parse build date/time if available (offset 11-31)
+        if (packet.length >= 32) {
+            char buildDate[12] = {0};
+            char buildTime[9] = {0};
+            memcpy(buildDate, &packet.payload[11], 11);
+            memcpy(buildTime, &packet.payload[23], 8);
+            if (_state) {
+                _state->setPicoBuildDate(buildDate, buildTime);
+            }
+        }
+        
+        // Check for version mismatch
+        char picoVerStr[16];
+        snprintf(picoVerStr, sizeof(picoVerStr), "%d.%d.%d", ver_major, ver_minor, ver_patch);
+        if (strcmp(picoVerStr, ESP32_VERSION) != 0) {
+            LOG_W("Internal version mismatch: %s vs %s", ESP32_VERSION, picoVerStr);
+            if (_server) _server->broadcastLogLevel("warn", "Firmware update recommended");
+        }
+    }
+    
+    // Request environmental config from Pico (Pico is source of truth)
+    // Pico will send MSG_ENV_CONFIG with its persisted settings
+    // This is required for Pico to exit STATE_FAULT (0x05) if config is missing
+    // But we request it first to see what Pico has stored
+    if (_uart) {
+        _uart->sendCommand(MSG_CMD_GET_CONFIG, nullptr, 0);
+        LOG_I("Requested config from Pico (Pico is source of truth)");
+    }
+    
+    // Pico is the source of truth for temperature setpoints and eco mode
+    // Pico loads settings from its own flash on boot and reports them in status messages
+    // No need to send from ESP32 - Pico already has the persisted values
+    
+    // Send pre-infusion config to Pico
+    if (_state) {
+        const auto& brewSettings = _state->settings().brew;
+        if (brewSettings.preinfusionTime > 0 || brewSettings.preinfusionPressure > 0) {
+            bool enabled = brewSettings.preinfusionPressure > 0;
+            uint16_t onTimeMs = (uint16_t)(brewSettings.preinfusionTime * 1000);
+            uint16_t pauseTimeMs = enabled ? DEFAULT_PREINFUSION_PAUSE_MS : 0;
+            
+            uint8_t preinfPayload[6];
+            preinfPayload[0] = CONFIG_PREINFUSION;
+            preinfPayload[1] = enabled ? 1 : 0;
+            preinfPayload[2] = onTimeMs & 0xFF;
+            preinfPayload[3] = (onTimeMs >> 8) & 0xFF;
+            preinfPayload[4] = pauseTimeMs & 0xFF;
+            preinfPayload[5] = (pauseTimeMs >> 8) & 0xFF;
+            if (_uart && _uart->sendCommand(MSG_CMD_CONFIG, preinfPayload, 6)) {
+                LOG_I("Sent pre-infusion config to Pico: %s, on=%dms, pause=%dms",
+                      enabled ? "enabled" : "disabled", onTimeMs, pauseTimeMs);
+            }
+        }
     }
 }
 

@@ -73,6 +73,9 @@
 // Pico Protocol Handler
 #include "pico_protocol_handler.h"
 
+// Runtime State Management
+#include "runtime_state.h"
+
 // Global instances - use pointers to defer construction until setup()
 // This prevents crashes in constructors before Serial is initialized
 WiFiManager* wifiManager = nullptr;
@@ -133,17 +136,8 @@ BrewOSLogLevel stringToLogLevel(const char* str) {
 // Set to true to enable BLE scale support (may cause instability on some networks)
 static bool scaleEnabled = false;
 
-// Machine state from Pico - Double buffering to prevent data tearing
-// Writers update the inactive buffer, then atomically swap the pointer
-// Readers always read from the active buffer (lock-free, no mutex needed)
-// CRITICAL: Mutex protects buffer operations to prevent lost updates from secondary writers
-static ui_state_t machineStateBufferA = {0};
-static ui_state_t machineStateBufferB = {0};
-// Use volatile to prevent compiler reordering of pointer assignments
-// On ESP32, 32-bit pointer writes are atomic, but volatile ensures memory visibility
-static volatile ui_state_t* machineState = &machineStateBufferA;  // Active buffer (readers)
-static volatile ui_state_t* machineStateNext = &machineStateBufferB;  // Inactive buffer (writers)
-static SemaphoreHandle_t stateMutex = nullptr;  // Protects buffer copy/swap operations
+// Machine state from Pico - Now managed by RuntimeState class
+// All state access should go through runtimeState() singleton
 
 // Note: Demo mode is handled by the web UI only (via URL parameters)
 // ESP32 does not simulate data when Pico is not connected
@@ -172,101 +166,8 @@ void parsePicoStatus(const uint8_t* payload, uint8_t length);
 void handleEncoderEvent(int32_t diff, button_state_t btn);
 static void onPicoPacket(const PicoPacket& packet);
 
-// Double buffering: Swap active/inactive buffers atomically
-// This prevents data tearing when readers access machineState while it's being updated
-static inline void swapMachineStateBuffers() {
-    // Atomic pointer swap (single 32-bit write on ESP32)
-    // volatile qualifier ensures compiler doesn't reorder these assignments
-    // On ESP32, 32-bit aligned pointer writes are guaranteed atomic by the architecture
-    volatile ui_state_t* temp = machineState;
-    machineState = machineStateNext;
-    machineStateNext = temp;
-    // Memory barrier not needed - mutex already provides synchronization
-    // The swap happens inside the mutex-protected section in parsePicoStatus()
-}
-
-// Get current machine state (for readers) - thread-safe, lock-free
-// Exported for use in other files (web_server, mqtt_client)
-const ui_state_t& getMachineState() {
-    // Cast away volatile for read access - safe because we're only reading
-    return *const_cast<ui_state_t*>(machineState);
-}
-
-// Get writable machine state (for writers - updates inactive buffer)
-// Caller must call swapMachineStateBuffers() after completing all updates
-static inline ui_state_t& getMachineStateNext() {
-    // Cast away volatile for write access - safe because we're inside mutex protection
-    return *const_cast<ui_state_t*>(machineStateNext);
-}
-
-// Legacy accessor for compatibility - returns reference to active buffer
-// WARNING: Direct writes to this are NOT thread-safe and can cause lost updates!
-// Use updateMachineStateField() for secondary writers (WiFi, scale, etc.)
-// Only use this for immediate single-field updates that will be overwritten by next Pico status
-ui_state_t& getMachineStateRef() {
-    // Cast away volatile for access - safe for immediate single-field updates
-    return *const_cast<ui_state_t*>(machineState);
-}
-
-// Convenience wrappers for common state updates
-// These update both buffers atomically to prevent lost updates
-void updateWiFiState(bool connected, bool apMode, int rssi) {
-    if (stateMutex == nullptr) return;
-    // Use portMAX_DELAY to ensure state updates are never dropped
-    // Critical state updates must not be silently discarded
-    if (xSemaphoreTake(stateMutex, portMAX_DELAY) == pdTRUE) {
-        // Cast away volatile for field access (safe inside mutex)
-        ui_state_t* state = const_cast<ui_state_t*>(machineState);
-        ui_state_t* stateNext = const_cast<ui_state_t*>(machineStateNext);
-        
-        state->wifi_connected = connected;
-        state->wifi_ap_mode = apMode;
-        if (rssi != 0) state->wifi_rssi = rssi;
-        stateNext->wifi_connected = connected;
-        stateNext->wifi_ap_mode = apMode;
-        if (rssi != 0) stateNext->wifi_rssi = rssi;
-        xSemaphoreGive(stateMutex);
-    } else {
-        // Defensive check - should never happen with portMAX_DELAY
-        LOG_E("CRITICAL: Failed to acquire state mutex in updateWiFiState");
-    }
-}
-
-void updatePicoConnectedState(bool connected) {
-    if (stateMutex == nullptr) return;
-    // Use portMAX_DELAY to ensure state updates are never dropped
-    // Critical state updates must not be silently discarded
-    if (xSemaphoreTake(stateMutex, portMAX_DELAY) == pdTRUE) {
-        // Cast away volatile for field access (safe inside mutex)
-        ui_state_t* state = const_cast<ui_state_t*>(machineState);
-        ui_state_t* stateNext = const_cast<ui_state_t*>(machineStateNext);
-        
-        state->pico_connected = connected;
-        stateNext->pico_connected = connected;
-        xSemaphoreGive(stateMutex);
-    } else {
-        // Defensive check - should never happen with portMAX_DELAY
-        LOG_E("CRITICAL: Failed to acquire state mutex in updatePicoConnectedState");
-    }
-}
-
-void updateScaleConnectedState(bool connected) {
-    if (stateMutex == nullptr) return;
-    // Use portMAX_DELAY to ensure state updates are never dropped
-    // Critical state updates must not be silently discarded
-    if (xSemaphoreTake(stateMutex, portMAX_DELAY) == pdTRUE) {
-        // Cast away volatile for field access (safe inside mutex)
-        ui_state_t* state = const_cast<ui_state_t*>(machineState);
-        ui_state_t* stateNext = const_cast<ui_state_t*>(machineStateNext);
-        
-        state->scale_connected = connected;
-        stateNext->scale_connected = connected;
-        xSemaphoreGive(stateMutex);
-    } else {
-        // Defensive check - should never happen with portMAX_DELAY
-        LOG_E("CRITICAL: Failed to acquire state mutex in updateScaleConnectedState");
-    }
-}
+// State management functions now provided by RuntimeState class
+// Use runtimeState() singleton for all state access
 
 // =============================================================================
 // WiFi Event Callbacks - Static functions to avoid std::function PSRAM issues
@@ -290,36 +191,28 @@ static void onWiFiConnected() {
     
     // Update machine state using thread-safe function that updates both buffers
     // This prevents lost updates when parsePicoStatus swaps buffers
-    updateWiFiState(true, false, WiFi.RSSI());
+        runtimeState().updateWiFi(true, false, WiFi.RSSI());
     
     // Get IP address for logging (before mutex)
     IPAddress ip = WiFi.localIP();
     
-    // Update SSID and IP in both buffers (these are string fields, need special handling)
-    // Use portMAX_DELAY to ensure state updates are never dropped
-    if (stateMutex != nullptr && xSemaphoreTake(stateMutex, portMAX_DELAY) == pdTRUE) {
-        // Get WiFi SSID directly from WiFiManager's stored value
-        // Cast away volatile for string operations (safe inside mutex)
-        ui_state_t* state = const_cast<ui_state_t*>(machineState);
-        ui_state_t* stateNext = const_cast<ui_state_t*>(machineStateNext);
-        
-        if (wifiManager) {
-            const char* ssid = wifiManager->getStoredSSID();
-            if (ssid && strlen(ssid) > 0) {
-                strncpy(state->wifi_ssid, ssid, sizeof(state->wifi_ssid) - 1);
-                state->wifi_ssid[sizeof(state->wifi_ssid) - 1] = '\0';
-                strncpy(stateNext->wifi_ssid, ssid, sizeof(stateNext->wifi_ssid) - 1);
-                stateNext->wifi_ssid[sizeof(stateNext->wifi_ssid) - 1] = '\0';
-            }
+    // Update SSID and IP in state (use RuntimeState to prevent race conditions)
+    ui_state_t& state = runtimeState().beginUpdate();
+    
+    // Get WiFi SSID directly from WiFiManager's stored value
+    if (wifiManager) {
+        const char* ssid = wifiManager->getStoredSSID();
+        if (ssid && strlen(ssid) > 0) {
+            strncpy(state.wifi_ssid, ssid, sizeof(state.wifi_ssid) - 1);
+            state.wifi_ssid[sizeof(state.wifi_ssid) - 1] = '\0';
         }
-        
-        // Get IP directly into buffer (no String allocation)
-        snprintf(state->wifi_ip, sizeof(state->wifi_ip), "%d.%d.%d.%d", 
-                 ip[0], ip[1], ip[2], ip[3]);
-        snprintf(stateNext->wifi_ip, sizeof(stateNext->wifi_ip), "%d.%d.%d.%d", 
-                 ip[0], ip[1], ip[2], ip[3]);
-        xSemaphoreGive(stateMutex);
     }
+    
+    // Get IP directly into buffer (no String allocation)
+    snprintf(state.wifi_ip, sizeof(state.wifi_ip), "%d.%d.%d.%d", 
+             ip[0], ip[1], ip[2], ip[3]);
+    
+    runtimeState().endUpdate();
     
     // Log immediately - web server is already running and ready
     LOG_I("Web server ready: http://%d.%d.%d.%d/ or http://brewos.local/", 
@@ -335,7 +228,7 @@ static void onWiFiConnected() {
 static void onWiFiDisconnected() {
     LOG_W("WiFi disconnected");
     // Use thread-safe update that modifies both buffers to prevent lost updates
-    updateWiFiState(false, false, 0);
+        runtimeState().updateWiFi(false, false, 0);
     // Reset WiFi connected state tracking
     wifiConnectedTime = 0;
     wifiConnectedLogSent = false;
@@ -364,9 +257,10 @@ static void onWiFiAPStarted() {
     // Only set wifi_ap_mode if we're truly in AP-only mode (no STA connection)
     // If WiFi is still connected, we're in AP+STA mode - don't trigger auto-setup screen
     bool wifiStillConnected = (WiFi.status() == WL_CONNECTED);
-    ui_state_t& state = getMachineStateRef();
+    ui_state_t& state = runtimeState().beginUpdate();
     state.wifi_ap_mode = !wifiStillConnected;  // Only true if AP-only (no WiFi connection)
     state.wifi_connected = wifiStillConnected;
+    runtimeState().endUpdate();
     
     if (wifiStillConnected) {
         LOG_I("AP+STA mode: WiFi still connected, setup screen will not auto-show");
@@ -392,15 +286,16 @@ static void onWiFiAPStarted() {
 // =============================================================================
 
 static void onScaleWeight(const scale_state_t& scaleState) {
-    ui_state_t& state = getMachineStateRef();
+    ui_state_t& state = runtimeState().beginUpdate();
     state.scale_connected = scaleState.connected;
     state.brew_weight = scaleState.weight;
     state.flow_rate = scaleState.flow_rate;
+    runtimeState().endUpdate();
 }
 
 static void onScaleConnection(bool connected) {
     LOG_I("Scale %s", connected ? "connected" : "disconnected");
-    updateScaleConnectedState(connected);
+        runtimeState().updateScaleConnection(connected);
 }
 
 // =============================================================================
@@ -473,7 +368,7 @@ static void onScheduleTriggered(const BrewOS::ScheduleEntry& schedule) {
     if (schedule.action == BrewOS::ACTION_TURN_ON) {
         // Validate machine state before allowing turn on
         // Only allow turning on from IDLE, READY, or ECO states
-        uint8_t currentState = getMachineState().machine_state;
+        uint8_t currentState = runtimeState().get().machine_state;
         if (currentState != UI_STATE_IDLE && 
             currentState != UI_STATE_READY && 
             currentState != UI_STATE_ECO) {
@@ -511,14 +406,14 @@ static void onPicoPacket(const PicoPacket& packet) {
     // The UI should use processed "status" messages instead, not low-level ESP32-Pico protocol
     // These messages are for ESP32-Pico communication only, not for the web UI
     
-    // Delegate protocol-level messages to handler (handshake, NACK, status, power meter)
+    // Delegate protocol-level messages to handler (boot, handshake, NACK, status, power meter)
     // These are handled by PicoProtocolHandler for better maintainability
-    if (packet.type == MSG_HANDSHAKE || packet.type == MSG_NACK || 
+    if (packet.type == MSG_BOOT || packet.type == MSG_HANDSHAKE || packet.type == MSG_NACK || 
         packet.type == MSG_STATUS || packet.type == MSG_POWER_METER) {
         protocolHandler.handlePacket(packet);
         // MSG_STATUS also needs to update connection state
         if (packet.type == MSG_STATUS) {
-            updatePicoConnectedState(true);
+            runtimeState().updatePicoConnection(true);
         }
         return;
     }
@@ -526,100 +421,21 @@ static void onPicoPacket(const PicoPacket& packet) {
     // Handle message types that are tightly coupled to main.cpp state
     // These remain in main.cpp for now but could be moved to handler in future refactoring
     switch (packet.type) {
-        case MSG_BOOT: {
-            LOG_I("Pico boot info received");
-            if (webServer) webServer->broadcastLog("Pico booted");
-            updatePicoConnectedState(true);
-            
-            // Parse boot payload (boot_payload_t structure)
-            // Layout: ver(3) + machine(1) + pcb(1) + pcb_ver(2) + reset(4) + build_date(12) + build_time(9) = 32 bytes
-            if (packet.length >= 4) {
-                uint8_t ver_major = packet.payload[0];
-                uint8_t ver_minor = packet.payload[1];
-                uint8_t ver_patch = packet.payload[2];
-                getMachineStateRef().machine_type = packet.payload[3];
-                
-                // Store in StateManager
-                State.setPicoVersion(ver_major, ver_minor, ver_patch);
-                ui_state_t& state = getMachineStateRef();
-                State.setMachineType(state.machine_type);
-                
-                LOG_I("Pico version: %d.%d.%d, Machine type: %d", 
-                      ver_major, ver_minor, ver_patch, state.machine_type);
-                
-                // Parse reset reason if available (offset 7-10, uint32_t)
-                if (packet.length >= 11) {
-                    // reset_reason is at offset 7 (after pcb_type and pcb_version), 4 bytes (uint32_t, little-endian)
-                    uint32_t reset_reason = 
-                        (static_cast<uint32_t>(packet.payload[7])      ) |
-                        (static_cast<uint32_t>(packet.payload[8]) << 8 ) |
-                        (static_cast<uint32_t>(packet.payload[9]) << 16) |
-                        (static_cast<uint32_t>(packet.payload[10]) << 24);
-                    State.setPicoResetReason(reset_reason);
-                }
-                
-                // Parse build date/time if available (offset 11-31)
-                if (packet.length >= 32) {
-                    char buildDate[12] = {0};
-                    char buildTime[9] = {0};
-                    memcpy(buildDate, &packet.payload[11], 11);
-                    memcpy(buildTime, &packet.payload[23], 8);
-                    State.setPicoBuildDate(buildDate, buildTime);
-                }
-                
-                // Check for version mismatch
-                char picoVerStr[16];
-                snprintf(picoVerStr, sizeof(picoVerStr), "%d.%d.%d", ver_major, ver_minor, ver_patch);
-                if (strcmp(picoVerStr, ESP32_VERSION) != 0) {
-                    LOG_W("Internal version mismatch: %s vs %s", ESP32_VERSION, picoVerStr);
-                    if (webServer) webServer->broadcastLogLevel("warn", "Firmware update recommended");
-                }
-            }
-            
-            // Request environmental config from Pico (Pico is source of truth)
-            // Pico will send MSG_ENV_CONFIG with its persisted settings
-            // This is required for Pico to exit STATE_FAULT (0x05) if config is missing
-            // But we request it first to see what Pico has stored
-            picoUart->sendCommand(MSG_CMD_GET_CONFIG, nullptr, 0);
-            LOG_I("Requested config from Pico (Pico is source of truth)");
-            
-            // Pico is the source of truth for temperature setpoints and eco mode
-            // Pico loads settings from its own flash on boot and reports them in status messages
-            // No need to send from ESP32 - Pico already has the persisted values
-            
-            // Send pre-infusion config to Pico
-            const auto& brewSettings = State.settings().brew;
-            if (brewSettings.preinfusionTime > 0 || brewSettings.preinfusionPressure > 0) {
-                bool enabled = brewSettings.preinfusionPressure > 0;
-                uint16_t onTimeMs = (uint16_t)(brewSettings.preinfusionTime * 1000);
-                uint16_t pauseTimeMs = enabled ? DEFAULT_PREINFUSION_PAUSE_MS : 0;
-                
-                uint8_t preinfPayload[6];
-                preinfPayload[0] = CONFIG_PREINFUSION;
-                preinfPayload[1] = enabled ? 1 : 0;
-                preinfPayload[2] = onTimeMs & 0xFF;
-                preinfPayload[3] = (onTimeMs >> 8) & 0xFF;
-                preinfPayload[4] = pauseTimeMs & 0xFF;
-                preinfPayload[5] = (pauseTimeMs >> 8) & 0xFF;
-                if (picoUart->sendCommand(MSG_CMD_CONFIG, preinfPayload, 6)) {
-                    LOG_I("Sent pre-infusion config to Pico: %s, on=%dms, pause=%dms",
-                          enabled ? "enabled" : "disabled", onTimeMs, pauseTimeMs);
-                }
-            }
-            
-            break;
-        }
         
         
         case MSG_ALARM: {
             uint8_t alarmCode = packet.payload[0];
             
+            // Check current state before updating (need to read first)
+            const ui_state_t& currentState = runtimeState().get();
+            bool wasAlarmActive = currentState.alarm_active;
+            uint8_t currentAlarmCode = currentState.alarm_code;
+            
             if (alarmCode == ALARM_NONE) {
                 // ALARM_NONE (0x00) means no alarm - clear the alarm state
                 // Only log if we're actually transitioning from a REAL alarm (non-zero) to cleared
-                ui_state_t& state = getMachineStateRef();
-                if (state.alarm_active && state.alarm_code != ALARM_NONE) {
-                    LOG_I("Pico alarm cleared (was: 0x%02X)", state.alarm_code);
+                if (wasAlarmActive && currentAlarmCode != ALARM_NONE) {
+                    LOG_I("Pico alarm cleared (was: 0x%02X)", currentAlarmCode);
                     // Defensive: Check webServer pointer and use try-catch equivalent (null check)
                     if (webServer) {
                         // Use a safer approach - format the message first to avoid variadic issues
@@ -629,13 +445,14 @@ static void onPicoPacket(const PicoPacket& packet) {
                     }
                 }
                 // Always update state, but only log when transitioning from real alarm
+                ui_state_t& state = runtimeState().beginUpdate();
                 state.alarm_active = false;
                 state.alarm_code = ALARM_NONE;
+                runtimeState().endUpdate();
             } else {
                 // Actual alarm - log and set alarm state
                 // Only log if this is a new alarm or different from current
-                ui_state_t& state = getMachineStateRef();
-                if (!state.alarm_active || state.alarm_code != alarmCode) {
+                if (!wasAlarmActive || currentAlarmCode != alarmCode) {
                     LOG_W("PICO ALARM: 0x%02X", alarmCode);
                     // Defensive: Format message first to avoid variadic argument issues
                     if (webServer) {
@@ -644,8 +461,10 @@ static void onPicoPacket(const PicoPacket& packet) {
                         webServer->broadcastLog(alarmMsg, "error");
                     }
                 }
+                ui_state_t& state = runtimeState().beginUpdate();
                 state.alarm_active = true;
                 state.alarm_code = alarmCode;
+                runtimeState().endUpdate();
             }
             break;
         }
@@ -786,13 +605,8 @@ void setup() {
     // - All blocking operations must use yield() or vTaskDelay() to feed watchdog
     // - Slow loop detection (Phase 8) is diagnostic only - doesn't prevent resets
     
-    // Initialize mutex for state buffer protection (prevents race conditions)
-    stateMutex = xSemaphoreCreateMutex();
-    if (stateMutex == nullptr) {
-        Serial.println("ERROR: Failed to create state mutex!");
-        ESP.restart();
-        return;
-    }
+    // Initialize runtime state (creates mutex for state buffer protection)
+    runtimeState().begin();
     
     // Print startup info (will be lost if no USB host connected)
     Serial.println();
@@ -1068,7 +882,7 @@ void setup() {
     Serial.println("[4.7/8] Checking WiFi credentials...");
     // Serial.flush(); // Removed - can block on USB CDC
     bool needsWifiSetup = !wifiManager->checkCredentials();
-    ui_state_t& state = getMachineStateRef();
+    ui_state_t& state = runtimeState().beginUpdate();
     if (needsWifiSetup) {
         Serial.println("No WiFi credentials found - setup screen will be shown");
         state.wifi_ap_mode = true;
@@ -1078,6 +892,7 @@ void setup() {
         state.wifi_ap_mode = false;
         state.wifi_connected = false;  // Will be updated when WiFi connects
     }
+    runtimeState().endUpdate();
     // Serial.flush(); // Removed - can block on USB CDC
     
     // Initialize UI
@@ -1086,7 +901,7 @@ void setup() {
         Serial.println("ERROR: UI initialization failed!");
     } else {
         Serial.println("UI initialized OK");
-        ui.update(getMachineState());
+        ui.update(runtimeState().get());
         if (needsWifiSetup) {
             Serial.println("Showing WiFi setup screen...");
         }
@@ -1124,7 +939,9 @@ void setup() {
     ui.onSetTargetWeight([](float weight) {
         LOG_I("UI: Set target weight to %.1fg", weight);
         brewByWeight->setTargetWeight(weight);
-        getMachineStateRef().target_weight = weight;
+        ui_state_t& state = runtimeState().beginUpdate();
+        state.target_weight = weight;
+        runtimeState().endUpdate();
     });
     
     ui.onWifiSetup([]() {
@@ -1357,7 +1174,7 @@ void setup() {
             if (mode == "on" || mode == "ready") {
                 // Validate machine state before allowing turn on
                 // Only allow turning on from IDLE, READY, or ECO states
-                uint8_t currentState = getMachineState().machine_state;
+                uint8_t currentState = runtimeState().get().machine_state;
                 if (currentState != UI_STATE_IDLE && 
                     currentState != UI_STATE_READY && 
                     currentState != UI_STATE_ECO) {
@@ -1379,7 +1196,9 @@ void setup() {
             float weight = doc["weight"] | 0.0f;
             if (weight > 0) {
                 brewByWeight->setTargetWeight(weight);
-                getMachineStateRef().target_weight = weight;
+                ui_state_t& state = runtimeState().beginUpdate();
+                state.target_weight = weight;
+                runtimeState().endUpdate();
             }
         }
         else if (cmdStr == "set_eco") {
@@ -1445,14 +1264,15 @@ void setup() {
     // Set default state values from BBW settings
     LOG_I("Setting default machine state values...");
     // Serial.flush(); // Removed - can block on USB CDC
-    // Use getMachineStateRef() directly to avoid scope issues
-    getMachineStateRef().brew_setpoint = 93.0f;
-    getMachineStateRef().steam_setpoint = 145.0f;
-    getMachineStateRef().target_weight = brewByWeight->getTargetWeight();
-    getMachineStateRef().dose_weight = brewByWeight->getDoseWeight();
-    getMachineStateRef().brew_max_temp = 105.0f;
-    getMachineStateRef().steam_max_temp = 160.0f;
-    getMachineStateRef().dose_weight = 18.0f;
+    ui_state_t& state = runtimeState().beginUpdate();
+    state.brew_setpoint = 93.0f;
+    state.steam_setpoint = 145.0f;
+    state.target_weight = brewByWeight->getTargetWeight();
+    state.dose_weight = brewByWeight->getDoseWeight();
+    state.brew_max_temp = 105.0f;
+    state.steam_max_temp = 160.0f;
+    state.dose_weight = 18.0f;
+    runtimeState().endUpdate();
     LOG_I("Default values set");
     // Serial.flush(); // Removed - can block on USB CDC
     
@@ -1654,7 +1474,7 @@ void setup() {
     
     // Final display update before entering main loop to ensure screen is visible
     display.update();
-    ui.update(getMachineState());
+    ui.update(runtimeState().get());
     display.update();
 }
 
@@ -1737,10 +1557,11 @@ void loop() {
     
     // Connection states (defensive - default to false if object missing)
     bool picoConnected = picoUart->isConnected();
-    ui_state_t& stateRef = getMachineStateRef();
+    ui_state_t& stateRef = runtimeState().beginUpdate();
     stateRef.mqtt_connected = mqttClient ? mqttClient->isConnected() : false;
     stateRef.scale_connected = (scaleEnabled && scaleManager) ? scaleManager->isConnected() : false;
     stateRef.cloud_connected = cloudConnection ? cloudConnection->isConnected() : false;
+    runtimeState().endUpdate();
     
     // =========================================================================
     // PHASE 5: Pico connection status
@@ -1775,7 +1596,7 @@ void loop() {
     
     // Only process BBW if we're actually brewing with a connected scale
     // This prevents any callbacks from firing when not needed
-    const ui_state_t& state = getMachineState();
+    const ui_state_t& state = runtimeState().get();
     bool shouldUpdateBBW = brewByWeight && 
                            scaleEnabled && 
                            scaleManager && 
@@ -1818,7 +1639,7 @@ void loop() {
                 screen_ota_set("Update in progress...");
             }
         } else {
-            ui.update(getMachineState());
+            ui.update(runtimeState().get());
         }
         
         display.update();
@@ -1833,10 +1654,11 @@ void loop() {
     
     // Sync BBW state to machine state (with null check)
     if (brewByWeight && brewByWeight->isActive()) {
-        ui_state_t& state = getMachineStateRef();
+        ui_state_t& state = runtimeState().beginUpdate();
         state.brew_weight = brewByWeight->getState().current_weight;
         state.target_weight = brewByWeight->getTargetWeight();
         state.dose_weight = brewByWeight->getDoseWeight();
+        runtimeState().endUpdate();
     }
     
     // Publish MQTT status with delta updates for efficiency
@@ -1856,7 +1678,7 @@ void loop() {
     lastMQTTConnected = mqttConnected;
     
     if (mqttConnected) {
-        const ui_state_t& state = getMachineState();
+        const ui_state_t& state = runtimeState().get();
         bool hasChanged = mqttChangeDetector.hasChanged(state);
         ChangedFields changedFields;
         if (hasChanged) {
@@ -1926,14 +1748,15 @@ void loop() {
         // Broadcast if we have local clients OR cloud connection
         if (webServer->getClientCount() > 0 || cloudConnection->isConnected()) {
             // Update connection status in machineState
-            ui_state_t& state = getMachineStateRef();
+            ui_state_t& state = runtimeState().beginUpdate();
             state.pico_connected = picoUart->isConnected();
             state.wifi_connected = wifiManager->isConnected();
             state.mqtt_connected = mqttClient->isConnected();
             state.cloud_connected = cloudConnection->isConnected();
+            runtimeState().endUpdate();
             
             // Broadcast unified status (goes to both local and cloud clients)
-            webServer->broadcastFullStatus(getMachineState());
+            webServer->broadcastFullStatus(runtimeState().get());
         }
     }
     
@@ -2109,25 +1932,10 @@ void loop() {
  */
 void parsePicoStatus(const uint8_t* payload, uint8_t length) {
     if (length < 18) return;  // Minimum status size (up to water_level)
-    if (stateMutex == nullptr) return;  // Not initialized yet
     
-    // CRITICAL: Protect buffer copy/swap with mutex to prevent race conditions
-    // Secondary writers (WiFi, scale, etc.) may update active buffer during this operation
-    if (xSemaphoreTake(stateMutex, portMAX_DELAY) != pdTRUE) {
-        return;  // Should never happen with portMAX_DELAY, but be defensive
-    }
-    
-    // Double buffering: Start with current state, update fields, then swap
-    // This prevents data tearing if readers access machineState during update
-    ui_state_t& state = getMachineStateNext();
-    
-    // Copy current state to preserve fields not updated in this call
-    // This copy happens INSIDE the mutex, so any secondary updates that happened
-    // before we took the mutex are included in this copy
-    // Cast away volatile for assignment (safe inside mutex)
-    ui_state_t* statePtr = const_cast<ui_state_t*>(machineState);
-    ui_state_t* stateNextPtr = const_cast<ui_state_t*>(machineStateNext);
-    *stateNextPtr = *statePtr;
+    // Begin update transaction - takes mutex and returns reference to writing buffer
+    // The writing buffer is already initialized with current state (copied in beginUpdate)
+    ui_state_t& state = runtimeState().beginUpdate();
     
     // Parse temperatures (int16 scaled by 10 -> float)
     int16_t brew_temp_raw, steam_temp_raw, group_temp_raw;
@@ -2190,12 +1998,8 @@ void parsePicoStatus(const uint8_t* payload, uint8_t length) {
         state.brew_count = brew_count_raw;
     }
     
-    // Atomic swap: Make updated buffer active (readers now see complete update)
-    // Swap happens INSIDE mutex to ensure atomicity with respect to secondary writers
-    swapMachineStateBuffers();
-    
-    // Release mutex after swap completes
-    xSemaphoreGive(stateMutex);
+    // End update transaction - swaps buffers atomically and releases mutex
+    runtimeState().endUpdate();
     
     // Auto-switch screens is now handled by UI::checkAutoScreenSwitch()
 }

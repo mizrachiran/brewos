@@ -31,8 +31,7 @@ static unsigned long _wifiReadyTime = 0;
 static const unsigned long WIFI_READY_DELAY_MS = 1000;  // Reduced from 5s to 1s - faster responsiveness
 
 // External reference to machine state - use getter function for thread-safe access
-extern const ui_state_t& getMachineState();  // Defined in main.cpp
-extern ui_state_t& getMachineStateRef();  // For writes (defined in main.cpp)
+#include "runtime_state.h"
 
 // Static WebServer pointer for WebSocket callback
 static BrewWebServer* _wsInstance = nullptr;
@@ -169,7 +168,7 @@ void BrewWebServer::loop() {
         if (freeHeap >= MIN_HEAP_FOR_STATE_BROADCAST) {
             LOG_I("Cloud: Sending deferred state broadcast (heap=%zu)", freeHeap);
             _pendingCloudStateBroadcast = false;
-            broadcastFullStatus(getMachineState());
+            broadcastFullStatus(runtimeState().get());
             broadcastDeviceInfo();
         } else {
             // Still not enough heap, try again in 2 seconds
@@ -1743,7 +1742,7 @@ void BrewWebServer::setupRoutes() {
             if (mode == "on" || mode == "ready") {
                 // Validate machine state before allowing turn on
                 // Only allow turning on from IDLE, READY, or ECO states
-                uint8_t currentState = getMachineState().machine_state;
+                uint8_t currentState = runtimeState().get().machine_state;
                 if (currentState != UI_STATE_IDLE && 
                     currentState != UI_STATE_READY && 
                     currentState != UI_STATE_ECO) {
@@ -1774,9 +1773,10 @@ void BrewWebServer::setupRoutes() {
                 // The state will be updated from Pico status packets, but this ensures
                 // immediate response to the user command
                 if (cmd == 0x00) {  // MODE_IDLE
-                    ui_state_t& state = getMachineStateRef();
+                    ui_state_t& state = runtimeState().beginUpdate();
                     state.machine_state = UI_STATE_IDLE;
                     state.is_heating = false;
+                    runtimeState().endUpdate();
                 }
                 
                 request->send(200, "application/json", "{\"status\":\"ok\"}");
