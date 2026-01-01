@@ -7,17 +7,29 @@
 #define WIFI_COMMAND_QUEUE_SIZE 8
 
 // Helper to validate function pointers before calling
-// On ESP32-S3, valid code addresses are in flash (0x40000000-0x42FFFFFF)
-// PSRAM data is at 0x3C000000-0x3DFFFFFF - calling this would crash
+// On ESP32-S3, valid code addresses are in flash/IRAM/DRAM (not PSRAM)
+// Note: Arduino framework doesn't have esp_ptr.h, so we use manual checks
+// These address ranges are standard for ESP32-S3
 static inline bool isValidCodePointer(void* ptr) {
+    if (!ptr) return false;
+    
     uintptr_t addr = (uintptr_t)ptr;
-    // Valid ESP32-S3 code/data regions:
+    
+    // Valid ESP32-S3 code/data regions (not PSRAM):
     // 0x3FF80000 - 0x3FFFFFFF: DRAM (function pointers can reside here)
     // 0x40000000 - 0x4001FFFF: ROM
     // 0x40020000 - 0x40027FFF: IRAM 
     // 0x42000000 - 0x42FFFFFF: Flash mapped code
-    return ((addr >= 0x40000000 && addr < 0x43000000) || 
-            (addr >= 0x3FF80000 && addr <= 0x3FFFFFFF));
+    // PSRAM is at 0x3C000000-0x3DFFFFFF - calling this would crash
+    
+    bool inDram = (addr >= 0x3FF80000 && addr <= 0x3FFFFFFF);
+    bool inRom = (addr >= 0x40000000 && addr < 0x40020000);
+    bool inIram = (addr >= 0x40020000 && addr < 0x40028000);
+    bool inFlash = (addr >= 0x42000000 && addr < 0x43000000);
+    
+    // Valid if in any code/data region (but NOT PSRAM)
+    // PSRAM pointers cause InstructionFetchError on callback invocation
+    return inDram || inRom || inIram || inFlash;
 }
 
 // Safe callback invocation with validation

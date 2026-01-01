@@ -30,8 +30,9 @@ static unsigned long _wifiConnectRequestTime = 0;
 static unsigned long _wifiReadyTime = 0;
 static const unsigned long WIFI_READY_DELAY_MS = 1000;  // Reduced from 5s to 1s - faster responsiveness
 
-// External reference to machine state defined in main.cpp
-extern ui_state_t machineState;
+// External reference to machine state - use getter function for thread-safe access
+extern const ui_state_t& getMachineState();  // Defined in main.cpp
+extern ui_state_t& getMachineStateRef();  // For writes (defined in main.cpp)
 
 // Static WebServer pointer for WebSocket callback
 static BrewWebServer* _wsInstance = nullptr;
@@ -168,7 +169,7 @@ void BrewWebServer::loop() {
         if (freeHeap >= MIN_HEAP_FOR_STATE_BROADCAST) {
             LOG_I("Cloud: Sending deferred state broadcast (heap=%zu)", freeHeap);
             _pendingCloudStateBroadcast = false;
-            broadcastFullStatus(machineState);
+            broadcastFullStatus(getMachineState());
             broadcastDeviceInfo();
         } else {
             // Still not enough heap, try again in 2 seconds
@@ -734,10 +735,10 @@ void BrewWebServer::setupRoutes() {
     
     // Get full statistics
     _server.on("/api/stats", HTTP_GET, [](AsyncWebServerRequest* request) {
-        #pragma GCC diagnostic push
-        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        StaticJsonDocument<2048> doc;
-        #pragma GCC diagnostic pop
+        // Use heap-allocated document to avoid stack overflow in AsyncTCP task
+        // AsyncTCP task has limited stack (4-8KB), allocating 2KB on stack is dangerous
+        // Allocate JsonDocument on heap (ArduinoJson 7.x requires explicit allocation)
+        SpiRamJsonDocument doc(2048);
         BrewOS::FullStatistics stats;
         Stats.getFullStatistics(stats);
         
@@ -763,10 +764,9 @@ void BrewWebServer::setupRoutes() {
     
     // Get extended statistics with history data
     _server.on("/api/stats/extended", HTTP_GET, [](AsyncWebServerRequest* request) {
-        #pragma GCC diagnostic push
-        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        StaticJsonDocument<2048> doc;
-        #pragma GCC diagnostic pop
+        // Use heap-allocated document to avoid stack overflow in AsyncTCP task
+        // AsyncTCP task has limited stack (4-8KB), allocating 2KB on stack is dangerous
+        SpiRamJsonDocument doc(2048);
         
         // Get full statistics
         BrewOS::FullStatistics stats;
@@ -840,10 +840,9 @@ void BrewWebServer::setupRoutes() {
     
     // Get power history
     _server.on("/api/stats/power", HTTP_GET, [](AsyncWebServerRequest* request) {
-        #pragma GCC diagnostic push
-        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        StaticJsonDocument<2048> doc;
-        #pragma GCC diagnostic pop
+        // Use heap-allocated document to avoid stack overflow in AsyncTCP task
+        // AsyncTCP task has limited stack (4-8KB), allocating 2KB on stack is dangerous
+        SpiRamJsonDocument doc(2048);
         JsonArray arr = doc.to<JsonArray>();
         Stats.getPowerHistory(arr);
         
@@ -1282,7 +1281,11 @@ void BrewWebServer::setupRoutes() {
         [](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            JsonDocument doc;
+            // Use StaticJsonDocument for incoming JSON (typically small, <512 bytes)
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+            StaticJsonDocument<512> doc;
+            #pragma GCC diagnostic pop
             if (deserializeJson(doc, data, len)) {
                 request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
                 return;
@@ -1349,10 +1352,9 @@ void BrewWebServer::setupRoutes() {
     
     // Get all schedules
     _server.on("/api/schedules", HTTP_GET, [](AsyncWebServerRequest* request) {
-        #pragma GCC diagnostic push
-        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        StaticJsonDocument<2048> doc;
-        #pragma GCC diagnostic pop
+        // Use heap-allocated document to avoid stack overflow in AsyncTCP task
+        // AsyncTCP task has limited stack (4-8KB), allocating 2KB on stack is dangerous
+        SpiRamJsonDocument doc(2048);
         JsonObject obj = doc.to<JsonObject>();
         State.settings().schedule.toJson(obj);
         
@@ -1378,7 +1380,11 @@ void BrewWebServer::setupRoutes() {
         [](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            JsonDocument doc;
+            // Use StaticJsonDocument for incoming JSON (typically small, <512 bytes)
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+            StaticJsonDocument<512> doc;
+            #pragma GCC diagnostic pop
             if (deserializeJson(doc, data, len)) {
                 request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
                 return;
@@ -1407,7 +1413,11 @@ void BrewWebServer::setupRoutes() {
         [](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            JsonDocument doc;
+            // Use StaticJsonDocument for incoming JSON (typically small, <512 bytes)
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+            StaticJsonDocument<512> doc;
+            #pragma GCC diagnostic pop
             if (deserializeJson(doc, data, len)) {
                 request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
                 return;
@@ -1436,7 +1446,11 @@ void BrewWebServer::setupRoutes() {
         [](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            JsonDocument doc;
+            // Use StaticJsonDocument for incoming JSON (typically small, <512 bytes)
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+            StaticJsonDocument<512> doc;
+            #pragma GCC diagnostic pop
             if (deserializeJson(doc, data, len)) {
                 request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
                 return;
@@ -1462,7 +1476,11 @@ void BrewWebServer::setupRoutes() {
         [](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            JsonDocument doc;
+            // Use StaticJsonDocument for incoming JSON (typically small, <512 bytes)
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+            StaticJsonDocument<512> doc;
+            #pragma GCC diagnostic pop
             if (deserializeJson(doc, data, len)) {
                 request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
                 return;
@@ -1486,10 +1504,9 @@ void BrewWebServer::setupRoutes() {
     
     // Auto power-off settings
     _server.on("/api/schedules/auto-off", HTTP_GET, [](AsyncWebServerRequest* request) {
-        #pragma GCC diagnostic push
-        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        StaticJsonDocument<2048> doc;
-        #pragma GCC diagnostic pop
+        // Use heap-allocated document to avoid stack overflow in AsyncTCP task
+        // AsyncTCP task has limited stack (4-8KB), allocating 2KB on stack is dangerous
+        SpiRamJsonDocument doc(2048);
         doc["enabled"] = State.getAutoPowerOffEnabled();
         doc["minutes"] = State.getAutoPowerOffMinutes();
         
@@ -1514,7 +1531,11 @@ void BrewWebServer::setupRoutes() {
         [](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            JsonDocument doc;
+            // Use StaticJsonDocument for incoming JSON (typically small, <512 bytes)
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+            StaticJsonDocument<512> doc;
+            #pragma GCC diagnostic pop
             if (deserializeJson(doc, data, len)) {
                 request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
                 return;
@@ -1535,10 +1556,9 @@ void BrewWebServer::setupRoutes() {
     
     // Get time status and settings
     _server.on("/api/time", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        #pragma GCC diagnostic push
-        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        StaticJsonDocument<2048> doc;
-        #pragma GCC diagnostic pop
+        // Use heap-allocated document to avoid stack overflow in AsyncTCP task
+        // AsyncTCP task has limited stack (4-8KB), allocating 2KB on stack is dangerous
+        SpiRamJsonDocument doc(2048);
         
         // Current time status
         TimeStatus timeStatus = _wifiManager.getTimeStatus();
@@ -1573,7 +1593,11 @@ void BrewWebServer::setupRoutes() {
         [](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            JsonDocument doc;
+            // Use StaticJsonDocument for incoming JSON (typically small, <512 bytes)
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+            StaticJsonDocument<512> doc;
+            #pragma GCC diagnostic pop
             if (deserializeJson(doc, data, len)) {
                 request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
                 return;
@@ -1628,7 +1652,11 @@ void BrewWebServer::setupRoutes() {
         [](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            JsonDocument doc;
+            // Use StaticJsonDocument for incoming JSON (typically small, <512 bytes)
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+            StaticJsonDocument<512> doc;
+            #pragma GCC diagnostic pop
             if (deserializeJson(doc, data, len)) {
                 request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
                 return;
@@ -1661,7 +1689,11 @@ void BrewWebServer::setupRoutes() {
         [](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            JsonDocument doc;
+            // Use StaticJsonDocument for incoming JSON (typically small, <512 bytes)
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+            StaticJsonDocument<512> doc;
+            #pragma GCC diagnostic pop
             if (deserializeJson(doc, data, len)) {
                 request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
                 return;
@@ -1695,7 +1727,11 @@ void BrewWebServer::setupRoutes() {
         [](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            JsonDocument doc;
+            // Use StaticJsonDocument for incoming JSON (typically small, <512 bytes)
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+            StaticJsonDocument<512> doc;
+            #pragma GCC diagnostic pop
             if (deserializeJson(doc, data, len)) {
                 request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
                 return;
@@ -1707,7 +1743,7 @@ void BrewWebServer::setupRoutes() {
             if (mode == "on" || mode == "ready") {
                 // Validate machine state before allowing turn on
                 // Only allow turning on from IDLE, READY, or ECO states
-                uint8_t currentState = machineState.machine_state;
+                uint8_t currentState = getMachineState().machine_state;
                 if (currentState != UI_STATE_IDLE && 
                     currentState != UI_STATE_READY && 
                     currentState != UI_STATE_ECO) {
@@ -1738,8 +1774,9 @@ void BrewWebServer::setupRoutes() {
                 // The state will be updated from Pico status packets, but this ensures
                 // immediate response to the user command
                 if (cmd == 0x00) {  // MODE_IDLE
-                    machineState.machine_state = UI_STATE_IDLE;
-                    machineState.is_heating = false;
+                    ui_state_t& state = getMachineStateRef();
+                    state.machine_state = UI_STATE_IDLE;
+                    state.is_heating = false;
                 }
                 
                 request->send(200, "application/json", "{\"status\":\"ok\"}");
@@ -1753,10 +1790,9 @@ void BrewWebServer::setupRoutes() {
     _server.on("/api/cloud/status", HTTP_GET, [this](AsyncWebServerRequest* request) {
         auto& cloudSettings = State.settings().cloud;
         
-        #pragma GCC diagnostic push
-        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        StaticJsonDocument<2048> doc;
-        #pragma GCC diagnostic pop
+        // Use heap-allocated document to avoid stack overflow in AsyncTCP task
+        // AsyncTCP task has limited stack (4-8KB), allocating 2KB on stack is dangerous
+        SpiRamJsonDocument doc(2048);
         doc["enabled"] = cloudSettings.enabled;
         doc["connected"] = _cloudConnection ? _cloudConnection->isConnected() : false;
         doc["serverUrl"] = cloudSettings.serverUrl;
@@ -1782,10 +1818,9 @@ void BrewWebServer::setupRoutes() {
     _server.on("/api/push/preferences", HTTP_GET, [this](AsyncWebServerRequest* request) {
         auto& notifSettings = State.settings().notifications;
         
-        #pragma GCC diagnostic push
-        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        StaticJsonDocument<2048> doc;
-        #pragma GCC diagnostic pop
+        // Use heap-allocated document to avoid stack overflow in AsyncTCP task
+        // AsyncTCP task has limited stack (4-8KB), allocating 2KB on stack is dangerous
+        SpiRamJsonDocument doc(2048);
         doc["machineReady"] = notifSettings.machineReady;
         doc["waterEmpty"] = notifSettings.waterEmpty;
         doc["descaleDue"] = notifSettings.descaleDue;
@@ -1821,7 +1856,10 @@ void BrewWebServer::setupRoutes() {
         nullptr,
         [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
             if (index + len == total) {
-                JsonDocument doc;
+                #pragma GCC diagnostic push
+                #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+                StaticJsonDocument<512> doc;
+                #pragma GCC diagnostic pop
                 DeserializationError error = deserializeJson(doc, data, len);
                 
                 if (error) {
@@ -1874,10 +1912,9 @@ void BrewWebServer::setupRoutes() {
             }
         }
         
-        #pragma GCC diagnostic push
-        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        StaticJsonDocument<2048> doc;
-        #pragma GCC diagnostic pop
+        // Use heap-allocated document to avoid stack overflow in AsyncTCP task
+        // AsyncTCP task has limited stack (4-8KB), allocating 2KB on stack is dangerous
+        SpiRamJsonDocument doc(2048);
         doc["deviceId"] = _pairingManager->getDeviceId();
         doc["token"] = _pairingManager->getCurrentToken();
         doc["url"] = _pairingManager->getPairingUrl();
@@ -1921,10 +1958,9 @@ void BrewWebServer::setupRoutes() {
             }
         }
         
-        #pragma GCC diagnostic push
-        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        StaticJsonDocument<2048> doc;
-        #pragma GCC diagnostic pop
+        // Use heap-allocated document to avoid stack overflow in AsyncTCP task
+        // AsyncTCP task has limited stack (4-8KB), allocating 2KB on stack is dangerous
+        SpiRamJsonDocument doc(2048);
         doc["deviceId"] = _pairingManager->getDeviceId();
         doc["token"] = _pairingManager->getCurrentToken();
         doc["url"] = _pairingManager->getPairingUrl();
@@ -1969,7 +2005,11 @@ void BrewWebServer::setupRoutes() {
         [](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            JsonDocument doc;
+            // Use StaticJsonDocument for incoming JSON (typically small, <512 bytes)
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+            StaticJsonDocument<512> doc;
+            #pragma GCC diagnostic pop
             if (deserializeJson(doc, data, len)) {
                 request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
                 return;
@@ -2237,10 +2277,9 @@ void BrewWebServer::handleGetWiFiNetworks(AsyncWebServerRequest* request) {
     if (_scanResultsReady && (now - _lastScanTime < SCAN_CACHE_TIMEOUT_MS)) {
         LOG_I("Returning cached WiFi scan results (%d networks)", _cachedNetworkCount);
         
-        #pragma GCC diagnostic push
-        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        StaticJsonDocument<2048> doc;
-        #pragma GCC diagnostic pop
+        // Use heap-allocated document to avoid stack overflow in AsyncTCP task
+        // AsyncTCP task has limited stack (4-8KB), allocating 2KB on stack is dangerous
+        SpiRamJsonDocument doc(2048);
         JsonArray networks = doc["networks"].to<JsonArray>();
         
         int n = WiFi.scanComplete();
@@ -2288,10 +2327,9 @@ void BrewWebServer::handleGetWiFiNetworks(AsyncWebServerRequest* request) {
         _lastScanTime = now;
         _scanInProgress = false;
         
-        #pragma GCC diagnostic push
-        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        StaticJsonDocument<2048> doc;
-        #pragma GCC diagnostic pop
+        // Use heap-allocated document to avoid stack overflow in AsyncTCP task
+        // AsyncTCP task has limited stack (4-8KB), allocating 2KB on stack is dangerous
+        SpiRamJsonDocument doc(2048);
         JsonArray networks = doc["networks"].to<JsonArray>();
         
         int maxNetworks = (scanResult > 20) ? 20 : scanResult;
@@ -2375,7 +2413,10 @@ void BrewWebServer::handleGetConfig(AsyncWebServerRequest* request) {
 }
 
 void BrewWebServer::handleCommand(AsyncWebServerRequest* request, uint8_t* data, size_t len) {
-    JsonDocument doc;
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    StaticJsonDocument<512> doc;
+    #pragma GCC diagnostic pop
     DeserializationError error = deserializeJson(doc, data, len);
     
     if (error) {
@@ -2460,7 +2501,10 @@ void BrewWebServer::handleOTAUpload(AsyncWebServerRequest* request, const String
         size_t progress = (uploadedSize * 100) / totalSize;
         if (progress >= lastProgress + 10) {
             lastProgress = progress;
-            JsonDocument doc;
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+            StaticJsonDocument<256> doc;
+            #pragma GCC diagnostic pop
             doc["type"] = "ota_progress";
             doc["stage"] = "upload";
             doc["progress"] = progress;
@@ -2798,7 +2842,10 @@ void BrewWebServer::handleGetMQTTConfig(AsyncWebServerRequest* request) {
 }
 
 void BrewWebServer::handleSetMQTTConfig(AsyncWebServerRequest* request, uint8_t* data, size_t len) {
-    JsonDocument doc;
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    StaticJsonDocument<512> doc;
+    #pragma GCC diagnostic pop
     DeserializationError error = deserializeJson(doc, data, len);
     
     if (error) {

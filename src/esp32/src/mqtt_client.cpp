@@ -769,18 +769,22 @@ void MQTTClient::publishAvailability(bool online) {
 }
 
 void MQTTClient::publishHomeAssistantDiscovery() {
-    // Acquire mutex for thread-safe publishing
-    if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
-        LOG_W("Failed to acquire mutex for HA discovery");
+    // NOTE: We do NOT hold the mutex for the entire discovery process.
+    // Instead, we acquire/release it for each individual publish.
+    // This allows publishStatus() calls to succeed during discovery.
+    
+    // Check actual connection state (acquire mutex briefly)
+    if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+        LOG_W("Failed to acquire mutex for HA discovery check");
         return;
     }
     
-    // Check actual connection state
     if (!_client.connected()) {
         _connected = false;
         xSemaphoreGive(_mutex);
         return;
     }
+    xSemaphoreGive(_mutex);  // Release mutex immediately
     
     LOG_I("Publishing Home Assistant discovery...");
     
@@ -808,12 +812,23 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     
     // Helper to publish a sensor discovery message
     // Use StaticJsonDocument on stack to avoid heap fragmentation (called 35+ times)
+    // NOTE: Acquires/releases mutex per publish to allow status updates during discovery
     auto publishSensor = [&](const char* name, const char* sensorId, const char* valueTemplate, 
                              const char* unit, const char* deviceClass, const char* stateClass,
                              const char* stateTopic = nullptr, const char* icon = nullptr) {
+        // Check if already lost connection
+        if (connectionLost) return;
+        
+        // Acquire mutex for this publish only
+        if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+            return;  // Skip this entity if mutex busy (status update in progress)
+        }
+        
         // Check connection before each publish
-        if (!_client.connected() || connectionLost) {
+        if (!_client.connected()) {
             connectionLost = true;
+            _connected = false;
+            xSemaphoreGive(_mutex);
             return;
         }
         
@@ -824,8 +839,13 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         addDeviceInfo(doc);
         
         doc["name"] = name;
-        doc["unique_id"] = "brewos_" + deviceId + "_" + String(sensorId);
-        doc["object_id"] = "brewos_" + String(sensorId);
+        // Use snprintf instead of String concatenation to reduce heap fragmentation
+        char uniqueId[64];
+        snprintf(uniqueId, sizeof(uniqueId), "brewos_%s_%s", deviceId.c_str(), sensorId);
+        doc["unique_id"] = uniqueId;
+        char objectId[48];
+        snprintf(objectId, sizeof(objectId), "brewos_%s", sensorId);
+        doc["object_id"] = objectId;
         doc["state_topic"] = stateTopic ? stateTopic : statusTopic.c_str();
         doc["value_template"] = valueTemplate;
         if (unit && strlen(unit) > 0) doc["unit_of_measurement"] = unit;
@@ -851,9 +871,11 @@ void MQTTClient::publishHomeAssistantDiscovery() {
             if (!_client.connected()) {
                 connectionLost = true;
                 _connected = false;
-                return;
             }
         }
+        
+        xSemaphoreGive(_mutex);  // Release mutex after publish
+        
         yield();  // Yield to prevent blocking network stack
         // Delay after each publish to prevent broker overwhelm
         // Some brokers (Mosquitto, etc) disconnect clients that publish too rapidly
@@ -864,9 +886,19 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     // Publish binary sensors for status
     auto publishBinarySensor = [&](const char* name, const char* sensorId, const char* valueTemplate, 
                                    const char* deviceClass, const char* icon = nullptr) {
+        // Check if already lost connection
+        if (connectionLost) return;
+        
+        // Acquire mutex for this publish only
+        if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+            return;
+        }
+        
         // Check connection before each publish
-        if (!_client.connected() || connectionLost) {
+        if (!_client.connected()) {
             connectionLost = true;
+            _connected = false;
+            xSemaphoreGive(_mutex);
             return;
         }
         
@@ -877,8 +909,12 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         addDeviceInfo(doc);
         
         doc["name"] = name;
-        doc["unique_id"] = "brewos_" + deviceId + "_" + String(sensorId);
-        doc["object_id"] = "brewos_" + String(sensorId);
+        char uniqueId[64];
+        snprintf(uniqueId, sizeof(uniqueId), "brewos_%s_%s", deviceId.c_str(), sensorId);
+        doc["unique_id"] = uniqueId;
+        char objectId[48];
+        snprintf(objectId, sizeof(objectId), "brewos_%s", sensorId);
+        doc["object_id"] = objectId;
         doc["state_topic"] = statusTopic;
         doc["value_template"] = valueTemplate;
         if (deviceClass && strlen(deviceClass) > 0) {
@@ -902,9 +938,11 @@ void MQTTClient::publishHomeAssistantDiscovery() {
             if (!_client.connected()) {
                 connectionLost = true;
                 _connected = false;
-                return;
             }
         }
+        
+        xSemaphoreGive(_mutex);
+        
         yield();
         delay(50);  // Prevent broker overwhelm
         publishCount++;
@@ -914,9 +952,16 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     auto publishSwitch = [&](const char* name, const char* switchId, const char* icon,
                              const char* payloadOn, const char* payloadOff, 
                              const char* stateTemplate) {
-        // Check connection before each publish
-        if (!_client.connected() || connectionLost) {
+        if (connectionLost) return;
+        
+        if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+            return;
+        }
+        
+        if (!_client.connected()) {
             connectionLost = true;
+            _connected = false;
+            xSemaphoreGive(_mutex);
             return;
         }
         
@@ -927,8 +972,12 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         addDeviceInfo(doc);
         
         doc["name"] = name;
-        doc["unique_id"] = "brewos_" + deviceId + "_" + String(switchId);
-        doc["object_id"] = "brewos_" + String(switchId);
+        char uniqueId[64];
+        snprintf(uniqueId, sizeof(uniqueId), "brewos_%s_%s", deviceId.c_str(), switchId);
+        doc["unique_id"] = uniqueId;
+        char objectId[48];
+        snprintf(objectId, sizeof(objectId), "brewos_%s", switchId);
+        doc["object_id"] = objectId;
         doc["state_topic"] = statusTopic;
         doc["command_topic"] = commandTopic;
         doc["value_template"] = stateTemplate;
@@ -952,9 +1001,11 @@ void MQTTClient::publishHomeAssistantDiscovery() {
             if (!_client.connected()) {
                 connectionLost = true;
                 _connected = false;
-                return;
             }
         }
+        
+        xSemaphoreGive(_mutex);
+        
         yield();
         delay(50);  // Prevent broker overwhelm
         publishCount++;
@@ -963,9 +1014,16 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     // Helper to publish a button
     auto publishButton = [&](const char* name, const char* buttonId, const char* icon,
                              const char* payload) {
-        // Check connection before each publish
-        if (!_client.connected() || connectionLost) {
+        if (connectionLost) return;
+        
+        if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+            return;
+        }
+        
+        if (!_client.connected()) {
             connectionLost = true;
+            _connected = false;
+            xSemaphoreGive(_mutex);
             return;
         }
         
@@ -976,8 +1034,12 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         addDeviceInfo(doc);
         
         doc["name"] = name;
-        doc["unique_id"] = "brewos_" + deviceId + "_" + String(buttonId);
-        doc["object_id"] = "brewos_" + String(buttonId);
+        char uniqueId[64];
+        snprintf(uniqueId, sizeof(uniqueId), "brewos_%s_%s", deviceId.c_str(), buttonId);
+        doc["unique_id"] = uniqueId;
+        char objectId[48];
+        snprintf(objectId, sizeof(objectId), "brewos_%s", buttonId);
+        doc["object_id"] = objectId;
         doc["command_topic"] = commandTopic;
         doc["payload_press"] = payload;
         doc["icon"] = icon;
@@ -996,9 +1058,11 @@ void MQTTClient::publishHomeAssistantDiscovery() {
             if (!_client.connected()) {
                 connectionLost = true;
                 _connected = false;
-                return;
             }
         }
+        
+        xSemaphoreGive(_mutex);
+        
         yield();
         delay(50);  // Prevent broker overwhelm
         publishCount++;
@@ -1008,9 +1072,16 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     auto publishNumber = [&](const char* name, const char* numberId, const char* icon,
                              float min, float max, float step, const char* unit,
                              const char* valueTemplate, const char* commandTemplate) {
-        // Check connection before each publish
-        if (!_client.connected() || connectionLost) {
+        if (connectionLost) return;
+        
+        if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+            return;
+        }
+        
+        if (!_client.connected()) {
             connectionLost = true;
+            _connected = false;
+            xSemaphoreGive(_mutex);
             return;
         }
         
@@ -1021,8 +1092,12 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         addDeviceInfo(doc);
         
         doc["name"] = name;
-        doc["unique_id"] = "brewos_" + deviceId + "_" + String(numberId);
-        doc["object_id"] = "brewos_" + String(numberId);
+        char uniqueId[64];
+        snprintf(uniqueId, sizeof(uniqueId), "brewos_%s_%s", deviceId.c_str(), numberId);
+        doc["unique_id"] = uniqueId;
+        char objectId[48];
+        snprintf(objectId, sizeof(objectId), "brewos_%s", numberId);
+        doc["object_id"] = objectId;
         doc["state_topic"] = statusTopic;
         doc["command_topic"] = commandTopic;
         doc["value_template"] = valueTemplate;
@@ -1048,9 +1123,11 @@ void MQTTClient::publishHomeAssistantDiscovery() {
             if (!_client.connected()) {
                 connectionLost = true;
                 _connected = false;
-                return;
             }
         }
+        
+        xSemaphoreGive(_mutex);
+        
         yield();
         delay(50);  // Prevent broker overwhelm
         publishCount++;
@@ -1060,9 +1137,16 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     auto publishSelect = [&](const char* name, const char* selectId, const char* icon,
                              std::initializer_list<const char*> options, const char* valueTemplate,
                              const char* commandTemplate) {
-        // Check connection before each publish
-        if (!_client.connected() || connectionLost) {
+        if (connectionLost) return;
+        
+        if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+            return;
+        }
+        
+        if (!_client.connected()) {
             connectionLost = true;
+            _connected = false;
+            xSemaphoreGive(_mutex);
             return;
         }
         
@@ -1073,8 +1157,12 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         addDeviceInfo(doc);
         
         doc["name"] = name;
-        doc["unique_id"] = "brewos_" + deviceId + "_" + String(selectId);
-        doc["object_id"] = "brewos_" + String(selectId);
+        char uniqueId[64];
+        snprintf(uniqueId, sizeof(uniqueId), "brewos_%s_%s", deviceId.c_str(), selectId);
+        doc["unique_id"] = uniqueId;
+        char objectId[48];
+        snprintf(objectId, sizeof(objectId), "brewos_%s", selectId);
+        doc["object_id"] = objectId;
         doc["state_topic"] = statusTopic;
         doc["command_topic"] = commandTopic;
         doc["value_template"] = valueTemplate;
@@ -1100,9 +1188,11 @@ void MQTTClient::publishHomeAssistantDiscovery() {
             if (!_client.connected()) {
                 connectionLost = true;
                 _connected = false;
-                return;
             }
         }
+        
+        xSemaphoreGive(_mutex);
+        
         yield();
         delay(50);  // Prevent broker overwhelm
         publishCount++;
@@ -1207,7 +1297,7 @@ void MQTTClient::publishHomeAssistantDiscovery() {
                   "{% set strategies = ['brew_only', 'sequential', 'parallel', 'smart_stagger'] %}{{ strategies[value_json.heating_strategy | int] | default('sequential') }}",
                   "{% set strategies = {'brew_only': 0, 'sequential': 1, 'parallel': 2, 'smart_stagger': 3} %}{\"cmd\":\"set_heating_strategy\",\"strategy\":{{ strategies[value] | default(1) }}}");
     
-    // Release mutex and log result
+    // Log result (mutex is released per-publish, not held at end)
     if (connectionLost) {
         LOG_W("Home Assistant discovery incomplete - connection lost (%d/%d entities published)", 
               publishCount, HA_TOTAL_ENTITY_COUNT);
@@ -1215,8 +1305,6 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     } else {
         LOG_I("Home Assistant discovery published (%d entities)", HA_TOTAL_ENTITY_COUNT);
     }
-    
-    xSemaphoreGive(_mutex);
 }
 
 void MQTTClient::onMessage(char* topicName, byte* payload, unsigned int length) {

@@ -64,6 +64,10 @@ public:
     
     // Reset connection state (used during OTA to properly detect reconnection)
     void clearConnectionState() { _connected = false; _lastPacketTime = 0; }
+    
+    // Non-blocking backoff for NACK handling (avoids blocking delay() in main loop)
+    void setBackoffUntil(uint32_t timestamp) { _backoffUntil = timestamp; }
+    bool isInBackoff() { return millis() < _backoffUntil; }
 
 private:
     HardwareSerial& _serial;
@@ -91,6 +95,7 @@ private:
     unsigned long _lastPacketTime;
     bool _connected;
     bool _paused;  // When true, loop() won't process incoming data (for OTA)
+    uint32_t _backoffUntil;  // Non-blocking backoff timestamp (0 = no backoff)
     
     // CRC calculation
     uint16_t calculateCRC(const uint8_t* data, size_t length);

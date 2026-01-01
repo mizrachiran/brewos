@@ -126,8 +126,13 @@ BrewOSLogLevel stringToLogLevel(const char* str) {
 // Set to true to enable BLE scale support (may cause instability on some networks)
 static bool scaleEnabled = false;
 
-// Machine state from Pico
-ui_state_t machineState = {0};  // Made non-static so it can be accessed from other files
+// Machine state from Pico - Double buffering to prevent data tearing
+// Writers update the inactive buffer, then atomically swap the pointer
+// Readers always read from the active buffer (lock-free, no mutex needed)
+static ui_state_t machineStateBufferA = {0};
+static ui_state_t machineStateBufferB = {0};
+static ui_state_t* machineState = &machineStateBufferA;  // Active buffer (readers)
+static ui_state_t* machineStateNext = &machineStateBufferB;  // Inactive buffer (writers)
 
 // Note: Demo mode is handled by the web UI only (via URL parameters)
 // ESP32 does not simulate data when Pico is not connected
@@ -151,6 +156,34 @@ void parsePicoStatus(const uint8_t* payload, uint8_t length);
 void handleEncoderEvent(int32_t diff, button_state_t btn);
 static void onPicoPacket(const PicoPacket& packet);
 
+// Double buffering: Swap active/inactive buffers atomically
+// This prevents data tearing when readers access machineState while it's being updated
+static inline void swapMachineStateBuffers() {
+    // Atomic pointer swap (single 32-bit write on ESP32)
+    ui_state_t* temp = machineState;
+    machineState = machineStateNext;
+    machineStateNext = temp;
+}
+
+// Get current machine state (for readers) - thread-safe, lock-free
+// Exported for use in other files (web_server, mqtt_client)
+const ui_state_t& getMachineState() {
+    return *machineState;
+}
+
+// Get writable machine state (for writers - updates inactive buffer)
+// Caller must call swapMachineStateBuffers() after completing all updates
+static inline ui_state_t& getMachineStateNext() {
+    return *machineStateNext;
+}
+
+// Legacy accessor for compatibility - returns reference to active buffer
+// NOTE: Direct writes to this are NOT thread-safe. Use getMachineStateNext() + swap for updates.
+// Exported for use in other files (web_server_websocket.cpp for command handlers)
+ui_state_t& getMachineStateRef() {
+    return *machineState;
+}
+
 // =============================================================================
 // WiFi Event Callbacks - Static functions to avoid std::function PSRAM issues
 // =============================================================================
@@ -172,22 +205,24 @@ static void onWiFiConnected() {
     }
     
     // Update machine state (simple operations only, no String allocations)
-    machineState.wifi_connected = true;
-    machineState.wifi_ap_mode = false;
-    machineState.wifi_rssi = WiFi.RSSI();
+    // NOTE: These are single-field updates (atomic on ESP32), but should ideally use double buffer
+    ui_state_t& state = getMachineStateRef();
+    state.wifi_connected = true;
+    state.wifi_ap_mode = false;
+    state.wifi_rssi = WiFi.RSSI();
     
     // Get WiFi SSID directly from WiFiManager's stored value
     if (wifiManager) {
         const char* ssid = wifiManager->getStoredSSID();
         if (ssid && strlen(ssid) > 0) {
-            strncpy(machineState.wifi_ssid, ssid, sizeof(machineState.wifi_ssid) - 1);
-            machineState.wifi_ssid[sizeof(machineState.wifi_ssid) - 1] = '\0';
+            strncpy(state.wifi_ssid, ssid, sizeof(state.wifi_ssid) - 1);
+            state.wifi_ssid[sizeof(state.wifi_ssid) - 1] = '\0';
         }
     }
     
     // Get IP directly into buffer (no String allocation)
     IPAddress ip = WiFi.localIP();
-    snprintf(machineState.wifi_ip, sizeof(machineState.wifi_ip), "%d.%d.%d.%d", 
+    snprintf(state.wifi_ip, sizeof(state.wifi_ip), "%d.%d.%d.%d", 
              ip[0], ip[1], ip[2], ip[3]);
     
     // Log immediately - web server is already running and ready
@@ -203,7 +238,7 @@ static void onWiFiConnected() {
 // Called when WiFi disconnects
 static void onWiFiDisconnected() {
     LOG_W("WiFi disconnected");
-    machineState.wifi_connected = false;
+    getMachineStateRef().wifi_connected = false;
     // Reset WiFi connected state tracking
     wifiConnectedTime = 0;
     wifiConnectedLogSent = false;
@@ -232,8 +267,9 @@ static void onWiFiAPStarted() {
     // Only set wifi_ap_mode if we're truly in AP-only mode (no STA connection)
     // If WiFi is still connected, we're in AP+STA mode - don't trigger auto-setup screen
     bool wifiStillConnected = (WiFi.status() == WL_CONNECTED);
-    machineState.wifi_ap_mode = !wifiStillConnected;  // Only true if AP-only (no WiFi connection)
-    machineState.wifi_connected = wifiStillConnected;
+    ui_state_t& state = getMachineStateRef();
+    state.wifi_ap_mode = !wifiStillConnected;  // Only true if AP-only (no WiFi connection)
+    state.wifi_connected = wifiStillConnected;
     
     if (wifiStillConnected) {
         LOG_I("AP+STA mode: WiFi still connected, setup screen will not auto-show");
@@ -258,15 +294,16 @@ static void onWiFiAPStarted() {
 // Scale Callbacks - Static functions to avoid std::function PSRAM issues
 // =============================================================================
 
-static void onScaleWeight(const scale_state_t& state) {
-    machineState.scale_connected = state.connected;
-    machineState.brew_weight = state.weight;
-    machineState.flow_rate = state.flow_rate;
+static void onScaleWeight(const scale_state_t& scaleState) {
+    ui_state_t& state = getMachineStateRef();
+    state.scale_connected = scaleState.connected;
+    state.brew_weight = scaleState.weight;
+    state.flow_rate = scaleState.flow_rate;
 }
 
 static void onScaleConnection(bool connected) {
     LOG_I("Scale %s", connected ? "connected" : "disconnected");
-    machineState.scale_connected = connected;
+    getMachineStateRef().scale_connected = connected;
 }
 
 // =============================================================================
@@ -338,7 +375,7 @@ static void onScheduleTriggered(const BrewOS::ScheduleEntry& schedule) {
     if (schedule.action == BrewOS::ACTION_TURN_ON) {
         // Validate machine state before allowing turn on
         // Only allow turning on from IDLE, READY, or ECO states
-        uint8_t currentState = machineState.machine_state;
+        uint8_t currentState = getMachineState().machine_state;
         if (currentState != UI_STATE_IDLE && 
             currentState != UI_STATE_READY && 
             currentState != UI_STATE_ECO) {
@@ -381,7 +418,7 @@ static void onPicoPacket(const PicoPacket& packet) {
         case MSG_BOOT: {
             LOG_I("Pico boot info received");
             if (webServer) webServer->broadcastLog("Pico booted");
-            machineState.pico_connected = true;
+            getMachineStateRef().pico_connected = true;
             
             // Parse boot payload (boot_payload_t structure)
             // Layout: ver(3) + machine(1) + pcb(1) + pcb_ver(2) + reset(4) + build_date(12) + build_time(9) = 32 bytes
@@ -389,14 +426,15 @@ static void onPicoPacket(const PicoPacket& packet) {
                 uint8_t ver_major = packet.payload[0];
                 uint8_t ver_minor = packet.payload[1];
                 uint8_t ver_patch = packet.payload[2];
-                machineState.machine_type = packet.payload[3];
+                getMachineStateRef().machine_type = packet.payload[3];
                 
                 // Store in StateManager
                 State.setPicoVersion(ver_major, ver_minor, ver_patch);
-                State.setMachineType(machineState.machine_type);
+                ui_state_t& state = getMachineStateRef();
+                State.setMachineType(state.machine_type);
                 
                 LOG_I("Pico version: %d.%d.%d, Machine type: %d", 
-                      ver_major, ver_minor, ver_patch, machineState.machine_type);
+                      ver_major, ver_minor, ver_patch, state.machine_type);
                 
                 // Parse reset reason if available (offset 7-10, uint32_t)
                 if (packet.length >= 11) {
@@ -490,6 +528,7 @@ static void onPicoPacket(const PicoPacket& packet) {
         
         case MSG_NACK: {
             // Pico is busy (backpressure) - reduce command rate
+            // NOTE: Using non-blocking backoff to keep UI responsive
             if (packet.length >= 4) {
                 uint8_t cmd_type = packet.payload[0];
                 uint8_t cmd_seq = packet.payload[1];
@@ -498,10 +537,10 @@ static void onPicoPacket(const PicoPacket& packet) {
                 LOG_W("Pico NACK: cmd=0x%02X seq=%d result=0x%02X (backpressure)", 
                       cmd_type, cmd_seq, result);
                 
-                // Implement exponential backoff to reduce load on Pico
-                // Track NACK frequency to detect system overload
+                // Track NACK frequency to detect system overload (non-blocking)
                 static uint32_t s_nack_count = 0;
                 static uint32_t s_last_nack_time = 0;
+                static uint32_t s_backoff_until = 0;  // Non-blocking backoff timestamp
                 uint32_t now = millis();
                 
                 // Initialize timing on first NACK
@@ -525,16 +564,23 @@ static void onPicoPacket(const PicoPacket& packet) {
                     s_last_nack_time = now;
                 }
                 
-                // Exponential backoff: delay next command
-                // This gives Pico time to process pending commands
-                delay(min((uint32_t)(100 * s_nack_count), (uint32_t)500));  // Cap at 500ms
+                // Non-blocking exponential backoff: set timestamp for when commands can resume
+                // PicoUART should check this before sending commands
+                // This avoids blocking delay() which freezes UI (encoder, display)
+                uint32_t backoff_ms = min((uint32_t)(100 * s_nack_count), (uint32_t)500);
+                s_backoff_until = now + backoff_ms;
+                
+                // Set backoff in PicoUART so it defers next command
+                if (picoUart) {
+                    picoUart->setBackoffUntil(s_backoff_until);
+                }
             }
             break;
         }
             
         case MSG_STATUS:
             parsePicoStatus(packet.payload, packet.length);
-            machineState.pico_connected = true;
+            getMachineStateRef().pico_connected = true;
             break;
         
         case MSG_POWER_METER: {
@@ -552,8 +598,9 @@ static void onPicoPacket(const PicoPacket& packet) {
             if (alarmCode == ALARM_NONE) {
                 // ALARM_NONE (0x00) means no alarm - clear the alarm state
                 // Only log if we're actually transitioning from a REAL alarm (non-zero) to cleared
-                if (machineState.alarm_active && machineState.alarm_code != ALARM_NONE) {
-                    LOG_I("Pico alarm cleared (was: 0x%02X)", machineState.alarm_code);
+                ui_state_t& state = getMachineStateRef();
+                if (state.alarm_active && state.alarm_code != ALARM_NONE) {
+                    LOG_I("Pico alarm cleared (was: 0x%02X)", state.alarm_code);
                     // Defensive: Check webServer pointer and use try-catch equivalent (null check)
                     if (webServer) {
                         // Use a safer approach - format the message first to avoid variadic issues
@@ -563,12 +610,13 @@ static void onPicoPacket(const PicoPacket& packet) {
                     }
                 }
                 // Always update state, but only log when transitioning from real alarm
-                machineState.alarm_active = false;
-                machineState.alarm_code = ALARM_NONE;
+                state.alarm_active = false;
+                state.alarm_code = ALARM_NONE;
             } else {
                 // Actual alarm - log and set alarm state
                 // Only log if this is a new alarm or different from current
-                if (!machineState.alarm_active || machineState.alarm_code != alarmCode) {
+                ui_state_t& state = getMachineStateRef();
+                if (!state.alarm_active || state.alarm_code != alarmCode) {
                     LOG_W("PICO ALARM: 0x%02X", alarmCode);
                     // Defensive: Format message first to avoid variadic argument issues
                     if (webServer) {
@@ -577,8 +625,8 @@ static void onPicoPacket(const PicoPacket& packet) {
                         webServer->broadcastLog(alarmMsg, "error");
                     }
                 }
-                machineState.alarm_active = true;
-                machineState.alarm_code = alarmCode;
+                state.alarm_active = true;
+                state.alarm_code = alarmCode;
             }
             break;
         }
@@ -979,14 +1027,15 @@ void setup() {
     Serial.println("[4.7/8] Checking WiFi credentials...");
     // Serial.flush(); // Removed - can block on USB CDC
     bool needsWifiSetup = !wifiManager->checkCredentials();
+    ui_state_t& state = getMachineStateRef();
     if (needsWifiSetup) {
         Serial.println("No WiFi credentials found - setup screen will be shown");
-        machineState.wifi_ap_mode = true;
-        machineState.wifi_connected = false;
+        state.wifi_ap_mode = true;
+        state.wifi_connected = false;
     } else {
         Serial.println("WiFi credentials found");
-        machineState.wifi_ap_mode = false;
-        machineState.wifi_connected = false;  // Will be updated when WiFi connects
+        state.wifi_ap_mode = false;
+        state.wifi_connected = false;  // Will be updated when WiFi connects
     }
     // Serial.flush(); // Removed - can block on USB CDC
     
@@ -996,7 +1045,7 @@ void setup() {
         Serial.println("ERROR: UI initialization failed!");
     } else {
         Serial.println("UI initialized OK");
-        ui.update(machineState);
+        ui.update(getMachineState());
         if (needsWifiSetup) {
             Serial.println("Showing WiFi setup screen...");
         }
@@ -1034,7 +1083,7 @@ void setup() {
     ui.onSetTargetWeight([](float weight) {
         LOG_I("UI: Set target weight to %.1fg", weight);
         brewByWeight->setTargetWeight(weight);
-        machineState.target_weight = weight;
+        getMachineStateRef().target_weight = weight;
     });
     
     ui.onWifiSetup([]() {
@@ -1239,7 +1288,7 @@ void setup() {
     // Serial.flush(); // Removed - can block on USB CDC
     
     // Set up MQTT command handler
-    mqttClient->onCommand([](const char* cmd, const JsonDocument& doc) {
+    mqttClient->onCommand([](const char* cmd, JsonDocument& doc) {
         String cmdStr = cmd;
         
         if (cmdStr == "set_temp") {
@@ -1262,7 +1311,7 @@ void setup() {
             if (mode == "on" || mode == "ready") {
                 // Validate machine state before allowing turn on
                 // Only allow turning on from IDLE, READY, or ECO states
-                uint8_t currentState = machineState.machine_state;
+                uint8_t currentState = getMachineState().machine_state;
                 if (currentState != UI_STATE_IDLE && 
                     currentState != UI_STATE_READY && 
                     currentState != UI_STATE_ECO) {
@@ -1284,7 +1333,7 @@ void setup() {
             float weight = doc["weight"] | 0.0f;
             if (weight > 0) {
                 brewByWeight->setTargetWeight(weight);
-                machineState.target_weight = weight;
+                getMachineStateRef().target_weight = weight;
             }
         }
         else if (cmdStr == "set_eco") {
@@ -1350,13 +1399,14 @@ void setup() {
     // Set default state values from BBW settings
     LOG_I("Setting default machine state values...");
     // Serial.flush(); // Removed - can block on USB CDC
-    machineState.brew_setpoint = 93.0f;
-    machineState.steam_setpoint = 145.0f;
-    machineState.target_weight = brewByWeight->getTargetWeight();
-    machineState.dose_weight = brewByWeight->getDoseWeight();
-    machineState.brew_max_temp = 105.0f;
-    machineState.steam_max_temp = 160.0f;
-    machineState.dose_weight = 18.0f;
+    // Use getMachineStateRef() directly to avoid scope issues
+    getMachineStateRef().brew_setpoint = 93.0f;
+    getMachineStateRef().steam_setpoint = 145.0f;
+    getMachineStateRef().target_weight = brewByWeight->getTargetWeight();
+    getMachineStateRef().dose_weight = brewByWeight->getDoseWeight();
+    getMachineStateRef().brew_max_temp = 105.0f;
+    getMachineStateRef().steam_max_temp = 160.0f;
+    getMachineStateRef().dose_weight = 18.0f;
     LOG_I("Default values set");
     // Serial.flush(); // Removed - can block on USB CDC
     
@@ -1558,7 +1608,7 @@ void setup() {
     
     // Final display update before entering main loop to ensure screen is visible
     display.update();
-    ui.update(machineState);
+    ui.update(getMachineState());
     display.update();
 }
 
@@ -1641,16 +1691,17 @@ void loop() {
     
     // Connection states (defensive - default to false if object missing)
     bool picoConnected = picoUart->isConnected();
-    machineState.mqtt_connected = mqttClient ? mqttClient->isConnected() : false;
-    machineState.scale_connected = (scaleEnabled && scaleManager) ? scaleManager->isConnected() : false;
-    machineState.cloud_connected = cloudConnection ? cloudConnection->isConnected() : false;
+    ui_state_t& stateRef = getMachineStateRef();
+    stateRef.mqtt_connected = mqttClient ? mqttClient->isConnected() : false;
+    stateRef.scale_connected = (scaleEnabled && scaleManager) ? scaleManager->isConnected() : false;
+    stateRef.cloud_connected = cloudConnection ? cloudConnection->isConnected() : false;
     
     // =========================================================================
     // PHASE 5: Pico connection status
     // =========================================================================
     
     // Update Pico connection status (no automatic demo mode - demo is web UI only)
-    machineState.pico_connected = picoConnected;
+    stateRef.pico_connected = picoConnected;
     
     // If Pico is connected but machine type is unknown, request boot info
     // This handles the case where MSG_BOOT was missed (e.g., ESP32 rebooted while Pico was running)
@@ -1678,16 +1729,17 @@ void loop() {
     
     // Only process BBW if we're actually brewing with a connected scale
     // This prevents any callbacks from firing when not needed
+    const ui_state_t& state = getMachineState();
     bool shouldUpdateBBW = brewByWeight && 
                            scaleEnabled && 
                            scaleManager && 
                            scaleManager->isConnected() &&
-                           machineState.is_brewing;
+                           state.is_brewing;
     
     // Update BBW with current brewing state and scale weight
     if (shouldUpdateBBW) {
         brewByWeight->update(
-            machineState.is_brewing,
+            state.is_brewing,
             scaleManager->getState().weight,
             true
         );
@@ -1720,7 +1772,7 @@ void loop() {
                 screen_ota_set("Update in progress...");
             }
         } else {
-            ui.update(machineState);
+            ui.update(getMachineState());
         }
         
         display.update();
@@ -1728,16 +1780,17 @@ void loop() {
     
     static bool lastPressed = false;
     bool currentPressed = encoder.isPressed();
-    if (machineState.is_brewing || (currentPressed && !lastPressed)) {
+    if (state.is_brewing || (currentPressed && !lastPressed)) {
         State.resetIdleTimer();
     }
     lastPressed = currentPressed;
     
     // Sync BBW state to machine state (with null check)
     if (brewByWeight && brewByWeight->isActive()) {
-        machineState.brew_weight = brewByWeight->getState().current_weight;
-        machineState.target_weight = brewByWeight->getTargetWeight();
-        machineState.dose_weight = brewByWeight->getDoseWeight();
+        ui_state_t& state = getMachineStateRef();
+        state.brew_weight = brewByWeight->getState().current_weight;
+        state.target_weight = brewByWeight->getTargetWeight();
+        state.dose_weight = brewByWeight->getDoseWeight();
     }
     
     // Publish MQTT status with delta updates for efficiency
@@ -1757,10 +1810,11 @@ void loop() {
     lastMQTTConnected = mqttConnected;
     
     if (mqttConnected) {
-        bool hasChanged = mqttChangeDetector.hasChanged(machineState);
+        const ui_state_t& state = getMachineState();
+        bool hasChanged = mqttChangeDetector.hasChanged(state);
         ChangedFields changedFields;
         if (hasChanged) {
-            changedFields = mqttChangeDetector.getChangedFields(machineState);
+            changedFields = mqttChangeDetector.getChangedFields(state);
         }
         
         unsigned long now = millis();
@@ -1773,13 +1827,13 @@ void loop() {
         
         if (hasChanged || heartbeatDue) {
             if (sendFullStatus) {
-                mqttClient->publishStatus(machineState);
+                mqttClient->publishStatus(state);
                 if (fullStatusDue) {
                     lastMQTTFullStatus = now;
                 }
             } else {
                 // Send delta update for incremental changes
-                mqttClient->publishStatusDelta(machineState, changedFields);
+                mqttClient->publishStatusDelta(state, changedFields);
             }
             
             if (heartbeatDue) {
@@ -1826,13 +1880,14 @@ void loop() {
         // Broadcast if we have local clients OR cloud connection
         if (webServer->getClientCount() > 0 || cloudConnection->isConnected()) {
             // Update connection status in machineState
-            machineState.pico_connected = picoUart->isConnected();
-            machineState.wifi_connected = wifiManager->isConnected();
-            machineState.mqtt_connected = mqttClient->isConnected();
-            machineState.cloud_connected = cloudConnection->isConnected();
+            ui_state_t& state = getMachineStateRef();
+            state.pico_connected = picoUart->isConnected();
+            state.wifi_connected = wifiManager->isConnected();
+            state.mqtt_connected = mqttClient->isConnected();
+            state.cloud_connected = cloudConnection->isConnected();
             
             // Broadcast unified status (goes to both local and cloud clients)
-            webServer->broadcastFullStatus(machineState);
+            webServer->broadcastFullStatus(getMachineState());
         }
     }
     
@@ -1855,7 +1910,7 @@ void loop() {
     }
     
     // Handle WiFi connected tasks
-    if (machineState.wifi_connected && wifiConnectedTime == 0) {
+    if (state.wifi_connected && wifiConnectedTime == 0) {
         wifiConnectedTime = millis();
     }
     if (wifiConnectedTime > 0 && millis() - wifiConnectedTime > 2000 && !ntpConfigured) {
@@ -1894,7 +1949,7 @@ void loop() {
             // Retry on next loop iteration (don't set mDNSStarted = true on failure)
         }
     }
-    if (!machineState.wifi_connected) {
+    if (!state.wifi_connected) {
         // Reset when WiFi disconnects
         wifiConnectedTime = 0;
         wifiConnectedLogSent = false;
@@ -1905,7 +1960,7 @@ void loop() {
     // Periodically ensure WiFi power save is disabled (every 30s when connected)
     // Some ESP32 SDKs re-enable power save after certain events
     static unsigned long lastPowerSaveCheck = 0;
-    if (machineState.wifi_connected && millis() - lastPowerSaveCheck > 30000) {
+    if (state.wifi_connected && millis() - lastPowerSaveCheck > 30000) {
         lastPowerSaveCheck = millis();
         wifi_ps_type_t ps_type;
         esp_wifi_get_ps(&ps_type);
@@ -2004,66 +2059,76 @@ void loop() {
 void parsePicoStatus(const uint8_t* payload, uint8_t length) {
     if (length < 18) return;  // Minimum status size (up to water_level)
     
+    // Double buffering: Start with current state, update fields, then swap
+    // This prevents data tearing if readers access machineState during update
+    ui_state_t& state = getMachineStateNext();
+    
+    // Copy current state to preserve fields not updated in this call
+    *machineStateNext = *machineState;
+    
     // Parse temperatures (int16 scaled by 10 -> float)
     int16_t brew_temp_raw, steam_temp_raw, group_temp_raw;
     memcpy(&brew_temp_raw, &payload[0], sizeof(int16_t));
     memcpy(&steam_temp_raw, &payload[2], sizeof(int16_t));
     memcpy(&group_temp_raw, &payload[4], sizeof(int16_t));
     
-    machineState.brew_temp = brew_temp_raw / 10.0f;
-    machineState.steam_temp = steam_temp_raw / 10.0f;
-    machineState.group_temp = group_temp_raw / 10.0f;
+    state.brew_temp = brew_temp_raw / 10.0f;
+    state.steam_temp = steam_temp_raw / 10.0f;
+    state.group_temp = group_temp_raw / 10.0f;
     
     // Parse pressure (uint16 scaled by 100 -> float)
     uint16_t pressure_raw;
     memcpy(&pressure_raw, &payload[6], sizeof(uint16_t));
-    machineState.pressure = pressure_raw / 100.0f;
+    state.pressure = pressure_raw / 100.0f;
     
     // Parse setpoints (int16 scaled by 10 -> float)
     int16_t brew_sp_raw, steam_sp_raw;
     memcpy(&brew_sp_raw, &payload[8], sizeof(int16_t));
     memcpy(&steam_sp_raw, &payload[10], sizeof(int16_t));
-    machineState.brew_setpoint = brew_sp_raw / 10.0f;
-    machineState.steam_setpoint = steam_sp_raw / 10.0f;
+    state.brew_setpoint = brew_sp_raw / 10.0f;
+    state.steam_setpoint = steam_sp_raw / 10.0f;
     
     // Parse state and flags
-    machineState.machine_state = payload[15];
+    state.machine_state = payload[15];
     uint8_t flags = payload[16];
     
-    machineState.is_brewing = (flags & 0x01) != 0;
-    machineState.is_heating = (flags & 0x02) != 0;
-    machineState.water_low = (flags & 0x08) != 0;
+    state.is_brewing = (flags & 0x01) != 0;
+    state.is_heating = (flags & 0x02) != 0;
+    state.water_low = (flags & 0x08) != 0;
     // Only update alarm_active from status if we have a valid alarm code
     // MSG_ALARM messages are the source of truth for alarm state
     // Status packet flag is just a hint - don't set alarm_active without alarm_code
     bool statusAlarmFlag = (flags & 0x10) != 0;
-    if (machineState.alarm_code != ALARM_NONE) {
+    if (state.alarm_code != ALARM_NONE) {
         // We have a real alarm code - status flag should match
-        machineState.alarm_active = statusAlarmFlag;
+        state.alarm_active = statusAlarmFlag;
     } else {
         // No alarm code - status flag is unreliable, keep alarm_active false
-        machineState.alarm_active = false;
+        state.alarm_active = false;
     }
     
     // Parse power watts (offset 18-19, if available)
     if (length >= 20) {
         uint16_t power_raw;
         memcpy(&power_raw, &payload[18], sizeof(uint16_t));
-        machineState.power_watts = power_raw;
+        state.power_watts = power_raw;
     }
     
     // Parse heating strategy (offset 28, if available)
     if (length >= 30) {
-        machineState.heating_strategy = payload[28];
+        state.heating_strategy = payload[28];
     }
     
     // Parse cleaning status (offsets 29-31, if available)
     if (length >= 32) {
-        machineState.cleaning_reminder = payload[29] != 0;
+        state.cleaning_reminder = payload[29] != 0;
         uint16_t brew_count_raw;
         memcpy(&brew_count_raw, &payload[30], sizeof(uint16_t));
-        machineState.brew_count = brew_count_raw;
+        state.brew_count = brew_count_raw;
     }
+    
+    // Atomic swap: Make updated buffer active (readers now see complete update)
+    swapMachineStateBuffers();
     
     // Auto-switch screens is now handled by UI::checkAutoScreenSwitch()
 }

@@ -156,7 +156,7 @@ public:
      * Events - Simple function pointers to avoid std::function PSRAM allocation issues
      */
     typedef void (*mqtt_event_callback_t)();
-    typedef void (*mqtt_command_callback_t)(const char* cmd, const JsonDocument& doc);
+    typedef void (*mqtt_command_callback_t)(const char* cmd, JsonDocument& doc);  // Non-const for ArduinoJson 7.x operator[]
     
     void onConnected(mqtt_event_callback_t callback) { _onConnected = callback; }
     void onDisconnected(mqtt_event_callback_t callback) { _onDisconnected = callback; }

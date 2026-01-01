@@ -12,7 +12,8 @@ PicoUART::PicoUART(HardwareSerial& serial)
     , _packetErrors(0)
     , _lastPacketTime(0)
     , _connected(false)
-    , _paused(false) {
+    , _paused(false)
+    , _backoffUntil(0) {
 }
 
 void PicoUART::begin() {
@@ -193,6 +194,18 @@ bool PicoUART::sendPing() {
 }
 
 bool PicoUART::sendCommand(uint8_t cmdType, const uint8_t* data, uint8_t len) {
+    // Check if we're in backoff period (non-blocking NACK handling)
+    if (_backoffUntil > 0 && millis() < _backoffUntil) {
+        // Still in backoff period - defer command
+        // Log only at debug level to avoid spam
+        LOG_D("Command 0x%02X deferred - backoff active for %lu ms", 
+              cmdType, _backoffUntil - millis());
+        return false;
+    }
+    
+    // Clear backoff once we're past the deadline
+    _backoffUntil = 0;
+    
     return sendPacket(cmdType, data, len);
 }
 

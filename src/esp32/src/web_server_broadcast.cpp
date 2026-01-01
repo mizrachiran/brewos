@@ -16,7 +16,8 @@
 
 // External references for status broadcast
 extern BrewByWeight* brewByWeight;
-extern ui_state_t machineState;
+// Use getter function for thread-safe access to machine state
+const ui_state_t& getMachineState();  // Defined in main.cpp
 
 // =============================================================================
 // Pre-allocated Broadcast Buffers (initialized in initBroadcastBuffers)
@@ -327,7 +328,7 @@ bool BrewWebServer::buildDeltaStatus(const ui_state_t& state, const ChangedField
     // Brew time (when brewing)
     if (changed.brew_time && state.is_brewing) {
         // Include in machine section for delta
-        if (!doc.containsKey("machine")) {
+        if (!doc["machine"].is<JsonObject>()) {
             doc["machine"].to<JsonObject>();
         }
         // Note: brew_time_ms is typically tracked separately, but for simplicity
@@ -352,7 +353,7 @@ bool BrewWebServer::buildDeltaStatus(const ui_state_t& state, const ChangedField
     
     // Alarm
     if (changed.alarm) {
-        if (!doc.containsKey("machine")) {
+        if (!doc["machine"].is<JsonObject>()) {
             doc["machine"].to<JsonObject>();
         }
         // Note: alarm fields would go in machine section
@@ -508,7 +509,10 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
         }
         lastHasLocalClients = hasLocalClients;
         
-        localChanged = localChangeDetector.hasChanged(state, &localChangedFields);
+        localChanged = localChangeDetector.hasChanged(state);
+        if (localChanged) {
+            localChangedFields = localChangeDetector.getChangedFields(state);
+        }
     }
     
     // Early exit: only build JSON/MessagePack if we have local clients OR need to send to cloud
@@ -911,8 +915,9 @@ void BrewWebServer::broadcastDeviceInfo() {
     
     // Include temperature setpoints (from Pico via machineState - Pico is source of truth)
     // These come from Pico's status messages, which reflect what Pico has persisted
-    doc["brewSetpoint"] = machineState.brew_setpoint;
-    doc["steamSetpoint"] = machineState.steam_setpoint;
+    const ui_state_t& state = getMachineState();
+    doc["brewSetpoint"] = state.brew_setpoint;
+    doc["steamSetpoint"] = state.steam_setpoint;
     
     // Include eco mode settings (from Pico - Pico is source of truth)
     // Note: These are cached from last set_eco command until Pico reports them back
