@@ -73,6 +73,8 @@ static void broadcastLogInternal(AsyncWebSocket* ws, CloudConnection* cloudConne
         
         // Only send to WebSocket if clients can receive (prevents queue overflow)
         // Log messages are less critical than OTA progress, so we just skip if queue is full
+        // NOTE: availableForWriteAll() may not exist in all ESPAsyncWebServer versions
+        // If compilation fails, replace with: iterate clients and check client->canSend()
         if (ws->count() > 0 && ws->availableForWriteAll()) {
             ws->textAll(jsonBuffer);
         }

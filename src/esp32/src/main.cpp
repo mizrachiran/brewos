@@ -24,6 +24,7 @@
 #include <new>              // For placement new
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>  // For vTaskDelay
+#include <freertos/semphr.h>  // For xSemaphoreCreateMutex
 #include <esp_wifi.h>       // For esp_wifi_set_ps, esp_wifi_get_ps
 #include "config.h"
 #include "memory_utils.h"   // For heap fragmentation monitoring
@@ -129,10 +130,12 @@ static bool scaleEnabled = false;
 // Machine state from Pico - Double buffering to prevent data tearing
 // Writers update the inactive buffer, then atomically swap the pointer
 // Readers always read from the active buffer (lock-free, no mutex needed)
+// CRITICAL: Mutex protects buffer operations to prevent lost updates from secondary writers
 static ui_state_t machineStateBufferA = {0};
 static ui_state_t machineStateBufferB = {0};
 static ui_state_t* machineState = &machineStateBufferA;  // Active buffer (readers)
 static ui_state_t* machineStateNext = &machineStateBufferB;  // Inactive buffer (writers)
+static SemaphoreHandle_t stateMutex = nullptr;  // Protects buffer copy/swap operations
 
 // Note: Demo mode is handled by the web UI only (via URL parameters)
 // ESP32 does not simulate data when Pico is not connected
@@ -178,10 +181,44 @@ static inline ui_state_t& getMachineStateNext() {
 }
 
 // Legacy accessor for compatibility - returns reference to active buffer
-// NOTE: Direct writes to this are NOT thread-safe. Use getMachineStateNext() + swap for updates.
-// Exported for use in other files (web_server_websocket.cpp for command handlers)
+// WARNING: Direct writes to this are NOT thread-safe and can cause lost updates!
+// Use updateMachineStateField() for secondary writers (WiFi, scale, etc.)
+// Only use this for immediate single-field updates that will be overwritten by next Pico status
 ui_state_t& getMachineStateRef() {
     return *machineState;
+}
+
+// Convenience wrappers for common state updates
+// These update both buffers atomically to prevent lost updates
+void updateWiFiState(bool connected, bool apMode, int rssi) {
+    if (stateMutex == nullptr) return;
+    if (xSemaphoreTake(stateMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        machineState->wifi_connected = connected;
+        machineState->wifi_ap_mode = apMode;
+        if (rssi != 0) machineState->wifi_rssi = rssi;
+        machineStateNext->wifi_connected = connected;
+        machineStateNext->wifi_ap_mode = apMode;
+        if (rssi != 0) machineStateNext->wifi_rssi = rssi;
+        xSemaphoreGive(stateMutex);
+    }
+}
+
+void updatePicoConnectedState(bool connected) {
+    if (stateMutex == nullptr) return;
+    if (xSemaphoreTake(stateMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        machineState->pico_connected = connected;
+        machineStateNext->pico_connected = connected;
+        xSemaphoreGive(stateMutex);
+    }
+}
+
+void updateScaleConnectedState(bool connected) {
+    if (stateMutex == nullptr) return;
+    if (xSemaphoreTake(stateMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        machineState->scale_connected = connected;
+        machineStateNext->scale_connected = connected;
+        xSemaphoreGive(stateMutex);
+    }
 }
 
 // =============================================================================
@@ -204,26 +241,33 @@ static void onWiFiConnected() {
         webServer->setWiFiConnected();
     }
     
-    // Update machine state (simple operations only, no String allocations)
-    // NOTE: These are single-field updates (atomic on ESP32), but should ideally use double buffer
-    ui_state_t& state = getMachineStateRef();
-    state.wifi_connected = true;
-    state.wifi_ap_mode = false;
-    state.wifi_rssi = WiFi.RSSI();
+    // Update machine state using thread-safe function that updates both buffers
+    // This prevents lost updates when parsePicoStatus swaps buffers
+    updateWiFiState(true, false, WiFi.RSSI());
     
-    // Get WiFi SSID directly from WiFiManager's stored value
-    if (wifiManager) {
-        const char* ssid = wifiManager->getStoredSSID();
-        if (ssid && strlen(ssid) > 0) {
-            strncpy(state.wifi_ssid, ssid, sizeof(state.wifi_ssid) - 1);
-            state.wifi_ssid[sizeof(state.wifi_ssid) - 1] = '\0';
-        }
-    }
-    
-    // Get IP directly into buffer (no String allocation)
+    // Get IP address for logging (before mutex)
     IPAddress ip = WiFi.localIP();
-    snprintf(state.wifi_ip, sizeof(state.wifi_ip), "%d.%d.%d.%d", 
-             ip[0], ip[1], ip[2], ip[3]);
+    
+    // Update SSID and IP in both buffers (these are string fields, need special handling)
+    if (stateMutex != nullptr && xSemaphoreTake(stateMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        // Get WiFi SSID directly from WiFiManager's stored value
+        if (wifiManager) {
+            const char* ssid = wifiManager->getStoredSSID();
+            if (ssid && strlen(ssid) > 0) {
+                strncpy(machineState->wifi_ssid, ssid, sizeof(machineState->wifi_ssid) - 1);
+                machineState->wifi_ssid[sizeof(machineState->wifi_ssid) - 1] = '\0';
+                strncpy(machineStateNext->wifi_ssid, ssid, sizeof(machineStateNext->wifi_ssid) - 1);
+                machineStateNext->wifi_ssid[sizeof(machineStateNext->wifi_ssid) - 1] = '\0';
+            }
+        }
+        
+        // Get IP directly into buffer (no String allocation)
+        snprintf(machineState->wifi_ip, sizeof(machineState->wifi_ip), "%d.%d.%d.%d", 
+                 ip[0], ip[1], ip[2], ip[3]);
+        snprintf(machineStateNext->wifi_ip, sizeof(machineStateNext->wifi_ip), "%d.%d.%d.%d", 
+                 ip[0], ip[1], ip[2], ip[3]);
+        xSemaphoreGive(stateMutex);
+    }
     
     // Log immediately - web server is already running and ready
     LOG_I("Web server ready: http://%d.%d.%d.%d/ or http://brewos.local/", 
@@ -238,7 +282,8 @@ static void onWiFiConnected() {
 // Called when WiFi disconnects
 static void onWiFiDisconnected() {
     LOG_W("WiFi disconnected");
-    getMachineStateRef().wifi_connected = false;
+    // Use thread-safe update that modifies both buffers to prevent lost updates
+    updateWiFiState(false, false, 0);
     // Reset WiFi connected state tracking
     wifiConnectedTime = 0;
     wifiConnectedLogSent = false;
@@ -303,7 +348,7 @@ static void onScaleWeight(const scale_state_t& scaleState) {
 
 static void onScaleConnection(bool connected) {
     LOG_I("Scale %s", connected ? "connected" : "disconnected");
-    getMachineStateRef().scale_connected = connected;
+    updateScaleConnectedState(connected);
 }
 
 // =============================================================================
@@ -418,7 +463,7 @@ static void onPicoPacket(const PicoPacket& packet) {
         case MSG_BOOT: {
             LOG_I("Pico boot info received");
             if (webServer) webServer->broadcastLog("Pico booted");
-            getMachineStateRef().pico_connected = true;
+            updatePicoConnectedState(true);
             
             // Parse boot payload (boot_payload_t structure)
             // Layout: ver(3) + machine(1) + pcb(1) + pcb_ver(2) + reset(4) + build_date(12) + build_time(9) = 32 bytes
@@ -580,7 +625,7 @@ static void onPicoPacket(const PicoPacket& packet) {
             
         case MSG_STATUS:
             parsePicoStatus(packet.payload, packet.length);
-            getMachineStateRef().pico_connected = true;
+            updatePicoConnectedState(true);
             break;
         
         case MSG_POWER_METER: {
@@ -752,6 +797,14 @@ void setup() {
     
     // Note: Watchdog is kept enabled - it helps catch hangs and crashes
     // Attempting to disable it causes errors on ESP32-S3
+    
+    // Initialize mutex for state buffer protection (prevents race conditions)
+    stateMutex = xSemaphoreCreateMutex();
+    if (stateMutex == nullptr) {
+        Serial.println("ERROR: Failed to create state mutex!");
+        ESP.restart();
+        return;
+    }
     
     // Print startup info (will be lost if no USB host connected)
     Serial.println();
@@ -2058,12 +2111,21 @@ void loop() {
  */
 void parsePicoStatus(const uint8_t* payload, uint8_t length) {
     if (length < 18) return;  // Minimum status size (up to water_level)
+    if (stateMutex == nullptr) return;  // Not initialized yet
+    
+    // CRITICAL: Protect buffer copy/swap with mutex to prevent race conditions
+    // Secondary writers (WiFi, scale, etc.) may update active buffer during this operation
+    if (xSemaphoreTake(stateMutex, portMAX_DELAY) != pdTRUE) {
+        return;  // Should never happen with portMAX_DELAY, but be defensive
+    }
     
     // Double buffering: Start with current state, update fields, then swap
     // This prevents data tearing if readers access machineState during update
     ui_state_t& state = getMachineStateNext();
     
     // Copy current state to preserve fields not updated in this call
+    // This copy happens INSIDE the mutex, so any secondary updates that happened
+    // before we took the mutex are included in this copy
     *machineStateNext = *machineState;
     
     // Parse temperatures (int16 scaled by 10 -> float)
@@ -2128,7 +2190,11 @@ void parsePicoStatus(const uint8_t* payload, uint8_t length) {
     }
     
     // Atomic swap: Make updated buffer active (readers now see complete update)
+    // Swap happens INSIDE mutex to ensure atomicity with respect to secondary writers
     swapMachineStateBuffers();
+    
+    // Release mutex after swap completes
+    xSemaphoreGive(stateMutex);
     
     // Auto-switch screens is now handled by UI::checkAutoScreenSwitch()
 }

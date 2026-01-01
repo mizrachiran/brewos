@@ -25,7 +25,10 @@ static inline bool isValidCodePointer(void* ptr) {
     bool inDram = (addr >= 0x3FF80000 && addr <= 0x3FFFFFFF);
     bool inRom = (addr >= 0x40000000 && addr < 0x40020000);
     bool inIram = (addr >= 0x40020000 && addr < 0x40028000);
-    bool inFlash = (addr >= 0x42000000 && addr < 0x43000000);
+    // Flash mapping can extend beyond 0x43000000 for larger partitions (up to 32MB)
+    // Use a more permissive check: any address >= 0x42000000 in the code space
+    // This covers standard 16MB flash and larger configurations
+    bool inFlash = (addr >= 0x42000000 && addr < 0x44000000);  // Extended range for up to 32MB flash
     
     // Valid if in any code/data region (but NOT PSRAM)
     // PSRAM pointers cause InstructionFetchError on callback invocation
