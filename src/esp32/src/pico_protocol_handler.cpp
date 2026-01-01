@@ -24,7 +24,7 @@ PicoProtocolHandler::PicoProtocolHandler()
     , _backoffUntil(0) {
 }
 
-void PicoProtocolHandler::begin(PicoUART* uart, BrewWebServer* server, StateManager* state, PowerMeterManager* powerMeter) {
+void PicoProtocolHandler::begin(PicoUART* uart, BrewWebServer* server, BrewOS::StateManager* state, PowerMeterManager* powerMeter) {
     _uart = uart;
     _server = server;
     _state = state;
