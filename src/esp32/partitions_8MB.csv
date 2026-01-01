@@ -1,0 +1,21 @@
+# BrewOS Custom Partition Table for 8MB Flash
+# 
+# Layout:
+#   - NVS: 20KB for WiFi credentials and persistent settings
+#   - OTA Data: 8KB for bootloader selection
+#   - App0/App1: 3MB each for OTA updates (LVGL+WiFi+SSL requires ~2MB)
+#   - LittleFS: ~1.875MB for web assets, logs, and user data (partition name is "spiffs" but filesystem type is LittleFS)
+#   - Coredump: 64KB for crash stack traces
+#
+# Total: ~8.007MB used of 8MB available (within acceptable margin for partition alignment)
+#
+# Note: Partition name is "spiffs" but filesystem type is LittleFS (configured in platformio.ini via board_build.filesystem = littlefs)
+
+# Name,    Type, SubType, Offset,   Size
+nvs,       data, nvs,     ,         0x5000
+otadata,   data, ota,     ,         0x2000
+app0,      app,  ota_0,   ,         0x300000
+app1,      app,  ota_1,   ,         0x300000
+spiffs,    data, spiffs,  ,         0x1E0000
+coredump,  data, coredump,,         0x10000
+
