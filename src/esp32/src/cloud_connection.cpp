@@ -723,6 +723,40 @@ void CloudConnection::send(const JsonDocument& doc) {
     }
 }
 
+void CloudConnection::sendBinary(const uint8_t* data, size_t len) {
+    if (!_connected || !data || !_sendQueue || len == 0) {
+        return;
+    }
+    
+    if (len >= MAX_MSG_SIZE - 5) {  // Reserve 5 bytes for length + marker
+        LOG_W("Binary message too large (%d bytes), dropping", len);
+        return;
+    }
+    
+    // Allocate in PSRAM and queue the pointer
+    // Format: [4 bytes length (big-endian)] [1 byte marker 0x01] [data]
+    uint8_t* msgCopy = (uint8_t*)heap_caps_malloc(len + 5, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!msgCopy) {
+        msgCopy = (uint8_t*)malloc(len + 5);
+    }
+    
+    if (msgCopy) {
+        // Store length as big-endian uint32_t
+        uint32_t len32 = len;
+        msgCopy[0] = (len32 >> 24) & 0xFF;
+        msgCopy[1] = (len32 >> 16) & 0xFF;
+        msgCopy[2] = (len32 >> 8) & 0xFF;
+        msgCopy[3] = len32 & 0xFF;
+        msgCopy[4] = 0x01;  // Binary format marker
+        memcpy(msgCopy + 5, data, len);
+        // Non-blocking queue - drop if full
+        if (xQueueSend(_sendQueue, &msgCopy, 0) != pdTRUE) {
+            LOG_W("Send queue full, dropping binary message");
+            free(msgCopy);
+        }
+    }
+}
+
 void CloudConnection::processSendQueue() {
     if (!_sendQueue || !_connected) {
         return;
@@ -737,7 +771,16 @@ void CloudConnection::processSendQueue() {
     
     // First pass: process up to MAX_PER_CALL messages
     while (processed < MAX_PER_CALL && xQueueReceive(_sendQueue, &msg, 0) == pdTRUE && msg) {
-        _ws.sendTXT(msg);
+        // Check if binary format (5th byte = 0x01)
+        uint8_t* msgPtr = (uint8_t*)msg;
+        if (msgPtr[4] == 0x01) {
+            // Binary MessagePack format: [4 bytes length] [0x01 marker] [data]
+            uint32_t len = (msgPtr[0] << 24) | (msgPtr[1] << 16) | (msgPtr[2] << 8) | msgPtr[3];
+            _ws.sendBIN(msgPtr + 5, len);
+        } else {
+            // Legacy text/JSON format (null-terminated string)
+            _ws.sendTXT((char*)msg);
+        }
         free(msg);
         processed++;
         
@@ -753,7 +796,16 @@ void CloudConnection::processSendQueue() {
         // Queue is getting full - process more messages but still limit to prevent long blocks
         int aggressiveCount = 0;
         while (processed < MAX_AGGRESSIVE && xQueueReceive(_sendQueue, &msg, 0) == pdTRUE && msg) {
-            _ws.sendTXT(msg);
+            // Check if binary format (5th byte = 0x01)
+            uint8_t* msgPtr = (uint8_t*)msg;
+            if (msgPtr[4] == 0x01) {
+                // Binary MessagePack format: [4 bytes length] [0x01 marker] [data]
+                uint32_t len = (msgPtr[0] << 24) | (msgPtr[1] << 16) | (msgPtr[2] << 8) | msgPtr[3];
+                _ws.sendBIN(msgPtr + 5, len);
+            } else {
+                // Legacy text/JSON format (null-terminated string)
+                _ws.sendTXT((char*)msg);
+            }
             free(msg);
             processed++;
             aggressiveCount++;

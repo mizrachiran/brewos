@@ -7,6 +7,7 @@
 #include "statistics/statistics_manager.h"
 #include "power_meter/power_meter_manager.h"
 #include "brew_by_weight.h"
+#include "msgpack_helper.h"
 #include <ArduinoJson.h>
 #include <esp_heap_caps.h>
 #include <stdarg.h>
@@ -20,15 +21,15 @@ extern ui_state_t machineState;
 // Pre-allocated Broadcast Buffers (initialized in initBroadcastBuffers)
 // =============================================================================
 static SpiRamJsonDocument* g_statusDoc = nullptr;
-static char* g_statusBuffer = nullptr;
-static const size_t STATUS_BUFFER_SIZE = 4096;
+static uint8_t* g_statusBuffer = nullptr;  // Changed to uint8_t for binary MessagePack
+static const size_t STATUS_BUFFER_SIZE = 2048;  // Reduced - MessagePack is smaller
 
 void initBroadcastBuffers() {
     if (!g_statusDoc) {
-        g_statusDoc = new SpiRamJsonDocument(STATUS_BUFFER_SIZE);
+        g_statusDoc = new SpiRamJsonDocument(4096);  // JSON doc still needs 4KB
     }
     if (!g_statusBuffer) {
-        g_statusBuffer = (char*)psram_malloc(STATUS_BUFFER_SIZE);
+        g_statusBuffer = (uint8_t*)psram_malloc(STATUS_BUFFER_SIZE);
     }
 }
 
@@ -505,14 +506,19 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
     esp32["freeHeap"] = ESP.getFreeHeap();
     esp32["uptime"] = millis();
     
-    // Serialize to pre-allocated PSRAM buffer (no allocation per broadcast)
-    size_t jsonSize = measureJson(doc) + 1;
-    if (jsonSize <= STATUS_BUFFER_SIZE) {
-        serializeJson(doc, g_statusBuffer, STATUS_BUFFER_SIZE);
-        
-        // Send to WebSocket clients (check count again to be safe)
+    // Serialize to MessagePack binary format (much smaller than JSON)
+    size_t msgpackSize = MessagePackHelper::serialize(doc, g_statusBuffer, STATUS_BUFFER_SIZE);
+    if (msgpackSize > 0) {
+        // Send to WebSocket clients as binary (MessagePack format)
         if (_ws.count() > 0) {
-            _ws.textAll(g_statusBuffer);
+            // AsyncWebSocket doesn't have binaryAll, so send to each client
+            _ws.cleanupClients();
+            for (size_t i = 0; i < _ws.count(); i++) {
+                AsyncWebSocketClient* client = _ws.client(i);
+                if (client && client->status() == WS_CONNECTED) {
+                    client->binary(g_statusBuffer, msgpackSize);
+                }
+            }
         }
         
         // Throttle cloud updates to prevent queue overflow when idle
@@ -530,15 +536,15 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
         bool intervalExpired = (now - lastCloudBroadcast >= interval);
         bool shouldSendToCloud = stateChanged || intervalExpired;
         
-        // Also send to cloud - use buffer directly to avoid String allocation
+        // Also send to cloud - use binary MessagePack format
         // Throttle updates when idle to prevent queue overflow, but send immediately on state changes
         if (_cloudConnection && _cloudConnection->isConnected() && shouldSendToCloud) {
-            _cloudConnection->send(g_statusBuffer);
+            _cloudConnection->sendBinary(g_statusBuffer, msgpackSize);
             lastCloudBroadcast = now;
             lastMachineState = state.machine_state;
         }
     } else {
-        LOG_W("Status JSON too large: %d > %d", jsonSize, STATUS_BUFFER_SIZE);
+        LOG_W("MessagePack serialization failed or buffer too small");
     }
     
     // Note: No cleanup needed - we're using pre-allocated reusable buffers

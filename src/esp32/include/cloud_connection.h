@@ -65,6 +65,11 @@ public:
     void send(const JsonDocument& doc);
     
     /**
+     * Send binary MessagePack data to cloud
+     */
+    void sendBinary(const uint8_t* data, size_t len);
+    
+    /**
      * Set callback for receiving commands from cloud users
      */
     void onCommand(CommandCallback callback);
