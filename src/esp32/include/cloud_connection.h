@@ -180,6 +180,9 @@ private:
     
     // Attempt to connect
     void connect();
+    
+    // Force disconnect (used by task for memory/pause management)
+    void forceDisconnect();
 };
 
 #endif // CLOUD_CONNECTION_H

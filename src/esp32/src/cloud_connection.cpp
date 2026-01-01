@@ -10,11 +10,16 @@
 
 // Reconnection settings - stay connected as much as possible
 #define RECONNECT_DELAY_MS 5000  // 5s between attempts
-#define STARTUP_GRACE_PERIOD_MS 15000  // 15s grace period after WiFi for local access
-#define MIN_HEAP_FOR_CONNECT 40000  // Need 40KB heap for SSL buffers + web server headroom
-#define MIN_HEAP_TO_STAY_CONNECTED 28000  // Disconnect if heap drops below this (state broadcast temporarily uses ~7KB)
-#define SSL_HANDSHAKE_TIMEOUT_MS 30000  // 30s timeout (increased for slow networks)
-#define CLOUD_TASK_STACK_SIZE 6144  // 6KB stack for SSL operations (reduced from 8KB)
+#define STARTUP_GRACE_PERIOD_MS 10000  // 10s grace period after WiFi for local access
+// Memory Management
+// SSL Context takes ~25-30KB. We need:
+// 45KB to start safely
+// 12KB to stay alive (lower threshold to prevent self-disconnecting)
+#define MIN_HEAP_FOR_CONNECT 45000  // Need 45KB heap for SSL buffers + web server headroom
+#define MIN_HEAP_TO_STAY_CONNECTED 12000  // Disconnect if heap drops below this (lowered to prevent thrashing)
+#define HEAP_THRESHOLD_FOR_PAUSE 35000   // Only disconnect for local UI if heap is below this
+#define SSL_HANDSHAKE_TIMEOUT_MS 20000  // 20s timeout
+#define CLOUD_TASK_STACK_SIZE 8192  // 8KB stack for SSL operations (increased for safety)
 #define CLOUD_TASK_PRIORITY 1  // Low priority - below web server
 
 CloudConnection::CloudConnection() {
@@ -82,14 +87,25 @@ void CloudConnection::end() {
     }
     
     // Clear send queue
+    // Note: Queue items are PSRAM-allocated (heap_caps_malloc), use heap_caps_free
     if (_sendQueue) {
         char* msg = nullptr;
         while (xQueueReceive(_sendQueue, &msg, 0) == pdTRUE && msg) {
-            free(msg);
+            heap_caps_free(msg);
         }
     }
     
     LOG_I("Disabled");
+}
+
+void CloudConnection::forceDisconnect() {
+    if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(200)) == pdTRUE) {
+        _ws.disconnect();
+        xSemaphoreGive(_mutex);
+    }
+    _connected = false;
+    _connecting = false;
+    _lastConnectAttempt = millis();
 }
 
 void CloudConnection::loop() {
@@ -116,72 +132,55 @@ void CloudConnection::taskCode(void* parameter) {
     
     while (self->_enabled) {
         unsigned long now = millis();
-        
-        // Check if paused for local activity - skip all connection logic
-        if (now < self->_pausedUntil) {
+        size_t currentHeap = ESP.getFreeHeap();
+
+        // 1. Critical Memory Protection
+        // Disconnect only if memory is critically low to save the system
+        if (currentHeap < MIN_HEAP_TO_STAY_CONNECTED && (self->_connected || self->_connecting)) {
+            LOG_W("Critical heap (%zu) - disconnecting", currentHeap);
+            self->forceDisconnect();
+            vTaskDelay(pdMS_TO_TICKS(5000)); // Give system time to recover
+            continue;
+        }
+
+        // 2. Pause Logic (Optimized)
+        // Only disconnect for local activity if we are actually tight on memory
+        // Otherwise, just stay connected but maybe defer polling
+        bool isPaused = (now < self->_pausedUntil);
+        bool lowMemPause = isPaused && (currentHeap < HEAP_THRESHOLD_FOR_PAUSE);
+
+        if (lowMemPause) {
+            if (self->_connected || self->_connecting) {
+                LOG_I("Pausing cloud for local priority (Low Mem: %zu)", currentHeap);
+                self->forceDisconnect();
+            }
             vTaskDelay(pdMS_TO_TICKS(500));
             continue;
         }
-        
-        // Emergency heap check - disconnect if memory is critically low
-        // This ensures web server has enough memory to serve requests
-        // BUT: Give a 10-second grace period after connection for SSL + state broadcast to complete
-        // (SSL handshake uses ~40KB, state broadcast temporarily uses ~7KB more)
-        size_t currentHeap = ESP.getFreeHeap();
-        bool recentlyConnected = (self->_connectedAt > 0 && (now - self->_connectedAt) < 10000);
-        
-        if (currentHeap < MIN_HEAP_TO_STAY_CONNECTED && (self->_connected || self->_connecting) && !recentlyConnected) {
-            LOG_W("Critical heap (%d bytes) - disconnecting cloud, retry in 30s", currentHeap);
-            if (xSemaphoreTake(self->_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-                self->_ws.disconnect();
-                xSemaphoreGive(self->_mutex);
-            }
+
+        // 3. Network Check
+        if (WiFi.status() != WL_CONNECTED) {
             self->_connected = false;
             self->_connecting = false;
-            self->_connectedAt = 0;
-            self->_lastConnectAttempt = now;
-            self->_reconnectDelay = 30000;  // Wait 30s before retrying after heap issue
-            vTaskDelay(pdMS_TO_TICKS(30000));  // Sleep 30s to let heap recover
-            continue;
-        }
-        
-        // Check WiFi
-        if (WiFi.status() != WL_CONNECTED || WiFi.localIP() == IPAddress(0, 0, 0, 0)) {
-            if (self->_connected) {
-                self->_connected = false;
-                self->_connecting = false;
-                LOG_W("WiFi disconnected");
-            }
             vTaskDelay(pdMS_TO_TICKS(1000));
             continue;
         }
         
-        // If not connected, try to connect
+        // 4. Connection Logic
         if (!self->_connected && !self->_connecting) {
             if (now - self->_lastConnectAttempt >= self->_reconnectDelay) {
-                // Double-check not paused (could have been set between checks)
-                if (now < self->_pausedUntil) {
-                    continue;
-                }
-                
-                // Check heap before attempting connection
-                size_t freeHeap = ESP.getFreeHeap();
-                if (freeHeap < MIN_HEAP_FOR_CONNECT) {
-                    LOG_W("Low heap (%d bytes) - deferring cloud connection", freeHeap);
-                    self->_lastConnectAttempt = now;
+                if (currentHeap < MIN_HEAP_FOR_CONNECT) {
+                    // Just warn, don't spam attempts
+                    if ((now / 1000) % 10 == 0) LOG_D("Waiting for heap to connect (%d needed)", (int)MIN_HEAP_FOR_CONNECT);
                 } else {
                     self->connect();
                 }
             }
         }
         
-        // Check for SSL handshake timeout or abort if paused
+        // Check for SSL handshake timeout
         if (self->_connecting) {
-            unsigned long now = millis();
             unsigned long connectTime = now - self->_lastConnectAttempt;
-            
-            // Abort handshake immediately if paused (local web access takes priority)
-            bool shouldAbort = (now < self->_pausedUntil);
             
             // Log progress every 5 seconds
             static unsigned long lastProgressLog = 0;
@@ -190,71 +189,26 @@ void CloudConnection::taskCode(void* parameter) {
                 lastProgressLog = connectTime;
             }
             
-            if (shouldAbort) {
-                LOG_I("Aborting SSL handshake for local web access");
-                if (xSemaphoreTake(self->_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-                    self->_ws.disconnect();
-                    xSemaphoreGive(self->_mutex);
-                }
-                self->_connecting = false;
-                self->_connected = false;
-                lastProgressLog = 0;
-                vTaskDelay(pdMS_TO_TICKS(500));
-                continue;  // Skip to next iteration, check pause again
-            }
-            
             if (connectTime > SSL_HANDSHAKE_TIMEOUT_MS) {
                 LOG_E("SSL handshake timeout (%ds)", SSL_HANDSHAKE_TIMEOUT_MS/1000);
-                if (xSemaphoreTake(self->_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-                    self->_ws.disconnect();
-                    xSemaphoreGive(self->_mutex);
-                }
-                self->_connecting = false;
-                self->_connected = false;
+                self->forceDisconnect();
                 self->_lastConnectAttempt = now;
                 lastProgressLog = 0;
                 
-                // Quick retry - always stay connected
+                // Quick retry
                 self->_failureCount++;
-                self->_reconnectDelay = 10000; // Always retry in 10s
+                self->_reconnectDelay = 10000; // Retry in 10s
                 LOG_W("Timeout (%d), retry in 10s", self->_failureCount);
             }
         }
         
-        // Skip WebSocket operations when paused - don't let SSL handshake block local access
-        unsigned long nowForWs = millis();
-        if (nowForWs < self->_pausedUntil) {
-            vTaskDelay(pdMS_TO_TICKS(500));
-            continue;
-        }
-        
-        // Skip WebSocket operations when waiting for reconnect delay
-        // This prevents the library from internally retrying and blocking the device
-        if (!self->_connected && !self->_connecting) {
-            if (nowForWs - self->_lastConnectAttempt < self->_reconnectDelay) {
-                // Still waiting - sleep and skip _ws.loop()
-                vTaskDelay(pdMS_TO_TICKS(1000));
-                continue;
-            }
-        }
-        
-        // All WebSocket operations under mutex
+        // 5. Processing Loop
         if (xSemaphoreTake(self->_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-            // Double-check pause (could have been set while waiting for mutex)
-            if (millis() < self->_pausedUntil) {
-                xSemaphoreGive(self->_mutex);
-                vTaskDelay(pdMS_TO_TICKS(500));
-                continue;
-            }
-            
-            // Only call _ws.loop() when connected or connecting
-            // Skip when idle/waiting to prevent library's internal reconnect attempts
             if (self->_connected || self->_connecting) {
-                // Process WebSocket events - this drives the SSL handshake
                 self->_ws.loop();
             }
             
-            // Send queued messages (only when connected)
+            // Process queue only if fully connected
             if (self->_connected) {
                 self->processSendQueue();
             }
@@ -262,37 +216,21 @@ void CloudConnection::taskCode(void* parameter) {
             xSemaphoreGive(self->_mutex);
         }
         
-        // Handle proactive initial state broadcast after cloud connects
-        // This ensures state is synced even if request_state message is delayed/lost
+        // 6. Proactive State Broadcast
         if (self->_connected && self->_pendingInitialStateBroadcast && 
             millis() >= self->_initialStateBroadcastTime) {
-            self->_pendingInitialStateBroadcast = false;
             
-            // Check heap before broadcasting
-            size_t freeHeap = ESP.getFreeHeap();
-            if (freeHeap >= 35000 && self->_onCommand) {
-                LOG_I("Proactive state broadcast to cloud (heap=%zu)", freeHeap);
-                // Create synthetic request_state command
+            self->_pendingInitialStateBroadcast = false;
+            if (self->_onCommand) {
+                // Use stack doc to request update
                 JsonDocument doc;
                 doc["type"] = "request_state";
-                doc["source"] = "proactive";  // Mark as proactive for debugging
-                self->_onCommand("request_state", doc);  // String literal is const char*
-            } else if (freeHeap < 35000) {
-                // Defer if heap too low
-                self->_pendingInitialStateBroadcast = true;
-                self->_initialStateBroadcastTime = millis() + 2000;
-                LOG_W("Deferring proactive state broadcast (heap=%zu)", freeHeap);
+                doc["source"] = "proactive";
+                self->_onCommand("request_state", doc);
             }
         }
         
-        // Yield to other tasks
-        if (self->_connected) {
-            vTaskDelay(pdMS_TO_TICKS(50));   // Connected: responsive to process queue quickly
-        } else if (self->_connecting) {
-            vTaskDelay(pdMS_TO_TICKS(20));   // Handshake: fast loop
-        } else {
-            vTaskDelay(pdMS_TO_TICKS(1000)); // Idle/waiting: save CPU, check every 1s
-        }
+        vTaskDelay(pdMS_TO_TICKS(10)); // Yield to allow other tasks (Web Server) to run
     }
     
     LOG_I("Task ending");
@@ -313,11 +251,12 @@ void CloudConnection::connect() {
         return;
     }
     
-    // CRITICAL: Never start connection during grace period or pause
+    // CRITICAL: Never start connection during grace period
     // SSL handshake blocks entire LWIP stack - must not start during web server activity
+    // Note: Pause logic is now handled by taskCode() based on memory, not here
     unsigned long now = millis();
-    if (now < _pausedUntil || now < STARTUP_GRACE_PERIOD_MS) {
-        LOG_I("Skipping connection - paused or in grace period");
+    if (now < STARTUP_GRACE_PERIOD_MS) {
+        LOG_I("Skipping connection - in grace period");
         _connecting = false;
         _lastConnectAttempt = now;
         return;
@@ -409,10 +348,10 @@ void CloudConnection::connect() {
     LOG_I("Network: IP=%s, RSSI=%d dBm, Gateway=%s", 
           localIP.toString().c_str(), rssi, WiFi.gatewayIP().toString().c_str());
     
-    // Enable heartbeat (ping every 15s, timeout 10s, 2 failures to disconnect)
+    // Enable heartbeat (ping every 15s, timeout 8s, 2 failures to disconnect)
     // Mutex protection for all _ws calls
     if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
-        _ws.enableHeartbeat(15000, 10000, 2);
+        _ws.enableHeartbeat(15000, 8000, 2);
         
         // Configure SSL client timeout (default 5s is too short for slow networks)
         // WebSocketsClient uses WiFiClientSecure internally
@@ -424,9 +363,9 @@ void CloudConnection::connect() {
             #ifdef WEBSOCKETS_CLIENT_HAS_GET_CLIENT
             WiFiClientSecure* sslClient = _ws.getCClient();
             if (sslClient) {
-                sslClient->setTimeout(20000);  // 20 second timeout for SSL operations
+                sslClient->setTimeout(15000);  // 15 second timeout for SSL operations
                 sslClient->setInsecure();  // Skip certificate validation (faster, acceptable for known server)
-                LOG_I("SSL client configured: timeout=20s, insecure mode");
+                LOG_I("SSL client configured: timeout=15s, insecure mode");
             }
             #else
             // WebSocketsClient library doesn't expose getCClient() - timeout uses library default
@@ -451,29 +390,9 @@ void CloudConnection::connect() {
 
 void CloudConnection::pause() {
     unsigned long now = millis();
-    unsigned long newPauseUntil = now + 30000; // Pause for 30s
-    
-    // Extend pause if already paused (web browsing session)
-    if (now < _pausedUntil) {
-        _pausedUntil = newPauseUntil;
-        LOG_D("Extended cloud pause until %lu", _pausedUntil);
-        return;
-    }
-    
-    LOG_I("Pausing cloud for local activity (30s)");
-    _pausedUntil = newPauseUntil;
-    
-    // Disconnect to free memory and network for local requests
-    if (_connected || _connecting) {
-        LOG_I("Disconnecting cloud to free resources for local");
-        if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-            _ws.disconnect();
-            xSemaphoreGive(_mutex);
-        }
-        _connected = false;
-        _connecting = false;
-        _lastConnectAttempt = now;
-    }
+    // Simply extend the timer. The task decides whether to disconnect 
+    // based on available HEAP_THRESHOLD_FOR_PAUSE.
+    _pausedUntil = now + 30000; 
 }
 
 void CloudConnection::resume() {
@@ -764,64 +683,25 @@ void CloudConnection::processSendQueue() {
     }
     
     char* msg = nullptr;
-    // Process messages in batches to prevent blocking SSL writes
-    // Add yields between sends to prevent timeouts
     int processed = 0;
-    const int MAX_PER_CALL = 10;  // Process up to 10 messages per call
-    const int MAX_AGGRESSIVE = 20;  // Max messages even when queue is full (prevents long blocks)
     
-    // First pass: process up to MAX_PER_CALL messages
-    while (processed < MAX_PER_CALL && xQueueReceive(_sendQueue, &msg, 0) == pdTRUE && msg) {
-        // Check if binary format (5th byte = 0x01)
+    // IMPORTANT: Do NOT sleep inside this function, it is called within a Mutex!
+    // Just process a batch and return.
+    
+    while (processed < 5 && xQueueReceive(_sendQueue, &msg, 0) == pdTRUE && msg) {
         uint8_t* msgPtr = (uint8_t*)msg;
+        
+        // Check for binary marker
         if (msgPtr[4] == 0x01) {
-            // Binary MessagePack format: [4 bytes length] [0x01 marker] [data]
             uint32_t len = (msgPtr[0] << 24) | (msgPtr[1] << 16) | (msgPtr[2] << 8) | msgPtr[3];
             _ws.sendBIN(msgPtr + 5, len);
         } else {
-            // Legacy text/JSON format (null-terminated string)
             _ws.sendTXT((char*)msg);
         }
-        free(msg);
+        
+        // Use heap_caps_free because these were allocated with heap_caps_malloc in send()
+        heap_caps_free(msg);
         processed++;
-        
-        // Yield every 5 messages to prevent blocking SSL writes
-        if (processed % 5 == 0) {
-            vTaskDelay(pdMS_TO_TICKS(10));  // 10ms yield to allow SSL to process
-        }
-    }
-    
-    // If queue is getting full (< 5 spaces left), process more aggressively but still limit
-    UBaseType_t queueSpace = uxQueueSpacesAvailable(_sendQueue);
-    if (queueSpace < 5 && processed < MAX_AGGRESSIVE) {
-        // Queue is getting full - process more messages but still limit to prevent long blocks
-        int aggressiveCount = 0;
-        while (processed < MAX_AGGRESSIVE && xQueueReceive(_sendQueue, &msg, 0) == pdTRUE && msg) {
-            // Check if binary format (5th byte = 0x01)
-            uint8_t* msgPtr = (uint8_t*)msg;
-            if (msgPtr[4] == 0x01) {
-                // Binary MessagePack format: [4 bytes length] [0x01 marker] [data]
-                uint32_t len = (msgPtr[0] << 24) | (msgPtr[1] << 16) | (msgPtr[2] << 8) | msgPtr[3];
-                _ws.sendBIN(msgPtr + 5, len);
-            } else {
-                // Legacy text/JSON format (null-terminated string)
-                _ws.sendTXT((char*)msg);
-            }
-            free(msg);
-            processed++;
-            aggressiveCount++;
-            
-            // Yield every 3 messages during aggressive processing
-            if (aggressiveCount % 3 == 0) {
-                vTaskDelay(pdMS_TO_TICKS(10));  // 10ms yield to allow SSL to process
-            }
-        }
-        
-        if (queueSpace < 2) {
-            // Queue is critically full - log warning
-            LOG_W("Cloud send queue critically full (%d/%d), processed %d messages", 
-                  uxQueueMessagesWaiting(_sendQueue), SEND_QUEUE_SIZE, processed);
-        }
     }
 }
 
