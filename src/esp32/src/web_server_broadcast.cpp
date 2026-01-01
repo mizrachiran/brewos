@@ -69,11 +69,15 @@ static void broadcastLogInternal(AsyncWebSocket* ws, CloudConnection* cloudConne
         serializeJson(doc, jsonBuffer, jsonSize);
         
         // Only send to WebSocket if clients can receive (prevents queue overflow)
-        // Log messages are less critical than OTA progress, so we just skip if queue is full
-        // NOTE: availableForWriteAll() may not exist in all ESPAsyncWebServer versions
-        // If compilation fails, replace with: iterate clients and check client->canSend()
-        if (ws->count() > 0 && ws->availableForWriteAll()) {
-            ws->textAll(jsonBuffer);
+        // Iterate clients individually to avoid blocking on slow clients
+        // This prevents one slow client from blocking all clients
+        if (ws->count() > 0) {
+            for (size_t i = 0; i < ws->count(); i++) {
+                AsyncWebSocketClient* client = ws->client(i);
+                if (client && client->canSend()) {
+                    client->text(jsonBuffer);
+                }
+            }
         }
         
         // Always try to send to cloud - it has its own queue management
@@ -1035,12 +1039,9 @@ void BrewWebServer::broadcastMqttStatus() {
     mqtt["broker"] = brokerBuf;
     mqtt["topic"] = topicBuf;
     
-    // Allocate JSON buffer
+    // Use buffer pool to avoid heap fragmentation
     size_t jsonSize = measureJson(doc) + 1;
-    char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!jsonBuffer) {
-        jsonBuffer = (char*)malloc(jsonSize);
-    }
+    char* jsonBuffer = JsonBufferPool::instance().allocate(jsonSize);
     
     if (jsonBuffer) {
         serializeJson(doc, jsonBuffer, jsonSize);

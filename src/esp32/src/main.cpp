@@ -215,12 +215,16 @@ void updateWiFiState(bool connected, bool apMode, int rssi) {
     // Use portMAX_DELAY to ensure state updates are never dropped
     // Critical state updates must not be silently discarded
     if (xSemaphoreTake(stateMutex, portMAX_DELAY) == pdTRUE) {
-        machineState->wifi_connected = connected;
-        machineState->wifi_ap_mode = apMode;
-        if (rssi != 0) machineState->wifi_rssi = rssi;
-        machineStateNext->wifi_connected = connected;
-        machineStateNext->wifi_ap_mode = apMode;
-        if (rssi != 0) machineStateNext->wifi_rssi = rssi;
+        // Cast away volatile for field access (safe inside mutex)
+        ui_state_t* state = const_cast<ui_state_t*>(machineState);
+        ui_state_t* stateNext = const_cast<ui_state_t*>(machineStateNext);
+        
+        state->wifi_connected = connected;
+        state->wifi_ap_mode = apMode;
+        if (rssi != 0) state->wifi_rssi = rssi;
+        stateNext->wifi_connected = connected;
+        stateNext->wifi_ap_mode = apMode;
+        if (rssi != 0) stateNext->wifi_rssi = rssi;
         xSemaphoreGive(stateMutex);
     } else {
         // Defensive check - should never happen with portMAX_DELAY
@@ -233,8 +237,12 @@ void updatePicoConnectedState(bool connected) {
     // Use portMAX_DELAY to ensure state updates are never dropped
     // Critical state updates must not be silently discarded
     if (xSemaphoreTake(stateMutex, portMAX_DELAY) == pdTRUE) {
-        machineState->pico_connected = connected;
-        machineStateNext->pico_connected = connected;
+        // Cast away volatile for field access (safe inside mutex)
+        ui_state_t* state = const_cast<ui_state_t*>(machineState);
+        ui_state_t* stateNext = const_cast<ui_state_t*>(machineStateNext);
+        
+        state->pico_connected = connected;
+        stateNext->pico_connected = connected;
         xSemaphoreGive(stateMutex);
     } else {
         // Defensive check - should never happen with portMAX_DELAY
@@ -247,8 +255,12 @@ void updateScaleConnectedState(bool connected) {
     // Use portMAX_DELAY to ensure state updates are never dropped
     // Critical state updates must not be silently discarded
     if (xSemaphoreTake(stateMutex, portMAX_DELAY) == pdTRUE) {
-        machineState->scale_connected = connected;
-        machineStateNext->scale_connected = connected;
+        // Cast away volatile for field access (safe inside mutex)
+        ui_state_t* state = const_cast<ui_state_t*>(machineState);
+        ui_state_t* stateNext = const_cast<ui_state_t*>(machineStateNext);
+        
+        state->scale_connected = connected;
+        stateNext->scale_connected = connected;
         xSemaphoreGive(stateMutex);
     } else {
         // Defensive check - should never happen with portMAX_DELAY
@@ -287,20 +299,24 @@ static void onWiFiConnected() {
     // Use portMAX_DELAY to ensure state updates are never dropped
     if (stateMutex != nullptr && xSemaphoreTake(stateMutex, portMAX_DELAY) == pdTRUE) {
         // Get WiFi SSID directly from WiFiManager's stored value
+        // Cast away volatile for string operations (safe inside mutex)
+        ui_state_t* state = const_cast<ui_state_t*>(machineState);
+        ui_state_t* stateNext = const_cast<ui_state_t*>(machineStateNext);
+        
         if (wifiManager) {
             const char* ssid = wifiManager->getStoredSSID();
             if (ssid && strlen(ssid) > 0) {
-                strncpy(machineState->wifi_ssid, ssid, sizeof(machineState->wifi_ssid) - 1);
-                machineState->wifi_ssid[sizeof(machineState->wifi_ssid) - 1] = '\0';
-                strncpy(machineStateNext->wifi_ssid, ssid, sizeof(machineStateNext->wifi_ssid) - 1);
-                machineStateNext->wifi_ssid[sizeof(machineStateNext->wifi_ssid) - 1] = '\0';
+                strncpy(state->wifi_ssid, ssid, sizeof(state->wifi_ssid) - 1);
+                state->wifi_ssid[sizeof(state->wifi_ssid) - 1] = '\0';
+                strncpy(stateNext->wifi_ssid, ssid, sizeof(stateNext->wifi_ssid) - 1);
+                stateNext->wifi_ssid[sizeof(stateNext->wifi_ssid) - 1] = '\0';
             }
         }
         
         // Get IP directly into buffer (no String allocation)
-        snprintf(machineState->wifi_ip, sizeof(machineState->wifi_ip), "%d.%d.%d.%d", 
+        snprintf(state->wifi_ip, sizeof(state->wifi_ip), "%d.%d.%d.%d", 
                  ip[0], ip[1], ip[2], ip[3]);
-        snprintf(machineStateNext->wifi_ip, sizeof(machineStateNext->wifi_ip), "%d.%d.%d.%d", 
+        snprintf(stateNext->wifi_ip, sizeof(stateNext->wifi_ip), "%d.%d.%d.%d", 
                  ip[0], ip[1], ip[2], ip[3]);
         xSemaphoreGive(stateMutex);
     }
@@ -2108,7 +2124,10 @@ void parsePicoStatus(const uint8_t* payload, uint8_t length) {
     // Copy current state to preserve fields not updated in this call
     // This copy happens INSIDE the mutex, so any secondary updates that happened
     // before we took the mutex are included in this copy
-    *machineStateNext = *machineState;
+    // Cast away volatile for assignment (safe inside mutex)
+    ui_state_t* statePtr = const_cast<ui_state_t*>(machineState);
+    ui_state_t* stateNextPtr = const_cast<ui_state_t*>(machineStateNext);
+    *stateNextPtr = *statePtr;
     
     // Parse temperatures (int16 scaled by 10 -> float)
     int16_t brew_temp_raw, steam_temp_raw, group_temp_raw;
