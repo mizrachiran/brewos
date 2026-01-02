@@ -1425,17 +1425,35 @@ void BrewWebServer::startCombinedOTA(const String& version, bool isPendingOTA) {
     LOG_I("Pico responded after update");
     
     // Request boot info to get the new version
+    // The Pico should send MSG_BOOT on boot, but we also explicitly request it
+    // to ensure we get the version even if MSG_BOOT was missed
     _picoUart.requestBootInfo();
-    for (int i = 0; i < 10; i++) {
+    
+    // Wait for boot info with retries (up to 3 seconds)
+    // Pico might need time to fully boot and send MSG_BOOT
+    const char* picoVersion = nullptr;
+    for (int attempt = 0; attempt < 30; attempt++) {
         delay(100);
         feedWatchdog();
         _picoUart.loop();
+        
+        // Check if version was received
+        picoVersion = State.getPicoVersion();
+        if (picoVersion && picoVersion[0] != '\0') {
+            LOG_I("Pico version received after %d ms", (attempt + 1) * 100);
+            break;
+        }
+        
+        // Request again every 1 second if not received yet
+        if (attempt > 0 && attempt % 10 == 0) {
+            LOG_I("Still waiting for Pico version, requesting boot info again...");
+            _picoUart.requestBootInfo();
+        }
     }
     
     // Verify Pico version after update
     // For dev-latest and beta channels (versions containing "-"), skip exact version matching
     // since the tag name differs from the actual firmware version (e.g., "dev-latest" vs "0.7.5")
-    const char* picoVersion = State.getPicoVersion();
     bool isDevOrBeta = (strcmp(version.c_str(), "dev-latest") == 0) || 
                        (strstr(version.c_str(), "-") != nullptr);
     
