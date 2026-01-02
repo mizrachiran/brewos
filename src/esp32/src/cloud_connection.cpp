@@ -1,6 +1,7 @@
 #include "cloud_connection.h"
 #include "memory_utils.h"
 #include <WiFi.h>
+#include <esp_heap_caps.h>  // For heap_caps_get_largest_free_block
 
 // Logging macros (match project convention)
 #define LOG_I(fmt, ...) Serial.printf("[Cloud] " fmt "\n", ##__VA_ARGS__)
@@ -25,7 +26,9 @@
 
 CloudConnection::CloudConnection() {
     _failureCount = 0;
-    _mutex = xSemaphoreCreateMutex();
+    // Use recursive mutex to prevent deadlock when callbacks try to disconnect
+    // (e.g., if _onCommand calls forceDisconnect() while _ws.loop() holds the mutex)
+    _mutex = xSemaphoreCreateRecursiveMutex();
     // Queue holds pointers to PSRAM-allocated message buffers
     _sendQueue = xQueueCreate(SEND_QUEUE_SIZE, sizeof(char*));
 }
@@ -80,9 +83,9 @@ void CloudConnection::end() {
     _connecting = false;
     
     if (wasConnected || wasConnecting) {
-        if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        if (_mutex && xSemaphoreTakeRecursive(_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
             _ws.disconnect();
-            xSemaphoreGive(_mutex);
+            xSemaphoreGiveRecursive(_mutex);
         }
         delay(100);
     }
@@ -100,9 +103,19 @@ void CloudConnection::end() {
 }
 
 void CloudConnection::forceDisconnect() {
-    if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(200)) == pdTRUE) {
+    if (xSemaphoreTakeRecursive(_mutex, pdMS_TO_TICKS(200)) == pdTRUE) {
         _ws.disconnect();
-        xSemaphoreGive(_mutex);
+        
+        // Explicitly stop SSL client to free buffers (~20-30KB)
+        // Note: getCClient() may not be available in all WebSocketsClient versions
+        #ifdef WEBSOCKETS_CLIENT_HAS_GET_CLIENT
+        WiFiClientSecure* sslClient = _ws.getCClient();
+        if (sslClient) {
+            sslClient->stop();
+        }
+        #endif
+        
+        xSemaphoreGiveRecursive(_mutex);
     }
     _connected = false;
     _connecting = false;
@@ -134,6 +147,9 @@ void CloudConnection::taskCode(void* parameter) {
     while (self->_enabled) {
         unsigned long now = millis();
         size_t currentHeap = ESP.getFreeHeap();
+        // Check largest contiguous block to avoid fragmentation trap
+        // SSL needs ~16-20KB contiguous block for handshake buffers
+        size_t largestBlock = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
 
         // 1. Critical Memory Protection
         // Disconnect only if memory is critically low to save the system
@@ -175,20 +191,22 @@ void CloudConnection::taskCode(void* parameter) {
         
         if (!self->_connected && !self->_connecting) {
             if (now - self->_lastConnectAttempt >= self->_reconnectDelay) {
-                if (currentHeap < MIN_HEAP_FOR_CONNECT) {
+                // Check BOTH total memory AND largest contiguous block
+                // SSL handshake needs ~20KB contiguous block, not just total free bytes
+                if (currentHeap < MIN_HEAP_FOR_CONNECT || largestBlock < 20000) {
                     // Track when we first encountered low memory
                     if (firstLowHeapTime == 0) {
                         firstLowHeapTime = now;
-                        LOG_W("Low heap detected (%zu < %d) - deferring cloud connection", 
-                              currentHeap, (int)MIN_HEAP_FOR_CONNECT);
+                        LOG_W("Low memory resources (Heap: %zu, MaxBlock: %zu) - deferring cloud connection", 
+                              currentHeap, largestBlock);
                     }
                     
                     unsigned long waitDuration = now - firstLowHeapTime;
                     
                     // Log every 30 seconds (instead of every 10 seconds) to reduce spam
                     if (now - lastHeapLogTime >= 30000) {
-                        LOG_D("Waiting for heap to connect (%d needed, have %zu, waiting %lu s)", 
-                              (int)MIN_HEAP_FOR_CONNECT, currentHeap, waitDuration / 1000);
+                        LOG_D("Waiting for memory to connect (need %d heap + 20KB block, have %zu heap + %zu block, waiting %lu s)", 
+                              (int)MIN_HEAP_FOR_CONNECT, currentHeap, largestBlock, waitDuration / 1000);
                         lastHeapLogTime = now;
                     }
                     
@@ -209,19 +227,25 @@ void CloudConnection::taskCode(void* parameter) {
                     
                     // Update last connect attempt to prevent immediate retry
                     self->_lastConnectAttempt = now;
-                } else {
-                    // Memory is available - reset tracking and try to connect
-                    if (firstLowHeapTime != 0) {
-                        unsigned long waitDuration = now - firstLowHeapTime;
-                        LOG_I("Heap recovered (%zu >= %d) after %lu s - attempting connection", 
-                              currentHeap, (int)MIN_HEAP_FOR_CONNECT, waitDuration / 1000);
-                        firstLowHeapTime = 0;
-                        lastHeapLogTime = 0;
-                        lastBackoffLog = 0;
+                    } else {
+                        // Memory is available - reset tracking and try to connect
+                        if (firstLowHeapTime != 0) {
+                            unsigned long waitDuration = now - firstLowHeapTime;
+                            LOG_I("Memory recovered (Heap: %zu, MaxBlock: %zu) after %lu s - attempting connection", 
+                                  currentHeap, largestBlock, waitDuration / 1000);
+                            firstLowHeapTime = 0;
+                            lastHeapLogTime = 0;
+                            lastBackoffLog = 0;
+                        }
+                        self->_reconnectDelay = RECONNECT_DELAY_MS;
+                        self->connect();
+                        
+                        // FIX: Update 'now' because connect() updated _lastConnectAttempt
+                        // to a time newer than the loop's 'now' variable.
+                        // Without this, the timeout check sees a negative value (wrapped to huge number)
+                        // and instantly kills the connection.
+                        now = millis();
                     }
-                    self->_reconnectDelay = RECONNECT_DELAY_MS;
-                    self->connect();
-                }
             }
         } else {
             // Connected or connecting - reset low memory tracking
@@ -257,7 +281,7 @@ void CloudConnection::taskCode(void* parameter) {
         }
         
         // 5. Processing Loop
-        if (xSemaphoreTake(self->_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+        if (xSemaphoreTakeRecursive(self->_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
             if (self->_connected || self->_connecting) {
                 self->_ws.loop();
             }
@@ -267,7 +291,7 @@ void CloudConnection::taskCode(void* parameter) {
                 self->processSendQueue();
             }
             
-            xSemaphoreGive(self->_mutex);
+            xSemaphoreGiveRecursive(self->_mutex);
         }
         
         // 6. Proactive State Broadcast
@@ -304,6 +328,32 @@ void CloudConnection::connect() {
         LOG_W("Cannot connect: missing server URL or device ID");
         return;
     }
+    
+    // CRITICAL: Ensure any previous connection is fully cleaned up before creating new one
+    // This prevents SSL buffer memory leaks when reconnecting after disconnection
+    if (xSemaphoreTakeRecursive(_mutex, pdMS_TO_TICKS(200)) == pdTRUE) {
+        // REMOVED: if (_connected || _connecting) check.
+        // reason: handleEvent() sets these to false, causing this cleanup to be 
+        // skipped during reconnection, leading to double SSL allocation.
+        
+        _ws.disconnect();
+        
+        // Note: getCClient() may not be available in all WebSocketsClient versions
+        #ifdef WEBSOCKETS_CLIENT_HAS_GET_CLIENT
+        WiFiClientSecure* sslClient = _ws.getCClient();
+        if (sslClient) {
+            sslClient->stop();
+            // Optional: flushing can help ensure the socket is truly dead
+            sslClient->flush(); 
+        }
+        #endif
+        
+        xSemaphoreGiveRecursive(_mutex);
+    }
+    
+    // Add a small delay to allow the LWIP stack to reclaim the socket memory
+    // before we allocate a huge new chunk for the next SSL handshake.
+    vTaskDelay(pdMS_TO_TICKS(250));
     
     // CRITICAL: Never start connection during grace period
     // SSL handshake blocks entire LWIP stack - must not start during web server activity
@@ -342,9 +392,11 @@ void CloudConnection::connect() {
                     return;
                 }
                 LOG_I("Registration successful");
-                // Small delay after registration to let memory stabilize and SSL connection close
+                // Delay after registration to let network stack stabilize and SSL connection fully close
                 // This prevents WebSocket SSL handshake timeout after registration
-                vTaskDelay(pdMS_TO_TICKS(500));
+                // ESP32 network stack needs time to clean up first SSL connection before starting second
+                LOG_I("Waiting 2s for network stack to stabilize after registration...");
+                vTaskDelay(pdMS_TO_TICKS(2000));
             } else {
                 // No registration callback - assume already paired
                 LOG_I("Device key present - assuming already paired (no registration callback)");
@@ -361,9 +413,11 @@ void CloudConnection::connect() {
                 _reconnectDelay = 30000;
                 return;
             }
-            // Small delay after registration to let memory stabilize and SSL connection close
+            // Delay after registration to let network stack stabilize and SSL connection fully close
             // This prevents WebSocket SSL handshake timeout after registration
-            vTaskDelay(pdMS_TO_TICKS(500));
+            // ESP32 network stack needs time to clean up first SSL connection before starting second
+            LOG_I("Waiting 2s for network stack to stabilize after registration...");
+            vTaskDelay(pdMS_TO_TICKS(2000));
         }
     }
     
@@ -418,27 +472,36 @@ void CloudConnection::connect() {
     
     // Enable heartbeat (ping every 15s, timeout 8s, 2 failures to disconnect)
     // Mutex protection for all _ws calls
-    if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+    if (xSemaphoreTakeRecursive(_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
         _ws.enableHeartbeat(15000, 8000, 2);
         
         // Configure SSL client timeout (default 5s is too short for slow networks)
         // WebSocketsClient uses WiFiClientSecure internally
-        // Try to configure timeout - method availability depends on library version
+        // Try to configure timeout - links2004/WebSockets@^2.4.1 should support getCClient()
         if (useSSL) {
             // Try to get and configure the underlying SSL client
             // Note: getCClient() may not be available in all WebSocketsClient versions
-            // If compilation fails, comment out this section
+            // links2004/WebSockets@2.7.2 doesn't expose this method
             #ifdef WEBSOCKETS_CLIENT_HAS_GET_CLIENT
             WiFiClientSecure* sslClient = _ws.getCClient();
             if (sslClient) {
                 sslClient->setTimeout(15000);  // 15 second timeout for SSL operations
                 sslClient->setInsecure();  // Skip certificate validation (faster, acceptable for known server)
-                LOG_I("SSL client configured: timeout=15s, insecure mode");
+                
+                // Attempt to force large buffers to PSRAM
+                // Note: setBufferSizes() may not be available in all ESP32 Arduino Core versions
+                #ifdef ESP32_ARDUINO_CORE_HAS_SETBUFFERSIZES
+                sslClient->setBufferSizes(16384, 4096); // Receive 16k, Transmit 4k
+                LOG_I("SSL client configured: timeout=15s, insecure mode, PSRAM buffers (16k/4k)");
+                #else
+                LOG_I("SSL client configured: timeout=15s, insecure mode (PSRAM buffers not configurable)");
+                #endif
             }
             #else
             // WebSocketsClient library doesn't expose getCClient() - timeout uses library default
-            // The library should handle SSL internally, but timeout may be limited
-            LOG_I("SSL client: using library default timeout (may be 5s)");
+            // The library should handle SSL internally, but timeout may be limited to 5s
+            // This is a known limitation with weak WiFi signals - the handshake may timeout
+            LOG_I("SSL client: using library default timeout (may be 5s) - getCClient() not available");
             #endif
         }
         
@@ -449,7 +512,7 @@ void CloudConnection::connect() {
         } else {
             _ws.begin(host.c_str(), port, wsPath.c_str());
         }
-        xSemaphoreGive(_mutex);
+        xSemaphoreGiveRecursive(_mutex);
     } else {
         LOG_W("Could not acquire mutex for connect");
         _connecting = false;
@@ -548,6 +611,17 @@ void CloudConnection::handleEvent(WStype_t type, uint8_t* payload, size_t length
                 // Note: This event handler is called from _ws.loop() which is already mutex-protected,
                 // so we can safely call disconnect() without taking the mutex again
                 _ws.disconnect();
+                
+                // Try to explicitly stop the underlying SSL client to free buffers
+                // This is critical for memory cleanup - SSL buffers are ~20-30KB
+                // Note: getCClient() may not be available in all WebSocketsClient versions
+                #ifdef WEBSOCKETS_CLIENT_HAS_GET_CLIENT
+                WiFiClientSecure* sslClient = _ws.getCClient();
+                if (sslClient) {
+                    sslClient->stop();  // Explicitly stop SSL client to free buffers
+                    LOG_D("SSL client stopped for cleanup");
+                }
+                #endif
                 
                 _connected = false;
                 _connecting = false;

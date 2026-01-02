@@ -358,8 +358,47 @@ void WiFiManager::doConnectToWiFi() {
         }
     }
     
-    // Connect with optimized settings
-    WiFi.begin(_storedSSID, _storedPassword);
+    // Scan for APs with the same SSID and connect to the strongest one
+    // This ensures we connect to the best AP when multiple APs broadcast the same SSID
+    LOG_I("Scanning for APs with SSID: %s", _storedSSID);
+    int n = WiFi.scanNetworks(false, true);  // async=false, show_hidden=true
+    
+    if (n > 0) {
+        int bestRSSI = -200;  // Start with very weak signal
+        uint8_t bestBSSID[6] = {0};
+        bool found = false;
+        
+        for (int i = 0; i < n; i++) {
+            String ssid = WiFi.SSID(i);
+            if (ssid == _storedSSID) {
+                int rssi = WiFi.RSSI(i);
+                LOG_I("Found AP: %s, RSSI: %d dBm, Channel: %d, BSSID: %s", 
+                      ssid.c_str(), rssi, WiFi.channel(i), WiFi.BSSIDstr(i).c_str());
+                
+                if (rssi > bestRSSI) {
+                    bestRSSI = rssi;
+                    WiFi.BSSID(i, bestBSSID);
+                    found = true;
+                }
+            }
+        }
+        
+        if (found) {
+            // Format BSSID as hex string for logging
+            char bssidStr[18];
+            snprintf(bssidStr, sizeof(bssidStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+                     bestBSSID[0], bestBSSID[1], bestBSSID[2], 
+                     bestBSSID[3], bestBSSID[4], bestBSSID[5]);
+            LOG_I("Connecting to strongest AP: RSSI=%d dBm, BSSID=%s", bestRSSI, bssidStr);
+            WiFi.begin(_storedSSID, _storedPassword, 0, bestBSSID);
+        } else {
+            LOG_W("SSID '%s' not found in scan, connecting without BSSID (ESP32 will auto-select)", _storedSSID);
+            WiFi.begin(_storedSSID, _storedPassword);
+        }
+    } else {
+        LOG_W("WiFi scan found no networks, connecting without BSSID (ESP32 will auto-select)");
+        WiFi.begin(_storedSSID, _storedPassword);
+    }
     
     _mode = WiFiManagerMode::STA_CONNECTING;
     _connectStartTime = millis();
