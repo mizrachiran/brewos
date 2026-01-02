@@ -249,17 +249,29 @@ int MQTTClient::testConnectionWithConfig(const MQTTConfig& testConfig) {
     testClient.setServer(testConfig.broker, testConfig.port);
     testClient.setBufferSize(512);  // Small buffer for test
     
+    // Set shorter timeout for test connection to avoid watchdog timeout
+    // Use 5 seconds instead of default 15s to prevent blocking CloudTask too long
+    // This ensures the test completes before the task watchdog (10s) triggers
+    testWifiClient.setTimeout(5000);  // 5 second timeout for test
+    testClient.setSocketTimeout(5);   // 5 second socket timeout
+    
     // Generate temporary client ID
     char testClientId[48];
     snprintf(testClientId, sizeof(testClientId), "brewos_test_%lu", millis());
     
-    // Attempt connection
+    // Feed watchdog before blocking operation
+    yield();
+    
+    // Attempt connection (blocking, but with shorter timeout)
     bool connected = false;
     if (strlen(testConfig.username) > 0) {
         connected = testClient.connect(testClientId, testConfig.username, testConfig.password);
     } else {
         connected = testClient.connect(testClientId);
     }
+    
+    // Feed watchdog after blocking operation
+    yield();
     
     if (connected) {
         LOG_I("MQTT test connection successful!");

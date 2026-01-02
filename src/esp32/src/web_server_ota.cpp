@@ -44,7 +44,9 @@ extern NotificationManager* notificationManager;
 static constexpr uint32_t OTA_WDT_TIMEOUT_SECONDS = 60;
 
 // Default watchdog timeout (seconds) - restored after OTA
-static constexpr uint32_t DEFAULT_WDT_TIMEOUT_SECONDS = 5;
+// Increased to 10s to allow longer blocking operations (MQTT tests, SSL connections)
+// while still catching real hangs quickly
+static constexpr uint32_t DEFAULT_WDT_TIMEOUT_SECONDS = 10;
 
 // Console log interval during download (ms)
 static constexpr uint32_t OTA_CONSOLE_LOG_INTERVAL_MS = 5000;
