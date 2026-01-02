@@ -45,8 +45,9 @@ static void broadcastLogInternal(AsyncWebSocket* ws, CloudConnection* cloudConne
     // Defensive checks: ensure all required pointers are valid
     if (!message || !ws) return;
     
-    // Clean up disconnected clients first
-    ws->cleanupClients();
+    // CRITICAL FIX: Don't cleanup clients on every log message - it's too expensive
+    // Rely on periodic cleanup in sendPingToClients() (every 5s) or loop() (every 1s)
+    // This prevents performance issues and race conditions during high-frequency logging
     
     // If no clients connected, nothing to do (but still send to cloud)
     if (ws->count() == 0 && !cloudConnection) return;
@@ -72,10 +73,12 @@ static void broadcastLogInternal(AsyncWebSocket* ws, CloudConnection* cloudConne
         // Iterate clients individually to avoid blocking on slow clients
         // This prevents one slow client from blocking all clients
         if (ws->count() > 0) {
-            for (size_t i = 0; i < ws->count(); i++) {
-                AsyncWebSocketClient* client = ws->client(i);
-                if (client && client->canSend()) {
-                    client->text(jsonBuffer);
+            // FIX: Iterate over clients list directly instead of using index
+            // ws->client(i) expects an ID, not an index!
+            // getClients() returns references, so use auto& and access with . not ->
+            for (auto& client : ws->getClients()) {
+                if (client.status() == WS_CONNECTED && client.canSend()) {
+                    client.text(jsonBuffer);
                 }
             }
         }
@@ -474,6 +477,7 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
     static unsigned long lastCloudHeartbeat = 0;
     static unsigned long lastFullStatusSync = 0;  // Periodic full status sync
     static bool lastCloudConnected = false;
+    static bool isKeepaliveForced = false;  // Track if this send is a keepalive (function scope)
     const unsigned long CLOUD_HEARTBEAT_INTERVAL = 30000;  // 30 seconds minimum heartbeat
     const unsigned long FULL_STATUS_SYNC_INTERVAL = 300000;  // 5 minutes for full status sync
     
@@ -502,19 +506,57 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
     bool localChanged = false;
     ChangedFields localChangedFields;
     bool isFirstLocalMessage = false;
+    static bool lastHasLocalClients = false;
+    static unsigned long lastClientConnectTime = 0;
     if (hasLocalClients) {
         // Reset detector when local client connects (ensures first update is sent)
-        static bool lastHasLocalClients = false;
         if (!lastHasLocalClients && hasLocalClients) {
             localChangeDetector.reset();
             isFirstLocalMessage = true;
+            lastClientConnectTime = millis();
+            LOG_I("New local client connected, will send initial status");
         }
         lastHasLocalClients = hasLocalClients;
         
+        // Always send status for first 2 seconds after client connects
+        // This ensures client receives initial state even if canSend() was false initially
+        unsigned long now = millis();
+        if (now - lastClientConnectTime < 2000) {
+            isFirstLocalMessage = true;
+        }
+        
         localChanged = localChangeDetector.hasChanged(state);
-        if (localChanged) {
+        
+        // For local clients: Send status every 2 seconds as keepalive even when idle
+        // This ensures client receives regular updates and doesn't mark connection as stale
+        static unsigned long lastLocalKeepalive = 0;
+        const unsigned long LOCAL_KEEPALIVE_INTERVAL = 2000;  // 2 seconds
+        
+        // Initialize keepalive timer on first client connection
+        if (!lastHasLocalClients && hasLocalClients) {
+            lastLocalKeepalive = now;  // Initialize to current time
+        }
+        
+        isKeepaliveForced = false;  // Reset flag (declared at function scope above)
+        
+        if (!localChanged && !isFirstLocalMessage) {
+            unsigned long timeSinceLastKeepalive = now - lastLocalKeepalive;
+            if (timeSinceLastKeepalive >= LOCAL_KEEPALIVE_INTERVAL) {
+                // Force send status as keepalive for local clients
+                localChanged = true;
+                isKeepaliveForced = true;
+                lastLocalKeepalive = now;
+            }
+        } else if (localChanged) {
+            // Reset keepalive timer when we send due to actual changes
+            lastLocalKeepalive = now;
+        }
+        
+        if (localChanged && !isKeepaliveForced) {
             localChangedFields = localChangeDetector.getChangedFields(state);
         }
+    } else {
+        lastHasLocalClients = false;
     }
     
     // Early exit: only build JSON/MessagePack if we have local clients OR need to send to cloud
@@ -530,13 +572,26 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
     // Send full status on:
     // 1. Major state changes (machine_state changed)
     // 2. Periodic sync (every 5 minutes)
-    // 3. First connection (client just connected)
+    // 3. First connection (client just connected) - ALWAYS send full status for new clients
     // 4. Heartbeat (to ensure consistency)
     unsigned long now = millis();
     bool fullStatusSyncDue = (now - lastFullStatusSync >= FULL_STATUS_SYNC_INTERVAL);
     bool majorStateChange = (cloudChanged && cloudChangedFields.machine_state) || 
                            (localChanged && localChangedFields.machine_state);
+    // Always send full status for newly connected clients to ensure they get complete state
+    // This prevents stale connection errors
     bool sendFullStatus = majorStateChange || fullStatusSyncDue || cloudHeartbeatDue || isFirstLocalMessage;
+    
+    // For newly connected clients, always send status even if nothing changed
+    // This ensures client gets complete initial state
+    if (isFirstLocalMessage) {
+        localChanged = true;  // Force send even if no changes detected
+    }
+    
+    // For local clients: Always send status updates periodically (every 2s) as keepalive
+    // This ensures client receives regular updates and doesn't mark connection as stale
+    // Cloud clients use change detection to save bandwidth, but local clients need keepalive
+    // The keepalive logic above forces localChanged=true every 2 seconds when idle
     
     // Clear the pre-allocated document for reuse
     g_statusDoc->clear();
@@ -546,17 +601,28 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
     statusSequence++;
     
     // Build delta or full status
-    if (!sendFullStatus && (cloudChanged || localChanged)) {
-        // Build delta status - use the changed fields from the appropriate detector
-        ChangedFields changed = hasLocalClients ? localChangedFields : cloudChangedFields;
-        if (buildDeltaStatus(state, changed, statusSequence, doc)) {
-            // Delta built successfully
-        } else {
-            // No changes detected, fall back to full status
+    // For newly connected clients, always send full status to ensure complete state
+    // For local clients with keepalive, send full status (simpler and ensures client gets complete state)
+    // Note: isKeepaliveForced is declared as static at function scope above
+    
+    if (!sendFullStatus && (cloudChanged || localChanged) && !isFirstLocalMessage) {
+        // Check if this is a keepalive send - if keepalive was forced, send full status
+        // Otherwise, try to build delta status
+        if (isKeepaliveForced) {
+            // This is a keepalive - send full status to ensure client gets complete state
             sendFullStatus = true;
+        } else {
+            // Build delta status - use the changed fields from the appropriate detector
+            ChangedFields changed = hasLocalClients ? localChangedFields : cloudChangedFields;
+            if (buildDeltaStatus(state, changed, statusSequence, doc)) {
+                // Delta built successfully
+            } else {
+                // No changes detected, fall back to full status
+                sendFullStatus = true;
+            }
         }
     } else {
-        // Build full status
+        // Build full status (for new clients, major changes, or periodic sync)
         sendFullStatus = true;
     }
     
@@ -862,16 +928,77 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
     size_t msgpackSize = MessagePackHelper::serialize(doc, g_statusBuffer, STATUS_BUFFER_SIZE);
     if (msgpackSize > 0) {
         // Send to WebSocket clients as binary (MessagePack format)
-        // Local clients always get updates every 500ms for responsive UI
+        // Status updates are only sent when something changes, on first connect,
+        // or during periodic sync. Application-level keepalive messages prevent stale connections.
         if (hasLocalClients) {
-            // AsyncWebSocket doesn't have binaryAll, so send to each client
-            _ws.cleanupClients();
-            for (size_t i = 0; i < _ws.count(); i++) {
-                AsyncWebSocketClient* client = _ws.client(i);
-                // Check both connection status and send queue availability to prevent errors
-                if (client && client->status() == WS_CONNECTED && client->canSend()) {
-                    client->binary(g_statusBuffer, msgpackSize);
+            // Only cleanup clients periodically, not before every send
+            // CRITICAL FIX: Don't cleanup right before sending keepalive
+            // Cleanup can remove clients, making them null when we try to send
+            // Instead, cleanup AFTER sending messages to avoid race conditions
+            static unsigned long lastCleanup = 0;
+            const unsigned long CLEANUP_INTERVAL = 5000;  // Clean up every 5 seconds
+            
+            // Get client count FIRST (before any cleanup)
+            // This prevents race conditions where cleanup removes clients while we're iterating
+            size_t clientCount = _ws.count();
+            // CRITICAL DEBUG: Log if we have clients but loop doesn't execute
+            if (clientCount == 0 && isKeepaliveForced) {
+                LOG_W("WARNING: No clients found but keepalive was forced! hasLocalClients=%d, _ws.count()=%zu", 
+                      hasLocalClients ? 1 : 0, _ws.count());
+            }
+            
+            // CRITICAL FIX: Use getClients() iterator instead of index-based loop
+            // _ws.client(i) expects a Client ID (like 3, 4, 5...), NOT an array index (0, 1, 2...)
+            // This is why _ws.client(0) returns null even when count() returns 1
+            
+            // Direct iteration over client list using getClients()
+            // getClients() returns references, so use auto& and access with . not ->
+            for (auto& client : _ws.getClients()) {
+                // Check connection status - always try to send if connected
+                // This ensures clients receive regular updates and don't mark connection as stale
+                if (client.status() == WS_CONNECTED) {
+                    // CRITICAL: Always send application-level keepalive messages (not protocol pings)
+                    // WebSocket protocol-level pings don't trigger browser's onmessage event,
+                    // so the client's lastMessageTime never updates and it marks connection as stale.
+                    // We must send actual messages (binary MessagePack or text JSON) that trigger onmessage.
+                    if (isKeepaliveForced) {
+                        // Force send keepalive - this is critical for connection stability
+                        // Always send the status message, even if queue appears full
+                        // The client needs to receive messages to update its lastMessageTime
+                        if (g_statusBuffer && msgpackSize > 0 && msgpackSize <= STATUS_BUFFER_SIZE) {
+                            client.binary(g_statusBuffer, msgpackSize);
+                        } else {
+                            LOG_E("Invalid buffer or size: g_statusBuffer=%p, msgpackSize=%zu, STATUS_BUFFER_SIZE=%d", 
+                                  g_statusBuffer, msgpackSize, STATUS_BUFFER_SIZE);
+                        }
+                    } else if (client.canSend()) {
+                        // Normal status update - only send if queue has space
+                        client.binary(g_statusBuffer, msgpackSize);
+                    } else {
+                        // Queue full for normal update - skip unless it's initial status
+                        if (isFirstLocalMessage) {
+                            LOG_W("Client %u queue full but sending initial status anyway", client.id());
+                            if (g_statusBuffer && msgpackSize > 0 && msgpackSize <= STATUS_BUFFER_SIZE) {
+                                client.binary(g_statusBuffer, msgpackSize);
+                            }
+                        } else {
+                            LOG_D("Client %u send queue full, skipping this update", client.id());
+                            // Don't send protocol ping - it won't help with client's stale detection
+                            // The client will receive keepalive from sendPingToClients() or next status update
+                        }
+                    }
                 }
+            }
+            
+            // CRITICAL FIX: Cleanup AFTER sending messages to avoid race conditions
+            // This ensures clients aren't removed while we're trying to send to them
+            if (millis() - lastCleanup > CLEANUP_INTERVAL) {
+                _ws.cleanupClients();
+                lastCleanup = millis();
+            }
+        } else {
+            if (isKeepaliveForced) {
+                LOG_W("No local clients but keepalive was forced - this shouldn't happen!");
             }
         }
         
@@ -883,7 +1010,11 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
             }
         }
     } else {
-        LOG_W("MessagePack serialization failed or buffer too small");
+        LOG_E("MessagePack serialization failed or buffer too small (keepalive=%d)", isKeepaliveForced);
+        // If keepalive failed to serialize, this is critical - connection will go stale
+        if (isKeepaliveForced) {
+            LOG_E("CRITICAL: Keepalive serialization failed - client will mark connection as stale!");
+        }
     }
     
     // Note: No cleanup needed - we're using pre-allocated reusable buffers
@@ -952,21 +1083,31 @@ void BrewWebServer::broadcastDeviceInfo() {
     
     // Use buffer pool to avoid heap fragmentation
     size_t jsonSize = measureJson(doc) + 1;
+    
+    // Defensive: Check if buffer pool is available and size is reasonable
+    if (jsonSize > 4096) {
+        LOG_E("Device info JSON too large (%zu bytes), skipping", jsonSize);
+        return;
+    }
+    
     char* jsonBuffer = JsonBufferPool::instance().allocate(jsonSize);
     
     if (jsonBuffer) {
         serializeJson(doc, jsonBuffer, jsonSize);
         
-        // Check each client individually before sending (prevents errors on unready clients)
-        // This prevents WebSocket errors when client just connected and isn't ready yet
-        if (_ws.count() > 0) {
-            for (size_t i = 0; i < _ws.count(); i++) {
-                AsyncWebSocketClient* client = _ws.client(i);
-                if (client && client->canSend()) {
-                    client->text(jsonBuffer);
-                }
+    // FIX: Iterate over clients list directly instead of using index
+    // ws->client(i) expects an ID, not an index!
+    if (_ws.count() > 0) {
+        _ws.cleanupClients();  // Clean up stale clients first
+        
+        // getClients() returns references, so use auto& and access with . not ->
+        for (auto& client : _ws.getClients()) {
+            // Defensive: Check client is connected and ready before sending
+            if (client.status() == WS_CONNECTED && client.canSend() && jsonBuffer) {
+                client.text(jsonBuffer);
             }
         }
+    }
         
         // Also send to cloud - use jsonBuffer directly to avoid String allocation
         if (_cloudConnection) {

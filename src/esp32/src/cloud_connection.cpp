@@ -12,10 +12,11 @@
 #define RECONNECT_DELAY_MS 5000  // 5s between attempts
 #define STARTUP_GRACE_PERIOD_MS 10000  // 10s grace period after WiFi for local access
 // Memory Management
-// SSL Context takes ~25-30KB. We need:
-// 45KB to start safely
+// SSL Context takes ~25-30KB. With optimized SSL buffers (2048 instead of 4096), it's ~20-25KB.
+// We need:
+// 40KB to start safely (reduced from 45KB due to SSL buffer optimization)
 // 12KB to stay alive (lower threshold to prevent self-disconnecting)
-#define MIN_HEAP_FOR_CONNECT 45000  // Need 45KB heap for SSL buffers + web server headroom
+#define MIN_HEAP_FOR_CONNECT 40000  // Need 40KB heap for SSL buffers + web server headroom (reduced from 45KB)
 #define MIN_HEAP_TO_STAY_CONNECTED 12000  // Disconnect if heap drops below this (lowered to prevent thrashing)
 #define HEAP_THRESHOLD_FOR_PAUSE 35000   // Only disconnect for local UI if heap is below this
 #define SSL_HANDSHAKE_TIMEOUT_MS 20000  // 20s timeout
@@ -167,14 +168,67 @@ void CloudConnection::taskCode(void* parameter) {
         }
         
         // 4. Connection Logic
+        // Track low memory state (static to persist across loop iterations)
+        static unsigned long firstLowHeapTime = 0;
+        static unsigned long lastHeapLogTime = 0;
+        static unsigned long lastBackoffLog = 0;
+        
         if (!self->_connected && !self->_connecting) {
             if (now - self->_lastConnectAttempt >= self->_reconnectDelay) {
                 if (currentHeap < MIN_HEAP_FOR_CONNECT) {
-                    // Just warn, don't spam attempts
-                    if ((now / 1000) % 10 == 0) LOG_D("Waiting for heap to connect (%d needed)", (int)MIN_HEAP_FOR_CONNECT);
+                    // Track when we first encountered low memory
+                    if (firstLowHeapTime == 0) {
+                        firstLowHeapTime = now;
+                        LOG_W("Low heap detected (%zu < %d) - deferring cloud connection", 
+                              currentHeap, (int)MIN_HEAP_FOR_CONNECT);
+                    }
+                    
+                    unsigned long waitDuration = now - firstLowHeapTime;
+                    
+                    // Log every 30 seconds (instead of every 10 seconds) to reduce spam
+                    if (now - lastHeapLogTime >= 30000) {
+                        LOG_D("Waiting for heap to connect (%d needed, have %zu, waiting %lu s)", 
+                              (int)MIN_HEAP_FOR_CONNECT, currentHeap, waitDuration / 1000);
+                        lastHeapLogTime = now;
+                    }
+                    
+                    // If we've been waiting for more than 5 minutes, increase reconnect delay
+                    // This prevents constant checking when memory is truly unavailable
+                    if (waitDuration > 300000) {  // 5 minutes
+                        self->_reconnectDelay = 60000;  // Check every 60 seconds instead of 5
+                        // Log once per minute when backing off
+                        if (now - lastBackoffLog >= 60000) {
+                            LOG_W("Low memory persists - backing off connection attempts (heap: %zu, waited %lu s)", 
+                                  currentHeap, waitDuration / 1000);
+                            lastBackoffLog = now;
+                        }
+                    } else {
+                        // Normal reconnect delay
+                        self->_reconnectDelay = RECONNECT_DELAY_MS;
+                    }
+                    
+                    // Update last connect attempt to prevent immediate retry
+                    self->_lastConnectAttempt = now;
                 } else {
+                    // Memory is available - reset tracking and try to connect
+                    if (firstLowHeapTime != 0) {
+                        unsigned long waitDuration = now - firstLowHeapTime;
+                        LOG_I("Heap recovered (%zu >= %d) after %lu s - attempting connection", 
+                              currentHeap, (int)MIN_HEAP_FOR_CONNECT, waitDuration / 1000);
+                        firstLowHeapTime = 0;
+                        lastHeapLogTime = 0;
+                        lastBackoffLog = 0;
+                    }
+                    self->_reconnectDelay = RECONNECT_DELAY_MS;
                     self->connect();
                 }
+            }
+        } else {
+            // Connected or connecting - reset low memory tracking
+            if (firstLowHeapTime != 0) {
+                firstLowHeapTime = 0;
+                lastHeapLogTime = 0;
+                lastBackoffLog = 0;
             }
         }
         
@@ -266,6 +320,14 @@ void CloudConnection::connect() {
     // Registration is only needed for initial pairing - it adds 5-15s SSL overhead
     // If we had auth failures, the key was regenerated and begin() was called again
     // so _deviceKey should already be updated
+    //
+    // NOTE: Registration and WebSocket are TWO SEPARATE SSL connections:
+    // 1. Registration: HTTPS POST using WiFiClientSecure (one-time, closes after response)
+    // 2. WebSocket: WSS connection using WebSocketsClient (persistent, stays open)
+    // Each requires its own SSL handshake. The WebSocket handshake may timeout if:
+    // - Memory is low after the first SSL connection
+    // - Network conditions change between connections
+    // - WebSocket library has shorter internal timeout than registration
     if (!_registered) {
         if (!_deviceKey.isEmpty()) {
             // Device key exists - try registration if not already registered
@@ -280,6 +342,9 @@ void CloudConnection::connect() {
                     return;
                 }
                 LOG_I("Registration successful");
+                // Small delay after registration to let memory stabilize and SSL connection close
+                // This prevents WebSocket SSL handshake timeout after registration
+                vTaskDelay(pdMS_TO_TICKS(500));
             } else {
                 // No registration callback - assume already paired
                 LOG_I("Device key present - assuming already paired (no registration callback)");
@@ -296,6 +361,9 @@ void CloudConnection::connect() {
                 _reconnectDelay = 30000;
                 return;
             }
+            // Small delay after registration to let memory stabilize and SSL connection close
+            // This prevents WebSocket SSL handshake timeout after registration
+            vTaskDelay(pdMS_TO_TICKS(500));
         }
     }
     

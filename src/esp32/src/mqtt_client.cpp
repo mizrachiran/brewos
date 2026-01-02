@@ -175,15 +175,17 @@ void MQTTClient::loop() {
 bool MQTTClient::setConfig(const MQTTConfig& config) {
     _config = config;
     
-    // Validate
-    if (strlen(_config.broker) == 0) {
-        LOG_E("MQTT broker cannot be empty");
-        return false;
-    }
-    
-    if (_config.port == 0 || _config.port > 65535) {
-        LOG_E("Invalid MQTT port: %d", _config.port);
-        return false;
+    // Validate - only require broker if MQTT is enabled
+    if (_config.enabled) {
+        if (strlen(_config.broker) == 0) {
+            LOG_E("MQTT broker cannot be empty when MQTT is enabled");
+            return false;
+        }
+        
+        if (_config.port == 0 || _config.port > 65535) {
+            LOG_E("Invalid MQTT port: %d", _config.port);
+            return false;
+        }
     }
     
     // Generate device ID if not set

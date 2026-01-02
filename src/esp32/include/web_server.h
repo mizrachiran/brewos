@@ -51,6 +51,7 @@ public:
     bool buildDeltaStatus(const ui_state_t& state, const ChangedFields& changed, 
                           uint32_t sequence, JsonDocument& doc);  // Build delta status (only changed fields)
     void broadcastFullStatus(const ui_state_t& machineState);  // Comprehensive status (periodic)
+    void sendPingToClients();  // Send WebSocket ping frames to all clients for keepalive
     void broadcastDeviceInfo();   // Device info (on connect only)
     void broadcastPowerMeterStatus();  // Power meter status update
     void broadcastBBWSettings();  // BBW settings (after save)

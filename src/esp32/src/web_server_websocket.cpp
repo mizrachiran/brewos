@@ -47,9 +47,10 @@ void BrewWebServer::handleWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* 
             
         case WS_EVT_CONNECT:
             {
-                // Limit to 1 concurrent client to save RAM (each WS client uses ~4KB)
-                // Note: count() includes the connecting client, so > 1 means there's already another client
-                if (server->count() > 1) {
+                // Limit concurrent clients to save RAM (each WS client uses ~4KB)
+                // Allow 2-3 clients to handle page refreshes where old connection overlaps with new one
+                // Note: count() includes the connecting client, so > 3 means there are already 3+ clients
+                if (server->count() > 3) {
                     LOG_W("Too many WebSocket clients (%u), rejecting new client %u from %s", 
                           server->count(), client->id(), client->remoteIP().toString().c_str());
                     // Close gracefully - this will trigger WS_EVT_DISCONNECT, not WS_EVT_ERROR
@@ -67,17 +68,33 @@ void BrewWebServer::handleWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* 
                 // Check if we have enough memory to send device info and status (needs ~3KB for JSON)
                 size_t freeHeap = ESP.getFreeHeap();
                 if (freeHeap > 10000) {
-                    // Send device info and status, but only if client is ready
-                    // Check client readiness to prevent WebSocket errors on unready connections
+                    // Always try to send device info and status on connect
+                    // Use a small delay to ensure client is fully ready, then send
+                    // This ensures the client receives initial state and doesn't mark connection as stale
+                    static unsigned long lastConnectTime = 0;
+                    lastConnectTime = millis();
+                    
+                    // Try immediate send if client is ready
                     if (client->canSend()) {
-                        // Send device info immediately so UI has the saved settings
-                        broadcastDeviceInfo();
-                        // Send full status on connect so client has complete state
-                        // This ensures client can apply delta updates correctly
-                        broadcastFullStatus(runtimeState().get());
+                        // TEST: Send a simple text message first to verify WebSocket is working
+                        const char* testMsg = "{\"type\":\"test\",\"message\":\"WebSocket connection test\"}";
+                        client->text(testMsg);
+                        LOG_I("Sent test message to client %u on connect", client->id());
+                        
+                        // Defensive: Defer broadcasts slightly to avoid crashes from race conditions
+                        // The client will receive status from the regular 2s keepalive cycle anyway
+                        // This prevents crashes when client connects during system initialization
+                        LOG_I("Client %u connected - status will be sent via keepalive cycle", client->id());
+                        
+                        // Note: We skip immediate broadcastDeviceInfo() and broadcastFullStatus() here
+                        // to avoid crashes. The regular keepalive cycle (every 2s) will send status
+                        // within 2 seconds, which is acceptable for initial connection.
                     } else {
-                        // Client not ready yet - it will request state via "request_state" command
-                        LOG_D("Client %u not ready for initial broadcast, will request state", client->id());
+                        // Client not ready yet - schedule a retry after a short delay
+                        // This ensures we send initial state even if client isn't immediately ready
+                        LOG_D("Client %u not ready for initial broadcast, will retry in 100ms", client->id());
+                        // Note: We'll retry in the next broadcastFullStatus call (happens every 500ms)
+                        // The client should receive status within 500ms, well before the 3s stale threshold
                     }
                 } else {
                     LOG_W("Low memory (%zu bytes), deferring device info broadcast", freeHeap);
@@ -208,17 +225,27 @@ void BrewWebServer::processCommand(JsonDocument& doc) {
         
         if (cmd == "set_eco") {
             // Set eco mode configuration
-            // Pico is the source of truth - we just relay the command and cache for UI
+            // Pico is the source of truth, but we persist on ESP32 as backup/cache
             // Payload: enabled (bool), brewTemp (float), timeout (int minutes)
             bool enabled = doc["enabled"] | true;
             float brewTemp = doc["brewTemp"] | 80.0f;
             int timeout = doc["timeout"] | 30;
             
-            // Cache in memory for immediate UI feedback (not persisted - Pico handles persistence)
+            // Validate inputs
+            if (brewTemp < 50.0f || brewTemp > 120.0f) {
+                broadcastLogLevel("error", "Invalid eco temp: %.1f°C (range: 50-120°C)", brewTemp);
+                return;
+            }
+            if (timeout < 1 || timeout > 1440) {
+                broadcastLogLevel("error", "Invalid eco timeout: %d min (range: 1-1440 min)", timeout);
+                return;
+            }
+            
+            // Update and persist settings on ESP32 (backup/cache even if Pico is source of truth)
             auto& tempSettings = State.settings().temperature;
             tempSettings.ecoBrewTemp = brewTemp;
             tempSettings.ecoTimeoutMinutes = (uint16_t)timeout;
-            // Note: We don't call State.saveTemperatureSettings() - Pico is source of truth
+            State.saveTemperatureSettings();  // Persist as backup
             
             // Convert to Pico format: [enabled:1][eco_brew_temp:2][timeout_minutes:2]
             uint8_t payload[5];
@@ -235,7 +262,7 @@ void BrewWebServer::processCommand(JsonDocument& doc) {
                 // Broadcast updated device info so UI refreshes
                 broadcastDeviceInfo();
             } else {
-                broadcastLogLevel("error", "Failed to send eco config to device");
+                broadcastLogLevel("error", "Failed to send eco config to device (saved locally as backup)");
             }
         }
         else if (cmd == "enter_eco") {
@@ -258,14 +285,17 @@ void BrewWebServer::processCommand(JsonDocument& doc) {
         }
         else if (cmd == "set_temp") {
             // Set temperature setpoint
-            // Pico is the source of truth - we just relay the command
+            // Pico is the source of truth, but we persist on ESP32 as backup/cache
             String boiler = doc["boiler"] | "brew";
             float temp = doc["temp"] | 0.0f;
             
-            // Update machineState immediately so status broadcasts show the new value
-            // This prevents Pico's old values from overwriting what we just set
-            // (Pico will persist and echo back the new value in its next status message)
-            // Update setpoint using RuntimeState
+            // Validate temperature range
+            if (temp < 50.0f || temp > 150.0f) {
+                broadcastLogLevel("error", "Invalid temperature: %.1f°C (range: 50-150°C)", temp);
+                return;
+            }
+            
+            // Update runtime state immediately so status broadcasts show the new value
             ui_state_t& state = runtimeState().beginUpdate();
             if (boiler == "steam") {
                 state.steam_setpoint = temp;
@@ -273,6 +303,15 @@ void BrewWebServer::processCommand(JsonDocument& doc) {
                 state.brew_setpoint = temp;
             }
             runtimeState().endUpdate();
+            
+            // Also persist in settings (backup/cache even if Pico is source of truth)
+            auto& tempSettings = State.settings().temperature;
+            if (boiler == "steam") {
+                tempSettings.steamSetpoint = temp;
+            } else {
+                tempSettings.brewSetpoint = temp;
+            }
+            State.saveTemperatureSettings();  // Persist as backup
             
             // Pico expects: [target:1][temperature:int16] where temperature is Celsius * 10
             // Note: Pico (RP2350) is little-endian, so send LSB first
@@ -288,6 +327,8 @@ void BrewWebServer::processCommand(JsonDocument& doc) {
                 broadcastLog(tempMsg);
                 // Broadcast updated device info so UI refreshes
                 broadcastDeviceInfo();
+            } else {
+                broadcastLogLevel("error", "Failed to send temp to Pico (saved locally as backup)");
             }
         }
         else if (cmd == "set_mode") {
@@ -622,6 +663,10 @@ void BrewWebServer::processCommand(JsonDocument& doc) {
                 brewByWeight->setAutoTare(doc["auto_tare"].as<bool>());
             }
             
+            // Note: brewByWeight->saveSettings() is called by each setter method,
+            // so settings are already persisted to brewByWeight's own NVS storage.
+            // StateManager has separate brew settings storage that's synced via broadcastDeviceInfo()
+            
             broadcastLogLevel("info", "Brew-by-weight settings updated");
             
             // Broadcast updated BBW settings to all clients (including cloud)
@@ -667,14 +712,24 @@ void BrewWebServer::processCommand(JsonDocument& doc) {
         }
         // Power settings (accept both "set_power" and "set_power_config" for compatibility)
         else if (cmd == "set_power" || cmd == "set_power_config") {
-            // Pico is the source of truth - we just relay the command and cache for UI
+            // Pico is the source of truth, but we persist on ESP32 as backup/cache
             uint16_t voltage = doc["voltage"] | 230;
             uint8_t maxCurrent = doc["maxCurrent"] | 15;
             
-            // Cache in memory for immediate UI feedback (not persisted - Pico handles persistence)
+            // Validate inputs
+            if (voltage < 100 || voltage > 240) {
+                broadcastLogLevel("error", "Invalid voltage: %dV (range: 100-240V)", voltage);
+                return;
+            }
+            if (maxCurrent < 1 || maxCurrent > 30) {
+                broadcastLogLevel("error", "Invalid max current: %dA (range: 1-30A)", maxCurrent);
+                return;
+            }
+            
+            // Update and persist settings on ESP32 (backup/cache even if Pico is source of truth)
             State.settings().power.mainsVoltage = voltage;
             State.settings().power.maxCurrent = (float)maxCurrent;
-            // Note: We don't call State.savePowerSettings() - Pico is source of truth
+            State.savePowerSettings();  // Persist as backup
             
             // Send to Pico as environmental config (Pico will persist it)
             uint8_t payload[4];
@@ -682,11 +737,13 @@ void BrewWebServer::processCommand(JsonDocument& doc) {
             payload[1] = (voltage >> 8) & 0xFF;
             payload[2] = voltage & 0xFF;
             payload[3] = maxCurrent;
-            _picoUart.sendCommand(MSG_CMD_CONFIG, payload, 4);
-            
-            broadcastLog("Power settings saved: %dV, %dA", voltage, maxCurrent);
-            // Broadcast updated device info so UI refreshes
-            broadcastDeviceInfo();
+            if (_picoUart.sendCommand(MSG_CMD_CONFIG, payload, 4)) {
+                broadcastLog("Power settings saved: %dV, %dA", voltage, maxCurrent);
+                // Broadcast updated device info so UI refreshes
+                broadcastDeviceInfo();
+            } else {
+                broadcastLogLevel("error", "Failed to send power config to Pico (saved locally as backup)");
+            }
         }
         // Power meter configuration
         else if (cmd == "configure_power_meter") {
@@ -849,8 +906,29 @@ void BrewWebServer::processCommand(JsonDocument& doc) {
                 machineInfo.machineModel[sizeof(machineInfo.machineModel) - 1] = '\0';
             }
             if (!doc["machineType"].isNull()) {
-                strncpy(machineInfo.machineType, doc["machineType"].as<const char*>(), sizeof(machineInfo.machineType) - 1);
+                const char* machineTypeStr = doc["machineType"].as<const char*>();
+                strncpy(machineInfo.machineType, machineTypeStr, sizeof(machineInfo.machineType) - 1);
                 machineInfo.machineType[sizeof(machineInfo.machineType) - 1] = '\0';
+                
+                // Also set the numeric machine type (used by State.getMachineType())
+                // This allows manual setting when Pico doesn't send MSG_BOOT
+                uint8_t numericType = 0; // 0 = unknown
+                if (strcmp(machineTypeStr, "dual_boiler") == 0) {
+                    numericType = 1;
+                } else if (strcmp(machineTypeStr, "single_boiler") == 0) {
+                    numericType = 2;
+                } else if (strcmp(machineTypeStr, "heat_exchanger") == 0) {
+                    numericType = 3;
+                } else if (strcmp(machineTypeStr, "thermoblock") == 0) {
+                    numericType = 4;
+                }
+                
+                if (numericType != 0) {
+                    State.setMachineType(numericType, true);  // force=true to override Pico's value
+                    LOG_I("Machine type set from UI: %s (%d)", machineTypeStr, numericType);
+                } else {
+                    LOG_W("Unknown machine type string: %s", machineTypeStr);
+                }
             }
             
             State.saveMachineInfoSettings();

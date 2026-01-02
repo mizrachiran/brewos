@@ -130,6 +130,7 @@ void StateManager::loadSettings() {
     _settings.brew.autoTare = prefs.getBool("autoTare", true);
     _settings.brew.preinfusionTime = prefs.getFloat("preinf", 0.0f);
     _settings.brew.preinfusionPressure = prefs.getFloat("preinfP", 2.0f);
+    _settings.brew.preinfusionPauseMs = prefs.getUShort("preinfPause", 5000);
     
     // Power
     _settings.power.mainsVoltage = prefs.getUShort("voltage", 220);
@@ -200,6 +201,18 @@ void StateManager::loadSettings() {
     _settings.machineInfo.machineType[sizeof(_settings.machineInfo.machineType) - 1] = '\0';
     if (strlen(_settings.machineInfo.machineType) == 0) {
         strcpy(_settings.machineInfo.machineType, "dual_boiler");
+    }
+    // Set numeric machine type from string
+    if (strcmp(_settings.machineInfo.machineType, "dual_boiler") == 0) {
+        _state.machineType = 1;
+    } else if (strcmp(_settings.machineInfo.machineType, "single_boiler") == 0) {
+        _state.machineType = 2;
+    } else if (strcmp(_settings.machineInfo.machineType, "heat_exchanger") == 0) {
+        _state.machineType = 3;
+    } else if (strcmp(_settings.machineInfo.machineType, "thermoblock") == 0) {
+        _state.machineType = 4;
+    } else {
+        _state.machineType = 0;  // unknown
     }
     
     // Notification Preferences
@@ -276,6 +289,7 @@ void StateManager::saveBrewSettings() {
     _prefs.putBool("autoTare", _settings.brew.autoTare);
     _prefs.putFloat("preinf", _settings.brew.preinfusionTime);
     _prefs.putFloat("preinfP", _settings.brew.preinfusionPressure);
+    _prefs.putUShort("preinfPause", _settings.brew.preinfusionPauseMs);
     _prefs.end();
     notifySettingsChanged();
 }
@@ -715,7 +729,16 @@ void StateManager::setPicoResetReason(uint8_t reason) {
     Serial.printf("[State] Pico reset reason: %s (%d)\n", reasonStr, reason);
 }
 
-void StateManager::setMachineType(uint8_t type) {
+void StateManager::setMachineType(uint8_t type, bool force) {
+    // If not forcing and machine type is already set (not unknown), preserve it
+    // This prevents Pico's MSG_BOOT from overwriting user-set machine type
+    if (!force && _state.machineType != 0 && type != 0) {
+        // Machine type already set - preserve user setting
+        Serial.printf("[State] Preserving existing machine type: %s (%d) (ignoring: %d)\n", 
+                     _settings.machineInfo.machineType, _state.machineType, type);
+        return;
+    }
+    
     _state.machineType = type;
     const char* typeStr = "unknown";
     switch (type) {
@@ -724,6 +747,11 @@ void StateManager::setMachineType(uint8_t type) {
         case 3: typeStr = "heat_exchanger"; break;
         case 4: typeStr = "thermoblock"; break;
     }
+    // Also update the persisted machine type string
+    strncpy(_settings.machineInfo.machineType, typeStr, sizeof(_settings.machineInfo.machineType) - 1);
+    _settings.machineInfo.machineType[sizeof(_settings.machineInfo.machineType) - 1] = '\0';
+    // Persist the change
+    saveMachineInfoSettings();
     Serial.printf("[State] Machine type: %s (%d)\n", typeStr, type);
 }
 

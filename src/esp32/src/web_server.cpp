@@ -52,8 +52,9 @@ void BrewWebServer::begin() {
     LOG_I("Starting web server...");
     
     // Initialize LittleFS with more open files to handle parallel asset requests
-    // Default is 5, increasing to 10 to prevent "fopen failed" errors (reduced from 15 to save heap)
-    if (!LittleFS.begin(true, "/littlefs", 10)) {
+    // Reduced to 7 to save internal RAM (each file handle uses ~1KB internal RAM)
+    // 7 handles should be enough for most use cases (HTML, CSS, JS, images)
+    if (!LittleFS.begin(true, "/littlefs", 7)) {
         LOG_E("Failed to mount LittleFS");
     } else {
         LOG_I("LittleFS mounted");
@@ -2678,6 +2679,46 @@ void BrewWebServer::handleStartOTA(AsyncWebServerRequest* request) {
 
 size_t BrewWebServer::getClientCount() {
     return _ws.count();
+}
+
+void BrewWebServer::sendPingToClients() {
+    // Send application-level keepalive message to all connected clients
+    // This prevents clients from marking connection as stale when device is idle
+    // Note: WebSocket protocol-level ping/pong frames don't trigger onmessage events,
+    // so we send a minimal application message that updates the client's lastMessageTime
+    if (_ws.count() > 0) {
+        // Only cleanup clients periodically, not before every keepalive
+        // This prevents premature removal of active clients
+        static unsigned long lastCleanup = 0;
+        const unsigned long CLEANUP_INTERVAL = 5000;  // Clean up every 5 seconds
+        if (millis() - lastCleanup > CLEANUP_INTERVAL) {
+            _ws.cleanupClients();
+            lastCleanup = millis();
+        }
+        
+        // Use minimal JSON keepalive message (much smaller than full status)
+        // This is sent every 3 seconds when idle, vs full status only when something changes
+        const char* keepalive = "{\"type\":\"keepalive\"}";
+        
+        // CRITICAL FIX: Use getClients() iterator instead of index-based loop
+        // _ws.client(i) expects a Client ID (like 3, 4, 5...), NOT an array index (0, 1, 2...)
+        // getClients() returns references, so use auto& and access with . not ->
+        for (auto& client : _ws.getClients()) {
+            if (client.status() == WS_CONNECTED) {
+                // For keepalive, always try to send even if queue appears full
+                // Keepalive messages are critical - they prevent stale connection detection
+                // The queue check is just a hint, not a hard limit
+                if (client.canSend()) {
+                    client.text(keepalive);
+                } else {
+                    // Queue appears full, but try anyway for keepalive
+                    // This is critical to prevent connection from going stale
+                    client.text(keepalive);
+                    LOG_D("Sent keepalive to client %u despite full queue", client.id());
+                }
+            }
+        }
+    }
 }
 
 String BrewWebServer::getContentType(const String& filename) {

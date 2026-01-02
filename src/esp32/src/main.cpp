@@ -1178,13 +1178,6 @@ void setup() {
     // Record server ready time
     serverReadyTime = millis();
     
-    // Initialize MQTT
-    Serial.println("[7/8] Initializing MQTT...");
-    // Serial.flush(); // Removed - can block on USB CDC
-    mqttClient->begin();
-    Serial.println("MQTT initialized OK");
-    // Serial.flush(); // Removed - can block on USB CDC
-    
     // Initialize Power Meter Manager
     Serial.println("[7.5/8] Initializing Power Meter...");
     // Serial.flush(); // Removed - can block on USB CDC
@@ -1192,7 +1185,7 @@ void setup() {
     Serial.println("Power Meter initialized OK");
     // Serial.flush(); // Removed - can block on USB CDC
     
-    // Set up MQTT command handler
+    // Set up MQTT command handler (before MQTT initialization)
     mqttClient->onCommand([](const char* cmd, JsonDocument& doc) {
         String cmdStr = cmd;
         
@@ -1329,6 +1322,40 @@ void setup() {
     Serial.print("Free heap after State: ");
     Serial.println(ESP.getFreeHeap());
     Serial.println("State Manager initialized OK");
+    // Serial.flush(); // Removed - can block on USB CDC
+    
+    // Sync MQTT settings from State Manager to MQTT client before initialization
+    // This ensures the MQTT client respects the enabled/disabled setting from State Manager
+    // IMPORTANT: This must happen after State.begin() so settings are loaded
+    if (mqttClient) {
+        const auto& mqttSettings = State.settings().mqtt;
+        MQTTConfig mqttConfig;
+        mqttConfig.enabled = mqttSettings.enabled;
+        strncpy(mqttConfig.broker, mqttSettings.broker, sizeof(mqttConfig.broker) - 1);
+        mqttConfig.broker[sizeof(mqttConfig.broker) - 1] = '\0';
+        mqttConfig.port = mqttSettings.port;
+        strncpy(mqttConfig.username, mqttSettings.username, sizeof(mqttConfig.username) - 1);
+        mqttConfig.username[sizeof(mqttConfig.username) - 1] = '\0';
+        strncpy(mqttConfig.password, mqttSettings.password, sizeof(mqttConfig.password) - 1);
+        mqttConfig.password[sizeof(mqttConfig.password) - 1] = '\0';
+        strncpy(mqttConfig.topic_prefix, mqttSettings.baseTopic, sizeof(mqttConfig.topic_prefix) - 1);
+        mqttConfig.topic_prefix[sizeof(mqttConfig.topic_prefix) - 1] = '\0';
+        mqttConfig.ha_discovery = mqttSettings.discovery;
+        // client_id and ha_device_id will be auto-generated if empty
+        mqttConfig.use_tls = false; // Not in MQTTSettings, use default
+        
+        if (mqttClient->setConfig(mqttConfig)) {
+            LOG_I("MQTT config synced from State Manager: enabled=%d", mqttConfig.enabled);
+        } else {
+            LOG_W("Failed to sync MQTT config from State Manager");
+        }
+    }
+    
+    // Initialize MQTT (after syncing config from State Manager)
+    Serial.println("[7/8] Initializing MQTT...");
+    // Serial.flush(); // Removed - can block on USB CDC
+    mqttClient->begin();
+    Serial.println("MQTT initialized OK");
     // Serial.flush(); // Removed - can block on USB CDC
     
     // Apply debug log level setting early (so boot logs are included)
@@ -1802,6 +1829,7 @@ void loop() {
     }
     
     // Periodic unified status broadcast to WebSocket clients (500ms for responsive UI)
+    // Only sends when something changes - WebSocket ping/pong handles keepalive
     if (millis() - lastStatusBroadcast > 500) {
         lastStatusBroadcast = millis();
         
@@ -1816,7 +1844,18 @@ void loop() {
             runtimeState().endUpdate();
             
             // Broadcast unified status (goes to both local and cloud clients)
+            // This only sends when something changed, on first connect, or periodic sync
             webServer->broadcastFullStatus(runtimeState().get());
+        }
+    }
+    
+    // Periodic WebSocket ping for keepalive (every 3 seconds)
+    // This keeps connections alive when device is idle and nothing changes
+    static unsigned long lastWsPing = 0;
+    if (millis() - lastWsPing > 3000) {
+        lastWsPing = millis();
+        if (webServer->getClientCount() > 0) {
+            webServer->sendPingToClients();
         }
     }
     
