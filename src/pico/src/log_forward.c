@@ -7,9 +7,11 @@
  */
 
 #include "log_forward.h"
+#include "logging.h"  // For logging_set_forward_enabled()
 #include "config_persistence.h"
 #include "protocol.h"
 #include "config.h"
+#include "pico/time.h"  // For time functions
 #include <stdarg.h>
 #include <string.h>
 #include <stdio.h>
@@ -20,6 +22,11 @@
 
 static bool g_enabled = false;
 static bool g_initialized = false;
+static bool g_pending_flash_write = false;
+static bool g_pending_flash_value = false;
+static uint32_t g_last_send_time = 0;
+static const uint32_t LOG_SEND_MIN_INTERVAL_MS = 2;  // Minimum 2ms between log sends (allows up to 500 logs/sec)
+                                                    // MSG_LOG doesn't require ACK, so we can be more permissive
 
 // =============================================================================
 // Public Functions
@@ -31,7 +38,8 @@ void log_forward_init(void) {
     g_initialized = true;
     
     if (g_enabled) {
-        LOG_PRINT("Log: Forwarding enabled (loaded from flash)\n");
+        // Use direct printf to avoid recursion during initialization
+        printf("Log: Forwarding enabled (loaded from flash)\n");
     }
 }
 
@@ -46,10 +54,23 @@ void log_forward_set_enabled(bool enabled) {
     
     g_enabled = enabled;
     
-    // Persist to flash
-    config_persistence_save_log_forwarding(enabled);
+    // Defer flash write to avoid blocking protocol handler
+    // Flash write will happen in log_forward_process() called from main loop
+    g_pending_flash_write = true;
+    g_pending_flash_value = enabled;
     
-    LOG_PRINT("Log: Forwarding %s\n", enabled ? "enabled" : "disabled");
+    // Use direct printf to avoid recursion - this log message should not be forwarded
+    // because we're in the middle of changing the forwarding state
+    printf("Log: Forwarding %s\n", enabled ? "enabled" : "disabled");
+}
+
+// Process pending flash writes (call from main loop, not from interrupt/protocol handler)
+void log_forward_process(void) {
+    if (g_pending_flash_write) {
+        g_pending_flash_write = false;
+        // Now safe to do blocking flash write from main loop
+        config_persistence_save_log_forwarding(g_pending_flash_value);
+    }
 }
 
 bool log_forward_is_enabled(void) {
@@ -61,7 +82,15 @@ void log_forward_send(uint8_t level, const char* message) {
         return;
     }
     
+    // Rate limiting: Don't send logs too frequently to prevent protocol flooding
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+    if (now - g_last_send_time < LOG_SEND_MIN_INTERVAL_MS) {
+        return;  // Skip this log to prevent flooding
+    }
+    g_last_send_time = now;
+    
     // Send via protocol
+    // Note: MSG_LOG is excluded from ACK tracking to prevent protocol overload
     protocol_send_log(level, message);
 }
 
@@ -85,7 +114,13 @@ void log_forward_handle_command(const uint8_t* payload, uint8_t length) {
     }
     
     bool enabled = payload[0] != 0;
-    log_forward_set_enabled(enabled);
+    
+    // Update both the log_forward state and the logging system's forwarding flag
+    // We call logging_set_forward_enabled() which will:
+    // 1. Set g_forward_enabled in logging.c
+    // 2. Call log_forward_set_enabled() which persists to flash
+    // The early return in log_forward_set_enabled() prevents infinite recursion
+    logging_set_forward_enabled(enabled);
     
     // Send ACK (we don't have seq here, but let's send general ACK)
     // The ESP32 will update its state based on the command it sent

@@ -42,7 +42,7 @@ void initBroadcastBuffers() {
 // Check availableForWriteAll() before sending to prevent queue overflow
 // which causes "Too many messages queued" and disconnects the client.
 static void broadcastLogInternal(AsyncWebSocket* ws, CloudConnection* cloudConnection, 
-                                 const char* level, const char* message) {
+                                 const char* level, const char* message, const char* source = "esp32") {
     // Defensive checks: ensure all required pointers are valid
     if (!message || !ws) return;
     
@@ -61,6 +61,7 @@ static void broadcastLogInternal(AsyncWebSocket* ws, CloudConnection* cloudConne
     doc["type"] = "log";
     doc["level"] = level ? level : "info";
     doc["message"] = message;
+    doc["source"] = source ? source : "esp32";  // Add source to distinguish Pico vs ESP32 logs
     doc["timestamp"] = millis();
     
     // Use buffer pool to avoid heap fragmentation
@@ -97,7 +98,13 @@ static void broadcastLogInternal(AsyncWebSocket* ws, CloudConnection* cloudConne
 // Direct message broadcast (no formatting) - for platform_log
 void BrewWebServer::broadcastLogMessage(const char* level, const char* message) {
     if (!message) return;
-    broadcastLogInternal(&_ws, _cloudConnection, level, message);
+    broadcastLogInternal(&_ws, _cloudConnection, level, message, "esp32");
+}
+
+// Broadcast log message with explicit source (for Pico logs)
+void BrewWebServer::broadcastLogMessageWithSource(const char* level, const char* message, const char* source) {
+    if (!message) return;
+    broadcastLogInternal(&_ws, _cloudConnection, level, message, source ? source : "esp32");
 }
 
 // C wrapper for platform_log to broadcast via WebSocket
@@ -126,7 +133,7 @@ void BrewWebServer::broadcastLog(const char* format, ...) {
     vsnprintf(message, sizeof(message), format, args);
     va_end(args);
     
-    broadcastLogInternal(&_ws, _cloudConnection, "info", message);
+    broadcastLogInternal(&_ws, _cloudConnection, "info", message, "esp32");
 }
 
 // Variadic version with explicit level (level, format, ...args)
@@ -140,7 +147,7 @@ void BrewWebServer::broadcastLogLevel(const char* level, const char* format, ...
     vsnprintf(message, sizeof(message), format, args);
     va_end(args);
     
-    broadcastLogInternal(&_ws, _cloudConnection, level, message);
+    broadcastLogInternal(&_ws, _cloudConnection, level, message, "esp32");
 }
 
 

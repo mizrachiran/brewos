@@ -154,7 +154,11 @@ BrewOSLogLevel stringToLogLevel(const char* str);
 // Forward declaration for WebSocket broadcast (defined in web_server_broadcast.cpp)
 extern "C" void platform_broadcast_log(const char* level, const char* message);
 
-// Helper to format and broadcast log message (used by LOG macros)
+// Helper function to check if debug logs should be broadcast (defined in main.cpp)
+extern bool should_broadcast_debug_logs(void);
+
+// Helper to format and broadcast log message (used by LOG macros for INFO/WARN/ERROR)
+// Optimized for non-DEBUG logs - no filtering needed
 static inline void _brewos_log_broadcast(const char* level, const char* fmt, ...) __attribute__((format(printf, 2, 3)));
 static inline void _brewos_log_broadcast(const char* level, const char* fmt, ...) {
     char buf[256];
@@ -163,6 +167,22 @@ static inline void _brewos_log_broadcast(const char* level, const char* fmt, ...
     vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
     platform_broadcast_log(level, buf);
+}
+
+// Helper to format and broadcast DEBUG log message (filters based on settings)
+// Separate function to avoid string comparison overhead for non-DEBUG logs
+static inline void _brewos_log_broadcast_debug(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
+static inline void _brewos_log_broadcast_debug(const char* fmt, ...) {
+    // Check setting before formatting (early return for better performance)
+    if (!should_broadcast_debug_logs()) {
+        return;  // Don't broadcast DEBUG logs if disabled
+    }
+    char buf[256];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    platform_broadcast_log("debug", buf);
 }
 
 #define LOG_TAG                 "BrewOS"
@@ -198,13 +218,15 @@ static inline void _brewos_log_broadcast(const char* level, const char* fmt, ...
     } \
 } while(0)
 
-// DEBUG - outputs if level >= DEBUG (no WebSocket broadcast to reduce traffic)
+// DEBUG - outputs if level >= DEBUG, broadcasts if debug logs enabled in settings
+// Uses separate broadcast function that checks settings (avoids string comparison overhead)
 #define LOG_D(fmt, ...)         do { \
     if (g_brewos_log_level >= BREWOS_LOG_DEBUG) { \
         Serial.printf("[%lu] D: " fmt "\n", millis(), ##__VA_ARGS__); \
         if (g_logManager && g_logManager->isEnabled()) { \
             log_manager_add_logf(BREWOS_LOG_DEBUG, LOG_SOURCE_ESP32, fmt, ##__VA_ARGS__); \
         } \
+        _brewos_log_broadcast_debug(fmt, ##__VA_ARGS__); \
     } \
 } while(0)
 #else

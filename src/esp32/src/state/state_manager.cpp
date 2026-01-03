@@ -1,4 +1,5 @@
 #include "state/state_manager.h"
+#include "config.h"  // For LOG_I macro
 #include "memory_utils.h"
 #include <LittleFS.h>
 #include <time.h>
@@ -403,11 +404,11 @@ void StateManager::saveSystemSettings() {
     _prefs.putBool("debugLogs", _settings.system.debugLogsEnabled);
     _prefs.putBool("picoLogFwd", _settings.system.picoLogForwardingEnabled);
     _prefs.end();  // This commits the changes to flash
-    Serial.printf("[State] System settings saved (setupComplete=%s, logBuffer=%s, debugLogs=%s, picoForwarding=%s)\n",
-                  _settings.system.setupComplete ? "true" : "false",
-                  _settings.system.logBufferEnabled ? "true" : "false",
-                  _settings.system.debugLogsEnabled ? "true" : "false",
-                  _settings.system.picoLogForwardingEnabled ? "true" : "false");
+    LOG_I("System settings saved (setupComplete=%s, logBuffer=%s, debugLogs=%s, picoForwarding=%s)",
+          _settings.system.setupComplete ? "true" : "false",
+          _settings.system.logBufferEnabled ? "true" : "false",
+          _settings.system.debugLogsEnabled ? "true" : "false",
+          _settings.system.picoLogForwardingEnabled ? "true" : "false");
     notifySettingsChanged();
 }
 
@@ -505,7 +506,7 @@ void StateManager::saveStats() {
     
     _prefs.end();
     
-    Serial.println("[State] Stats saved");
+    LOG_I("Stats saved");
 }
 
 void StateManager::recordShot() {

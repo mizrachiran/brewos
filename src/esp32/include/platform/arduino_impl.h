@@ -30,6 +30,10 @@ static inline void platform_delay(uint32_t ms) {
 // This is safe - no circular dependency (log_manager.h includes config.h, but config.h doesn't include platform.h)
 #include "log_manager.h"
 
+// Include state_manager.h to check debug logs setting
+// This is safe - state_manager.h doesn't include platform.h
+#include "state/state_manager.h"
+
 // Forward declaration for web server (defined in main.cpp)
 // Note: We can't include web_server.h here due to potential circular dependencies,
 // so we'll use a function pointer approach or check at runtime
@@ -77,11 +81,18 @@ static inline void platform_log(log_level_t level, const char* fmt, ...) {
     // This avoids type conversion issues between log_level_t and BrewOSLogLevel
     log_manager_add_logf((int)level, LOG_SOURCE_ESP32, "%s", buf);
     
-    // 4. WebSocket broadcast (INFO and above to reduce traffic)
+    // 4. WebSocket broadcast (INFO and above, or DEBUG if debug logs enabled)
     // This sends logs to connected UI clients in real-time
-    if (level >= BREWOS_LOG_INFO) {
+    bool shouldBroadcast = (level >= BREWOS_LOG_INFO);
+    if (level == BREWOS_LOG_DEBUG) {
+        // Check if debug logs are enabled in settings
+        shouldBroadcast = State.settings().system.debugLogsEnabled;
+    }
+    
+    if (shouldBroadcast) {
         const char* level_name;
         switch(level) {
+            case BREWOS_LOG_DEBUG: level_name = "debug"; break;
             case BREWOS_LOG_INFO:  level_name = "info"; break;
             case BREWOS_LOG_WARN:  level_name = "warn"; break;
             case BREWOS_LOG_ERROR: level_name = "error"; break;

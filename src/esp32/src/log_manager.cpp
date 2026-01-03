@@ -1,10 +1,17 @@
 #include "log_manager.h"
 #include "config.h"  // For BrewOSLogLevel enum definition
 #include "protocol_defs.h"
+#include "state/state_manager.h"  // For State macro to check debug logs setting
+#include "web_server.h"  // For BrewWebServer
 #include <esp_heap_caps.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <stdarg.h>
+
+// Forward declaration for web server (defined in main.cpp)
+// Helper function to broadcast log via WebSocket (defined in web_server_broadcast.cpp)
+extern "C" void platform_broadcast_log(const char* level, const char* message);
+extern BrewWebServer* webServer;  // Global webServer pointer from main.cpp
 
 // Global instance pointer
 LogManager* g_logManager = nullptr;
@@ -303,7 +310,31 @@ void LogManager::handlePicoLog(const uint8_t* payload, size_t length) {
     memcpy(message, &payload[1], msgLen);
     message[msgLen] = '\0';
     
+    // Add to log buffer
     addLog(level, LOG_SOURCE_PICO, message);
+    
+    // Also broadcast via WebSocket (same logic as ESP32 logs)
+    // INFO and above, or DEBUG if debug logs enabled
+    bool shouldBroadcast = (level >= BREWOS_LOG_INFO);
+    if (level == BREWOS_LOG_DEBUG) {
+        // Check if debug logs are enabled in settings
+        shouldBroadcast = State.settings().system.debugLogsEnabled;
+    }
+    
+    if (shouldBroadcast) {
+        const char* level_name;
+        switch(level) {
+            case BREWOS_LOG_DEBUG: level_name = "debug"; break;
+            case BREWOS_LOG_INFO:  level_name = "info"; break;
+            case BREWOS_LOG_WARN:  level_name = "warn"; break;
+            case BREWOS_LOG_ERROR: level_name = "error"; break;
+            default: level_name = "info"; break;
+        }
+        // Broadcast Pico logs with source="pico" to distinguish from ESP32 logs
+        if (webServer) {
+            webServer->broadcastLogMessageWithSource(level_name, message, "pico");
+        }
+    }
 }
 
 // Helper function for LOG macros (takes int to avoid circular dependency)

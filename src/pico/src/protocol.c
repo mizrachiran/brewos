@@ -267,7 +267,9 @@ static bool send_packet(uint8_t type, const uint8_t* payload, uint8_t length) {
     }
     
     // Check if this is a command that requires ACK tracking
-    bool needs_ack = (type >= MSG_CMD_SET_TEMP && type <= MSG_LOG);
+    // MSG_LOG is excluded - logs are informational and don't need ACK confirmation
+    // This prevents log flooding from overwhelming the protocol
+    bool needs_ack = (type >= MSG_CMD_SET_TEMP && type < MSG_LOG);
     
     // If backpressure is active and this needs ACK, check if we can send
     if (needs_ack && g_backpressure_active) {

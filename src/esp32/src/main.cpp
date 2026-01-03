@@ -102,11 +102,17 @@ BrewOSLogLevel g_brewos_log_level = BREWOS_LOG_INFO;  // Default to INFO level
 
 void setLogLevel(BrewOSLogLevel level) {
     g_brewos_log_level = level;
-    Serial.printf("[Log] Level set to: %s (%d)\n", logLevelToString(level), level);
+    LOG_I("Level set to: %s (%d)", logLevelToString(level), level);
 }
 
 BrewOSLogLevel getLogLevel() {
     return g_brewos_log_level;
+}
+
+// Helper function to check if debug logs should be broadcast via WebSocket
+// Used by LOG_D macro in config.h
+bool should_broadcast_debug_logs(void) {
+    return State.settings().system.debugLogsEnabled;
 }
 
 const char* logLevelToString(BrewOSLogLevel level) {
@@ -496,8 +502,11 @@ static void onPicoPacket(const PicoPacket& packet) {
 
 static void handlePicoACK(const PicoPacket& packet) {
     // Command acknowledgment from Pico
-    if (packet.length >= 1) {
-        uint8_t resultCode = packet.payload[0];
+    // ACK payload structure: [cmd_type(1)] [cmd_seq(1)] [result(1)] [reserved(1)]
+    if (packet.length >= 3) {
+        uint8_t cmdType = packet.payload[0];  // Original command type
+        uint8_t cmdSeq = packet.payload[1];   // Sequence number
+        uint8_t resultCode = packet.payload[2]; // Actual result code
         // Only log non-success acknowledgments to reduce noise
         if (resultCode != ACK_SUCCESS) {
             const char* errorMsg = "Unknown error";
@@ -509,7 +518,7 @@ static void handlePicoACK(const PicoPacket& packet) {
                 case ACK_ERROR_BUSY:      errorMsg = "System busy"; break;
                 case ACK_ERROR_NOT_READY: errorMsg = "Not ready"; break;
             }
-            LOG_W("Pico ACK error: %s (code=0x%02X)", errorMsg, resultCode);
+            LOG_W("Pico ACK error: %s (cmd=0x%02X, result=0x%02X)", errorMsg, cmdType, resultCode);
         }
     }
 }

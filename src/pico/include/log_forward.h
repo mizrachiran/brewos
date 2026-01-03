@@ -51,5 +51,11 @@ void log_forward_sendf(uint8_t level, const char* format, ...);
  */
 void log_forward_handle_command(const uint8_t* payload, uint8_t length);
 
+/**
+ * Process pending flash writes (call from main loop)
+ * Deferred flash writes to avoid blocking protocol handler
+ */
+void log_forward_process(void);
+
 #endif // LOG_FORWARD_H
 

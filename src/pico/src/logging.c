@@ -66,10 +66,17 @@ log_level_t logging_get_level(void) {
 }
 
 void logging_set_forward_enabled(bool enable) {
-    g_forward_enabled = enable;
+    // IMPORTANT: Set g_forward_enabled AFTER log_forward_set_enabled() completes
+    // This ensures flash write completes before any logs try to forward
+    // Prevents crashes from forwarding during flash operations
     if (enable) {
         log_forward_set_enabled(true);
+        // Only enable forwarding in logging system after flash write is complete
+        g_forward_enabled = true;
     } else {
+        // Disable forwarding first to prevent new logs from trying to forward
+        g_forward_enabled = false;
+        // Then update the persisted state
         log_forward_set_enabled(false);
     }
 }
@@ -180,6 +187,7 @@ void log_message_va(log_level_t level, const char* format, va_list args) {
         // ESP32 forwarding: Try to send immediately if enabled
         // log_forward_send() should be non-blocking, but if it blocks,
         // the ring buffer ensures we don't block the control loop
+        // Check both flags: g_forward_enabled (logging system) and log_forward_is_enabled() (persisted state)
         if (g_forward_enabled && log_forward_is_enabled()) {
             // Map log level to log_forward level
             uint8_t fwd_level = LOG_FWD_INFO;
@@ -190,6 +198,7 @@ void log_message_va(log_level_t level, const char* format, va_list args) {
                 case LOG_LEVEL_DEBUG: fwd_level = LOG_FWD_DEBUG; break;
                 case LOG_LEVEL_TRACE: fwd_level = LOG_FWD_DEBUG; break;
             }
+            // Forward the log message to ESP32
             log_forward_send(fwd_level, buffer);
         }
     } else {

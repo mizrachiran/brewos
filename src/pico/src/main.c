@@ -155,12 +155,10 @@ void core1_main(void) {
             protocol_stats_t stats;
             protocol_get_stats(&stats);
             
-            // Log protocol health metrics
-            LOG_INFO("Protocol: RX=%lu TX=%lu CRC_err=%u PKT_err=%u TO=%u\n",
+            // Log protocol health metrics (combined into one message to avoid rate limiting drops)
+            LOG_INFO("Protocol: RX=%lu TX=%lu CRC_err=%u PKT_err=%u TO=%u | Retry=%u ACK_TO=%u NACK=%u Pending=%u\n",
                      stats.packets_received, stats.packets_sent,
-                     stats.crc_errors, stats.packet_errors, stats.timeout_errors);
-            
-            LOG_INFO("Protocol: Retry=%u ACK_TO=%u NACK=%u Pending=%u\n",
+                     stats.crc_errors, stats.packet_errors, stats.timeout_errors,
                      stats.retries, stats.ack_timeouts,
                      stats.nacks_received, stats.pending_cmd_count);
             
@@ -183,6 +181,9 @@ void core1_main(void) {
         // Process pending log messages from ring buffer (non-blocking logging)
         // This drains messages queued by Core 0 to prevent printf() from blocking
         logging_process_pending();
+        
+        // Process pending flash writes for log forwarding (deferred to avoid blocking protocol handler)
+        log_forward_process();
         
         // Signal that Core 1 is alive (for watchdog monitoring by Core 0)
         g_core1_alive = true;
@@ -443,6 +444,18 @@ int main(void) {
                     elec_state.max_current_draw);
     }
     
+    // Initialize log forwarding (dev mode feature)
+    // Must be done after config_persistence_init() so flash is available
+    // Note: Boot logs (lines 348-407) happen before this, so they won't be forwarded
+    // But all subsequent logs will be forwarded if enabled
+    log_forward_init();
+    // Enable forwarding in logging system if it was enabled in flash
+    if (log_forward_is_enabled()) {
+        logging_set_forward_enabled(true);
+        // Use direct printf to avoid recursion during initialization
+        printf("Log forwarding enabled (loaded from flash)\n");
+    }
+    
     // Initialize control
     control_init();
     DEBUG_PRINT("Control initialized\n");
@@ -458,10 +471,6 @@ int main(void) {
     // Initialize cleaning mode
     cleaning_init();
     DEBUG_PRINT("Cleaning mode initialized\n");
-    
-    // Initialize log forwarding (dev mode feature)
-    log_forward_init();
-    DEBUG_PRINT("Log forwarding initialized\n");
     
     // Note: Statistics are now tracked by ESP32 (has NTP for accurate timestamps)
     // Pico only sends brew completion events to ESP32 via alarms
