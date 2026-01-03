@@ -388,7 +388,20 @@ bool protocol_send_boot(void) {
     };
     // Copy build date/time (compile-time constants)
     strncpy(boot.build_date, BUILD_DATE, sizeof(boot.build_date) - 1);
-    strncpy(boot.build_time, BUILD_TIME, sizeof(boot.build_time) - 1);
+    // Convert BUILD_TIME from "HH:MM:SS" to "HHMMSS" format (remove colons)
+    const char* time_str = BUILD_TIME;
+    if (strlen(time_str) >= 8) {  // "HH:MM:SS" format
+        boot.build_time[0] = time_str[0];  // H
+        boot.build_time[1] = time_str[1];  // H
+        boot.build_time[2] = time_str[3];  // M (skip colon)
+        boot.build_time[3] = time_str[4];  // M
+        boot.build_time[4] = time_str[6];  // S (skip colon)
+        boot.build_time[5] = time_str[7];  // S
+        boot.build_time[6] = '\0';
+    } else {
+        // Fallback: copy as-is if format is unexpected
+        strncpy(boot.build_time, BUILD_TIME, sizeof(boot.build_time) - 1);
+    }
     
     bool result = send_packet(MSG_BOOT, (const uint8_t*)&boot, sizeof(boot_payload_t));
     if (!result) {

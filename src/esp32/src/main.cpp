@@ -172,6 +172,43 @@ void parsePicoStatus(const uint8_t* payload, uint8_t length);
 void handleEncoderEvent(int32_t diff, button_state_t btn);
 static void onPicoPacket(const PicoPacket& packet);
 
+// Setup helper functions
+static void setupEarlyInitialization();
+static void setupCheckPendingOTA();
+static void setupInitializeFilesystem();
+static void setupCreateGlobalObjects();
+static void setupInitializeDisplayAndEncoder();
+static void setupInitializeUI();
+static void setupInitializePicoUART();
+static void setupWaitForPicoConnection();
+static void setupRequestPicoBootInfo(bool picoConnected);
+static void setupInitializeWiFi();
+static void setupInitializeWebServer();
+static void setupInitializeMQTT();
+static void setupInitializeScaleAndBBW();
+static void setupInitializeStateManager();
+static void setupInitializeLogManager();
+static void setupInitializeCloudConnection();
+static void setupInitializeNotificationManager();
+
+// Loop helper functions
+static void loopCoreSystemUpdates();
+static void loopOptionalServiceUpdates();
+static void loopUpdateConnectionStates();
+static void loopHandlePicoBootInfo();
+static void loopUpdateBrewByWeight();
+static void loopUpdateUI();
+static void loopUpdateMQTTStatus();
+static void loopPeriodicTasks();
+static void loopHandleWiFiTasks();
+static void loopMonitorMemoryAndTiming();
+
+// Pico packet handler functions
+static void handlePicoACK(const PicoPacket& packet);
+static void handlePicoAlarm(const PicoPacket& packet);
+static void handlePicoEnvConfig(const PicoPacket& packet);
+static void handlePicoDiagnostics(const PicoPacket& packet);
+
 // State management functions now provided by RuntimeState class
 // Use runtimeState() singleton for all state access
 
@@ -424,208 +461,25 @@ static void onPicoPacket(const PicoPacket& packet) {
     // Handle message types that are tightly coupled to main.cpp state
     // These remain in main.cpp for now but could be moved to handler in future refactoring
     switch (packet.type) {
-        
-        case MSG_ACK: {
-            // Command acknowledgment from Pico
-            if (packet.length >= 1) {
-                uint8_t resultCode = packet.payload[0];
-                // Only log non-success acknowledgments to reduce noise
-                if (resultCode != ACK_SUCCESS) {
-                    const char* errorMsg = "Unknown error";
-                    switch (resultCode) {
-                        case ACK_ERROR_INVALID:    errorMsg = "Invalid command"; break;
-                        case ACK_ERROR_REJECTED:   errorMsg = "Command rejected"; break;
-                        case ACK_ERROR_FAILED:    errorMsg = "Command failed"; break;
-                        case ACK_ERROR_TIMEOUT:   errorMsg = "Timeout"; break;
-                        case ACK_ERROR_BUSY:      errorMsg = "System busy"; break;
-                        case ACK_ERROR_NOT_READY: errorMsg = "Not ready"; break;
-                    }
-                    LOG_W("Pico ACK error: %s (code=0x%02X)", errorMsg, resultCode);
-                }
-            }
+        case MSG_ACK:
+            handlePicoACK(packet);
             break;
-        }
-        
-        
-        case MSG_ALARM: {
-            uint8_t alarmCode = packet.payload[0];
-            uint32_t now = millis();
-            
-            // Debounce: Require stable alarm state before processing changes
-            // This prevents rapid toggling between alarm codes (e.g., 0x05 <-> 0x00)
-            // Strategy: Track the last received code and only process when it's been stable
-            bool shouldProcess = false;
-            
-            if (alarmCode != lastReceivedAlarmCode) {
-                // New alarm code received - reset debounce timer
-                lastReceivedAlarmCode = alarmCode;
-                lastAlarmChangeTime = now;
-                // Don't process yet - wait for it to be stable
-            } else if ((now - lastAlarmChangeTime) >= ALARM_DEBOUNCE_MS) {
-                // Same code received for debounce period - it's stable, process it
-                shouldProcess = true;
-            }
-            // Otherwise: same code but not stable yet - continue waiting
-            
-            if (!shouldProcess) {
-                // Ignore this alarm message - waiting for stable state
-                break;
-            }
-            
-            // Process the stable alarm code
-            lastProcessedAlarmCode = alarmCode;
-            
-            // Check current state before updating (need to read first)
-            const ui_state_t& currentState = runtimeState().get();
-            bool wasAlarmActive = currentState.alarm_active;
-            uint8_t currentAlarmCode = currentState.alarm_code;
-            
-            if (alarmCode == ALARM_NONE) {
-                // ALARM_NONE (0x00) means no alarm - clear the alarm state
-                // Only log if we're actually transitioning from a REAL alarm (non-zero) to cleared
-                if (wasAlarmActive && currentAlarmCode != ALARM_NONE) {
-                    LOG_I("Pico alarm cleared (was: 0x%02X)", currentAlarmCode);
-                    // Defensive: Check webServer pointer and use try-catch equivalent (null check)
-                    if (webServer) {
-                        // Use a safer approach - format the message first to avoid variadic issues
-                        char alarmMsg[64];
-                        snprintf(alarmMsg, sizeof(alarmMsg), "Pico alarm cleared");
-                        webServer->broadcastLog(alarmMsg, "info");
-                    }
-                }
-                // Always update state, but only log when transitioning from real alarm
-                ui_state_t& state = runtimeState().beginUpdate();
-                state.alarm_active = false;
-                state.alarm_code = ALARM_NONE;
-                runtimeState().endUpdate();
-            } else {
-                // Actual alarm - log and set alarm state
-                // Only log if this is a new alarm or different from current
-                if (!wasAlarmActive || currentAlarmCode != alarmCode) {
-                    LOG_W("PICO ALARM: 0x%02X", alarmCode);
-                    // Defensive: Format message first to avoid variadic argument issues
-                    if (webServer) {
-                        char alarmMsg[64];
-                        snprintf(alarmMsg, sizeof(alarmMsg), "Pico ALARM: 0x%02X", alarmCode);
-                        webServer->broadcastLog(alarmMsg, "error");
-                    }
-                }
-                ui_state_t& state = runtimeState().beginUpdate();
-                state.alarm_active = true;
-                state.alarm_code = alarmCode;
-                runtimeState().endUpdate();
-            }
+        case MSG_ALARM:
+            handlePicoAlarm(packet);
             break;
-        }
-        
         case MSG_CONFIG:
             LOG_I("Received config from Pico");
             if (webServer) webServer->broadcastLog("Config received from Pico");
             break;
-            
-        case MSG_ENV_CONFIG: {
-            // Pico is the source of truth for power settings
-            if (packet.length >= 18) {
-                uint16_t voltage = packet.payload[0] | (packet.payload[1] << 8);
-                float max_current = 0;
-                memcpy(&max_current, &packet.payload[2], sizeof(float));
-                
-                // Store in machineState for use in broadcasts (Pico is source of truth)
-                // Note: We don't persist these on ESP32 - Pico handles persistence
-                State.settings().power.mainsVoltage = voltage;
-                State.settings().power.maxCurrent = max_current;
-                
-                LOG_I("Env config from Pico: %dV, %.1fA max", voltage, max_current);
-                if (webServer) {
-                    webServer->broadcastLogLevel("info", "Env config: %dV, %.1fA max", voltage, max_current);
-                    // Broadcast updated device info so UI refreshes
-                    webServer->broadcastDeviceInfo();
-                }
-            }
+        case MSG_ENV_CONFIG:
+            handlePicoEnvConfig(packet);
             break;
-        }
-            
         case MSG_DEBUG_RESP:
             LOG_D("Debug response from Pico");
             break;
-            
-        case MSG_DIAGNOSTICS: {
-            // Use pre-allocated buffer to avoid heap fragmentation
-            // Thread-safe mutex protection for concurrent access
-            if (diagnosticBufferMutex == nullptr) {
-                // Mutex not initialized yet, skip (shouldn't happen in normal operation)
-                LOG_W("Diagnostic buffer mutex not initialized, skipping message");
-                break;
-            }
-            
-            if (xSemaphoreTake(diagnosticBufferMutex, pdMS_TO_TICKS(100)) != pdTRUE) {
-                LOG_W("Diagnostic buffer in use, skipping message");
-                break;
-            }
-            
-            if (packet.length == 8) {
-                // Diagnostic header
-                LOG_I("Diag header: tests=%d, pass=%d, fail=%d, warn=%d, skip=%d, complete=%d",
-                      packet.payload[0], packet.payload[1], packet.payload[2],
-                      packet.payload[3], packet.payload[4], packet.payload[5]);
-                
-                #pragma GCC diagnostic push
-                #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-                StaticJsonDocument<256> doc;
-                #pragma GCC diagnostic pop
-                doc["type"] = "diagnostics_header";
-                doc["testCount"] = packet.payload[0];
-                doc["passCount"] = packet.payload[1];
-                doc["failCount"] = packet.payload[2];
-                doc["warnCount"] = packet.payload[3];
-                doc["skipCount"] = packet.payload[4];
-                doc["isComplete"] = packet.payload[5] != 0;
-                doc["durationMs"] = packet.payload[6] | (packet.payload[7] << 8);
-                
-                size_t jsonSize = measureJson(doc) + 1;
-                if (jsonSize <= sizeof(diagnosticJsonBuffer) && webServer) {
-                    serializeJson(doc, diagnosticJsonBuffer, sizeof(diagnosticJsonBuffer));
-                    webServer->broadcastRaw(diagnosticJsonBuffer);
-                } else {
-                    LOG_W("Diagnostic JSON too large for buffer: %zu bytes", jsonSize);
-                }
-                
-                if (packet.payload[5] && webServer) {
-                    webServer->broadcastLog("Diagnostics complete");
-                }
-            } else if (packet.length >= 32) {
-                // Diagnostic result
-                LOG_I("Diag result: test=%d, status=%d", packet.payload[0], packet.payload[1]);
-                
-                #pragma GCC diagnostic push
-                #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-                StaticJsonDocument<384> doc;
-                #pragma GCC diagnostic pop
-                doc["type"] = "diagnostics_result";
-                doc["testId"] = packet.payload[0];
-                doc["status"] = packet.payload[1];
-                doc["rawValue"] = (int16_t)(packet.payload[2] | (packet.payload[3] << 8));
-                doc["expectedMin"] = (int16_t)(packet.payload[4] | (packet.payload[5] << 8));
-                doc["expectedMax"] = (int16_t)(packet.payload[6] | (packet.payload[7] << 8));
-                
-                char msg[25];
-                memcpy(msg, &packet.payload[8], 24);
-                msg[24] = '\0';
-                doc["message"] = msg;
-                
-                size_t jsonSize = measureJson(doc) + 1;
-                if (jsonSize <= sizeof(diagnosticJsonBuffer) && webServer) {
-                    serializeJson(doc, diagnosticJsonBuffer, sizeof(diagnosticJsonBuffer));
-                    webServer->broadcastRaw(diagnosticJsonBuffer);
-                } else {
-                    LOG_W("Diagnostic JSON too large for buffer: %zu bytes", jsonSize);
-                }
-            }
-            
-            xSemaphoreGive(diagnosticBufferMutex);
+        case MSG_DIAGNOSTICS:
+            handlePicoDiagnostics(packet);
             break;
-        }
-        
         case MSG_LOG: {
             // Log message from Pico - forward to log manager
             if (g_logManager && packet.length > 0) {
@@ -633,7 +487,6 @@ static void onPicoPacket(const PicoPacket& packet) {
             }
             break;
         }
-            
         default:
             // Only log unknown packet types (not every packet)
             LOG_W("Unknown packet type: 0x%02X, len=%d, seq=%d", 
@@ -641,7 +494,194 @@ static void onPicoPacket(const PicoPacket& packet) {
     }
 }
 
-void setup() {
+static void handlePicoACK(const PicoPacket& packet) {
+    // Command acknowledgment from Pico
+    if (packet.length >= 1) {
+        uint8_t resultCode = packet.payload[0];
+        // Only log non-success acknowledgments to reduce noise
+        if (resultCode != ACK_SUCCESS) {
+            const char* errorMsg = "Unknown error";
+            switch (resultCode) {
+                case ACK_ERROR_INVALID:    errorMsg = "Invalid command"; break;
+                case ACK_ERROR_REJECTED:   errorMsg = "Command rejected"; break;
+                case ACK_ERROR_FAILED:    errorMsg = "Command failed"; break;
+                case ACK_ERROR_TIMEOUT:   errorMsg = "Timeout"; break;
+                case ACK_ERROR_BUSY:      errorMsg = "System busy"; break;
+                case ACK_ERROR_NOT_READY: errorMsg = "Not ready"; break;
+            }
+            LOG_W("Pico ACK error: %s (code=0x%02X)", errorMsg, resultCode);
+        }
+    }
+}
+
+static void handlePicoAlarm(const PicoPacket& packet) {
+    uint8_t alarmCode = packet.payload[0];
+    uint32_t now = millis();
+    
+    // Debounce: Require stable alarm state before processing changes
+    // This prevents rapid toggling between alarm codes (e.g., 0x05 <-> 0x00)
+    // Strategy: Track the last received code and only process when it's been stable
+    bool shouldProcess = false;
+    
+    if (alarmCode != lastReceivedAlarmCode) {
+        // New alarm code received - reset debounce timer
+        lastReceivedAlarmCode = alarmCode;
+        lastAlarmChangeTime = now;
+        // Don't process yet - wait for it to be stable
+    } else if ((now - lastAlarmChangeTime) >= ALARM_DEBOUNCE_MS) {
+        // Same code received for debounce period - it's stable, process it
+        shouldProcess = true;
+    }
+    // Otherwise: same code but not stable yet - continue waiting
+    
+    if (!shouldProcess) {
+        // Ignore this alarm message - waiting for stable state
+        return;
+    }
+    
+    // Process the stable alarm code
+    lastProcessedAlarmCode = alarmCode;
+    
+    // Check current state before updating (need to read first)
+    const ui_state_t& currentState = runtimeState().get();
+    bool wasAlarmActive = currentState.alarm_active;
+    uint8_t currentAlarmCode = currentState.alarm_code;
+    
+    if (alarmCode == ALARM_NONE) {
+        // ALARM_NONE (0x00) means no alarm - clear the alarm state
+        // Only log if we're actually transitioning from a REAL alarm (non-zero) to cleared
+        if (wasAlarmActive && currentAlarmCode != ALARM_NONE) {
+            LOG_I("Pico alarm cleared (was: 0x%02X)", currentAlarmCode);
+            // Defensive: Check webServer pointer and use try-catch equivalent (null check)
+            if (webServer) {
+                // Use a safer approach - format the message first to avoid variadic issues
+                char alarmMsg[64];
+                snprintf(alarmMsg, sizeof(alarmMsg), "Pico alarm cleared");
+                webServer->broadcastLog(alarmMsg, "info");
+            }
+        }
+        // Always update state, but only log when transitioning from real alarm
+        ui_state_t& state = runtimeState().beginUpdate();
+        state.alarm_active = false;
+        state.alarm_code = ALARM_NONE;
+        runtimeState().endUpdate();
+    } else {
+        // Actual alarm - log and set alarm state
+        // Only log if this is a new alarm or different from current
+        if (!wasAlarmActive || currentAlarmCode != alarmCode) {
+            LOG_W("PICO ALARM: 0x%02X", alarmCode);
+            // Defensive: Format message first to avoid variadic argument issues
+            if (webServer) {
+                char alarmMsg[64];
+                snprintf(alarmMsg, sizeof(alarmMsg), "Pico ALARM: 0x%02X", alarmCode);
+                webServer->broadcastLog(alarmMsg, "error");
+            }
+        }
+        ui_state_t& state = runtimeState().beginUpdate();
+        state.alarm_active = true;
+        state.alarm_code = alarmCode;
+        runtimeState().endUpdate();
+    }
+}
+
+static void handlePicoEnvConfig(const PicoPacket& packet) {
+    // Pico is the source of truth for power settings
+    if (packet.length >= 18) {
+        uint16_t voltage = packet.payload[0] | (packet.payload[1] << 8);
+        float max_current = 0;
+        memcpy(&max_current, &packet.payload[2], sizeof(float));
+        
+        // Store in machineState for use in broadcasts (Pico is source of truth)
+        // Note: We don't persist these on ESP32 - Pico handles persistence
+        State.settings().power.mainsVoltage = voltage;
+        State.settings().power.maxCurrent = max_current;
+        
+        LOG_I("Env config from Pico: %dV, %.1fA max", voltage, max_current);
+        if (webServer) {
+            webServer->broadcastLogLevel("info", "Env config: %dV, %.1fA max", voltage, max_current);
+            // Broadcast updated device info so UI refreshes
+            webServer->broadcastDeviceInfo();
+        }
+    }
+}
+
+static void handlePicoDiagnostics(const PicoPacket& packet) {
+    // Use pre-allocated buffer to avoid heap fragmentation
+    // Thread-safe mutex protection for concurrent access
+    if (diagnosticBufferMutex == nullptr) {
+        // Mutex not initialized yet, skip (shouldn't happen in normal operation)
+        LOG_W("Diagnostic buffer mutex not initialized, skipping message");
+        return;
+    }
+    
+    if (xSemaphoreTake(diagnosticBufferMutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+        LOG_W("Diagnostic buffer in use, skipping message");
+        return;
+    }
+    
+    if (packet.length == 8) {
+        // Diagnostic header
+        LOG_I("Diag header: tests=%d, pass=%d, fail=%d, warn=%d, skip=%d, complete=%d",
+              packet.payload[0], packet.payload[1], packet.payload[2],
+              packet.payload[3], packet.payload[4], packet.payload[5]);
+        
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+        StaticJsonDocument<256> doc;
+        #pragma GCC diagnostic pop
+        doc["type"] = "diagnostics_header";
+        doc["testCount"] = packet.payload[0];
+        doc["passCount"] = packet.payload[1];
+        doc["failCount"] = packet.payload[2];
+        doc["warnCount"] = packet.payload[3];
+        doc["skipCount"] = packet.payload[4];
+        doc["isComplete"] = packet.payload[5] != 0;
+        doc["durationMs"] = packet.payload[6] | (packet.payload[7] << 8);
+        
+        size_t jsonSize = measureJson(doc) + 1;
+        if (jsonSize <= sizeof(diagnosticJsonBuffer) && webServer) {
+            serializeJson(doc, diagnosticJsonBuffer, sizeof(diagnosticJsonBuffer));
+            webServer->broadcastRaw(diagnosticJsonBuffer);
+        } else {
+            LOG_W("Diagnostic JSON too large for buffer: %zu bytes", jsonSize);
+        }
+        
+        if (packet.payload[5] && webServer) {
+            webServer->broadcastLog("Diagnostics complete");
+        }
+    } else if (packet.length >= 32) {
+        // Diagnostic result
+        LOG_I("Diag result: test=%d, status=%d", packet.payload[0], packet.payload[1]);
+        
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+        StaticJsonDocument<384> doc;
+        #pragma GCC diagnostic pop
+        doc["type"] = "diagnostics_result";
+        doc["testId"] = packet.payload[0];
+        doc["status"] = packet.payload[1];
+        doc["rawValue"] = (int16_t)(packet.payload[2] | (packet.payload[3] << 8));
+        doc["expectedMin"] = (int16_t)(packet.payload[4] | (packet.payload[5] << 8));
+        doc["expectedMax"] = (int16_t)(packet.payload[6] | (packet.payload[7] << 8));
+        
+        char msg[25];
+        memcpy(msg, &packet.payload[8], 24);
+        msg[24] = '\0';
+        doc["message"] = msg;
+        
+        size_t jsonSize = measureJson(doc) + 1;
+        if (jsonSize <= sizeof(diagnosticJsonBuffer) && webServer) {
+            serializeJson(doc, diagnosticJsonBuffer, sizeof(diagnosticJsonBuffer));
+            webServer->broadcastRaw(diagnosticJsonBuffer);
+        } else {
+            LOG_W("Diagnostic JSON too large for buffer: %zu bytes", jsonSize);
+        }
+    }
+    
+    xSemaphoreGive(diagnosticBufferMutex);
+}
+
+static void setupEarlyInitialization() {
     // Turn on backlight immediately so user knows device is running
     // Backlight is GPIO7, active LOW (LOW = ON)
     pinMode(7, OUTPUT);
@@ -722,7 +762,9 @@ void setup() {
     } else {
         Serial.println("NVS initialized OK");
     }
-    
+}
+
+static void setupCheckPendingOTA() {
     // =========================================================================
     // EARLY PENDING OTA CHECK - Before heavy initialization
     // If there's a pending OTA, do minimal boot to preserve memory
@@ -842,7 +884,9 @@ void setup() {
     // =========================================================================
     // END EARLY PENDING OTA CHECK - Continue normal boot
     // =========================================================================
-    
+}
+
+static void setupInitializeFilesystem() {
     // Initialize LittleFS (needed by State, WebServer, etc.)
     Serial.println("[2/8] Initializing LittleFS...");
     // Use 10 max open files (reduced from 15 to save heap)
@@ -862,7 +906,9 @@ void setup() {
     // Log Manager is initialized but NOT enabled by default
     // Buffer is only allocated when enabled via settings (dev mode feature)
     // This is done later after State is loaded, to check the setting
-    
+}
+
+static void setupCreateGlobalObjects() {
     // Turn on backlight so user knows device is running
     // IMPORTANT: Backlight is ACTIVE LOW on VIEWESMART UEDX48480021-MD80E!
     Serial.println("[3/8] Turning on backlight...");
@@ -920,7 +966,9 @@ void setup() {
     
     Serial.println("All global objects created OK");
     // Serial.flush(); // Removed - can block on USB CDC
-    
+}
+
+static void setupInitializeDisplayAndEncoder() {
     // Initialize display (PSRAM enabled for RGB frame buffer)
     // Now using lower PCLK (8 MHz) and bounce buffer for WiFi compatibility
     Serial.println("[4/8] Initializing display...");
@@ -938,7 +986,9 @@ void setup() {
         Serial.println("Encoder initialized OK");
     }
     encoder.setCallback(handleEncoderEvent);
-    
+}
+
+static void setupInitializeUI() {
     // Check if WiFi setup is needed BEFORE initializing UI
     // This ensures the setup screen shows immediately if no credentials exist
     Serial.println("[4.7/8] Checking WiFi credentials...");
@@ -969,7 +1019,9 @@ void setup() {
         }
         display.update();
     }
-    
+}
+
+static void setupUICallbacks() {
     // UI callbacks
     ui.onTurnOn([]() {
         LOG_I("UI: Turn on requested");
@@ -1011,7 +1063,9 @@ void setup() {
         wifiManager->setStaticIP(false);
         wifiManager->startAP();
     });
-    
+}
+
+static void setupInitializePicoUART() {
     // Initialize Pico UART
     Serial.println("[4/8] Initializing Pico UART...");
     // Serial.flush(); // Removed - can block on USB CDC
@@ -1040,7 +1094,9 @@ void setup() {
     // // Serial.flush(); // Removed - can block on USB CDC
     // picoUart->resetPico();
     // delay(1000);  // Give Pico time to reset and start booting (Core 1 needs time to init)
-    
+}
+
+static void setupWaitForPicoConnection() {
     // Wait for Pico to connect (sends boot message)
     // Pico Core 1 needs time to initialize and send boot message
     // Increased to 10 seconds to allow for simultaneous power-on initialization
@@ -1135,6 +1191,10 @@ void setup() {
         }
     }
     
+    setupRequestPicoBootInfo(picoConnected);
+}
+
+static void setupRequestPicoBootInfo(bool picoConnected) {
     // If machine type or pico version is still unknown, request boot info from Pico
     // This handles the case where MSG_BOOT was missed (Pico was already running before ESP32)
     const char* picoVersion = State.getPicoVersion();
@@ -1174,7 +1234,9 @@ void setup() {
         }
         // Serial.flush(); // Removed - can block on USB CDC
     }
-    
+}
+
+static void setupInitializeWiFi() {
     // Initialize WiFi callbacks using static function pointers
     // This avoids std::function which allocates in PSRAM and causes InstructionFetchError
     wifiManager->onConnected(onWiFiConnected);
@@ -1189,7 +1251,9 @@ void setup() {
     
     // Stagger initialization to reduce power supply load and EMI spikes
     delay(500);
-    
+}
+
+static void setupInitializeWebServer() {
     // Start web server
     Serial.println("[6/8] Starting web server...");
     // Serial.flush(); // Removed - can block on USB CDC
@@ -1214,7 +1278,43 @@ void setup() {
     powerMeterManager->begin();
     Serial.println("Power Meter initialized OK");
     // Serial.flush(); // Removed - can block on USB CDC
+}
+
+void setup() {
+    setupEarlyInitialization();
+    setupCheckPendingOTA();
+    setupInitializeFilesystem();
+    setupCreateGlobalObjects();
+    setupInitializeDisplayAndEncoder();
+    setupInitializeUI();
+    setupUICallbacks();
+    setupInitializePicoUART();
+    setupWaitForPicoConnection();
+    setupInitializeWiFi();
+    setupInitializeWebServer();
+    setupInitializeMQTT();
+    setupInitializeScaleAndBBW();
+    setupInitializeStateManager();
+    setupInitializeLogManager();
+    setupInitializeCloudConnection();
+    setupInitializeNotificationManager();
     
+    Serial.println("========================================");
+    Serial.println("SETUP COMPLETE!");
+    Serial.print("Free heap: ");
+    Serial.print(ESP.getFreeHeap());
+    Serial.println(" bytes");
+    Serial.println("Entering main loop...");
+    Serial.println("========================================");
+    // Serial.flush(); // Removed - can block on USB CDC
+    
+    // Final display update before entering main loop to ensure screen is visible
+    display.update();
+    ui.update(runtimeState().get());
+    display.update();
+}
+
+static void setupInitializeMQTT() {
     // Set up MQTT command handler (before MQTT initialization)
     mqttClient->onCommand([](const char* cmd, JsonDocument& doc) {
         String cmdStr = cmd;
@@ -1305,44 +1405,6 @@ void setup() {
         }
     });
     
-    // Initialize BLE Scale Manager
-    if (scaleEnabled) {
-        LOG_I("Initializing BLE Scale Manager...");
-        if (scaleManager->begin()) {
-            // Set up scale callbacks using static functions to avoid PSRAM issues
-            scaleManager->onWeight(onScaleWeight);
-            scaleManager->onConnection(onScaleConnection);
-            LOG_I("Scale Manager ready");
-        } else {
-            LOG_E("Scale Manager initialization failed!");
-        }
-    }
-    
-    // Initialize Brew-by-Weight controller
-    LOG_I("Initializing Brew-by-Weight...");
-    brewByWeight->begin();
-    
-    // Connect brew-by-weight callbacks using static functions to avoid PSRAM issues
-    brewByWeight->onStop(onBBWStop);
-    brewByWeight->onTare(onBBWTare);
-    
-    // Set default state values from BBW settings
-    LOG_I("Setting default machine state values...");
-    // Serial.flush(); // Removed - can block on USB CDC
-    {
-        ui_state_t& defaultState = runtimeState().beginUpdate();
-        defaultState.brew_setpoint = 93.0f;
-        defaultState.steam_setpoint = 145.0f;
-        defaultState.target_weight = brewByWeight->getTargetWeight();
-        defaultState.dose_weight = brewByWeight->getDoseWeight();
-        defaultState.brew_max_temp = 105.0f;
-        defaultState.steam_max_temp = 160.0f;
-        defaultState.dose_weight = 18.0f;
-        runtimeState().endUpdate();
-    }
-    LOG_I("Default values set");
-    // Serial.flush(); // Removed - can block on USB CDC
-    
     // Initialize State Manager (schedules, settings persistence)
     Serial.println("[8/8] Initializing State Manager...");
     Serial.print("Free heap before State: ");
@@ -1387,6 +1449,59 @@ void setup() {
     mqttClient->begin();
     Serial.println("MQTT initialized OK");
     // Serial.flush(); // Removed - can block on USB CDC
+}
+
+static void setupInitializeScaleAndBBW() {
+    // Initialize BLE Scale Manager
+    if (scaleEnabled) {
+        LOG_I("Initializing BLE Scale Manager...");
+        if (scaleManager->begin()) {
+            // Set up scale callbacks using static functions to avoid PSRAM issues
+            scaleManager->onWeight(onScaleWeight);
+            scaleManager->onConnection(onScaleConnection);
+            LOG_I("Scale Manager ready");
+        } else {
+            LOG_E("Scale Manager initialization failed!");
+        }
+    }
+    
+    // Initialize Brew-by-Weight controller
+    LOG_I("Initializing Brew-by-Weight...");
+    brewByWeight->begin();
+    
+    // Connect brew-by-weight callbacks using static functions to avoid PSRAM issues
+    brewByWeight->onStop(onBBWStop);
+    brewByWeight->onTare(onBBWTare);
+    
+    // Set default state values from BBW settings
+    LOG_I("Setting default machine state values...");
+    // Serial.flush(); // Removed - can block on USB CDC
+    {
+        ui_state_t& defaultState = runtimeState().beginUpdate();
+        defaultState.brew_setpoint = 93.0f;
+        defaultState.steam_setpoint = 145.0f;
+        defaultState.target_weight = brewByWeight->getTargetWeight();
+        defaultState.dose_weight = brewByWeight->getDoseWeight();
+        defaultState.brew_max_temp = 105.0f;
+        defaultState.steam_max_temp = 160.0f;
+        defaultState.dose_weight = 18.0f;
+        runtimeState().endUpdate();
+    }
+    LOG_I("Default values set");
+    // Serial.flush(); // Removed - can block on USB CDC
+}
+
+static void setupInitializeStateManager() {
+    // Initialize State Manager (schedules, settings persistence)
+    Serial.println("[8/8] Initializing State Manager...");
+    Serial.print("Free heap before State: ");
+    Serial.println(ESP.getFreeHeap());
+    // Serial.flush(); // Removed - can block on USB CDC
+    State.begin();
+    Serial.print("Free heap after State: ");
+    Serial.println(ESP.getFreeHeap());
+    Serial.println("State Manager initialized OK");
+    // Serial.flush(); // Removed - can block on USB CDC
     
     // Apply debug log level setting early (so boot logs are included)
     if (State.settings().system.debugLogsEnabled) {
@@ -1396,6 +1511,14 @@ void setup() {
         setLogLevel(BREWOS_LOG_INFO);  // Ensure INFO level (default)
     }
     
+    // Apply display settings from State
+    const auto& displaySettings = State.settings().display;
+    display.setBacklight(displaySettings.brightness);
+    LOG_I("Display settings applied: brightness=%d, timeout=%ds", 
+          displaySettings.brightness, displaySettings.screenTimeout);
+}
+
+static void setupInitializeLogManager() {
     // Initialize Log Manager if enabled in settings (dev mode feature)
     // Only allocates 50KB buffer when enabled - zero impact when disabled
     if (State.settings().system.logBufferEnabled) {
@@ -1420,13 +1543,9 @@ void setup() {
     } else {
         Serial.println("Log buffer disabled (enable in settings/dev mode)");
     }
-    
-    // Apply display settings from State
-    const auto& displaySettings = State.settings().display;
-    display.setBacklight(displaySettings.brightness);
-    LOG_I("Display settings applied: brightness=%d, timeout=%ds", 
-          displaySettings.brightness, displaySettings.screenTimeout);
-    
+}
+
+static void setupInitializeCloudConnection() {
     // Initialize Pairing Manager and Cloud Connection if cloud is enabled
     auto& cloudSettings = State.settings().cloud;
     if (cloudSettings.enabled && strlen(cloudSettings.serverUrl) > 0) {
@@ -1550,7 +1669,9 @@ void setup() {
             screen_cloud_show_error("Cloud not initialized");
         }
     });
-    
+}
+
+static void setupInitializeNotificationManager() {
     // Initialize Notification Manager
     Serial.println("[8.5/8] Initializing Notification Manager...");
     // Serial.flush(); // Removed - can block on USB CDC
@@ -1563,20 +1684,6 @@ void setup() {
     
     // Set up schedule callback using static function to avoid PSRAM issues
     State.onScheduleTriggered(onScheduleTriggered);
-    
-    Serial.println("========================================");
-    Serial.println("SETUP COMPLETE!");
-    Serial.print("Free heap: ");
-    Serial.print(ESP.getFreeHeap());
-    Serial.println(" bytes");
-    Serial.println("Entering main loop...");
-    Serial.println("========================================");
-    // Serial.flush(); // Removed - can block on USB CDC
-    
-    // Final display update before entering main loop to ensure screen is visible
-    display.update();
-    ui.update(runtimeState().get());
-    display.update();
 }
 
 // =============================================================================
@@ -1587,7 +1694,6 @@ void loop() {
     // Feed watchdog at start of every loop iteration
     // This prevents watchdog reset if any single component takes too long
     yield();
-    
     
     // =========================================================================
     // PHASE 1: Critical object validation
@@ -1603,6 +1709,27 @@ void loop() {
         return;
     }
     
+    loopCoreSystemUpdates();
+    loopOptionalServiceUpdates();
+    loopUpdateConnectionStates();
+    loopHandlePicoBootInfo();
+    loopUpdateBrewByWeight();
+    State.loop();
+    loopUpdateUI();
+    loopUpdateMQTTStatus();
+    loopPeriodicTasks();
+    loopHandleWiFiTasks();
+    loopMonitorMemoryAndTiming();
+    
+    // =========================================================================
+    // PHASE 9: Loop throttling - Give network stack CPU time
+    // =========================================================================
+    // Yield to background tasks (WiFi, AsyncTCP)
+    // 2ms is sufficient now that EMI is fixed via GPIO drive strength
+    delay(2);
+}
+
+static void loopCoreSystemUpdates() {
     // =========================================================================
     // PHASE 2: Core system updates (always run)
     // These are essential for basic operation
@@ -1624,7 +1751,9 @@ void loop() {
     // Web server request handling
     webServer->loop();
     yield();  // Feed watchdog after web server (handles HTTP requests)
-    
+}
+
+static void loopOptionalServiceUpdates() {
     // =========================================================================
     // PHASE 3: Optional service updates
     // =========================================================================
@@ -1650,7 +1779,9 @@ void loop() {
         scaleManager->loop();
         yield();
     }
-    
+}
+
+static void loopUpdateConnectionStates() {
     // =========================================================================
     // PHASE 4: State synchronization
     // Update machine state from various sources
@@ -1659,20 +1790,21 @@ void loop() {
     // Connection states (defensive - default to false if object missing)
     bool picoConnected = picoUart->isConnected();
     ui_state_t& stateRef = runtimeState().beginUpdate();
+    stateRef.pico_connected = picoConnected;
     stateRef.mqtt_connected = mqttClient ? mqttClient->isConnected() : false;
     stateRef.scale_connected = (scaleEnabled && scaleManager) ? scaleManager->isConnected() : false;
     stateRef.cloud_connected = cloudConnection ? cloudConnection->isConnected() : false;
     runtimeState().endUpdate();
-    
+}
+
+static void loopHandlePicoBootInfo() {
     // =========================================================================
     // PHASE 5: Pico connection status
     // =========================================================================
     
-    // Update Pico connection status (no automatic demo mode - demo is web UI only)
-    stateRef.pico_connected = picoConnected;
-    
     // If Pico is connected but machine type or version is unknown, request boot info
     // This handles the case where MSG_BOOT was missed (e.g., ESP32 rebooted while Pico was running)
+    bool picoConnected = picoUart->isConnected();
     if (picoConnected) {
         static unsigned long lastBootInfoRequest = 0;
         static uint8_t bootInfoRequestCount = 0;
@@ -1727,7 +1859,9 @@ void loop() {
             bootInfoRequestCount = 0;
         }
     }
-    
+}
+
+static void loopUpdateBrewByWeight() {
     // =========================================================================
     // PHASE 6: Brew-by-Weight (only when actively brewing with scale)
     // This is DISABLED when:
@@ -1753,9 +1887,17 @@ void loop() {
         );
     }
     
-    // State Manager - handles schedules, idle timeout, etc.
-    State.loop();
-    
+    // Sync BBW state to machine state (with null check)
+    if (brewByWeight && brewByWeight->isActive()) {
+        ui_state_t& state = runtimeState().beginUpdate();
+        state.brew_weight = brewByWeight->getState().current_weight;
+        state.target_weight = brewByWeight->getTargetWeight();
+        state.dose_weight = brewByWeight->getDoseWeight();
+        runtimeState().endUpdate();
+    }
+}
+
+static void loopUpdateUI() {
     // Update display and encoder
     unsigned long now = millis();
     unsigned long uiUpdateInterval = 100; // 10 FPS - good balance of responsiveness and CPU usage
@@ -1788,20 +1930,14 @@ void loop() {
     
     static bool lastPressed = false;
     bool currentPressed = encoder.isPressed();
+    const ui_state_t& state = runtimeState().get();
     if (state.is_brewing || (currentPressed && !lastPressed)) {
         State.resetIdleTimer();
     }
     lastPressed = currentPressed;
-    
-    // Sync BBW state to machine state (with null check)
-    if (brewByWeight && brewByWeight->isActive()) {
-        ui_state_t& state = runtimeState().beginUpdate();
-        state.brew_weight = brewByWeight->getState().current_weight;
-        state.target_weight = brewByWeight->getTargetWeight();
-        state.dose_weight = brewByWeight->getDoseWeight();
-        runtimeState().endUpdate();
-    }
-    
+}
+
+static void loopUpdateMQTTStatus() {
     // Publish MQTT status with delta updates for efficiency
     // Full status on major changes or periodic sync, delta for incremental changes
     static StatusChangeDetector mqttChangeDetector;
@@ -1850,7 +1986,9 @@ void loop() {
             }
         }
     }
-    
+}
+
+static void loopPeriodicTasks() {
     // Periodic ping to Pico for connection monitoring
     if (millis() - lastPing > 5000) {
         lastPing = millis();
@@ -1930,6 +2068,10 @@ void loop() {
             }
         }
     }
+}
+
+static void loopHandleWiFiTasks() {
+    const ui_state_t& state = runtimeState().get();
     
     // Handle WiFi connected tasks
     if (state.wifi_connected && wifiConnectedTime == 0) {
@@ -1991,7 +2133,9 @@ void loop() {
             esp_wifi_set_ps(WIFI_PS_NONE);
         }
     }
-    
+}
+
+static void loopMonitorMemoryAndTiming() {
     // =========================================================================
     // PHASE 8: Memory and loop timing monitoring
     // =========================================================================
@@ -2051,13 +2195,6 @@ void loop() {
                   fragmentation, largestBlock);
         }
     }
-    
-    // =========================================================================
-    // PHASE 9: Loop throttling - Give network stack CPU time
-    // =========================================================================
-    // Yield to background tasks (WiFi, AsyncTCP)
-    // 2ms is sufficient now that EMI is fixed via GPIO drive strength
-    delay(2);
 }
 
 /**

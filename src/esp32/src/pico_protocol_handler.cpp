@@ -146,7 +146,7 @@ void PicoProtocolHandler::handleBoot(const PicoPacket& packet) {
     runtimeState().updatePicoConnection(true);
     
     // Parse boot payload (boot_payload_t structure)
-    // Layout: ver(3) + machine(1) + pcb(1) + pcb_ver(2) + reset(4) + build_date(12) + build_time(9) = 32 bytes
+    // Layout: ver(3) + machine(1) + pcb(1) + pcb_ver(2) + reset(4) + build_date(12) + build_time(7) + protocol_ver(2) = 32 bytes
     if (packet.length >= 4) {
         uint8_t ver_major = packet.payload[0];
         uint8_t ver_minor = packet.payload[1];
@@ -180,12 +180,31 @@ void PicoProtocolHandler::handleBoot(const PicoPacket& packet) {
             }
         }
         
-        // Parse build date/time if available (offset 11-31)
-        if (packet.length >= 32) {
+        // Parse build date/time if available (offset 11-29, protocol_ver at 30-31)
+        if (packet.length >= 30) {
             char buildDate[12] = {0};
-            char buildTime[9] = {0};
+            char buildTimeCompact[7] = {0};  // "HHMMSS" format (no colons)
+            char buildTime[9] = {0};          // "HH:MM:SS" format for display
+            
             memcpy(buildDate, &packet.payload[11], 11);
-            memcpy(buildTime, &packet.payload[23], 8);
+            memcpy(buildTimeCompact, &packet.payload[23], 6);
+            
+            // Convert from "HHMMSS" to "HH:MM:SS" format
+            if (strlen(buildTimeCompact) == 6) {
+                buildTime[0] = buildTimeCompact[0];  // H
+                buildTime[1] = buildTimeCompact[1];  // H
+                buildTime[2] = ':';
+                buildTime[3] = buildTimeCompact[2];  // M
+                buildTime[4] = buildTimeCompact[3];  // M
+                buildTime[5] = ':';
+                buildTime[6] = buildTimeCompact[4];  // S
+                buildTime[7] = buildTimeCompact[5];  // S
+                buildTime[8] = '\0';
+            } else {
+                // Fallback: use compact format as-is
+                strncpy(buildTime, buildTimeCompact, sizeof(buildTime) - 1);
+            }
+            
             if (_state) {
                 _state->setPicoBuildDate(buildDate, buildTime);
             }

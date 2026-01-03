@@ -111,7 +111,7 @@ typedef struct __attribute__((packed)) {
     uint8_t pcb_version_minor;
     uint32_t reset_reason;
     char build_date[12];        // "Dec 12 2024" (compile date)
-    char build_time[9];         // "14:30:45" (compile time)
+    char build_time[7];        // "143045" (compile time, HHMMSS format, no colons)
     uint8_t protocol_version_major;  // Protocol version for compatibility check
     uint8_t protocol_version_minor;
 } boot_payload_t;
@@ -323,5 +323,7 @@ _Static_assert(sizeof(config_environmental_t) <= PROTOCOL_MAX_PAYLOAD,
                "config_environmental_t exceeds PROTOCOL_MAX_PAYLOAD");
 _Static_assert(sizeof(config_preinfusion_t) <= PROTOCOL_MAX_PAYLOAD,
                "config_preinfusion_t exceeds PROTOCOL_MAX_PAYLOAD");
+_Static_assert(sizeof(boot_payload_t) <= PROTOCOL_MAX_PAYLOAD,
+               "boot_payload_t exceeds PROTOCOL_MAX_PAYLOAD");
 
 #endif // PROTOCOL_H
