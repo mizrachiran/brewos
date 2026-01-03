@@ -199,6 +199,16 @@ static const char* get_msg_name(uint8_t type) {
     switch (type) {
         case MSG_PING:                    return "PING";
         case MSG_STATUS:                  return "STATUS";
+        case MSG_ALARM:                   return "ALARM";
+        case MSG_BOOT:                    return "BOOT";
+        case MSG_ACK:                     return "ACK";
+        case MSG_CONFIG:                  return "CONFIG";
+        case MSG_DEBUG:                   return "DEBUG";
+        case MSG_ENV_CONFIG:              return "ENV_CONFIG";
+        case MSG_STATISTICS:              return "STATISTICS";
+        case MSG_DIAGNOSTICS:             return "DIAGNOSTICS";
+        case MSG_HANDSHAKE:               return "HANDSHAKE";
+        case MSG_NACK:                    return "NACK";
         case MSG_CMD_SET_TEMP:            return "SET_TEMP";
         case MSG_CMD_SET_PID:             return "SET_PID";
         case MSG_CMD_BREW:                return "BREW";
