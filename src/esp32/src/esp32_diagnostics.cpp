@@ -8,6 +8,7 @@
 #include "esp32_diagnostics.h"
 #include "config.h"
 #include <Arduino.h>
+#include <string.h>
 
 // =============================================================================
 // GPIO19 (WEIGHT_STOP) Output Test

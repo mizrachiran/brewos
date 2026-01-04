@@ -696,10 +696,14 @@ static void setupEarlyInitialization() {
     pinMode(7, OUTPUT);
     digitalWrite(7, LOW);
     
-    // Initialize USB CDC Serial in non-blocking mode
-    // On ESP32-S3, USB CDC can block if no host is connected
+    // Initialize Serial (USB CDC if enabled, hardware UART if disabled)
+    // When USB CDC is disabled (ARDUINO_USB_MODE=0), Serial uses hardware UART
+    // and doesn't have setTxTimeoutMs() method
     Serial.begin(115200);
+    #if ARDUINO_USB_MODE == 1
+    // USB CDC mode - set timeout to prevent blocking
     Serial.setTxTimeoutMs(10);  // Short timeout - won't block long if no USB host
+    #endif
     
     // Note: Watchdog is kept enabled - it helps catch hangs and crashes
     // Attempting to disable it causes errors on ESP32-S3
