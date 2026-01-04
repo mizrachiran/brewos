@@ -19,6 +19,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>  // For size_t
 #include "environmental_config.h"
 #include "protocol_defs.h"
 #include "power_meter.h"
@@ -73,8 +74,15 @@ typedef struct __attribute__((packed)) {
     // Log forwarding to ESP32 (dev mode feature)
     bool log_forwarding_enabled;          // Whether to forward logs to ESP32
     
-    // Reserved for future use (reduced from 15 to accommodate log_forwarding_enabled)
-    uint8_t reserved[14];
+    // Machine type (source of truth - persisted across firmware flashes)
+    uint8_t machine_type;                 // MACHINE_TYPE_* enum (0=unknown, 1=dual_boiler, 2=single_boiler, 3=heat_exchanger, 4=thermoblock)
+    
+    // Machine identification (source of truth - persisted across firmware flashes)
+    char machine_brand[16];                // Machine brand (e.g., "ECM", "Profitec", "Rancilio")
+    char machine_model[16];               // Machine model (e.g., "Synchronika", "Pro 700", "Silvia")
+    
+    // Reserved for future use
+    uint8_t reserved[1];
     
     // CRC32 for integrity check
     uint32_t crc32;
@@ -178,6 +186,41 @@ bool config_persistence_save_log_forwarding(bool enabled);
  * Get log forwarding setting from persisted config
  */
 bool config_persistence_get_log_forwarding(void);
+
+/**
+ * Save machine type to flash
+ * @param machine_type Machine type (MACHINE_TYPE_* enum)
+ * @return true on success, false on failure
+ */
+bool config_persistence_save_machine_type(uint8_t machine_type);
+
+/**
+ * Get machine type from persisted config
+ * @return Machine type (0 if not set or invalid)
+ */
+uint8_t config_persistence_get_machine_type(void);
+
+/**
+ * Save machine brand and model to flash
+ * @param brand Machine brand string (max 15 chars, null-terminated)
+ * @param model Machine model string (max 15 chars, null-terminated)
+ * @return true on success, false on failure
+ */
+bool config_persistence_save_machine_info(const char* brand, const char* model);
+
+/**
+ * Get machine brand from persisted config
+ * @param brand Output buffer (must be at least 16 bytes)
+ * @param brand_size Size of brand buffer
+ */
+void config_persistence_get_machine_brand(char* brand, size_t brand_size);
+
+/**
+ * Get machine model from persisted config
+ * @param model Output buffer (must be at least 16 bytes)
+ * @param model_size Size of model buffer
+ */
+void config_persistence_get_machine_model(char* model, size_t model_size);
 
 #endif // CONFIG_PERSISTENCE_H
 

@@ -12,6 +12,7 @@
 #include "config.h"
 #include "pcb_config.h"
 #include "machine_config.h"
+#include "config_persistence.h"
 #include "gpio_init.h"
 #include "bootloader.h"
 
@@ -374,11 +375,18 @@ bool protocol_send_boot(void) {
               FIRMWARE_VERSION_MAJOR, FIRMWARE_VERSION_MINOR, FIRMWARE_VERSION_PATCH,
               reset_reason_str);
     
+    // Use persisted machine type (source of truth), fallback to compile-time type
+    uint8_t machine_type = config_persistence_get_machine_type();
+    if (machine_type == 0 || machine_type > 4) {
+        // Not persisted or invalid - use compile-time type
+        machine_type = (uint8_t)machine_get_type();
+    }
+    
     boot_payload_t boot = {
         .version_major = FIRMWARE_VERSION_MAJOR,
         .version_minor = FIRMWARE_VERSION_MINOR,
         .version_patch = FIRMWARE_VERSION_PATCH,
-        .machine_type = (uint8_t)machine_get_type(),  // From machine config
+        .machine_type = machine_type,  // From persisted config (source of truth)
         .pcb_type = (uint8_t)pcb_type,
         .pcb_version_major = pcb_ver.major,
         .pcb_version_minor = pcb_ver.minor,

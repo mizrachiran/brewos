@@ -216,6 +216,7 @@ extern "C" {
 #define CONFIG_TEMPS             0x04
 #define CONFIG_ENVIRONMENTAL     0x05   // Environmental electrical config (voltage, current limits)
 #define CONFIG_ECO               0x06   // Eco mode configuration
+#define CONFIG_MACHINE_INFO      0x07   // Machine brand and model (source of truth on Pico)
 
 // =============================================================================
 // CRC-16-CCITT

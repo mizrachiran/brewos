@@ -1,5 +1,6 @@
 #include "web_server.h"
 #include "config.h"
+#include "../shared/protocol_defs.h"  // For CONFIG_MACHINE_INFO
 #include "memory_utils.h"
 #include "pico_uart.h"
 #include "mqtt_client.h"
@@ -1031,6 +1032,31 @@ void BrewWebServer::handleMachineInfoCommand(JsonDocument& doc, const String& cm
     }
     
     State.saveMachineInfoSettings();
+    
+    // Send machine brand/model to Pico (source of truth)
+    if (brandValue || modelValue) {
+        // Get current values (in case only one was updated)
+        char currentBrand[32];
+        char currentModel[32];
+        strncpy(currentBrand, machineInfo.machineBrand, sizeof(currentBrand) - 1);
+        currentBrand[sizeof(currentBrand) - 1] = '\0';
+        strncpy(currentModel, machineInfo.machineModel, sizeof(currentModel) - 1);
+        currentModel[sizeof(currentModel) - 1] = '\0';
+        
+        // Prepare payload for CONFIG_MACHINE_INFO
+        uint8_t payload[33];  // 1 byte config_type + 32 bytes (16+16 for brand+model)
+        payload[0] = CONFIG_MACHINE_INFO;  // Machine brand and model
+        memset(&payload[1], 0, 32);  // Zero out string fields
+        strncpy((char*)&payload[1], currentBrand, 15);  // Brand (max 15 chars)
+        strncpy((char*)&payload[17], currentModel, 15);  // Model (max 15 chars)
+        
+        if (_picoUart.sendCommand(MSG_CMD_CONFIG, payload, sizeof(payload))) {
+            LOG_I("Sent machine info to Pico: %s %s", currentBrand, currentModel);
+        } else {
+            LOG_W("Failed to send machine info to Pico");
+        }
+    }
+    
     State.saveNetworkSettings();
     
     // Broadcast device info update

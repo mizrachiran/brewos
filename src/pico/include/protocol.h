@@ -188,6 +188,12 @@ typedef struct __attribute__((packed)) {
     uint16_t pause_time_ms;      // Soak/pause duration (0-30000ms typical)
 } config_preinfusion_t;  // 5 bytes
 
+// CONFIG_MACHINE_INFO (0x07) payload (for MSG_CMD_CONFIG)
+typedef struct __attribute__((packed)) {
+    char brand[16];               // Machine brand (null-terminated, max 15 chars)
+    char model[16];               // Machine model (null-terminated, max 15 chars)
+} config_machine_info_t;  // 32 bytes
+
 // MSG_ENV_CONFIG (0x08) payload - Environmental config response
 typedef struct __attribute__((packed)) {
     uint16_t nominal_voltage;        // 120, 230, 240, etc. (V)

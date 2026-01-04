@@ -10,6 +10,7 @@
 #include "environmental_config.h"
 #include "control.h"
 #include "state.h"
+#include "machine_config.h"   // For machine_get_type()
 #include "flash_safe.h"       // Flash safety utilities
 #include "pico/stdlib.h"
 #include "pico/bootrom.h"
@@ -113,6 +114,13 @@ static void set_defaults(persisted_config_t* config) {
     config->eco_enabled = true;           // Eco mode enabled by default
     config->eco_brew_temp = 800;          // 80.0°C in eco mode
     config->eco_timeout_minutes = 30;     // 30 minutes idle before eco
+    
+    // Machine type: Use compile-time type as default
+    config->machine_type = (uint8_t)machine_get_type();
+    
+    // Machine brand/model: Empty by default (user must set via UI)
+    memset(config->machine_brand, 0, sizeof(config->machine_brand));
+    memset(config->machine_model, 0, sizeof(config->machine_model));
 }
 
 // =============================================================================
@@ -259,9 +267,36 @@ bool config_persistence_init(void) {
             // Cleaning mode values are loaded but not applied here
             // They are applied in cleaning_init() via config_persistence_get_cleaning()
             
-            LOG_PRINT("Config: Loaded from flash (env: %dV, %.1fA)\n",
+            // Validate and handle machine type
+            machine_type_t compile_time_type = machine_get_type();
+            uint8_t persisted_type = g_persisted_config.machine_type;
+            
+            if (persisted_type == 0 || persisted_type > 4) {
+                // Machine type not set or invalid - save compile-time type
+                LOG_PRINT("Config: Machine type not persisted, saving compile-time type: %d\n", 
+                         compile_time_type);
+                g_persisted_config.machine_type = (uint8_t)compile_time_type;
+                // Save immediately to persist machine type
+                flash_write_config(&g_persisted_config);
+            } else if (persisted_type != (uint8_t)compile_time_type) {
+                // Mismatch: persisted type differs from compile-time type
+                // This can happen if firmware for a different machine type is flashed
+                LOG_WARN("Config: Machine type mismatch! Persisted=%d, Compile-time=%d\n",
+                        persisted_type, compile_time_type);
+                LOG_WARN("Config: Using compile-time type (firmware compiled for different machine)\n");
+                // Update persisted type to match compile-time (firmware was compiled for this type)
+                g_persisted_config.machine_type = (uint8_t)compile_time_type;
+                flash_write_config(&g_persisted_config);
+            } else {
+                // Match: persisted type matches compile-time type
+                LOG_PRINT("Config: Machine type validated: %d (persisted matches compile-time)\n",
+                         persisted_type);
+            }
+            
+            LOG_PRINT("Config: Loaded from flash (env: %dV, %.1fA, machine_type: %d)\n",
                      g_persisted_config.environmental.nominal_voltage,
-                     g_persisted_config.environmental.max_current_draw);
+                     g_persisted_config.environmental.max_current_draw,
+                     g_persisted_config.machine_type);
             return true;  // Machine can operate
         } else {
             LOG_PRINT("Config: Loaded from flash but environmental config invalid (machine disabled)\n");
@@ -273,7 +308,12 @@ bool config_persistence_init(void) {
         g_config_loaded = false;
         g_env_valid = false;
         
+        // Machine type is set in set_defaults() from compile-time type
+        // Save it to flash so it persists across future firmware flashes
         LOG_PRINT("Config: No valid config in flash, using defaults\n");
+        LOG_PRINT("Config: Saving machine type: %d\n", g_persisted_config.machine_type);
+        flash_write_config(&g_persisted_config);  // Save machine type even if env config is invalid
+        
         LOG_PRINT("Config: Machine disabled - environmental config required\n");
         return false;  // Machine disabled - environmental config not set
     }
@@ -529,5 +569,90 @@ bool config_persistence_save_log_forwarding(bool enabled) {
 
 bool config_persistence_get_log_forwarding(void) {
     return g_persisted_config.log_forwarding_enabled;
+}
+
+bool config_persistence_save_machine_type(uint8_t machine_type) {
+    // Validate machine type
+    if (machine_type > 4) {  // MACHINE_TYPE_THERMOBLOCK = 4
+        LOG_WARN("Config: Invalid machine type %d\n", machine_type);
+        return false;
+    }
+    
+    // Compare-before-write: Skip flash write if nothing changed
+    if (g_persisted_config.machine_type == machine_type) {
+        DEBUG_PRINT("Config: Machine type unchanged (%d), skipping flash write\n", machine_type);
+        return true;  // Success - nothing to save
+    }
+    
+    // Update machine type in persisted config
+    g_persisted_config.machine_type = machine_type;
+    
+    // Ensure magic and version are set
+    g_persisted_config.magic = CONFIG_MAGIC;
+    g_persisted_config.version = CONFIG_VERSION;
+    
+    // Save to flash
+    if (flash_write_config(&g_persisted_config)) {
+        g_config_loaded = true;
+        LOG_PRINT("Config: Saved machine type: %d\n", machine_type);
+        return true;
+    }
+    
+    LOG_WARN("Config: Failed to save machine type to flash\n");
+    return false;
+}
+
+uint8_t config_persistence_get_machine_type(void) {
+    return g_persisted_config.machine_type;
+}
+
+bool config_persistence_save_machine_info(const char* brand, const char* model) {
+    if (!brand || !model) {
+        return false;
+    }
+    
+    // Check if values changed (compare-before-write to avoid unnecessary flash writes)
+    bool brand_changed = strncmp(g_persisted_config.machine_brand, brand, sizeof(g_persisted_config.machine_brand)) != 0;
+    bool model_changed = strncmp(g_persisted_config.machine_model, model, sizeof(g_persisted_config.machine_model)) != 0;
+    
+    if (!brand_changed && !model_changed) {
+        DEBUG_PRINT("Config: Machine info unchanged, skipping flash write\n");
+        return true;  // Success - nothing to save
+    }
+    
+    // Update machine brand/model in persisted config
+    strncpy(g_persisted_config.machine_brand, brand, sizeof(g_persisted_config.machine_brand) - 1);
+    g_persisted_config.machine_brand[sizeof(g_persisted_config.machine_brand) - 1] = '\0';
+    
+    strncpy(g_persisted_config.machine_model, model, sizeof(g_persisted_config.machine_model) - 1);
+    g_persisted_config.machine_model[sizeof(g_persisted_config.machine_model) - 1] = '\0';
+    
+    // Ensure magic and version are set
+    g_persisted_config.magic = CONFIG_MAGIC;
+    g_persisted_config.version = CONFIG_VERSION;
+    
+    // Save to flash
+    if (flash_write_config(&g_persisted_config)) {
+        g_config_loaded = true;
+        LOG_PRINT("Config: Saved machine info: %s %s\n", brand, model);
+        return true;
+    }
+    
+    LOG_WARN("Config: Failed to save machine info to flash\n");
+    return false;
+}
+
+void config_persistence_get_machine_brand(char* brand, size_t brand_size) {
+    if (brand && brand_size > 0) {
+        strncpy(brand, g_persisted_config.machine_brand, brand_size - 1);
+        brand[brand_size - 1] = '\0';
+    }
+}
+
+void config_persistence_get_machine_model(char* model, size_t model_size) {
+    if (model && model_size > 0) {
+        strncpy(model, g_persisted_config.machine_model, model_size - 1);
+        model[model_size - 1] = '\0';
+    }
 }
 

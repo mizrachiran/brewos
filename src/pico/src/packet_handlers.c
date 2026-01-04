@@ -317,6 +317,33 @@ void handle_cmd_config(const packet_t* packet) {
                  preinfusion_cmd.pause_time_ms);
         
         protocol_send_ack(MSG_CMD_CONFIG, packet->seq, ACK_SUCCESS);
+        
+    } else if (config_type == CONFIG_MACHINE_INFO) {
+        if (packet->length < sizeof(config_machine_info_t) + 1) {
+            protocol_send_ack(MSG_CMD_CONFIG, packet->seq, ACK_ERROR_INVALID);
+            return;
+        }
+        
+        config_machine_info_t machine_info_cmd;
+        if (!safe_memcpy(&machine_info_cmd, &packet->payload[1], sizeof(config_machine_info_t),
+                        packet->length - 1)) {
+            protocol_send_ack(MSG_CMD_CONFIG, packet->seq, ACK_ERROR_INVALID);
+            return;
+        }
+        
+        // Ensure null termination (safety)
+        machine_info_cmd.brand[sizeof(machine_info_cmd.brand) - 1] = '\0';
+        machine_info_cmd.model[sizeof(machine_info_cmd.model) - 1] = '\0';
+        
+        // Save to flash (source of truth on Pico)
+        if (config_persistence_save_machine_info(machine_info_cmd.brand, machine_info_cmd.model)) {
+            LOG_INFO("Machine info saved: %s %s\n", machine_info_cmd.brand, machine_info_cmd.model);
+            protocol_send_ack(MSG_CMD_CONFIG, packet->seq, ACK_SUCCESS);
+        } else {
+            LOG_WARN("Failed to save machine info\n");
+            protocol_send_ack(MSG_CMD_CONFIG, packet->seq, ACK_ERROR_INVALID);
+        }
+        
     } else {
         // Unknown config type
         protocol_send_ack(MSG_CMD_CONFIG, packet->seq, ACK_SUCCESS);
