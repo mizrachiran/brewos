@@ -2002,10 +2002,37 @@ void BrewWebServer::setupRoutes() {
     
     // Run all diagnostic tests
     _server.on("/api/diagnostics/run", HTTP_POST, [this](AsyncWebServerRequest* request) {
-        // Send command to Pico to run all diagnostics
+        broadcastLogLevel("info", "Running hardware diagnostics...");
+        
+        // Run ESP32-side diagnostic tests first (GPIO19 and GPIO20)
+        uint8_t esp32Tests[] = { DIAG_TEST_WEIGHT_STOP_OUTPUT, DIAG_TEST_PICO_RUN_OUTPUT };
+        for (size_t i = 0; i < sizeof(esp32Tests) / sizeof(esp32Tests[0]); i++) {
+            diag_result_t result;
+            uint8_t status = esp32_diagnostics_run_test(esp32Tests[i], &result);
+            
+            // Broadcast result in same format as Pico results
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+            StaticJsonDocument<384> doc;
+            #pragma GCC diagnostic pop
+            doc["type"] = "diagnostics_result";
+            doc["testId"] = result.test_id;
+            doc["status"] = result.status;
+            doc["rawValue"] = result.raw_value;
+            doc["expectedMin"] = 0;
+            doc["expectedMax"] = 0;
+            doc["message"] = result.message;
+            
+            String jsonStr;
+            serializeJson(doc, jsonStr);
+            broadcastRaw(jsonStr.c_str());
+            
+            delay(50);  // Small delay between tests
+        }
+        
+        // Then send command to Pico to run all diagnostics
         uint8_t payload[1] = { 0x00 };  // DIAG_TEST_ALL
         if (_picoUart.sendCommand(MSG_CMD_DIAGNOSTICS, payload, 1)) {
-            broadcastLogLevel("info", "Running hardware diagnostics...");
             request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Diagnostics started\"}");
         } else {
             request->send(500, "application/json", "{\"error\":\"Failed to send diagnostic command\"}");
