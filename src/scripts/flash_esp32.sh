@@ -757,19 +757,19 @@ if [ "$FLASH_SUCCESS" = true ]; then
     quiet_echo "${CYAN}Firmware hash: $FIRMWARE_HASH${NC}"
     quiet_echo ""
     
-    # Start serial monitor automatically (unless in quiet mode)
-    if [ "$QUIET" = false ]; then
-        quiet_echo "${BLUE}Starting serial monitor on $PORT...${NC}"
-        quiet_echo "${YELLOW}Press Ctrl+C to exit monitor${NC}"
-        quiet_echo ""
+    # # Start serial monitor automatically (unless in quiet mode)
+    # if [ "$QUIET" = false ]; then
+    #     quiet_echo "${BLUE}Starting serial monitor on $PORT...${NC}"
+    #     quiet_echo "${YELLOW}Press Ctrl+C to exit monitor${NC}"
+    #     quiet_echo ""
         
-        # Brief delay to let ESP32 reset and start booting
-        sleep 1
+    #     # Brief delay to let ESP32 reset and start booting
+    #     sleep 1
         
-        # Start PlatformIO device monitor (exec replaces shell, so Ctrl+C exits cleanly)
-        cd "$ESP32_DIR"
-        exec pio device monitor -p "$PORT"
-    fi
+    #     # Start PlatformIO device monitor (exec replaces shell, so Ctrl+C exits cleanly)
+    #     cd "$ESP32_DIR"
+    #     exec pio device monitor -p "$PORT"
+    # fi
 else
     # This shouldn't be reached if exit 1 was called, but just in case
     echo ""
