@@ -108,7 +108,7 @@ bool diagnostics_run_all(diag_report_t* report) {
         { DIAG_TEST_ESP32_COMM, diag_test_esp32_comm },
         { DIAG_TEST_BUZZER, diag_test_buzzer },
         { DIAG_TEST_LED, diag_test_led },
-        { DIAG_TEST_WEIGHT_STOP, diag_test_weight_stop_input },
+        { DIAG_TEST_WEIGHT_STOP_INPUT, diag_test_weight_stop_input },
     };
     
     const int num_tests = sizeof(tests) / sizeof(tests[0]);
@@ -193,7 +193,7 @@ uint8_t diagnostics_run_test(uint8_t test_id, diag_result_t* result) {
         case DIAG_TEST_LED:
             diag_test_led(result);
             break;
-        case DIAG_TEST_WEIGHT_STOP:
+        case DIAG_TEST_WEIGHT_STOP_INPUT:
             diag_test_weight_stop_input(result);
             break;
         // Class B Safety Tests
@@ -719,7 +719,7 @@ uint8_t diag_test_led(diag_result_t* result) {
 }
 
 uint8_t diag_test_weight_stop_input(diag_result_t* result) {
-    init_result(result, DIAG_TEST_WEIGHT_STOP);
+    init_result(result, DIAG_TEST_WEIGHT_STOP_INPUT);
     
     const pcb_config_t* pcb = pcb_config_get();
     if (!pcb || !PIN_VALID(pcb->pins.input_weight_stop)) {

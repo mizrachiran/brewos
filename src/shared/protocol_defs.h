@@ -104,8 +104,9 @@ extern "C" {
 #define DIAG_TEST_LED           0x0D    // Status LED green (GPIO15)
 
 // ESP32 Control Signals (repurposed USB pins)
-#define DIAG_TEST_WEIGHT_STOP   0x11    // ESP32 GPIO19 (USB D+) - WEIGHT_STOP output test
-#define DIAG_TEST_PICO_RUN      0x12    // ESP32 GPIO20 (USB D-) - Pico RUN pin output test
+#define DIAG_TEST_WEIGHT_STOP_OUTPUT  0x11    // ESP32 GPIO19 (USB D+) - WEIGHT_STOP output test
+#define DIAG_TEST_PICO_RUN_OUTPUT     0x12    // ESP32 GPIO20 (USB D-) - Pico RUN pin output test
+#define DIAG_TEST_WEIGHT_STOP_INPUT   0x13    // Pico GPIO21 - WEIGHT_STOP input test (reads ESP32 GPIO19 signal)
 
 // Class B Safety Tests (IEC 60730/60335 Annex R)
 #define DIAG_TEST_CLASS_B_ALL   0x30    // Run all Class B tests

@@ -17,7 +17,7 @@
 uint8_t diag_test_weight_stop_output(diag_result_t* result) {
     if (!result) return DIAG_STATUS_FAIL;
     
-    result->test_id = DIAG_TEST_WEIGHT_STOP;
+    result->test_id = DIAG_TEST_WEIGHT_STOP_OUTPUT;
     result->status = DIAG_STATUS_RUNNING;
     result->raw_value = 0;
     result->expected_min = 0;
@@ -57,7 +57,7 @@ uint8_t diag_test_weight_stop_output(diag_result_t* result) {
 uint8_t diag_test_pico_run_output(diag_result_t* result) {
     if (!result) return DIAG_STATUS_FAIL;
     
-    result->test_id = DIAG_TEST_PICO_RUN;
+    result->test_id = DIAG_TEST_PICO_RUN_OUTPUT;
     result->status = DIAG_STATUS_RUNNING;
     result->raw_value = 0;
     result->expected_min = 0;
@@ -98,10 +98,10 @@ uint8_t esp32_diagnostics_run_test(uint8_t test_id, diag_result_t* result) {
     if (!result) return DIAG_STATUS_FAIL;
     
     switch (test_id) {
-        case DIAG_TEST_WEIGHT_STOP:
+        case DIAG_TEST_WEIGHT_STOP_OUTPUT:
             return diag_test_weight_stop_output(result);
             
-        case DIAG_TEST_PICO_RUN:
+        case DIAG_TEST_PICO_RUN_OUTPUT:
             return diag_test_pico_run_output(result);
             
         default:
@@ -114,6 +114,6 @@ uint8_t esp32_diagnostics_run_test(uint8_t test_id, diag_result_t* result) {
 }
 
 bool esp32_diagnostics_is_esp32_test(uint8_t test_id) {
-    return (test_id == DIAG_TEST_WEIGHT_STOP || test_id == DIAG_TEST_PICO_RUN);
+    return (test_id == DIAG_TEST_WEIGHT_STOP_OUTPUT || test_id == DIAG_TEST_PICO_RUN_OUTPUT);
 }
 
