@@ -1093,16 +1093,9 @@ static void setupInitializePicoUART() {
     protocolHandler.begin(picoUart, webServer, &BrewOS::StateManager::getInstance(), powerMeterManager);
     Serial.println("Protocol handler initialized");
     
-    // NOTE: Skipping Pico reset during initialization because:
-    // 1. PICO_RUN_PIN (GPIO8) conflicts with DISPLAY_RST_PIN (GPIO8)
-    // 2. Resetting Pico would reset the display, causing screen to disappear
-    // 3. Pico is not wired in current configuration
-    // If Pico reset is needed later, it should be done before display initialization
-    // or use a different GPIO pin for Pico reset
-    // Serial.println("[4.5/8] Resetting Pico...");
-    // // Serial.flush(); // Removed - can block on USB CDC
-    // picoUart->resetPico();
-    // delay(1000);  // Give Pico time to reset and start booting (Core 1 needs time to init)
+    // Pico reset is now available via GPIO20 (repurposed from USB D-)
+    // No longer conflicts with display reset pin (GPIO8)
+    // Note: Pico reset can be performed via picoUart->resetPico() if needed
 }
 
 static void setupWaitForPicoConnection() {

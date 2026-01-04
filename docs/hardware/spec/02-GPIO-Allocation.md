@@ -61,9 +61,9 @@
 │  │  UART0 - ESP32 DISPLAY MODULE (8-pin JST-XH)                            │  │
 │  │  ├── GPIO0 (UART0 TX) ─── ESP32 RX (1kΩ series protection - R40)       │  │
 │  │  ├── GPIO1 (UART0 RX) ─── ESP32 TX (1kΩ series protection - R41)       │  │
-│  │  ├── PICO RUN ◄──────── ESP32 GPIO8 (ESP32 resets Pico)                │  │
+│  │  ├── PICO RUN ◄──────── ESP32 GPIO20 (ESP32 resets Pico, USB D- repurposed) │  │
 │  │  ├── GPIO16 (SPARE1) ↔── ESP32 GPIO9 (J15 Pin 6, 4.7kΩ pull-down)     │  │
-│  │  ├── GPIO21 (WEIGHT_STOP) ◄─ ESP32 GPIO10 (J15 Pin 7, 4.7kΩ pull-down)│  │
+│  │  ├── GPIO21 (WEIGHT_STOP) ◄─ ESP32 GPIO19 (J15 Pin 7, 4.7kΩ pull-down, USB D+ repurposed)│  │
 │  │  └── GPIO22 (SPARE2) ↔── ESP32 GPIO22 (J15 Pin 8, 4.7kΩ pull-down)    │  │
 │  └─────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                 │
@@ -96,9 +96,10 @@
 │  └─────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                 │
 │  ┌─────────────────────────────────────────────────────────────────────────┐  │
-│  │  ESP32 CONTROL SIGNALS (J15 Pins 6-8) - All have 4.7kΩ pull-downs      │  │
+│  │  ESP32 CONTROL SIGNALS (J15 Pins 5-8) - All have 4.7kΩ pull-downs      │  │
+│  │  ├── PICO RUN ← ESP32 GPIO20 (J15 Pin 5, USB D- repurposed)           │  │
 │  │  ├── GPIO16 ── SPARE1 ↔ ESP32 GPIO9 (J15 Pin 6)                       │  │
-│  │  ├── GPIO21 ── WEIGHT_STOP ← ESP32 GPIO10 (J15 Pin 7)                 │  │
+│  │  ├── GPIO21 ── WEIGHT_STOP ← ESP32 GPIO19 (J15 Pin 7, USB D+ repurposed) │  │
 │  │  └── GPIO22 ── SPARE2 ↔ ESP32 GPIO22 (J15 Pin 8)                      │  │
 │  └─────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                 │
@@ -223,3 +224,14 @@ For NTC circuits with R1=3.3kΩ, a few microamps of leakage induces several mill
 
 **Current Design Status:**
 The RC filter capacitors (C8, C9, C11) suppress AC noise but do NOT mitigate DC leakage. For ±0.5°C espresso extraction accuracy, firmware calibration against a reference thermometer is **required** during commissioning.
+
+## ESP32 USB Pin Repurposing
+
+**Note:** ESP32-S3 USB data pins (D+ and D-) are repurposed as GPIO pins:
+
+- **GPIO19 (USB D+)**: Used for WEIGHT_STOP signal (ESP32 → Pico GPIO21 via J15 Pin 7)
+- **GPIO20 (USB D-)**: Used for Pico RUN pin control (ESP32 → Pico RUN via J15 Pin 5)
+
+USB CDC (Serial over USB) is disabled to free these pins for GPIO functions. USB bootloader functionality remains available (separate from USB CDC).
+
+For details on re-enabling USB CDC, see `docs/development/USB_CDC_Re-enable.md`.

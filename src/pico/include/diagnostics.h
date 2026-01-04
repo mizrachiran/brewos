@@ -152,6 +152,13 @@ uint8_t diag_test_buzzer(diag_result_t* result);
  */
 uint8_t diag_test_led(diag_result_t* result);
 
+/**
+ * Test WEIGHT_STOP input (GPIO21)
+ * Checks: GPIO configured correctly, can read signal from ESP32 GPIO19
+ * Note: Requires ESP32 to toggle WEIGHT_STOP signal for full end-to-end test
+ */
+uint8_t diag_test_weight_stop_input(diag_result_t* result);
+
 // =============================================================================
 // Class B Safety Tests (IEC 60730/60335 Annex R)
 // =============================================================================

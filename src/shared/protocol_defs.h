@@ -100,8 +100,12 @@ extern "C" {
 #define DIAG_TEST_POWER_METER   0x0A    // Power meter UART1 (GPIO6/7) - PZEM, JSY, Eastron
 
 // User Interface (Section 3.4)
-#define DIAG_TEST_BUZZER        0x0C    // Piezo buzzer PWM (GPIO19)
+#define DIAG_TEST_BUZZER        0x0C    // Piezo buzzer PWM (GPIO19 on Pico)
 #define DIAG_TEST_LED           0x0D    // Status LED green (GPIO15)
+
+// ESP32 Control Signals (repurposed USB pins)
+#define DIAG_TEST_WEIGHT_STOP   0x11    // ESP32 GPIO19 (USB D+) - WEIGHT_STOP output test
+#define DIAG_TEST_PICO_RUN      0x12    // ESP32 GPIO20 (USB D-) - Pico RUN pin output test
 
 // Class B Safety Tests (IEC 60730/60335 Annex R)
 #define DIAG_TEST_CLASS_B_ALL   0x30    // Run all Class B tests

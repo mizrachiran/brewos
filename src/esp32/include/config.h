@@ -69,13 +69,19 @@
 #define PICO_UART_RX_PIN        44              // ESP32 RX <- Pico TX (GPIO0)
 
 // Pico control pins
-#define PICO_RUN_PIN            8               // Controls Pico RUN (reset) → J15 Pin 5
+// NOTE: GPIO20 (D-) is repurposed from USB CDC for Pico reset control
+// USB CDC is disabled to free up GPIO19/20 for GPIO functions
+#define PICO_RUN_PIN            20              // Controls Pico RUN (reset) → J15 Pin 5
+                                                // GPIO20 = USB D- (repurposed as GPIO)
 
 // J15 Pin 6 - SPARE1: ESP32 GPIO9 ↔ Pico GPIO16 (4.7kΩ pull-down on Pico side)
 #define SPARE1_PIN              9               // J15 Pin 6 - General purpose bidirectional I/O
 
 // Brew-by-weight signal
-#define WEIGHT_STOP_PIN         10              // ESP32 GPIO10 → J15 Pin 7 → Pico GPIO21 (4.7kΩ pull-down)
+// NOTE: GPIO19 (D+) is repurposed from USB CDC for weight stop signal
+// USB CDC is disabled to free up GPIO19/20 for GPIO functions
+#define WEIGHT_STOP_PIN         19              // ESP32 GPIO19 → J15 Pin 7 → Pico GPIO21 (4.7kΩ pull-down)
+                                                // GPIO19 = USB D+ (repurposed as GPIO)
                                                 // Set HIGH when target weight reached, LOW otherwise
 
 // J15 Pin 8 - SPARE2: ESP32 GPIO22 ↔ Pico GPIO22 (4.7kΩ pull-down on Pico side)

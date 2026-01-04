@@ -108,6 +108,7 @@ bool diagnostics_run_all(diag_report_t* report) {
         { DIAG_TEST_ESP32_COMM, diag_test_esp32_comm },
         { DIAG_TEST_BUZZER, diag_test_buzzer },
         { DIAG_TEST_LED, diag_test_led },
+        { DIAG_TEST_WEIGHT_STOP, diag_test_weight_stop_input },
     };
     
     const int num_tests = sizeof(tests) / sizeof(tests[0]);
@@ -191,6 +192,9 @@ uint8_t diagnostics_run_test(uint8_t test_id, diag_result_t* result) {
             break;
         case DIAG_TEST_LED:
             diag_test_led(result);
+            break;
+        case DIAG_TEST_WEIGHT_STOP:
+            diag_test_weight_stop_input(result);
             break;
         // Class B Safety Tests
         case DIAG_TEST_CLASS_B_ALL:
@@ -711,6 +715,41 @@ uint8_t diag_test_led(diag_result_t* result) {
     set_result(result, DIAG_STATUS_PASS, "LED flashed");
     
     DEBUG_PRINT("LED: test flash\n");
+    return result->status;
+}
+
+uint8_t diag_test_weight_stop_input(diag_result_t* result) {
+    init_result(result, DIAG_TEST_WEIGHT_STOP);
+    
+    const pcb_config_t* pcb = pcb_config_get();
+    if (!pcb || !PIN_VALID(pcb->pins.input_weight_stop)) {
+        set_result(result, DIAG_STATUS_SKIP, "Not configured");
+        return result->status;
+    }
+    
+    // Read current state of GPIO21 (WEIGHT_STOP input)
+    // This pin should normally be LOW (pull-down on Pico side)
+    // ESP32 GPIO19 drives this signal HIGH when weight target is reached
+    bool current_state = hw_read_gpio(pcb->pins.input_weight_stop);
+    
+    // Test that we can read the pin (basic functionality test)
+    // For full end-to-end test, ESP32 would need to toggle GPIO19
+    // This test verifies the pin is configured and readable
+    if (current_state) {
+        // Pin is HIGH - could be ESP32 is signaling, or wiring issue
+        set_result(result, DIAG_STATUS_WARN, "Pin reads HIGH (check ESP32 signal)");
+        result->raw_value = 1;
+    } else {
+        // Pin is LOW - normal state (ESP32 GPIO19 should be LOW)
+        set_result(result, DIAG_STATUS_PASS, "Pin reads LOW (normal)");
+        result->raw_value = 0;
+    }
+    
+    result->expected_min = 0;
+    result->expected_max = 1;
+    
+    DEBUG_PRINT("WEIGHT_STOP input (GPIO%d): state=%d\n", 
+                pcb->pins.input_weight_stop, current_state);
     return result->status;
 }
 

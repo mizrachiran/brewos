@@ -12,6 +12,7 @@
 #include "power_meter/power_meter_manager.h"
 #include "log_manager.h"
 #include "ui/ui.h"
+#include "esp32_diagnostics.h"
 #include <WiFi.h>
 #include <LittleFS.h>
 #include <HTTPClient.h>
@@ -2027,13 +2028,36 @@ void BrewWebServer::setupRoutes() {
             }
             
             uint8_t testId = doc["testId"] | 0;
-            uint8_t payload[1] = { testId };
             
-            if (_picoUart.sendCommand(MSG_CMD_DIAGNOSTICS, payload, 1)) {
-                broadcastLog("Running diagnostic test %d", testId);
-                request->send(200, "application/json", "{\"status\":\"ok\"}");
+            // Check if this is an ESP32-side test (GPIO19/GPIO20)
+            if (esp32_diagnostics_is_esp32_test(testId)) {
+                // Run ESP32-side test locally
+                diag_result_t result;
+                uint8_t status = esp32_diagnostics_run_test(testId, &result);
+                
+                // Return result as JSON
+                #pragma GCC diagnostic push
+                #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+                StaticJsonDocument<256> responseDoc;
+                #pragma GCC diagnostic pop
+                responseDoc["status"] = (status == DIAG_STATUS_PASS) ? "ok" : "fail";
+                responseDoc["testId"] = result.test_id;
+                responseDoc["resultStatus"] = result.status;
+                responseDoc["message"] = result.message;
+                responseDoc["rawValue"] = result.raw_value;
+                
+                String response;
+                serializeJson(responseDoc, response);
+                request->send(200, "application/json", response);
             } else {
-                request->send(500, "application/json", "{\"error\":\"Failed to send command\"}");
+                // Forward Pico-side test to Pico
+                uint8_t payload[1] = { testId };
+                if (_picoUart.sendCommand(MSG_CMD_DIAGNOSTICS, payload, 1)) {
+                    broadcastLog("Running diagnostic test %d", testId);
+                    request->send(200, "application/json", "{\"status\":\"ok\"}");
+                } else {
+                    request->send(500, "application/json", "{\"error\":\"Failed to send command\"}");
+                }
             }
         }
     );

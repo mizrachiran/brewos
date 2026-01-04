@@ -27,13 +27,11 @@ void PicoUART::begin() {
     Serial1.begin(PICO_UART_BAUD, SERIAL_8N1, PICO_UART_RX_PIN, PICO_UART_TX_PIN);
     
     // Initialize control pins
-    // NOTE: PICO_RUN_PIN (GPIO8) conflicts with DISPLAY_RST_PIN (GPIO8)
-    // Since Pico is not wired in current configuration, skip configuring GPIO8
-    // to avoid resetting the display. If Pico is connected later, use a different
-    // GPIO pin for Pico reset or configure GPIO8 after display initialization.
-    // pinMode(PICO_RUN_PIN, OUTPUT);
-    // digitalWrite(PICO_RUN_PIN, LOW);       // LOW = Pico running
+    // GPIO20 (PICO_RUN_PIN) - repurposed from USB D- for Pico reset control
+    pinMode(PICO_RUN_PIN, OUTPUT);
+    digitalWrite(PICO_RUN_PIN, HIGH);      // HIGH = Pico running (LOW = reset)
     
+    // GPIO19 (WEIGHT_STOP_PIN) - repurposed from USB D+ for brew-by-weight signal
     pinMode(WEIGHT_STOP_PIN, OUTPUT);
     digitalWrite(WEIGHT_STOP_PIN, LOW);    // LOW = no weight stop signal
     
@@ -253,17 +251,14 @@ bool PicoUART::enterBootloader() {
 }
 
 void PicoUART::resetPico() {
-    LOG_I("Resetting Pico...");
+    LOG_I("Resetting Pico via GPIO%d...", PICO_RUN_PIN);
     
-    // NOTE: PICO_RUN_PIN (GPIO8) conflicts with DISPLAY_RST_PIN (GPIO8)
-    // Resetting Pico would reset the display. Skip if Pico is not wired.
-    // If Pico reset is needed, use a different GPIO pin or do it before display init.
-    LOG_W("Pico reset skipped - GPIO8 conflicts with display reset pin");
-    // digitalWrite(PICO_RUN_PIN, HIGH);
-    // delay(100);
-    // digitalWrite(PICO_RUN_PIN, LOW);
+    // Pull RUN pin LOW to reset Pico (GPIO20 repurposed from USB D-)
+    digitalWrite(PICO_RUN_PIN, LOW);
+    delay(100);
+    digitalWrite(PICO_RUN_PIN, HIGH);  // Release - Pico will boot
     
-    LOG_I("Pico reset complete (skipped)");
+    LOG_I("Pico reset complete");
 }
 
 void PicoUART::holdBootsel(bool hold) {
