@@ -13,6 +13,7 @@
 #include "log_manager.h"
 #include "ui/ui.h"
 #include "esp32_diagnostics.h"
+#include "wifi_setup_page.h"
 #include <WiFi.h>
 #include <LittleFS.h>
 #include <HTTPClient.h>
@@ -200,250 +201,14 @@ void BrewWebServer::setupRoutes() {
         request->send(200, "text/plain", "OK");
     });
     
-    // WiFi Setup page - inline HTML (no file operations, no PSRAM issues)
-    // This follows IoT best practices: minimal setup page served directly
+    // WiFi Setup page - served from PROGMEM (flash memory, not RAM/PSRAM)
+    // HTML is defined in wifi_setup_page.h
     _server.on("/setup", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        // Inline HTML WiFi setup page - completely self-contained
-        // No file operations, no PSRAM usage, works reliably
-        // Using PROGMEM to store in flash (not RAM/PSRAM)
-        const char html[] PROGMEM = R"rawliteral(
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>BrewOS WiFi Setup</title>
-    <style>
-        *{box-sizing:border-box;margin:0;padding:0}
-        body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:linear-gradient(145deg,#1a1412 0%,#2d1f18 50%,#1a1412 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-        .card{background:linear-gradient(180deg,#1e1714 0%,#171210 100%);border-radius:24px;box-shadow:0 25px 80px rgba(0,0,0,0.5),0 0 0 1px rgba(186,132,86,0.1);max-width:420px;width:100%;padding:40px 32px;position:relative;overflow:hidden}
-        .card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#ba8456,#c38f5f,#a06b3d)}
-        .logo{width:80px;height:80px;margin:0 auto 24px;display:block;filter:drop-shadow(0 4px 12px rgba(186,132,86,0.3))}
-        h1{color:#f5f0eb;text-align:center;margin-bottom:8px;font-size:26px;font-weight:600;letter-spacing:-0.5px}
-        .subtitle{color:#9a8578;text-align:center;margin-bottom:32px;font-size:14px}
-        .form-group{margin-bottom:20px}
-        label{display:block;color:#c4b5a9;font-weight:500;margin-bottom:10px;font-size:13px;text-transform:uppercase;letter-spacing:0.5px}
-        input{width:100%;padding:14px 16px;background:#0d0a09;border:1px solid #3d2e24;border-radius:12px;font-size:15px;color:#f5f0eb;transition:all 0.2s}
-        input::placeholder{color:#5c4d42}
-        input:focus{outline:none;border-color:#ba8456;box-shadow:0 0 0 3px rgba(186,132,86,0.15)}
-        .btn{width:100%;padding:16px;background:linear-gradient(135deg,#ba8456 0%,#a06b3d 100%);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;transition:all 0.2s;text-transform:uppercase;letter-spacing:0.5px}
-        .btn:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(186,132,86,0.3)}
-        .btn:active{transform:translateY(0)}
-        .btn:disabled{opacity:0.4;cursor:not-allowed;transform:none}
-        .btn-secondary{background:#2d241e;color:#c4b5a9;margin-top:12px}
-        .btn-secondary:hover{background:#3d2e24}
-        .status{margin-top:20px;padding:14px 16px;border-radius:12px;font-size:14px;display:none;text-align:center}
-        .status.success{background:rgba(34,197,94,0.1);color:#4ade80;border:1px solid rgba(34,197,94,0.2)}
-        .status.error{background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.2)}
-        .status.info{background:rgba(186,132,86,0.1);color:#d5a071;border:1px solid rgba(186,132,86,0.2)}
-        .network-list{max-height:280px;overflow-y:auto;background:#0d0a09;border:1px solid #3d2e24;border-radius:12px;margin-bottom:16px}
-        .network-list::-webkit-scrollbar{width:6px}
-        .network-list::-webkit-scrollbar-track{background:#1a1412}
-        .network-list::-webkit-scrollbar-thumb{background:#3d2e24;border-radius:3px}
-        .network-item{padding:14px 16px;border-bottom:1px solid #2d241e;cursor:pointer;transition:all 0.15s}
-        .network-item:hover{background:#1a1412}
-        .network-item:last-child{border-bottom:none}
-        .network-item.selected{background:rgba(186,132,86,0.1);border-color:rgba(186,132,86,0.3)}
-        .network-ssid{font-weight:500;color:#f5f0eb;font-size:15px;display:flex;align-items:center;gap:8px}
-        .network-ssid .lock{color:#ba8456;font-size:12px}
-        .network-rssi{font-size:12px;color:#7a6b5f;margin-top:4px}
-        .signal-bars{display:inline-flex;gap:2px;margin-left:auto}
-        .signal-bar{width:3px;background:#3d2e24;border-radius:1px}
-        .signal-bar.active{background:#ba8456}
-        .empty-state{text-align:center;padding:40px 20px;color:#5c4d42}
-        .empty-state svg{width:48px;height:48px;margin-bottom:16px;opacity:0.5}
-        .spinner{display:inline-block;width:18px;height:18px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 0.6s linear infinite;margin-right:8px;vertical-align:middle}
-        @keyframes spin{to{transform:rotate(360deg)}}
-        .divider{height:1px;background:linear-gradient(90deg,transparent,#3d2e24,transparent);margin:24px 0}
-    </style>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-</head>
-<body>
-    <div class="card">
-        <svg class="logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="50" cy="50" r="48" fill="url(#grad1)" stroke="#ba8456" stroke-width="2"/>
-            <path d="M30 35C30 35 32 25 50 25C68 25 70 35 70 35V60C70 70 60 75 50 75C40 75 30 70 30 60V35Z" fill="#2d1f18" stroke="#ba8456" stroke-width="2"/>
-            <path d="M70 40H75C80 40 82 45 82 50C82 55 80 60 75 60H70" stroke="#ba8456" stroke-width="2" fill="none"/>
-            <ellipse cx="50" cy="35" rx="18" ry="6" fill="#ba8456" opacity="0.3"/>
-            <path d="M40 50C42 55 48 58 50 58C52 58 58 55 60 50" stroke="#d5a071" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
-            <defs><linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1e1714"/><stop offset="100%" stop-color="#0d0a09"/></linearGradient></defs>
-        </svg>
-        
-        <h1>BrewOS</h1>
-        <p class="subtitle">Connect your espresso machine to WiFi</p>
-        
-        <div class="form-group">
-            <label>Available Networks</label>
-            <div id="networkList" class="network-list">
-                <div class="empty-state">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M8.288 15.038a5.25 5.25 0 017.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 011.06 0z"/>
-                    </svg>
-                    <p>Tap "Scan" to find networks</p>
-                </div>
-            </div>
-        </div>
-        
-        <button id="scanBtn" class="btn btn-secondary" onclick="scanNetworks()">
-            <span id="scanSpinner" class="spinner" style="display:none"></span>
-            <span id="scanText">Scan for Networks</span>
-        </button>
-        
-        <div class="divider"></div>
-        
-        <div class="form-group" id="passwordGroup" style="display:none">
-            <label>WiFi Password</label>
-            <input type="password" id="password" placeholder="Enter password">
-        </div>
-        
-        <button id="connectBtn" class="btn" onclick="connectWiFi()" disabled>
-            <span id="connectSpinner" class="spinner" style="display:none"></span>
-            <span id="connectText">Connect to Network</span>
-        </button>
-        
-        <div id="status" class="status"></div>
-    </div>
-    
-    <script>
-        let selectedSSID = '';
-        
-        function showStatus(message, type) {
-            const status = document.getElementById('status');
-            status.textContent = message;
-            status.className = 'status ' + type;
-            status.style.display = 'block';
-        }
-        
-        function hideStatus() {
-            document.getElementById('status').style.display = 'none';
-        }
-        
-        function getSignalBars(rssi) {
-            const bars = rssi > -50 ? 4 : rssi > -60 ? 3 : rssi > -70 ? 2 : 1;
-            return Array(4).fill(0).map((_, i) => 
-                `<div class="signal-bar${i < bars ? ' active' : ''}" style="height:${6 + i * 3}px"></div>`
-            ).join('');
-        }
-        
-        async function scanNetworks() {
-            const btn = document.getElementById('scanBtn');
-            const spinner = document.getElementById('scanSpinner');
-            const text = document.getElementById('scanText');
-            const list = document.getElementById('networkList');
-            
-            btn.disabled = true;
-            spinner.style.display = 'inline-block';
-            text.textContent = 'Scanning...';
-            hideStatus();
-            
-            try {
-                const response = await fetch('/api/wifi/networks');
-                const data = await response.json();
-                
-                if (data.networks && data.networks.length > 0) {
-                    list.innerHTML = '';
-                    data.networks.sort((a,b) => b.rssi - a.rssi).forEach(network => {
-                        const item = document.createElement('div');
-                        item.className = 'network-item';
-                        item.onclick = () => selectNetwork(network.ssid, network.secure, item);
-                        item.innerHTML = `
-                            <div class="network-ssid">
-                                ${escapeHtml(network.ssid)}
-                                ${network.secure ? '<span class="lock">🔒</span>' : ''}
-                                <span class="signal-bars">${getSignalBars(network.rssi)}</span>
-                            </div>
-                            <div class="network-rssi">${network.rssi} dBm</div>
-                        `;
-                        list.appendChild(item);
-                    });
-                    showStatus(data.networks.length + ' networks found', 'success');
-                } else {
-                    list.innerHTML = '<div class="empty-state"><p>No networks found</p></div>';
-                    showStatus('No networks found. Try again.', 'error');
-                }
-            } catch (error) {
-                showStatus('Scan failed. Please try again.', 'error');
-                list.innerHTML = '<div class="empty-state"><p>Scan failed</p></div>';
-            }
-            
-            btn.disabled = false;
-            spinner.style.display = 'none';
-            text.textContent = 'Scan for Networks';
-        }
-        
-        function selectNetwork(ssid, secure, element) {
-            selectedSSID = ssid;
-            document.getElementById('passwordGroup').style.display = secure ? 'block' : 'none';
-            document.getElementById('connectBtn').disabled = false;
-            
-            document.querySelectorAll('.network-item').forEach(item => item.classList.remove('selected'));
-            element.classList.add('selected');
-            
-            showStatus('Selected: ' + ssid, 'info');
-        }
-        
-        async function connectWiFi() {
-            if (!selectedSSID) {
-                showStatus('Please select a network first', 'error');
-                return;
-            }
-            
-            const password = document.getElementById('password').value;
-            const btn = document.getElementById('connectBtn');
-            const spinner = document.getElementById('connectSpinner');
-            const text = document.getElementById('connectText');
-            
-            btn.disabled = true;
-            spinner.style.display = 'inline-block';
-            text.textContent = 'Connecting...';
-            hideStatus();
-            
-            try {
-                const response = await fetch('/api/wifi/connect', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ssid: selectedSSID, password: password})
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    showStatus('Connected! Redirecting to BrewOS...', 'success');
-                    text.textContent = 'Connected!';
-                    setTimeout(() => {
-                        window.location.href = 'http://brewos.local';
-                    }, 3000);
-                } else {
-                    showStatus(data.error || 'Connection failed', 'error');
-                    btn.disabled = false;
-                    spinner.style.display = 'none';
-                    text.textContent = 'Connect to Network';
-                }
-            } catch (error) {
-                showStatus('Connection error. Please try again.', 'error');
-                btn.disabled = false;
-                spinner.style.display = 'none';
-                text.textContent = 'Connect to Network';
-            }
-        }
-        
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-        
-        // Auto-scan on load
-        window.onload = () => scanNetworks();
-    </script>
-</body>
-</html>
-)rawliteral";
         // Copy from PROGMEM to regular RAM for AsyncWebServer
-        size_t htmlLen = strlen_P(html);
+        size_t htmlLen = strlen_P(WIFI_SETUP_PAGE_HTML);
         char* htmlBuffer = (char*)heap_caps_malloc(htmlLen + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (htmlBuffer) {
-            strcpy_P(htmlBuffer, html);
+            strcpy_P(htmlBuffer, WIFI_SETUP_PAGE_HTML);
             request->send(200, "text/html", htmlBuffer);
             // Buffer will be freed by AsyncWebServer after response
         } else {
@@ -2342,6 +2107,45 @@ static int _cachedNetworkCount = 0;
 static unsigned long _lastScanTime = 0;
 static const unsigned long SCAN_CACHE_TIMEOUT_MS = 30000;  // Cache results for 30 seconds
 
+/**
+ * Helper function to build deduplicated network list
+ * Networks are already sorted by RSSI (strongest first), so we just skip duplicates
+ * Returns the number of unique networks added
+ */
+static int buildDeduplicatedNetworks(JsonArray& networks, int scanResult, int maxNetworks) {
+    int uniqueCount = 0;
+    
+    // Track seen SSIDs to avoid duplicates
+    // Since networks are sorted by RSSI (strongest first), first occurrence is the best
+    for (int i = 0; i < scanResult && uniqueCount < maxNetworks; i++) {
+        String ssid = WiFi.SSID(i);
+        if (ssid.length() == 0) {
+            continue;  // Skip empty SSIDs
+        }
+        
+        // Check if we've already added this SSID
+        bool alreadyAdded = false;
+        for (size_t j = 0; j < networks.size(); j++) {
+            JsonObject network = networks[j];
+            if (network["ssid"].as<String>() == ssid) {
+                alreadyAdded = true;
+                break;
+            }
+        }
+        
+        // Only add if we haven't seen this SSID yet (first = strongest signal)
+        if (!alreadyAdded) {
+            JsonObject network = networks.add<JsonObject>();
+            network["ssid"] = ssid;
+            network["rssi"] = WiFi.RSSI(i);
+            network["secure"] = (WiFi.encryptionType(i) != WIFI_AUTH_OPEN);
+            uniqueCount++;
+        }
+    }
+    
+    return uniqueCount;
+}
+
 void BrewWebServer::handleGetWiFiNetworks(AsyncWebServerRequest* request) {
     // Use cached results if available and fresh
     unsigned long now = millis();
@@ -2357,16 +2161,9 @@ void BrewWebServer::handleGetWiFiNetworks(AsyncWebServerRequest* request) {
         
         int n = WiFi.scanComplete();
         if (n > 0) {
-            int maxNetworks = (n > 20) ? 20 : n;
-            for (int i = 0; i < maxNetworks; i++) {
-                String ssid = WiFi.SSID(i);
-                if (ssid.length() > 0) {
-                    JsonObject network = networks.add<JsonObject>();
-                    network["ssid"] = ssid;
-                    network["rssi"] = WiFi.RSSI(i);
-                    network["secure"] = (WiFi.encryptionType(i) != WIFI_AUTH_OPEN);
-                }
-            }
+            int maxNetworks = 20;  // Limit to 20 unique networks
+            int uniqueCount = buildDeduplicatedNetworks(networks, n, maxNetworks);
+            LOG_I("Deduplicated %d networks to %d unique SSIDs", n, uniqueCount);
         }
         
         size_t jsonSize = measureJson(doc) + 1;
@@ -2405,16 +2202,9 @@ void BrewWebServer::handleGetWiFiNetworks(AsyncWebServerRequest* request) {
         SpiRamJsonDocument doc(2048);
         JsonArray networks = doc["networks"].to<JsonArray>();
         
-        int maxNetworks = (scanResult > 20) ? 20 : scanResult;
-        for (int i = 0; i < maxNetworks; i++) {
-            String ssid = WiFi.SSID(i);
-            if (ssid.length() > 0) {
-                JsonObject network = networks.add<JsonObject>();
-                network["ssid"] = ssid;
-                network["rssi"] = WiFi.RSSI(i);
-                network["secure"] = (WiFi.encryptionType(i) != WIFI_AUTH_OPEN);
-            }
-        }
+        int maxNetworks = 20;  // Limit to 20 unique networks
+        int uniqueCount = buildDeduplicatedNetworks(networks, scanResult, maxNetworks);
+        LOG_I("Deduplicated %d networks to %d unique SSIDs", scanResult, uniqueCount);
         
         size_t jsonSize = measureJson(doc) + 1;
         char* jsonBuffer = (char*)heap_caps_malloc(jsonSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
