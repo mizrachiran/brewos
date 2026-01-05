@@ -7,6 +7,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <stdarg.h>
+#include <LittleFS.h>
 
 // Forward declaration for web server (defined in main.cpp)
 // Helper function to broadcast log via WebSocket (defined in web_server_broadcast.cpp)
@@ -32,6 +33,7 @@ LogManager::LogManager()
     , _mutex(nullptr)
     , _picoLogForwarding(false)
     , _enabled(false)
+    , _lastSaveTime(0)
 {
     // Create mutex early (small memory footprint)
     _mutex = xSemaphoreCreateMutex();
@@ -66,15 +68,28 @@ bool LogManager::enable() {
         return false;
     }
     
-    memset(_buffer, 0, LOG_BUFFER_SIZE);
-    _head = 0;
-    _tail = 0;
-    _size = 0;
-    _wrapped = false;
+    // Try to restore logs from flash before clearing
+    // This preserves crash logs across reboots
+    bool restored = restoreFromFlash();
+    
+    // Only clear if we didn't restore (first time or restore failed)
+    if (!restored) {
+        memset(_buffer, 0, LOG_BUFFER_SIZE);
+        _head = 0;
+        _tail = 0;
+        _size = 0;
+        _wrapped = false;
+    }
+    
     _enabled = true;
+    _lastSaveTime = 0;  // Initialize save time (will be set on first loop call)
     
     Serial.printf("[LogManager] Enabled - allocated %dKB buffer\n", LOG_BUFFER_SIZE / 1024);
-    addLog(BREWOS_LOG_INFO, LOG_SOURCE_ESP32, "Log buffer enabled (50KB)");
+    if (restored) {
+        addLog(BREWOS_LOG_INFO, LOG_SOURCE_ESP32, "Log buffer enabled (50KB) - restored from flash");
+    } else {
+        addLog(BREWOS_LOG_INFO, LOG_SOURCE_ESP32, "Log buffer enabled (50KB)");
+    }
     
     return true;
 }
@@ -355,4 +370,357 @@ void log_manager_add_logf(int level, LogSource source, const char* format, ...) 
     va_end(args);
     
     g_logManager->addLog((BrewOSLogLevel)level, source, message);
+}
+
+bool LogManager::saveToFlash() {
+    if (!_buffer) {
+        return false;  // Buffer not allocated
+    }
+    
+    // Save even if size is 0 (might have crash info just added)
+    // But skip if not enabled (unless we're in panic context - handled separately)
+    if (!_enabled && _size == 0) {
+        return false;
+    }
+    
+    // Try to use LittleFS - first try if already mounted, then try to mount
+    bool fsMounted = false;
+    // Try to open a file to check if already mounted
+    File testFile = LittleFS.open("/logs.bin", "r");
+    if (testFile) {
+        testFile.close();
+        fsMounted = true;
+    } else {
+        // Try to mount (don't format in panic context)
+        fsMounted = LittleFS.begin(false);
+    }
+    
+    if (!fsMounted) {
+        return false;  // LittleFS not available
+    }
+    
+    // Try to get mutex (with short timeout - skip in panic context if can't get it)
+    bool hasMutex = false;
+    if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+        hasMutex = true;
+    }
+    // Continue even without mutex in panic context
+    
+    bool success = false;
+    
+    // Get current RAM buffer as text
+    String ramLogs = getLogs();
+    if (ramLogs.length() == 0 && _size == 0) {
+        return false;  // Nothing to save
+    }
+    
+    // Append RAM logs to flash file (text format, not binary)
+    File file = LittleFS.open("/logs.txt", "a");  // Append mode
+    if (file) {
+        // Write RAM buffer logs
+        file.print(ramLogs);
+        file.flush();
+        file.close();
+        
+        // Check file size and truncate if needed (keep only most recent logs)
+        File sizeCheck = LittleFS.open("/logs.txt", "r");
+        if (sizeCheck) {
+            size_t fileSize = sizeCheck.size();
+            sizeCheck.close();
+            
+            if (fileSize > LOG_FLASH_MAX_SIZE) {
+                // Read entire file, keep only the last LOG_FLASH_MAX_SIZE bytes
+                File readFile = LittleFS.open("/logs.txt", "r");
+                if (readFile) {
+                    String allLogs = readFile.readString();
+                    readFile.close();
+                    
+                    // Keep only the last LOG_FLASH_MAX_SIZE bytes (most recent logs)
+                    if (allLogs.length() > LOG_FLASH_MAX_SIZE) {
+                        allLogs = allLogs.substring(allLogs.length() - LOG_FLASH_MAX_SIZE);
+                        // Find first newline to avoid cutting in the middle of a log entry
+                        int firstNewline = allLogs.indexOf('\n');
+                        if (firstNewline > 0) {
+                            allLogs = allLogs.substring(firstNewline + 1);
+                        }
+                    }
+                    
+                    // Write truncated logs back
+                    File truncFile = LittleFS.open("/logs.txt", "w");
+                    if (truncFile) {
+                        truncFile.print(allLogs);
+                        truncFile.flush();
+                        truncFile.close();
+                        success = true;
+                    }
+                }
+            } else {
+                success = true;
+            }
+        }
+    }
+    
+    // Also keep binary format for restoreFromFlash (for backward compatibility)
+    // But primary storage is now text format
+    File binFile = LittleFS.open("/logs.bin", "w");
+    if (binFile) {
+        // Write header: size (4 bytes), head (4 bytes), tail (4 bytes), wrapped (1 byte)
+        binFile.write((uint8_t*)&_size, sizeof(_size));
+        binFile.write((uint8_t*)&_head, sizeof(_head));
+        binFile.write((uint8_t*)&_tail, sizeof(_tail));
+        binFile.write((uint8_t*)&_wrapped, sizeof(_wrapped));
+        
+        if (_size > 0) {
+            if (_wrapped) {
+                size_t firstPart = LOG_BUFFER_SIZE - _tail;
+                binFile.write((uint8_t*)(_buffer + _tail), firstPart);
+                binFile.write((uint8_t*)_buffer, _head);
+            } else {
+                binFile.write((uint8_t*)_buffer, _head);
+            }
+        }
+        binFile.close();
+    }
+    
+    if (hasMutex) {
+        xSemaphoreGive(_mutex);
+    }
+    
+    return success;
+}
+
+bool LogManager::restoreFromFlash() {
+    if (!_buffer) {
+        return false;  // Buffer not allocated yet
+    }
+    
+    // Check if LittleFS is mounted
+    if (!LittleFS.begin(false)) {  // false = don't format if mount fails
+        return false;
+    }
+    
+    // Check if log file exists
+    if (!LittleFS.exists("/logs.bin")) {
+        return false;  // No saved logs
+    }
+    
+    File file = LittleFS.open("/logs.bin", "r");
+    if (!file) {
+        return false;
+    }
+    
+    // Read header
+    size_t savedSize = 0;
+    size_t savedHead = 0;
+    size_t savedTail = 0;
+    bool savedWrapped = false;
+    
+    if (file.read((uint8_t*)&savedSize, sizeof(savedSize)) != sizeof(savedSize) ||
+        file.read((uint8_t*)&savedHead, sizeof(savedHead)) != sizeof(savedHead) ||
+        file.read((uint8_t*)&savedTail, sizeof(savedTail)) != sizeof(savedTail) ||
+        file.read((uint8_t*)&savedWrapped, sizeof(savedWrapped)) != sizeof(savedWrapped)) {
+        file.close();
+        return false;  // Invalid header
+    }
+    
+    // Validate header values
+    if (savedHead >= LOG_BUFFER_SIZE || savedTail >= LOG_BUFFER_SIZE || savedSize > LOG_BUFFER_SIZE) {
+        file.close();
+        return false;  // Invalid data
+    }
+    
+    // Clear buffer first
+    memset(_buffer, 0, LOG_BUFFER_SIZE);
+    
+    // Read buffer data
+    bool success = false;
+    if (savedWrapped) {
+        // Read from tail to end, then from start to head
+        size_t firstPart = LOG_BUFFER_SIZE - savedTail;
+        if (file.read((uint8_t*)(_buffer + savedTail), firstPart) == firstPart &&
+            file.read((uint8_t*)_buffer, savedHead) == savedHead) {
+            _head = savedHead;
+            _tail = savedTail;
+            _size = savedSize;
+            _wrapped = savedWrapped;
+            success = true;
+        }
+    } else {
+        // Read from start to head
+        if (file.read((uint8_t*)_buffer, savedHead) == savedHead) {
+            _head = savedHead;
+            _tail = savedTail;
+            _size = savedSize;
+            _wrapped = savedWrapped;
+            success = true;
+        }
+    }
+    
+    file.close();
+    
+    if (success) {
+        Serial.printf("[LogManager] Restored %zu bytes of logs from flash\n", _size);
+    }
+    
+    return success;
+}
+
+void LogManager::loop() {
+    if (!_enabled || !_buffer) {
+        return;  // Not enabled, nothing to do
+    }
+    
+    unsigned long now = millis();
+    
+    // Auto-save every 30 seconds
+    const unsigned long AUTO_SAVE_INTERVAL_MS = 30000;  // 30 seconds
+    
+    // Check if buffer is 50% full (trigger immediate save)
+    bool bufferNearlyFull = false;
+    if (_wrapped) {
+        // Buffer is full, always save
+        bufferNearlyFull = true;
+    } else {
+        // Check if buffer is 50% full
+        size_t fillPercent = (_head * 100) / LOG_BUFFER_SIZE;
+        bufferNearlyFull = (fillPercent >= 50);
+    }
+    
+    // Check if it's time to save (time-based or buffer full)
+    bool shouldSave = false;
+    if (bufferNearlyFull) {
+        shouldSave = true;
+    } else if (_lastSaveTime == 0) {
+        // First time, initialize save time (don't save immediately)
+        _lastSaveTime = now;
+        return;
+    } else if (now - _lastSaveTime >= AUTO_SAVE_INTERVAL_MS) {
+        shouldSave = true;
+    }
+    
+    if (shouldSave && _size > 0) {
+        // Save to flash (non-blocking, uses mutex with timeout)
+        if (saveToFlash()) {
+            _lastSaveTime = now;
+            // Log the save (but don't use LOG macros to avoid recursion)
+            // Just update the timestamp, user can see it in the logs
+        }
+    }
+}
+
+String LogManager::getLogsFromFlash() {
+    String result;
+    
+    // Check if LittleFS is mounted
+    bool fsMounted = false;
+    File testFile = LittleFS.open("/logs.txt", "r");
+    if (testFile) {
+        testFile.close();
+        fsMounted = true;
+    } else {
+        fsMounted = LittleFS.begin(false);
+    }
+    
+    if (!fsMounted) {
+        return String("ERROR: LittleFS not available");
+    }
+    
+    // Read from text file (primary storage)
+    File file = LittleFS.open("/logs.txt", "r");
+    if (file) {
+        result = file.readString();
+        file.close();
+        return result;
+    }
+    
+    // Fallback to binary format (for backward compatibility)
+    File binFile = LittleFS.open("/logs.bin", "r");
+    if (!binFile) {
+        return String("ERROR: Could not open log file");
+    }
+    
+    // Read header
+    size_t savedSize = 0;
+    size_t savedHead = 0;
+    size_t savedTail = 0;
+    bool savedWrapped = false;
+    
+    if (binFile.read((uint8_t*)&savedSize, sizeof(savedSize)) != sizeof(savedSize) ||
+        binFile.read((uint8_t*)&savedHead, sizeof(savedHead)) != sizeof(savedHead) ||
+        binFile.read((uint8_t*)&savedTail, sizeof(savedTail)) != sizeof(savedTail) ||
+        binFile.read((uint8_t*)&savedWrapped, sizeof(savedWrapped)) != sizeof(savedWrapped)) {
+        binFile.close();
+        return String("ERROR: Invalid log file header");
+    }
+    
+    // Validate header
+    if (savedHead >= LOG_BUFFER_SIZE || savedTail >= LOG_BUFFER_SIZE || savedSize > LOG_BUFFER_SIZE) {
+        binFile.close();
+        return String("ERROR: Invalid log file data");
+    }
+    
+    // Read buffer data
+    result.reserve(savedSize + 1);
+    if (savedWrapped) {
+        size_t firstPart = LOG_BUFFER_SIZE - savedTail;
+        for (size_t i = 0; i < firstPart; i++) {
+            char c = binFile.read();
+            if (c >= 0) result += c;
+        }
+        for (size_t i = 0; i < savedHead; i++) {
+            char c = binFile.read();
+            if (c >= 0) result += c;
+        }
+    } else {
+        for (size_t i = 0; i < savedHead; i++) {
+            char c = binFile.read();
+            if (c >= 0) result += c;
+        }
+    }
+    
+    binFile.close();
+    return result;
+}
+
+String LogManager::getLogsComplete() {
+    // First, flush RAM buffer to flash to ensure we have latest logs
+    if (_enabled && _buffer && _size > 0) {
+        saveToFlash();
+    }
+    
+    // Then get logs from flash (which has complete history)
+    return getLogsFromFlash();
+}
+
+void LogManager::addLogDirect(BrewOSLogLevel level, LogSource source, const char* message) {
+    // No-op if disabled - but try to write even if not enabled (panic context)
+    if (!_buffer || !message) return;
+    
+    // Direct write without mutex - for panic handler use only
+    // Format: [timestamp] [SOURCE] LEVEL: message\n
+    char entry[LOG_ENTRY_MAX_SIZE];
+    unsigned long timestamp = millis();
+    
+    // Calculate available space for message (leave room for prefix and newline)
+    size_t prefixLen = snprintf(entry, sizeof(entry), "[%lu] [%s] %s: ", 
+                                 timestamp, sourceToString(source), levelToString(level));
+    size_t maxMsgLen = sizeof(entry) - prefixLen - 2; // -2 for \n and \0
+    
+    // Truncate message if needed
+    char truncatedMsg[LOG_ENTRY_MAX_SIZE];
+    strncpy(truncatedMsg, message, maxMsgLen);
+    truncatedMsg[maxMsgLen] = '\0';
+    
+    // Format complete entry
+    int len = snprintf(entry, sizeof(entry), "[%lu] [%s] %s: %s\n",
+                       timestamp,
+                       sourceToString(source),
+                       levelToString(level),
+                       truncatedMsg);
+    
+    // Write directly to buffer (no mutex - panic context)
+    if (len > 0) {
+        size_t writeLen = (len < (int)sizeof(entry)) ? len : sizeof(entry) - 1;
+        writeToBuffer(entry, writeLen);
+    }
 }

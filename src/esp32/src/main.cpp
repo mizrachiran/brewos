@@ -76,6 +76,9 @@
 // Runtime State Management
 #include "runtime_state.h"
 
+// Panic Handler - catches crashes and writes to log buffer
+#include "panic_handler.h"
+
 // Global instances - use pointers to defer construction until setup()
 // This prevents crashes in constructors before Serial is initialized
 WiFiManager* wifiManager = nullptr;
@@ -722,6 +725,9 @@ static void setupEarlyInitialization() {
     if (diagnosticBufferMutex == nullptr) {
         Serial.println("ERROR: Failed to create diagnostic buffer mutex");
     }
+    
+    // Register panic handler early to catch crashes
+    registerPanicHandler();
     
     // Print startup info (will be lost if no USB host connected)
     Serial.println();
@@ -1785,6 +1791,12 @@ static void loopOptionalServiceUpdates() {
         scaleManager->loop();
         yield();
     }
+    
+    // Log Manager - periodic auto-save to flash
+    if (g_logManager && g_logManager->isEnabled()) {
+        g_logManager->loop();
+    }
+    yield();  // Feed watchdog
 }
 
 static void loopUpdateConnectionStates() {

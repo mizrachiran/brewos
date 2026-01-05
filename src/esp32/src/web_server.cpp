@@ -793,13 +793,15 @@ void BrewWebServer::setupRoutes() {
     });
     
     // GET /api/logs - Download system logs as text file
+    // Flushes RAM to flash and returns complete log history from flash
     _server.on("/api/logs", HTTP_GET, [](AsyncWebServerRequest* request) {
         if (!g_logManager || !g_logManager->isEnabled()) {
             request->send(503, "application/json", "{\"error\":\"Log buffer not enabled\"}");
             return;
         }
         
-        String logs = g_logManager->getLogs();
+        // Flush RAM to flash and get complete logs (from flash, which has full history)
+        String logs = g_logManager->getLogsComplete();
         
         // Set headers for file download
         AsyncWebServerResponse* response = request->beginResponse(200, "text/plain", logs);

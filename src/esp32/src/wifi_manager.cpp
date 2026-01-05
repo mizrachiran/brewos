@@ -3,6 +3,9 @@
 #include "lwip/dns.h"  // For direct DNS server configuration
 #include "esp_wifi.h"  // For esp_wifi_set_ps()
 
+// Note: SNTP status API is not available in Arduino ESP32 framework
+// Using time-based detection instead
+
 // Command queue size
 #define WIFI_COMMAND_QUEUE_SIZE 8
 
@@ -352,7 +355,8 @@ void WiFiManager::doConnectToWiFi() {
     
     // Apply static IP configuration if enabled
     if (_staticIP.enabled) {
-        LOG_I("Using static IP: %s", _staticIP.ip.toString().c_str());
+        String staticIPStr = _staticIP.ip.toString();
+        LOG_I("Using static IP: %s", staticIPStr.c_str());
         if (!WiFi.config(_staticIP.ip, _staticIP.gateway, _staticIP.subnet, _staticIP.dns1, _staticIP.dns2)) {
             LOG_E("Failed to configure static IP");
         }
@@ -692,29 +696,76 @@ void WiFiManager::syncNTP() {
 static void checkNtpSyncTask(void* parameter) {
     WiFiManager* manager = static_cast<WiFiManager*>(parameter);
     
-    // Check after 5 seconds
-    vTaskDelay(pdMS_TO_TICKS(5000));
-    bool synced = manager->isTimeSynced();
-    
-    if (synced) {
-        TimeStatus status = manager->getTimeStatus();
-        LOG_I("NTP sync completed successfully. Current time: %s, Timezone: %s", 
-              status.currentTime.c_str(), status.timezone.c_str());
+    // Validate manager pointer - check for null and invalid memory addresses
+    // ESP32 valid pointers are typically in range 0x3Fxxxxxx (internal RAM) or 0x3Cxxxxxx (PSRAM)
+    if (!manager || (uintptr_t)manager < 0x3C000000) {
+        LOG_E("checkNtpSyncTask: Invalid manager pointer: %p", manager);
         vTaskDelete(nullptr);
         return;
     }
     
-    // If not synced after 5s, wait another 5s and check again
-    LOG_D("NTP sync still in progress, checking again in 5 seconds...");
-    vTaskDelay(pdMS_TO_TICKS(5000));
-    synced = manager->isTimeSynced();
+    // Get initial time to detect if it changes
+    time_t initialTime = time(nullptr);
+    LOG_D("NTP sync check started, initial time: %ld", initialTime);
     
-    if (synced) {
-        TimeStatus status = manager->getTimeStatus();
-        LOG_I("NTP sync completed successfully (after 10s). Current time: %s, Timezone: %s", 
-              status.currentTime.c_str(), status.timezone.c_str());
-    } else {
-        LOG_W("NTP sync failed or timed out. Time not synchronized. Check WiFi connection and NTP server.");
+    // NTP sync can take 15-30 seconds, check multiple times
+    const int maxChecks = 6;  // 6 checks over 30 seconds
+    const int checkIntervalMs = 5000;  // Check every 5 seconds
+    bool synced = false;
+    
+    for (int i = 0; i < maxChecks; i++) {
+        vTaskDelay(pdMS_TO_TICKS(checkIntervalMs));
+        
+        // Re-validate manager pointer (in case object was destroyed)
+        if (!manager) {
+            LOG_E("checkNtpSyncTask: Manager pointer became invalid!");
+            vTaskDelete(nullptr);
+            return;
+        }
+        
+        time_t currentTime = time(nullptr);
+        
+        // Check if time is valid (synced) - inline check to avoid member function call
+        // If time is after 2020, consider it synced (NTP provides epoch time)
+        bool timeValid = (currentTime > 1577836800);  // Jan 1, 2020
+        bool syncedStatus = timeValid;
+        
+        LOG_D("NTP check %d/%d: time=%ld, isTimeSynced=%s", 
+              i + 1, maxChecks, currentTime, syncedStatus ? "true" : "false");
+        
+        // Check if time has changed significantly (more than 1 second difference)
+        // This indicates NTP has updated the time
+        bool timeChanged = (currentTime != initialTime && abs((long)(currentTime - initialTime)) > 1);
+        
+        // Sync is complete if:
+        // 1. Time is valid AND has changed (indicating NTP update), OR
+        // 2. Time is valid AND initial time was invalid (NTP just set it)
+        bool initialTimeWasInvalid = (initialTime <= 1577836800);  // Before 2020
+        if ((timeValid && timeChanged) || (timeValid && initialTimeWasInvalid)) {
+            synced = true;
+            // Format time for logging - avoid calling getTimeStatus which might crash
+            struct tm* timeinfo = localtime(&currentTime);
+            if (timeinfo) {
+                char timeStr[64];
+                strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", timeinfo);
+                LOG_I("NTP sync completed successfully after %d seconds. Current time: %s", 
+                      (i + 1) * checkIntervalMs / 1000, timeStr);
+            } else {
+                LOG_I("NTP sync completed successfully after %d seconds. Current time: %ld", 
+                      (i + 1) * checkIntervalMs / 1000, currentTime);
+            }
+            break;
+        }
+        
+        if (i < maxChecks - 1) {
+            LOG_D("NTP sync still in progress, checking again in %d seconds...", checkIntervalMs / 1000);
+        }
+    }
+    
+    if (!synced) {
+        time_t finalTime = time(nullptr);
+        LOG_W("NTP sync failed or timed out after %d seconds. Time: %ld. Check WiFi connection and NTP server.", 
+              maxChecks * checkIntervalMs / 1000, finalTime);
     }
     
     // Task completes and cleans up
@@ -736,41 +787,80 @@ void WiFiManager::doSyncNTP() {
     LOG_I("Configuring NTP: %s (UTC%+d)", _ntpServer, _utcOffsetSec / 3600);
     
     // Configure time with timezone offset
-    // ESP32 uses POSIX timezone format: GMT-offset (inverted from what you'd expect)
-    // For UTC+2: "UTC-2" because POSIX uses the opposite sign
+    // ESP32 Arduino configTzTime uses POSIX timezone format
+    // Format options: "GMT0", "GMT-1", "GMT-2" etc. (offset is inverted)
+    // OR: "UTC0", "UTC-1", "UTC-2" etc.
+    // For UTC+2, we need GMT-2 or UTC-2 (inverted sign)
     char tzStr[32];
     int hours = _utcOffsetSec / 3600;
+    int minutes = (_utcOffsetSec % 3600) / 60;
     
-    if (_dstOffsetSec > 0) {
-        // With DST - format: STD-offset DST for simple rule
-        snprintf(tzStr, sizeof(tzStr), "UTC%+d", -hours);
+    // Build timezone string: GMT<offset> or UTC<offset>
+    // If there are minutes, use format GMT-2:30, otherwise GMT-2
+    if (minutes != 0) {
+        snprintf(tzStr, sizeof(tzStr), "GMT%d:%02d", -hours, abs(minutes));
     } else {
-        snprintf(tzStr, sizeof(tzStr), "UTC%+d", -hours);
+        snprintf(tzStr, sizeof(tzStr), "GMT%d", -hours);
     }
     
-    // Copy server name before releasing mutex
-    char serverCopy[64];
-    strncpy(serverCopy, _ntpServer, sizeof(serverCopy) - 1);
-    serverCopy[sizeof(serverCopy) - 1] = '\0';
+    // CRITICAL: Do NOT create a local serverCopy!
+    // configTzTime stores the server pointer for later use by the background SNTP task.
+    // If we pass a local stack variable, it becomes invalid when this function returns,
+    // causing a crash when SNTP tries to access it later.
+    // Instead, use _ntpServer directly (class member that persists).
     
-    xSemaphoreGive(_mutex);
+    // Verify WiFi is connected before starting NTP sync
+    if (WiFi.status() != WL_CONNECTED) {
+        LOG_W("WiFi not connected, cannot sync NTP");
+        xSemaphoreGive(_mutex);
+        return;
+    }
+    
+    // Test DNS resolution for NTP server (using _ntpServer directly)
+    IPAddress ntpIP;
+    if (!WiFi.hostByName(_ntpServer, ntpIP)) {
+        LOG_W("Failed to resolve NTP server DNS: %s", _ntpServer);
+        // Continue anyway - configTzTime might handle DNS internally
+    } else {
+        // Store toString() result in a variable to avoid temporary String issues
+        String ntpIPStr = ntpIP.toString();
+        LOG_D("NTP server %s resolved to %s", _ntpServer, ntpIPStr.c_str());
+    }
     
     // Set timezone and NTP server
-    configTzTime(tzStr, serverCopy);
+    // configTzTime starts NTP sync automatically
+    // Note: configTzTime expects timezone in POSIX format (GMT<offset> where offset is inverted)
+    // CRITICAL: Pass _ntpServer (class member) directly, not a local copy!
+    // tzStr is safe because configTzTime calls setenv() internally which makes a copy.
+    configTzTime(tzStr, _ntpServer);
     
-    LOG_I("NTP sync started, timezone: %s", tzStr);
+    // Verify configTzTime was called (time will be 0 until NTP syncs)
+    time_t testTime = time(nullptr);
+    LOG_I("NTP sync started, timezone: %s, server: %s, current time: %ld", tzStr, _ntpServer, testTime);
+    
+    // Release mutex after using _ntpServer (it's safe now since configTzTime has stored the pointer)
+    xSemaphoreGive(_mutex);
+    
+    // Give NTP a moment to start
+    vTaskDelay(pdMS_TO_TICKS(100));
     
     // Create a task to check sync completion after delay
     // This task will self-delete after checking
-    xTaskCreatePinnedToCore(
+    // Note: We pass 'this' pointer, which must remain valid for the task lifetime
+    // The WiFiManager object should not be destroyed while this task is running
+    BaseType_t taskResult = xTaskCreatePinnedToCore(
         checkNtpSyncTask,
         "checkNtpSync",
-        2048,  // Stack size
+        4096,  // Stack size - increased from 2048 to prevent stack overflow
         this,  // Pass WiFiManager instance
         1,     // Low priority
         nullptr, // Don't store handle (task self-deletes)
         WIFI_TASK_CORE
     );
+    
+    if (taskResult != pdPASS) {
+        LOG_E("Failed to create NTP sync check task!");
+    }
 }
 
 bool WiFiManager::isTimeSynced() {

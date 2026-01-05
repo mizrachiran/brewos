@@ -12,6 +12,9 @@
 // Log buffer size (50KB)
 #define LOG_BUFFER_SIZE (50 * 1024)
 
+// Maximum log file size in LittleFS (100KB - limits flash usage)
+#define LOG_FLASH_MAX_SIZE (100 * 1024)
+
 // Maximum single log entry size
 #define LOG_ENTRY_MAX_SIZE 256
 
@@ -112,6 +115,46 @@ public:
      * Get the singleton instance
      */
     static LogManager& instance();
+    
+    /**
+     * Add log entry directly without mutex (for panic handler use only)
+     * This bypasses mutex protection and should only be used in panic/exception context
+     * where normal mutex operations may not be safe.
+     */
+    void addLogDirect(BrewOSLogLevel level, LogSource source, const char* message);
+    
+    /**
+     * Save log buffer to flash (LittleFS) for persistence across reboots
+     * @return true if saved successfully
+     */
+    bool saveToFlash();
+    
+    /**
+     * Restore log buffer from flash (LittleFS) on boot
+     * @return true if restored successfully
+     */
+    bool restoreFromFlash();
+    
+    /**
+     * Get all logs from flash (complete history)
+     * This reads the saved logs from LittleFS, which contains the full log history
+     * @return String containing all logs from flash
+     */
+    String getLogsFromFlash();
+    
+    /**
+     * Get all logs (RAM + Flash merged)
+     * Flushes RAM to flash first, then returns complete log history from flash
+     * @return String containing all logs
+     */
+    String getLogsComplete();
+    
+    /**
+     * Periodic update - call from main loop
+     * Checks if auto-save is needed and saves to flash if necessary
+     * Auto-saves every 30 seconds or when buffer is 50% full
+     */
+    void loop();
 
 private:
     char* _buffer;              // Circular buffer (nullptr when disabled)
@@ -122,6 +165,7 @@ private:
     SemaphoreHandle_t _mutex;   // Thread safety
     bool _picoLogForwarding;    // Pico log forwarding enabled
     bool _enabled;              // Log buffer is enabled
+    unsigned long _lastSaveTime; // Last auto-save time (millis)
     
     // Internal helpers
     void writeToBuffer(const char* data, size_t len);
