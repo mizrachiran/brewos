@@ -1,5 +1,6 @@
 # Pre-build script for PlatformIO
 # Patches third-party libraries to fix build warnings with ESP-IDF 5.x
+# Also syncs and lints WiFi setup page HTML
 #
 # Note: NimBLE-Arduino 1.4.x has macro redefinition issues with ESP-IDF 5.x
 # because it defines CONFIG_BT_NIMBLE_* macros without checking if they're
@@ -8,6 +9,9 @@
 
 Import("env")
 import os
+import sys
+import subprocess
+from pathlib import Path
 
 def patch_nimble_config():
     """
@@ -119,6 +123,70 @@ def patch_nimble_config():
             f.write(content)
         print("[pre_build] Patched NimBLE-Arduino for ESP-IDF 5.x compatibility")
 
+def sync_wifi_setup_page():
+    """
+    Sync WiFi setup page HTML to header file and lint it.
+    This ensures the header is always up-to-date before compilation.
+    """
+    # Get project directory (where platformio.ini is located)
+    project_dir = Path(env.get("PROJECT_DIR", "."))
+    script_dir = project_dir / "scripts"
+    html_file = project_dir / "wifi_setup_page_dev.html"
+    sync_script = project_dir / "update_wifi_setup_header.py"
+    lint_script = script_dir / "lint_wifi_setup.py"
+    
+    # Skip if HTML file doesn't exist (not an error - might be building without it)
+    if not html_file.exists():
+        return
+    
+    # Skip if sync script doesn't exist
+    if not sync_script.exists():
+        print("[pre_build] Warning: WiFi setup sync script not found, skipping")
+        return
+    
+    print("[pre_build] Syncing WiFi setup page...")
+    
+    # Run lint first (warnings only, don't fail build)
+    if lint_script.exists():
+        try:
+            result = subprocess.run(
+                [sys.executable, str(lint_script)],
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode != 0:
+                print("[pre_build] WiFi setup lint warnings:")
+                print(result.stdout)
+                if result.stderr:
+                    print(result.stderr)
+        except Exception as e:
+            print(f"[pre_build] Warning: Lint check failed: {e}")
+    
+    # Run sync script
+    try:
+        result = subprocess.run(
+            [sys.executable, str(sync_script)],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0:
+            print("[pre_build] ✓ WiFi setup page synced")
+        else:
+            print(f"[pre_build] Error syncing WiFi setup page:")
+            print(result.stderr)
+            # Don't fail the build, but warn
+            print("[pre_build] Warning: Continuing build with potentially outdated WiFi setup page")
+    except Exception as e:
+        print(f"[pre_build] Warning: WiFi setup sync failed: {e}")
+        print("[pre_build] Continuing build...")
+
 # Run patch immediately when script loads (before library compilation)
 patch_nimble_config()
+
+# Sync WiFi setup page (runs before compilation)
+sync_wifi_setup_page()
 

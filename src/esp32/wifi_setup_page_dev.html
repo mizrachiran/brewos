@@ -1,22 +1,3 @@
-#ifndef WIFI_SETUP_PAGE_H
-#define WIFI_SETUP_PAGE_H
-
-#include <Arduino.h>
-
-/**
- * WiFi Setup Page HTML
- * 
- * Self-contained HTML page for WiFi network selection and configuration.
- * Stored in PROGMEM (flash) to avoid RAM/PSRAM usage.
- * 
- * This page is served at /setup route when the device is in AP mode.
- * 
- * To edit this file:
- * 1. Edit wifi_setup_page_dev.html (with mock APIs for local testing)
- * 2. Run: python3 update_wifi_setup_header.py
- * 3. This will update this header file from the dev HTML file
- */
-const char WIFI_SETUP_PAGE_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html>
   <head>
@@ -357,7 +338,40 @@ const char WIFI_SETUP_PAGE_HTML[] PROGMEM = R"rawliteral(
     <script>
       let selectedSSID = "";
 
-      
+      // Mock API endpoints for local development
+      const MOCK_NETWORKS = [
+        { ssid: "HomeWiFi", rssi: -45, secure: true },
+        { ssid: "Office Network", rssi: -52, secure: true },
+        { ssid: "Guest Network", rssi: -68, secure: false },
+        { ssid: "Neighbor WiFi", rssi: -75, secure: true },
+        { ssid: "Test Network", rssi: -82, secure: false },
+      ];
+
+      // Intercept fetch calls for local development
+      const originalFetch = window.fetch;
+      window.fetch = function (url, options) {
+        if (url === "/api/wifi/networks") {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ networks: MOCK_NETWORKS }),
+          });
+        }
+        if (url === "/api/wifi/connect") {
+          const body = JSON.parse(options.body);
+          console.log("Mock connect:", body);
+          // Simulate success after delay
+          return new Promise((resolve) => {
+            setTimeout(() => {
+              resolve({
+                ok: true,
+                json: () =>
+                  Promise.resolve({ status: "ok", message: "Connected!" }),
+              });
+            }, 1500);
+          });
+        }
+        return originalFetch.apply(this, arguments);
+      };
 
       function showStatus(message, type) {
         const status = document.getElementById("status");
@@ -510,7 +524,3 @@ const char WIFI_SETUP_PAGE_HTML[] PROGMEM = R"rawliteral(
     </script>
   </body>
 </html>
-
-)rawliteral";
-
-#endif // WIFI_SETUP_PAGE_H
