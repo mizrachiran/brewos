@@ -195,32 +195,32 @@ See [SETUP.md](SETUP.md) for detailed instructions.
 
 ## Documentation
 
-| Document                                                        | Description                                |
-| --------------------------------------------------------------- | ------------------------------------------ |
-| **User Documentation**                                          |                                            |
-| [BrewOS Wiki](https://github.com/brewos-io/wiki)                | Complete user guide, installation, and features |
-| **Getting Started**                                             |                                            |
-| [Setup Guide](SETUP.md)                                         | Development environment setup              |
-| [System Architecture](docs/Architecture.md)                     | Full system overview with cloud            |
-| **Pico Firmware**                                               |                                            |
-| [Architecture](docs/pico/Architecture.md)                       | Module structure, dual-core design         |
-| [Requirements](docs/pico/Requirements.md)                       | Functional and safety requirements         |
-| [Machine Configurations](docs/pico/Machine_Configurations.md)   | Multi-machine support                      |
-| **ESP32 Firmware**                                              |                                            |
-| [State Management](docs/esp32/State_Management.md)              | Settings, stats, shot history              |
-| [MQTT Integration](docs/esp32/integrations/MQTT.md)             | MQTT protocol and auto-discovery           |
-| [Home Assistant](https://github.com/brewos-io/homeassistant)   | Custom card, native integration, examples  |
-| [BLE Scales](docs/esp32/integrations/BLE_Scales.md)             | Bluetooth scale integration                |
-| **App & Cloud** (External Repositories)                        |                                            |
-| [App Repository](https://github.com/brewos-io/app)              | Progressive Web App                        |
-| [App Documentation](https://github.com/brewos-io/app/tree/main/docs) | App development guide                |
-| [Cloud Repository](https://github.com/brewos-io/cloud)          | Cloud service for remote access            |
-| [Cloud Documentation](https://github.com/brewos-io/cloud/tree/main/docs) | Cloud setup and deployment         |
-| **Shared**                                                      |                                            |
-| [Communication Protocol](docs/shared/Communication_Protocol.md) | Binary protocol Pico ↔ ESP32               |
-| **Hardware**                                                    |                                            |
-| [Specification](docs/hardware/Specification.md)                 | PCB design, component selection            |
-| [Compatibility](docs/Compatibility.md)                          | Validated machines list                    |
+| Document                                                                 | Description                                     |
+| ------------------------------------------------------------------------ | ----------------------------------------------- |
+| **User Documentation**                                                   |                                                 |
+| [BrewOS Wiki](https://github.com/brewos-io/wiki)                         | Complete user guide, installation, and features |
+| **Getting Started**                                                      |                                                 |
+| [Setup Guide](SETUP.md)                                                  | Development environment setup                   |
+| [System Architecture](docs/Architecture.md)                              | Full system overview with cloud                 |
+| **Pico Firmware**                                                        |                                                 |
+| [Architecture](docs/pico/Architecture.md)                                | Module structure, dual-core design              |
+| [Requirements](docs/pico/Requirements.md)                                | Functional and safety requirements              |
+| [Machine Configurations](docs/pico/Machine_Configurations.md)            | Multi-machine support                           |
+| **ESP32 Firmware**                                                       |                                                 |
+| [State Management](docs/esp32/State_Management.md)                       | Settings, stats, shot history                   |
+| [MQTT Integration](docs/esp32/integrations/MQTT.md)                      | MQTT protocol and auto-discovery                |
+| [Home Assistant](https://github.com/brewos-io/homeassistant)             | Custom card, native integration, examples       |
+| [BLE Scales](docs/esp32/integrations/BLE_Scales.md)                      | Bluetooth scale integration                     |
+| **App & Cloud** (External Repositories)                                  |                                                 |
+| [App Repository](https://github.com/brewos-io/app)                       | Progressive Web App                             |
+| [App Documentation](https://github.com/brewos-io/app/tree/main/docs)     | App development guide                           |
+| [Cloud Repository](https://github.com/brewos-io/cloud)                   | Cloud service for remote access                 |
+| [Cloud Documentation](https://github.com/brewos-io/cloud/tree/main/docs) | Cloud setup and deployment                      |
+| **Shared**                                                               |                                                 |
+| [Communication Protocol](docs/shared/Communication_Protocol.md)          | Binary protocol Pico ↔ ESP32                    |
+| **Hardware**                                                             |                                                 |
+| [Specification](docs/hardware/Specification.md)                          | PCB design, component selection                 |
+| [Compatibility](docs/Compatibility.md)                                   | Validated machines list                         |
 
 ---
 
