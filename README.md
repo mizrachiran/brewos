@@ -193,6 +193,8 @@ See [SETUP.md](SETUP.md) for detailed instructions.
 
 | Document                                                        | Description                                |
 | --------------------------------------------------------------- | ------------------------------------------ |
+| **User Documentation**                                          |                                            |
+| [BrewOS Wiki](https://github.com/brewos-io/wiki)                | Complete user guide, installation, and features |
 | **Getting Started**                                             |                                            |
 | [Setup Guide](SETUP.md)                                         | Development environment setup              |
 | [System Architecture](docs/Architecture.md)                     | Full system overview with cloud            |
