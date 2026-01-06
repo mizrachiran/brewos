@@ -733,6 +733,10 @@ static bool downloadToFile(const char* url, const char* filePath,
         return false;
     }
     
+    unsigned long downloadTime = millis() - downloadStart;
+    LOG_I("Download complete: %d bytes in %lu ms (%.1f KB/s)", 
+          contentLength, downloadTime, (contentLength / 1024.0f) / (downloadTime / 1000.0f));
+    
     // Verify file size matches
     File verifyFile = LittleFS.open(filePath, "r");
     if (!verifyFile || verifyFile.size() != (size_t)contentLength) {

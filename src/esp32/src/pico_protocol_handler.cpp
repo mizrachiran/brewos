@@ -100,10 +100,11 @@ void PicoProtocolHandler::handleNACK(const PicoPacket& packet) {
 }
 
 void PicoProtocolHandler::handleHandshake(const PicoPacket& packet) {
-    LOG_I("Pico handshake received");
+    LOG_I("Pico protocol handshake received");
     
     // Parse handshake payload
     if (packet.length < 6) {
+        LOG_W("Handshake packet too short: %d bytes (expected 6)", packet.length);
         return;
     }
     
@@ -113,7 +114,7 @@ void PicoProtocolHandler::handleHandshake(const PicoPacket& packet) {
     uint8_t max_retry = packet.payload[3];
     uint16_t ack_timeout = (packet.payload[5] << 8) | packet.payload[4];
     
-    LOG_I("Protocol: v%d.%d, capabilities=0x%02X, retry=%d, timeout=%dms",
+    LOG_I("Pico protocol: v%d.%d, capabilities=0x%02X, max_retry=%d, ack_timeout=%dms",
           proto_major, proto_minor, capabilities, max_retry, ack_timeout);
     
     // Send handshake response
@@ -127,7 +128,13 @@ void PicoProtocolHandler::handleHandshake(const PicoPacket& packet) {
     };
     
     if (_uart) {
-        _uart->sendPacket(MSG_HANDSHAKE, handshake, 6);
+        if (_uart->sendPacket(MSG_HANDSHAKE, handshake, 6)) {
+            LOG_I("Protocol handshake response sent - protocol v1.1 established");
+        } else {
+            LOG_W("Failed to send handshake response");
+        }
+    } else {
+        LOG_E("PicoUART not available for handshake response");
     }
 }
 
@@ -135,11 +142,12 @@ void PicoProtocolHandler::handleHandshake(const PicoPacket& packet) {
 static constexpr uint16_t DEFAULT_PREINFUSION_PAUSE_MS = 5000;
 
 void PicoProtocolHandler::handleBoot(const PicoPacket& packet) {
-    LOG_I("Pico boot info received");
+    LOG_I("Pico boot message received (length: %d bytes)", packet.length);
     if (_server) _server->broadcastLog("Pico booted");
     
     // Update Pico connection state
     runtimeState().updatePicoConnection(true);
+    LOG_I("Pico connection established");
     
     // Parse boot payload (boot_payload_t structure)
     // Layout: ver(3) + machine(1) + pcb(1) + pcb_ver(2) + reset(4) + build_date(12) + build_time(7) + protocol_ver(2) = 32 bytes
@@ -160,7 +168,7 @@ void PicoProtocolHandler::handleBoot(const PicoPacket& packet) {
             _state->setMachineType(machineType);
         }
         
-        LOG_I("Pico version: %d.%d.%d, Machine type: %d", 
+        LOG_I("Pico firmware: v%d.%d.%d, Machine type: %d", 
               ver_major, ver_minor, ver_patch, machineType);
         
         // Parse reset reason if available (offset 7-10, uint32_t)
@@ -174,6 +182,7 @@ void PicoProtocolHandler::handleBoot(const PicoPacket& packet) {
             if (_state) {
                 _state->setPicoResetReason(reset_reason);
             }
+            LOG_I("Pico reset reason: 0x%08X", reset_reason);
         }
         
         // Parse build date/time if available (offset 11-29, protocol_ver at 30-31)
@@ -204,14 +213,18 @@ void PicoProtocolHandler::handleBoot(const PicoPacket& packet) {
             if (_state) {
                 _state->setPicoBuildDate(buildDate, buildTime);
             }
+            LOG_I("Pico build: %s %s", buildDate, buildTime);
         }
         
         // Check for version mismatch
         char picoVerStr[16];
         snprintf(picoVerStr, sizeof(picoVerStr), "%d.%d.%d", ver_major, ver_minor, ver_patch);
+        LOG_I("Pico build: %s (ESP32: %s)", picoVerStr, ESP32_VERSION);
         if (strcmp(picoVerStr, ESP32_VERSION) != 0) {
-            LOG_W("Internal version mismatch: %s vs %s", ESP32_VERSION, picoVerStr);
+            LOG_W("Firmware version mismatch: Pico=%s, ESP32=%s", picoVerStr, ESP32_VERSION);
             if (_server) _server->broadcastLogLevel("warn", "Firmware update recommended");
+        } else {
+            LOG_I("Firmware versions match");
         }
     }
     
@@ -316,9 +329,20 @@ void PicoProtocolHandler::handleStatus(const uint8_t* payload, uint8_t length) {
     state.steam_setpoint = steam_sp_raw / 10.0f;
     
     // Parse state and flags
-    state.machine_state = payload[15];
+    uint8_t new_machine_state = payload[15];
     uint8_t flags = payload[16];
     
+    // Log machine state transitions
+    static uint8_t last_machine_state = UI_STATE_INIT;
+    if (new_machine_state != last_machine_state) {
+        const char* stateNames[] = {"INIT", "IDLE", "HEATING", "READY", "BREWING", "FAULT", "SAFE", "ECO"};
+        const char* oldState = (last_machine_state < 8) ? stateNames[last_machine_state] : "UNKNOWN";
+        const char* newState = (new_machine_state < 8) ? stateNames[new_machine_state] : "UNKNOWN";
+        LOG_I("Machine state: %s → %s", oldState, newState);
+        last_machine_state = new_machine_state;
+    }
+    
+    state.machine_state = new_machine_state;
     state.is_brewing = (flags & 0x01) != 0;
     state.is_heating = (flags & 0x02) != 0;
     state.water_low = (flags & 0x08) != 0;

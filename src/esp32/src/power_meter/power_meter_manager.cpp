@@ -128,7 +128,7 @@ bool PowerMeterManager::configureHardware() {
 }
 
 bool PowerMeterManager::configureMqtt(const char* topic, const char* format) {
-    LOG_I("Configuring MQTT meter: topic=%s, format=%s", topic, format);
+    LOG_I("Configuring MQTT power meter: topic=%s, format=%s", topic, format);
     
     // Clean up existing meter
     cleanupMeter();
@@ -137,21 +137,41 @@ bool PowerMeterManager::configureMqtt(const char* topic, const char* format) {
     _mqttMeter = new MQTTPowerMeter(topic, format);
     
     if (!_mqttMeter->begin()) {
-        LOG_E("Failed to initialize MQTT meter");
+        LOG_E("Failed to initialize MQTT power meter");
         delete _mqttMeter;
         _mqttMeter = nullptr;
         return false;
     }
     
+    LOG_I("MQTT power meter initialized successfully");
     _source = PowerMeterSource::MQTT;
     
-    return saveConfig();
+    bool saved = saveConfig();
+    if (saved) {
+        LOG_I("MQTT power meter configuration saved");
+    } else {
+        LOG_W("Failed to save MQTT power meter configuration");
+    }
+    
+    return saved;
 }
 
 void PowerMeterManager::onPicoPowerData(const PowerMeterReading& reading) {
     // Only accept data if source is set to hardware
     if (_source != PowerMeterSource::HARDWARE_MODBUS) {
         return;
+    }
+    
+    // Log connection status changes
+    static bool wasConnected = false;
+    bool isNowConnected = reading.valid;
+    if (isNowConnected != wasConnected) {
+        if (isNowConnected) {
+            LOG_I("Power meter (hardware) connected - receiving data from Pico");
+        } else {
+            LOG_W("Power meter (hardware) disconnected - no data from Pico");
+        }
+        wasConnected = isNowConnected;
     }
     
     // Update cached reading

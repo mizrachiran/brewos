@@ -162,12 +162,13 @@ void WiFiManager::taskLoop() {
                 case WiFiManagerMode::STA_MODE:
                     // Check if still connected
                     if (WiFi.status() != WL_CONNECTED) {
-                        LOG_W("WiFi disconnected");
+                        LOG_W("WiFi disconnected from %s", _storedSSID);
                         _mode = WiFiManagerMode::DISCONNECTED;
                         safeCallback(_onDisconnected);
                         
                         // Try to reconnect after interval
                         if (millis() - _lastConnectAttempt > WIFI_RECONNECT_INTERVAL) {
+                            LOG_I("Attempting WiFi reconnection to %s...", _storedSSID);
                             xSemaphoreGive(_mutex);
                             doConnectToWiFi();
                             continue;  // Skip the semaphore give below
@@ -183,6 +184,8 @@ void WiFiManager::taskLoop() {
                     // Try to reconnect if we have credentials
                     if (hasStoredCredentials() && 
                         millis() - _lastConnectAttempt > WIFI_RECONNECT_INTERVAL) {
+                        LOG_I("WiFi reconnection attempt to %s (interval: %lums)", 
+                              _storedSSID, WIFI_RECONNECT_INTERVAL);
                         xSemaphoreGive(_mutex);
                         doConnectToWiFi();
                         continue;  // Skip the semaphore give below

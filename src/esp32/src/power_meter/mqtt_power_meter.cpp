@@ -96,6 +96,9 @@ void MQTTPowerMeter::onMqttData(const char* payload, size_t length) {
 void MQTTPowerMeter::onMqttData(JsonDocument& doc) {
     bool parsed = false;
     
+    // Log connection status changes
+    static bool wasConnected = false;
+    
     // Try format-specific parsing
     switch (_format) {
         case MqttFormat::SHELLY:
@@ -116,10 +119,19 @@ void MQTTPowerMeter::onMqttData(JsonDocument& doc) {
         _lastReading.timestamp = millis();
         _lastReading.valid = true;
         _lastUpdateTime = millis();
+        bool isNowConnected = true;
+        if (!wasConnected) {
+            LOG_I("MQTT power meter connected: topic=%s, format=%s", _topic.c_str(), getFormat());
+        }
         _hasData = true;
         _lastError[0] = '\0';
+        wasConnected = isNowConnected;
     } else {
         snprintf(_lastError, sizeof(_lastError), "Failed to parse MQTT data");
+        if (wasConnected) {
+            LOG_W("MQTT power meter data parse failed: topic=%s", _topic.c_str());
+        }
+        wasConnected = false;
     }
 }
 

@@ -138,8 +138,10 @@ void MQTTClient::taskLoop() {
             // Sync _connected flag with actual connection state
             if (clientConnected && !_connected) {
                 _connected = true;
+                LOG_I("MQTT connected successfully to %s:%d", _config.broker, _config.port);
             } else if (!clientConnected && _connected) {
                 _connected = false;
+                LOG_W("MQTT connection lost from %s:%d", _config.broker, _config.port);
             }
             
             if (!clientConnected) {
@@ -147,11 +149,15 @@ void MQTTClient::taskLoop() {
                 if (now - _lastReconnectAttempt > (unsigned long)_reconnectDelay) {
                     _lastReconnectAttempt = now;
                     xSemaphoreGive(_mutex);
+                    LOG_I("MQTT reconnecting to %s:%d (attempt, delay=%lums)", 
+                          _config.broker, _config.port, _reconnectDelay);
                     if (connect()) {
                         _reconnectDelay = 1000;  // Reset delay on success
+                        LOG_I("MQTT reconnection successful");
                     } else {
                         // Exponential backoff, max 60 seconds
                         _reconnectDelay = min(_reconnectDelay * 2, 60000);
+                        LOG_W("MQTT reconnection failed, next attempt in %lums", _reconnectDelay);
                     }
                     continue;
                 }

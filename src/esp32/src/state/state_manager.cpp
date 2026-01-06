@@ -255,6 +255,7 @@ void StateManager::loadSettings() {
 }
 
 void StateManager::saveSettings() {
+    LOG_I("Saving all settings to NVS");
     saveTemperatureSettings();
     saveBrewSettings();
     savePowerSettings();
@@ -267,6 +268,7 @@ void StateManager::saveSettings() {
     saveNotificationSettings();
     saveSystemSettings();
     saveUserPreferences();
+    LOG_I("All settings saved successfully");
 }
 
 void StateManager::saveTemperatureSettings() {

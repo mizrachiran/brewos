@@ -659,9 +659,13 @@ void CloudConnection::handleEvent(WStype_t type, uint8_t* payload, size_t length
             }
             break;
             
-        case WStype_CONNECTED:
-            LOG_I("Connected to cloud!");
-            LOG_I("Device ID: %s, Key length: %d", _deviceId.c_str(), _deviceKey.length());
+        case WStype_CONNECTED: {
+            LOG_I("Cloud WebSocket connected successfully!");
+            LOG_I("Server: %s, Device ID: %s, Key length: %d", 
+                  _serverUrl.c_str(), _deviceId.c_str(), _deviceKey.length());
+            size_t heapAfter = ESP.getFreeHeap();
+            size_t largestBlock = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+            LOG_I("Memory after SSL: heap=%zu, largest block=%zu", heapAfter, largestBlock);
             _connected = true;
             _connecting = false;
             _failureCount = 0; // Reset failures
@@ -671,6 +675,7 @@ void CloudConnection::handleEvent(WStype_t type, uint8_t* payload, size_t length
             _pendingInitialStateBroadcast = true;  // Schedule state broadcast after stabilization
             _initialStateBroadcastTime = millis() + 3000;  // Wait 3s for heap to stabilize after SSL
             break;
+        }
             
         case WStype_TEXT:
             handleMessage(payload, length);
