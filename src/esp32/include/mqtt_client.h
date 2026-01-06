@@ -33,6 +33,16 @@
 #include "utils/status_change_detector.h"
 
 // =============================================================================
+// MQTT Command Queue Structure
+// =============================================================================
+
+// Command structure for thread-safe command passing from Core 0 (MQTT task) to Core 1 (main loop)
+struct MQTTCommand {
+    char cmd[32];
+    char payload[256];  // Serialized JSON payload
+};
+
+// =============================================================================
 // MQTT Configuration Structure
 // =============================================================================
 
@@ -81,6 +91,12 @@ public:
      * Update - call in main loop
      */
     void loop();
+    
+    /**
+     * Process queued commands - call in main loop on Core 1
+     * Thread-safe: dequeues commands from queue and executes callback
+     */
+    void processCommands();
     
     /**
      * Get current configuration
@@ -191,6 +207,10 @@ private:
     SemaphoreHandle_t _mutex = nullptr;
     volatile bool _taskRunning = false;
     
+    // Command queue for thread-safe command passing from Core 0 to Core 1
+    QueueHandle_t _commandQueue = nullptr;
+    static const size_t COMMAND_QUEUE_SIZE = 10;
+    
     // Internal methods
     void loadConfig();
     void saveConfig();
@@ -205,7 +225,8 @@ private:
     static MQTTClient* _instance;
     
     // Topic builders
-    String topic(const char* suffix) const;
+    void getTopic(const char* suffix, char* buffer, size_t len) const;
+    String topic(const char* suffix) const;  // Deprecated: use getTopic() instead
     String haTopic(const char* component, const char* object) const;
     
     // Generate device ID from MAC address

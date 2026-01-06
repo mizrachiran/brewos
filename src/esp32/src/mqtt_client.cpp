@@ -14,8 +14,11 @@
 // Static instance for callback
 MQTTClient* MQTTClient::_instance = nullptr;
 
-// MQTT buffer size - must be large enough for HA discovery messages (~600 bytes)
-static const uint16_t MQTT_BUFFER_SIZE = 1024;
+// MQTT buffer size - must be large enough for HA discovery messages
+// Current largest discovery payload (Heating Strategy select) is ~600 bytes
+// Increased to 2048 bytes to provide headroom for future entity additions
+// and larger option lists in select entities
+static const uint16_t MQTT_BUFFER_SIZE = 2048;
 
 // Total number of entities published to Home Assistant
 // Sensors: 5 temps + 7 power + 5 shot/scale + 3 stats = 20
@@ -36,7 +39,8 @@ MQTTClient::MQTTClient()
     , _wasConnected(false)
     , _taskHandle(nullptr)
     , _mutex(nullptr)
-    , _taskRunning(false) {
+    , _taskRunning(false)
+    , _commandQueue(nullptr) {
     
     _instance = this;
     _client.setCallback(messageCallback);
@@ -48,6 +52,12 @@ MQTTClient::MQTTClient()
     
     // Create mutex for thread-safe access
     _mutex = xSemaphoreCreateMutex();
+    
+    // Create command queue for thread-safe command passing from Core 0 to Core 1
+    _commandQueue = xQueueCreate(COMMAND_QUEUE_SIZE, sizeof(MQTTCommand));
+    if (_commandQueue == nullptr) {
+        LOG_E("Failed to create MQTT command queue");
+    }
 }
 
 bool MQTTClient::begin() {
@@ -170,6 +180,33 @@ void MQTTClient::loop() {
     // - Reconnection logic uses vTaskDelay() instead of delay()
     // - PubSubClient::loop() is called from task, not main loop
     // - Main loop() never blocks waiting for MQTT operations
+    
+    // Process queued commands (called from main loop on Core 1)
+    processCommands();
+}
+
+void MQTTClient::processCommands() {
+    // Process all queued commands (non-blocking)
+    // This runs on Core 1 (main loop) for thread safety
+    if (_commandQueue == nullptr || _commandCallback == nullptr) {
+        return;
+    }
+    
+    MQTTCommand mqttCmd;
+    while (xQueueReceive(_commandQueue, &mqttCmd, 0) == pdTRUE) {
+        // Parse JSON payload
+        JsonDocument doc;
+        DeserializationError error = deserializeJson(doc, mqttCmd.payload);
+        if (error) {
+            LOG_W("Failed to parse queued MQTT command JSON: %s", error.c_str());
+            continue;
+        }
+        
+        // Execute callback on Core 1 (main loop context)
+        // This ensures thread safety: scaleManager, brewByWeight, etc. are accessed
+        // only from Core 1 where they were created
+        _commandCallback(mqttCmd.cmd, doc);
+    }
 }
 
 bool MQTTClient::setConfig(const MQTTConfig& config) {
@@ -324,7 +361,8 @@ bool MQTTClient::connect() {
     }
     
     // Build will topic for LWT
-    String willTopic = topic("availability");
+    char willTopic[64];
+    getTopic("availability", willTopic, sizeof(willTopic));
     
     bool connected = false;
     if (strlen(_config.username) > 0) {
@@ -332,7 +370,7 @@ bool MQTTClient::connect() {
             _config.client_id,
             _config.username,
             _config.password,
-            willTopic.c_str(),
+            willTopic,
             1,  // QoS 1
             true,  // Retain
             "offline"
@@ -340,7 +378,7 @@ bool MQTTClient::connect() {
     } else {
         connected = _client.connect(
             _config.client_id,
-            willTopic.c_str(),
+            willTopic,
             1,
             true,
             "offline"
@@ -356,9 +394,10 @@ bool MQTTClient::connect() {
         publishAvailability(true);
         
         // Subscribe to command topic
-        String cmdTopic = topic("command");
-        _client.subscribe(cmdTopic.c_str(), 1);
-        LOG_I("Subscribed to: %s", cmdTopic.c_str());
+        char cmdTopic[64];
+        getTopic("command", cmdTopic, sizeof(cmdTopic));
+        _client.subscribe(cmdTopic, 1);
+        LOG_I("Subscribed to: %s", cmdTopic);
         
         // Publish Home Assistant discovery if enabled
         if (_config.ha_discovery) {
@@ -498,16 +537,17 @@ void MQTTClient::publishStatus(const ui_state_t& state) {
     char statusBuffer[1024];
     size_t len = serializeJson(doc, statusBuffer, sizeof(statusBuffer));
     
-    // Publish to status topic (retained) - use topic() helper to respect topic_prefix
-    String statusTopic = topic("status");
-    if (!_client.publish(statusTopic.c_str(), (const uint8_t*)statusBuffer, len, true)) {
+    // Publish to status topic (retained) - use getTopic() helper to respect topic_prefix
+    char statusTopic[64];
+    getTopic("status", statusTopic, sizeof(statusTopic));
+    if (!_client.publish(statusTopic, (const uint8_t*)statusBuffer, len, true)) {
         LOG_W("Failed to publish status");
         // Check if connection was lost during publish
         if (!_client.connected()) {
             _connected = false;
         }
     } else {
-        LOG_D("Published status to %s (%d bytes)", statusTopic.c_str(), len);
+        LOG_D("Published status to %s (%d bytes)", statusTopic, len);
     }
     
     xSemaphoreGive(_mutex);
@@ -628,14 +668,15 @@ void MQTTClient::publishStatusDelta(const ui_state_t& state, const ChangedFields
     size_t len = serializeJson(doc, statusBuffer, sizeof(statusBuffer));
     
     // Publish to delta topic (non-retained)
-    String deltaTopic = topic("status/delta");
-    if (!_client.publish(deltaTopic.c_str(), (const uint8_t*)statusBuffer, len, false)) {
+    char deltaTopic[64];
+    getTopic("status/delta", deltaTopic, sizeof(deltaTopic));
+    if (!_client.publish(deltaTopic, (const uint8_t*)statusBuffer, len, false)) {
         LOG_W("Failed to publish status delta");
         if (!_client.connected()) {
             _connected = false;
         }
     } else {
-        LOG_D("Published status delta to %s (%d bytes)", deltaTopic.c_str(), len);
+        LOG_D("Published status delta to %s (%d bytes)", deltaTopic, len);
     }
     
     xSemaphoreGive(_mutex);
@@ -652,8 +693,9 @@ void MQTTClient::publishShot(const char* shot_json) {
         return;
     }
     
-    String shotTopic = topic("shot");
-    if (!_client.publish(shotTopic.c_str(), (const uint8_t*)shot_json, strlen(shot_json), false)) {
+    char shotTopic[64];
+    getTopic("shot", shotTopic, sizeof(shotTopic));
+    if (!_client.publish(shotTopic, (const uint8_t*)shot_json, strlen(shot_json), false)) {
         LOG_W("Failed to publish shot data");
         if (!_client.connected()) {
             _connected = false;
@@ -674,8 +716,9 @@ void MQTTClient::publishStatisticsJson(const char* stats_json) {
         return;
     }
     
-    String statsTopic = topic("statistics");
-    if (!_client.publish(statsTopic.c_str(), (const uint8_t*)stats_json, strlen(stats_json), true)) {
+    char statsTopic[64];
+    getTopic("statistics", statsTopic, sizeof(statsTopic));
+    if (!_client.publish(statsTopic, (const uint8_t*)stats_json, strlen(stats_json), true)) {
         LOG_W("Failed to publish statistics");
         if (!_client.connected()) {
             _connected = false;
@@ -711,15 +754,16 @@ void MQTTClient::publishStatistics(uint16_t shotsToday, uint32_t totalShots, flo
     char statsBuffer[128];
     size_t len = serializeJson(doc, statsBuffer, sizeof(statsBuffer));
     
-    // Publish to statistics topic (retained) - use topic() helper to respect topic_prefix
-    String statsTopic = topic("statistics");
-    if (!_client.publish(statsTopic.c_str(), (const uint8_t*)statsBuffer, len, true)) {
+    // Publish to statistics topic (retained) - use getTopic() helper to respect topic_prefix
+    char statsTopic[64];
+    getTopic("statistics", statsTopic, sizeof(statsTopic));
+    if (!_client.publish(statsTopic, (const uint8_t*)statsBuffer, len, true)) {
         LOG_W("Failed to publish statistics");
         if (!_client.connected()) {
             _connected = false;
         }
     } else {
-        LOG_D("Published statistics to %s (%d bytes)", statsTopic.c_str(), len);
+        LOG_D("Published statistics to %s (%d bytes)", statsTopic, len);
     }
     
     xSemaphoreGive(_mutex);
@@ -784,9 +828,10 @@ void MQTTClient::publishAvailability(bool online) {
         return;
     }
     
-    String availTopic = topic("availability");
+    char availTopic[64];
+    getTopic("availability", availTopic, sizeof(availTopic));
     const char* msg = online ? "online" : "offline";
-    if (!_client.publish(availTopic.c_str(), (const uint8_t*)msg, strlen(msg), true)) {
+    if (!_client.publish(availTopic, (const uint8_t*)msg, strlen(msg), true)) {
         LOG_W("Failed to publish availability: %s", msg);
         if (!_client.connected()) {
             _connected = false;
@@ -818,12 +863,17 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     
     LOG_I("Publishing Home Assistant discovery...");
     
-    String deviceId = String(_config.ha_device_id);
-    String statusTopic = topic("status");
-    String availTopic = topic("availability");
-    String commandTopic = topic("command");
-    String powerTopic = topic("power");
-    String shotTopic = topic("shot");
+    const char* deviceId = _config.ha_device_id;
+    char statusTopic[64];
+    getTopic("status", statusTopic, sizeof(statusTopic));
+    char availTopic[64];
+    getTopic("availability", availTopic, sizeof(availTopic));
+    char commandTopic[64];
+    getTopic("command", commandTopic, sizeof(commandTopic));
+    char powerTopic[64];
+    getTopic("power", powerTopic, sizeof(powerTopic));
+    char shotTopic[64];
+    getTopic("shot", shotTopic, sizeof(shotTopic));
     
     // Counter for pacing publishes (prevents network stack saturation)
     int publishCount = 0;
@@ -832,12 +882,16 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     // Device info helper - returns a consistent device object
     auto addDeviceInfo = [&](JsonDocument& doc) {
         JsonObject device = doc["device"].to<JsonObject>();
-        device["identifiers"].to<JsonArray>().add("brewos_" + deviceId);
+        char identifier[64];
+        snprintf(identifier, sizeof(identifier), "brewos_%s", deviceId);
+        device["identifiers"].to<JsonArray>().add(identifier);
         device["name"] = "BrewOS Coffee Machine";
         device["model"] = "ECM Controller";
         device["manufacturer"] = "BrewOS";
         device["sw_version"] = ESP32_VERSION;
-        device["configuration_url"] = "http://" + WiFi.localIP().toString();
+        char configUrl[64];
+        snprintf(configUrl, sizeof(configUrl), "http://%s", WiFi.localIP().toString().c_str());
+        device["configuration_url"] = configUrl;
     };
     
     // Helper to publish a sensor discovery message
@@ -871,12 +925,12 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         doc["name"] = name;
         // Use snprintf instead of String concatenation to reduce heap fragmentation
         char uniqueId[64];
-        snprintf(uniqueId, sizeof(uniqueId), "brewos_%s_%s", deviceId.c_str(), sensorId);
+        snprintf(uniqueId, sizeof(uniqueId), "brewos_%s_%s", deviceId, sensorId);
         doc["unique_id"] = uniqueId;
         char objectId[48];
         snprintf(objectId, sizeof(objectId), "brewos_%s", sensorId);
         doc["object_id"] = objectId;
-        doc["state_topic"] = stateTopic ? stateTopic : statusTopic.c_str();
+        doc["state_topic"] = stateTopic ? stateTopic : statusTopic;
         doc["value_template"] = valueTemplate;
         if (unit && strlen(unit) > 0) doc["unit_of_measurement"] = unit;
         if (deviceClass && strlen(deviceClass) > 0) doc["device_class"] = deviceClass;
@@ -893,7 +947,7 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         // Build topic on stack (avoid String heap allocation)
         char configTopic[128];
         snprintf(configTopic, sizeof(configTopic), "homeassistant/sensor/brewos_%s/%s/config", 
-                 deviceId.c_str(), sensorId);
+                 deviceId, sensorId);
         
         if (!_client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true)) {
             LOG_W("Failed to publish HA discovery for %s", sensorId);
@@ -940,7 +994,7 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         
         doc["name"] = name;
         char uniqueId[64];
-        snprintf(uniqueId, sizeof(uniqueId), "brewos_%s_%s", deviceId.c_str(), sensorId);
+        snprintf(uniqueId, sizeof(uniqueId), "brewos_%s_%s", deviceId, sensorId);
         doc["unique_id"] = uniqueId;
         char objectId[48];
         snprintf(objectId, sizeof(objectId), "brewos_%s", sensorId);
@@ -962,7 +1016,7 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         // Build topic on stack
         char configTopic[128];
         snprintf(configTopic, sizeof(configTopic), "homeassistant/binary_sensor/brewos_%s/%s/config",
-                 deviceId.c_str(), sensorId);
+                 deviceId, sensorId);
         if (!_client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true)) {
             LOG_W("Failed to publish HA discovery for %s", sensorId);
             if (!_client.connected()) {
@@ -1003,7 +1057,7 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         
         doc["name"] = name;
         char uniqueId[64];
-        snprintf(uniqueId, sizeof(uniqueId), "brewos_%s_%s", deviceId.c_str(), switchId);
+        snprintf(uniqueId, sizeof(uniqueId), "brewos_%s_%s", deviceId, switchId);
         doc["unique_id"] = uniqueId;
         char objectId[48];
         snprintf(objectId, sizeof(objectId), "brewos_%s", switchId);
@@ -1025,7 +1079,7 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         // Build topic on stack
         char configTopic[128];
         snprintf(configTopic, sizeof(configTopic), "homeassistant/switch/brewos_%s/%s/config",
-                 deviceId.c_str(), switchId);
+                 deviceId, switchId);
         if (!_client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true)) {
             LOG_W("Failed to publish HA discovery for %s", switchId);
             if (!_client.connected()) {
@@ -1065,7 +1119,7 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         
         doc["name"] = name;
         char uniqueId[64];
-        snprintf(uniqueId, sizeof(uniqueId), "brewos_%s_%s", deviceId.c_str(), buttonId);
+        snprintf(uniqueId, sizeof(uniqueId), "brewos_%s_%s", deviceId, buttonId);
         doc["unique_id"] = uniqueId;
         char objectId[48];
         snprintf(objectId, sizeof(objectId), "brewos_%s", buttonId);
@@ -1082,7 +1136,7 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         // Build topic on stack
         char configTopic[128];
         snprintf(configTopic, sizeof(configTopic), "homeassistant/button/brewos_%s/%s/config",
-                 deviceId.c_str(), buttonId);
+                 deviceId, buttonId);
         if (!_client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true)) {
             LOG_W("Failed to publish HA discovery for %s", buttonId);
             if (!_client.connected()) {
@@ -1123,7 +1177,7 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         
         doc["name"] = name;
         char uniqueId[64];
-        snprintf(uniqueId, sizeof(uniqueId), "brewos_%s_%s", deviceId.c_str(), numberId);
+        snprintf(uniqueId, sizeof(uniqueId), "brewos_%s_%s", deviceId, numberId);
         doc["unique_id"] = uniqueId;
         char objectId[48];
         snprintf(objectId, sizeof(objectId), "brewos_%s", numberId);
@@ -1147,7 +1201,7 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         // Build topic on stack
         char configTopic[128];
         snprintf(configTopic, sizeof(configTopic), "homeassistant/number/brewos_%s/%s/config",
-                 deviceId.c_str(), numberId);
+                 deviceId, numberId);
         if (!_client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true)) {
             LOG_W("Failed to publish HA discovery for %s", numberId);
             if (!_client.connected()) {
@@ -1188,7 +1242,7 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         
         doc["name"] = name;
         char uniqueId[64];
-        snprintf(uniqueId, sizeof(uniqueId), "brewos_%s_%s", deviceId.c_str(), selectId);
+        snprintf(uniqueId, sizeof(uniqueId), "brewos_%s_%s", deviceId, selectId);
         doc["unique_id"] = uniqueId;
         char objectId[48];
         snprintf(objectId, sizeof(objectId), "brewos_%s", selectId);
@@ -1212,7 +1266,7 @@ void MQTTClient::publishHomeAssistantDiscovery() {
         // Build topic on stack
         char configTopic[128];
         snprintf(configTopic, sizeof(configTopic), "homeassistant/select/brewos_%s/%s/config",
-                 deviceId.c_str(), selectId);
+                 deviceId, selectId);
         if (!_client.publish(configTopic, (const uint8_t*)payloadBuffer, payloadLen, true)) {
             LOG_W("Failed to publish HA discovery for %s", selectId);
             if (!_client.connected()) {
@@ -1249,10 +1303,11 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     // ==========================================================================
     // STATISTICS SENSORS (use statistics topic)
     // ==========================================================================
-    String statisticsTopic = topic("statistics");
-    publishSensor("Shots Today", "shots_today", "{{ value_json.shots_today | default(0) }}", "shots", nullptr, "total_increasing", statisticsTopic.c_str(), "mdi:counter");
-    publishSensor("Total Shots", "total_shots", "{{ value_json.total_shots | default(0) }}", "shots", nullptr, "total_increasing", statisticsTopic.c_str(), "mdi:coffee-maker");
-    publishSensor("Energy Today", "energy_today", "{{ value_json.kwh_today | default(0) }}", "kWh", "energy", "total_increasing", statisticsTopic.c_str(), nullptr);
+    char statisticsTopic[64];
+    getTopic("statistics", statisticsTopic, sizeof(statisticsTopic));
+    publishSensor("Shots Today", "shots_today", "{{ value_json.shots_today | default(0) }}", "shots", nullptr, "total_increasing", statisticsTopic, "mdi:counter");
+    publishSensor("Total Shots", "total_shots", "{{ value_json.total_shots | default(0) }}", "shots", nullptr, "total_increasing", statisticsTopic, "mdi:coffee-maker");
+    publishSensor("Energy Today", "energy_today", "{{ value_json.kwh_today | default(0) }}", "kWh", "energy", "total_increasing", statisticsTopic, nullptr);
     
     // ==========================================================================
     // BINARY SENSORS
@@ -1268,13 +1323,13 @@ void MQTTClient::publishHomeAssistantDiscovery() {
     // ==========================================================================
     // POWER METER SENSORS
     // ==========================================================================
-    publishSensor("Voltage", "voltage", "{{ value_json.voltage }}", "V", "voltage", "measurement", powerTopic.c_str());
-    publishSensor("Current", "current", "{{ value_json.current }}", "A", "current", "measurement", powerTopic.c_str());
-    publishSensor("Power", "power", "{{ value_json.power }}", "W", "power", "measurement", powerTopic.c_str());
-    publishSensor("Energy Import", "energy_import", "{{ value_json.energy_import }}", "kWh", "energy", "total_increasing", powerTopic.c_str());
-    publishSensor("Energy Export", "energy_export", "{{ value_json.energy_export }}", "kWh", "energy", "total_increasing", powerTopic.c_str());
-    publishSensor("Frequency", "frequency", "{{ value_json.frequency }}", "Hz", "frequency", "measurement", powerTopic.c_str());
-    publishSensor("Power Factor", "power_factor", "{{ value_json.power_factor }}", "", "power_factor", "measurement", powerTopic.c_str());
+    publishSensor("Voltage", "voltage", "{{ value_json.voltage }}", "V", "voltage", "measurement", powerTopic);
+    publishSensor("Current", "current", "{{ value_json.current }}", "A", "current", "measurement", powerTopic);
+    publishSensor("Power", "power", "{{ value_json.power }}", "W", "power", "measurement", powerTopic);
+    publishSensor("Energy Import", "energy_import", "{{ value_json.energy_import }}", "kWh", "energy", "total_increasing", powerTopic);
+    publishSensor("Energy Export", "energy_export", "{{ value_json.energy_export }}", "kWh", "energy", "total_increasing", powerTopic);
+    publishSensor("Frequency", "frequency", "{{ value_json.frequency }}", "Hz", "frequency", "measurement", powerTopic);
+    publishSensor("Power Factor", "power_factor", "{{ value_json.power_factor }}", "", "power_factor", "measurement", powerTopic);
     
     // ==========================================================================
     // SWITCH - Machine Power
@@ -1347,13 +1402,13 @@ void MQTTClient::onMessage(char* topicName, byte* payload, unsigned int length) 
     LOG_D("MQTT message: topic=%s, payload=%s", topicName, message);
     
     // Parse command
-    String topicStr = String(topicName);
-    String cmdTopic = topic("command");
+    char cmdTopicBuf[64];
+    getTopic("command", cmdTopicBuf, sizeof(cmdTopicBuf));
     
-    if (topicStr == cmdTopic) {
+    if (strcmp(topicName, cmdTopicBuf) == 0) {
         LOG_I("Received MQTT command: %s", message);
         
-        // Parse JSON command
+        // Parse JSON command to extract cmd name
         JsonDocument doc;
         DeserializationError error = deserializeJson(doc, message);
         if (error) {
@@ -1361,100 +1416,29 @@ void MQTTClient::onMessage(char* topicName, byte* payload, unsigned int length) 
             return;
         }
         
-        String cmd = doc["cmd"] | "";
+        const char* cmd = doc["cmd"] | "";
         
-        if (cmd == "set_temp") {
-            // Set temperature: {"cmd":"set_temp","boiler":"brew","temp":94.0}
-            String boiler = doc["boiler"] | "brew";
-            float temp = doc["temp"] | 0.0f;
+        // Enqueue command for processing on Core 1 (main loop)
+        // This ensures thread safety: MQTT task (Core 0) doesn't directly modify
+        // state that main loop (Core 1) accesses
+        if (_commandQueue != nullptr) {
+            MQTTCommand mqttCmd;
+            strncpy(mqttCmd.cmd, cmd, sizeof(mqttCmd.cmd) - 1);
+            mqttCmd.cmd[sizeof(mqttCmd.cmd) - 1] = '\0';
+            strncpy(mqttCmd.payload, message, sizeof(mqttCmd.payload) - 1);
+            mqttCmd.payload[sizeof(mqttCmd.payload) - 1] = '\0';
             
-            if (temp > 0) {
-                if (_commandCallback) {
-                    _commandCallback(cmd.c_str(), doc);
-                }
-                LOG_I("MQTT: Set %s temp to %.1f°C", boiler.c_str(), temp);
+            // Try to enqueue (non-blocking, drop if queue full)
+            if (xQueueSend(_commandQueue, &mqttCmd, 0) != pdTRUE) {
+                LOG_W("MQTT command queue full, dropping command: %s", cmd);
             }
-        }
-        else if (cmd == "set_mode") {
-            // Set mode: {"cmd":"set_mode","mode":"standby"}
-            String mode = doc["mode"] | "";
-            if (mode.length() > 0) {
-                if (_commandCallback) {
-                    _commandCallback(cmd.c_str(), doc);
-                }
-                LOG_I("MQTT: Set mode to %s", mode.c_str());
-            }
-        }
-        else if (cmd == "tare") {
-            // Tare scale: {"cmd":"tare"}
+        } else {
+            // Fallback: call callback directly if queue not initialized
+            // This should not happen in normal operation
+            LOG_W("MQTT command queue not initialized, calling callback directly");
             if (_commandCallback) {
-                _commandCallback(cmd.c_str(), doc);
+                _commandCallback(cmd, doc);
             }
-            LOG_I("MQTT: Tare scale");
-        }
-        else if (cmd == "set_target_weight") {
-            // Set target weight: {"cmd":"set_target_weight","weight":36.0}
-            float weight = doc["weight"] | 0.0f;
-            if (weight > 0) {
-                if (_commandCallback) {
-                    _commandCallback(cmd.c_str(), doc);
-                }
-                LOG_I("MQTT: Set target weight to %.1fg", weight);
-            }
-        }
-        else if (cmd == "set_eco") {
-            // Set eco mode config: {"cmd":"set_eco","enabled":true,"brewTemp":80.0,"timeout":30}
-            if (_commandCallback) {
-                _commandCallback(cmd.c_str(), doc);
-            }
-            bool enabled = doc["enabled"] | true;
-            float brewTemp = doc["brewTemp"] | 80.0f;
-            int timeout = doc["timeout"] | 30;
-            LOG_I("MQTT: Set eco config: enabled=%d, temp=%.1f°C, timeout=%dmin", 
-                  enabled, brewTemp, timeout);
-        }
-        else if (cmd == "enter_eco") {
-            // Enter eco mode: {"cmd":"enter_eco"}
-            if (_commandCallback) {
-                _commandCallback(cmd.c_str(), doc);
-            }
-            LOG_I("MQTT: enter_eco");
-        }
-        else if (cmd == "exit_eco") {
-            // Exit eco mode: {"cmd":"exit_eco"}
-            if (_commandCallback) {
-                _commandCallback(cmd.c_str(), doc);
-            }
-            LOG_I("MQTT: exit_eco");
-        }
-        else if (cmd == "brew_start") {
-            // Start brewing: {"cmd":"brew_start"}
-            if (_commandCallback) {
-                _commandCallback(cmd.c_str(), doc);
-            }
-            LOG_I("MQTT: brew_start");
-        }
-        else if (cmd == "brew_stop") {
-            // Stop brewing: {"cmd":"brew_stop"}
-            if (_commandCallback) {
-                _commandCallback(cmd.c_str(), doc);
-            }
-            LOG_I("MQTT: brew_stop");
-        }
-        else if (cmd == "set_heating_strategy") {
-            // Set heating strategy: {"cmd":"set_heating_strategy","strategy":1}
-            uint8_t strategy = doc["strategy"] | 1;
-            if (strategy <= 3) {
-                if (_commandCallback) {
-                    _commandCallback(cmd.c_str(), doc);
-                }
-                LOG_I("MQTT: set_heating_strategy to %d", strategy);
-            } else {
-                LOG_W("MQTT: Invalid heating strategy: %d", strategy);
-            }
-        }
-        else {
-            LOG_W("MQTT: Unknown command: %s", cmd.c_str());
         }
     }
 }
@@ -1465,7 +1449,15 @@ void MQTTClient::messageCallback(char* topic, byte* payload, unsigned int length
     }
 }
 
+void MQTTClient::getTopic(const char* suffix, char* buffer, size_t len) const {
+    // Build topic string using stack buffer to avoid heap allocations
+    // Format: {topic_prefix}/{ha_device_id}/{suffix}
+    snprintf(buffer, len, "%s/%s/%s", _config.topic_prefix, _config.ha_device_id, suffix);
+}
+
 String MQTTClient::topic(const char* suffix) const {
+    // Deprecated: use getTopic() instead to avoid heap allocations
+    // Kept for backward compatibility
     String t = String(_config.topic_prefix);
     t += "/";
     t += _config.ha_device_id;
