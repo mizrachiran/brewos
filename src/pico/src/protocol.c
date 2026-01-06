@@ -38,8 +38,8 @@ typedef enum {
 } rx_state_t;
 
 static rx_state_t g_rx_state = RX_WAIT_SYNC;
-// RX buffer sized for max packet: header (4) + payload (32) + CRC (2) = 38 bytes, round to 40 for safety
-static uint8_t g_rx_buffer[40];
+// RX buffer sized for max packet: header (4) + payload (64) + CRC (2) = 70 bytes, round to 72 for safety
+static uint8_t g_rx_buffer[72];
 static uint8_t g_rx_index = 0;
 static uint8_t g_rx_length = 0;
 static uint8_t g_tx_seq = 0;
@@ -278,7 +278,9 @@ static bool send_packet(uint8_t type, const uint8_t* payload, uint8_t length) {
         return false;  // Caller should retry later
     }
     
-    uint8_t buffer[64];
+    // Buffer size: header (4) + max payload (64) + CRC (2) = 70 bytes
+    // Use PROTOCOL_MAX_PACKET which is defined in protocol_defs.h (via config.h)
+    uint8_t buffer[PROTOCOL_MAX_PACKET];
     uint8_t idx = 0;
     
     // Build packet
@@ -289,6 +291,10 @@ static bool send_packet(uint8_t type, const uint8_t* payload, uint8_t length) {
     buffer[idx++] = seq;
     
     // Copy payload
+    // NOTE: Endianness assumption - memcpy relies on both RP2350 (Pico) and ESP32-S3
+    // being Little Endian. This is correct for the current hardware pairing, but would
+    // break on a Big Endian platform. Explicit serialization (byte-by-byte) would be
+    // more portable but memcpy is faster and acceptable given the fixed hardware pairing.
     if (length > 0 && payload != NULL) {
         memcpy(&buffer[idx], payload, length);
         idx += length;

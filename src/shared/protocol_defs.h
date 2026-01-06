@@ -32,16 +32,17 @@ extern "C" {
 // Packet Structure
 // =============================================================================
 // | SYNC (0xAA) | TYPE | LENGTH | SEQ | PAYLOAD... | CRC16 |
-// |     1       |   1  |    1   |  1  |   0-32     |   2   |
+// |     1       |   1  |    1   |  1  |   0-64     |   2   |
 
 #define PROTOCOL_SYNC_BYTE      0xAA
-#define PROTOCOL_MAX_PAYLOAD    32      // Reduced from 56 to save RAM (status_payload_t is 32 bytes)
+#define PROTOCOL_MAX_PAYLOAD    64      // Increased from 32 to allow room for expansion
+                                        // status_payload_t is 32 bytes, leaving 32 bytes headroom
 #define PROTOCOL_HEADER_SIZE    4       // sync + type + length + seq
 #define PROTOCOL_CRC_SIZE       2
 #define PROTOCOL_MAX_PACKET     (PROTOCOL_HEADER_SIZE + PROTOCOL_MAX_PAYLOAD + PROTOCOL_CRC_SIZE)
 
-// Note: All payload types fit within 32 bytes:
-//   - status_payload_t: 32 bytes (exact fit)
+// Note: All payload types fit within 64 bytes:
+//   - status_payload_t: 32 bytes (room for expansion)
 //   - config_payload_t: 14 bytes
 //   - env_config_payload_t: 18 bytes
 //   - diag_result_payload_t: 32 bytes (exact fit)

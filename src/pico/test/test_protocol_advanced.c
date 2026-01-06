@@ -167,11 +167,11 @@ void test_handshake_payload_size(void) {
 void test_pending_command_structure(void) {
     pending_cmd_t pending;
     
-    // Verify structure size (updated after PROTOCOL_MAX_PAYLOAD reduction from 56 to 32)
-    // Structure: type(1) + seq(1) + payload[32](32) + length(1) + retry_count(1) + sent_time_ms(4) + active(1) = 41 bytes
-    // With padding/alignment, expect around 44 bytes
-    TEST_ASSERT_GREATER_OR_EQUAL(40, sizeof(pending));
-    TEST_ASSERT_LESS_OR_EQUAL(48, sizeof(pending));  // Should not exceed 48 with any reasonable padding
+    // Verify structure size (updated after PROTOCOL_MAX_PAYLOAD increase from 32 to 64)
+    // Structure: type(1) + seq(1) + payload[64](64) + length(1) + retry_count(1) + sent_time_ms(4) + active(1) = 73 bytes
+    // With padding/alignment, expect around 76 bytes
+    TEST_ASSERT_GREATER_OR_EQUAL(73, sizeof(pending));
+    TEST_ASSERT_LESS_OR_EQUAL(80, sizeof(pending));  // Should not exceed 80 with any reasonable padding
     
     // Initialize
     pending.type = MSG_CMD_SET_TEMP;

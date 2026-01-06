@@ -42,6 +42,9 @@ void PicoUART::begin() {
 void PicoUART::loop() {
     // Skip processing if paused (during OTA)
     // This prevents the packet handler from consuming bootloader ACK bytes
+    // Note: We do NOT drain the buffer here because OTA process (executePicoOTA)
+    // actively reads from Serial1 while PicoUART is paused. Draining would
+    // steal data from the OTA process.
     if (_paused) {
         return;
     }
@@ -155,12 +158,13 @@ void PicoUART::processPacket() {
 }
 
 bool PicoUART::sendPacket(uint8_t type, const uint8_t* payload, uint8_t length) {
-    if (length > 56) {
-        LOG_E("Packet payload too large: %d", length);
+    if (length > PROTOCOL_MAX_PAYLOAD) {
+        LOG_E("Packet payload too large: %d (max: %d)", length, PROTOCOL_MAX_PAYLOAD);
         return false;
     }
     
-    uint8_t buffer[64];
+    // Buffer size: header (4) + max payload (64) + CRC (2) = 70 bytes
+    uint8_t buffer[PROTOCOL_MAX_PACKET];
     uint8_t idx = 0;
     
     // Build packet

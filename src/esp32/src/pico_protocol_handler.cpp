@@ -288,6 +288,10 @@ void PicoProtocolHandler::handleStatus(const uint8_t* payload, uint8_t length) {
     ui_state_t& state = runtimeState().beginUpdate();
     
     // Parse temperatures (int16 scaled by 10 -> float)
+    // NOTE: Endianness assumption - memcpy relies on both RP2350 (Pico) and ESP32-S3
+    // being Little Endian. This is correct for the current hardware pairing, but would
+    // break on a Big Endian platform. Explicit serialization (byte-by-byte) would be
+    // more portable but memcpy is faster and acceptable given the fixed hardware pairing.
     int16_t brew_temp_raw, steam_temp_raw, group_temp_raw;
     memcpy(&brew_temp_raw, &payload[0], sizeof(int16_t));
     memcpy(&steam_temp_raw, &payload[2], sizeof(int16_t));
@@ -298,11 +302,13 @@ void PicoProtocolHandler::handleStatus(const uint8_t* payload, uint8_t length) {
     state.group_temp = group_temp_raw / 10.0f;
     
     // Parse pressure (uint16 scaled by 100 -> float)
+    // NOTE: Endianness assumption (see comment above for temperatures)
     uint16_t pressure_raw;
     memcpy(&pressure_raw, &payload[6], sizeof(uint16_t));
     state.pressure = pressure_raw / 100.0f;
     
     // Parse setpoints (int16 scaled by 10 -> float)
+    // NOTE: Endianness assumption (see comment above for temperatures)
     int16_t brew_sp_raw, steam_sp_raw;
     memcpy(&brew_sp_raw, &payload[8], sizeof(int16_t));
     memcpy(&steam_sp_raw, &payload[10], sizeof(int16_t));
@@ -329,6 +335,7 @@ void PicoProtocolHandler::handleStatus(const uint8_t* payload, uint8_t length) {
     }
     
     // Parse power watts (offset 18-19, if available)
+    // NOTE: Endianness assumption (see comment above for temperatures)
     if (length >= 20) {
         uint16_t power_raw;
         memcpy(&power_raw, &payload[18], sizeof(uint16_t));
@@ -341,6 +348,7 @@ void PicoProtocolHandler::handleStatus(const uint8_t* payload, uint8_t length) {
     }
     
     // Parse cleaning status (offsets 29-31, if available)
+    // NOTE: Endianness assumption (see comment above for temperatures)
     if (length >= 32) {
         state.cleaning_reminder = payload[29] != 0;
         uint16_t brew_count_raw;

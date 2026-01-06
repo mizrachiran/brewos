@@ -22,7 +22,7 @@
 // Packet Structure
 // -----------------------------------------------------------------------------
 // | SYNC (0xAA) | TYPE | LENGTH | SEQ | PAYLOAD... | CRC16 |
-// |     1       |   1  |    1   |  1  |  0-32      |   2   |
+// |     1       |   1  |    1   |  1  |  0-64      |   2   |
 
 typedef struct {
     uint8_t type;
@@ -315,7 +315,7 @@ uint8_t* protocol_get_rx_buffer(size_t* buffer_size);
 // Compile-time Payload Size Verification
 // -----------------------------------------------------------------------------
 // Static assertions to catch payload size mismatches at compile time
-// These ensure all payloads fit within PROTOCOL_MAX_PAYLOAD (32 bytes)
+// These ensure all payloads fit within PROTOCOL_MAX_PAYLOAD (64 bytes)
 
 _Static_assert(sizeof(config_payload_t) <= PROTOCOL_MAX_PAYLOAD,
                "config_payload_t exceeds PROTOCOL_MAX_PAYLOAD");

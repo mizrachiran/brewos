@@ -2,13 +2,14 @@
 #define PICO_UART_H
 
 #include <Arduino.h>
+#include "config.h"  // Includes protocol_defs.h for PROTOCOL_MAX_PACKET
 
 // Packet structure
 struct PicoPacket {
     uint8_t type;
     uint8_t length;
     uint8_t seq;
-    uint8_t payload[56];
+    uint8_t payload[64];  // Updated to match PROTOCOL_MAX_PAYLOAD (was 56)
     uint16_t crc;
     bool valid;
 };
@@ -84,7 +85,7 @@ private:
     };
     
     RxState _rxState;
-    uint8_t _rxBuffer[64];
+    uint8_t _rxBuffer[PROTOCOL_MAX_PACKET];  // Sized for max packet: header (4) + payload (64) + CRC (2) = 70 bytes
     uint8_t _rxIndex;
     uint8_t _rxLength;
     uint8_t _txSeq;
