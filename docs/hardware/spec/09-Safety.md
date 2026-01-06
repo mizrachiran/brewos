@@ -28,12 +28,12 @@
 
 ### Component Specifications
 
-| Component | Value              | Part Number            | Purpose                 |
-| --------- | ------------------ | ---------------------- | ----------------------- |
-| F1        | 10A 250V slow-blow | Littelfuse 0218010.MXP | Main circuit protection |
-| F2        | 2A 250V slow-blow  | Littelfuse 0218002.MXP | HLK module protection   |
-| RV1       | 275V AC MOV        | S14K275                | Surge protection        |
-| C1        | 100nF X2 275V AC   | -                      | EMI filter              |
+| Component | Value              | Part Number              | Purpose                 |
+| --------- | ------------------ | ------------------------ | ----------------------- |
+| F1        | 10A 250V slow-blow | **Littelfuse 463** (SMD) | Main circuit protection |
+| F2        | 2A 250V slow-blow  | **Littelfuse 463** (SMD) | HLK module protection   |
+| RV1       | 275V AC MOV        | S14K275                  | Surge protection        |
+| C1        | 100nF X2 275V AC   | -                        | EMI filter              |
 
 ### Fuse Coordination
 
@@ -206,9 +206,9 @@ NEW GROUNDING STRATEGY
 3. PCB LV SIDE (GND) connects to CHASSIS via J5 (SRif).
 
 Safety Benefit:
-If 'L' shorts to the PCB surface, it hits FR4 (fiberglass), not a 
-Ground Plane. It cannot create a dead short or explode. 
-The fuse will eventually blow if it finds a path, but the "Explosive 
+If 'L' shorts to the PCB surface, it hits FR4 (fiberglass), not a
+Ground Plane. It cannot create a dead short or explode.
+The fuse will eventually blow if it finds a path, but the "Explosive
 Arc" risk is eliminated.
 ```
 
@@ -242,21 +242,21 @@ The RP2350 "5V Tolerant" GPIO feature has a critical caveat documented in the da
 
 ### Power Sequencing Risk Analysis
 
-| Scenario | Risk Level | Consequence |
-| -------- | ---------- | ----------- |
-| Normal operation (PCB powered first) | ✅ Safe | IOVDD active, 5V tolerance engaged |
-| ESP32 USB powered before PCB | 🔴 Critical | IOVDD=0V, GPIO latch-up risk |
-| Hot-plugging peripherals | 🟡 Medium | Transient violation possible |
-| Power glitch/brownout | 🟡 Medium | Brief IOVDD dropout |
+| Scenario                             | Risk Level  | Consequence                        |
+| ------------------------------------ | ----------- | ---------------------------------- |
+| Normal operation (PCB powered first) | ✅ Safe     | IOVDD active, 5V tolerance engaged |
+| ESP32 USB powered before PCB         | 🔴 Critical | IOVDD=0V, GPIO latch-up risk       |
+| Hot-plugging peripherals             | 🟡 Medium   | Transient violation possible       |
+| Power glitch/brownout                | 🟡 Medium   | Brief IOVDD dropout                |
 
 ### Protection Mechanisms Implemented
 
-| Protection | Component | Purpose |
-| ---------- | --------- | ------- |
-| Series resistors (1kΩ) | R40-R43 | Limits fault current to <500µA during sequencing anomalies |
-| Pull-down resistors (4.7kΩ) | R11-R15, R73-R75 | Ensures defined GPIO states at boot |
-| ESD clamps | D10-D15 | Additional transient protection |
-| Schottky clamp (BAT54S) | D16 | ADC overvoltage protection |
+| Protection                  | Component        | Purpose                                                    |
+| --------------------------- | ---------------- | ---------------------------------------------------------- |
+| Series resistors (1kΩ)      | R40-R43          | Limits fault current to <500µA during sequencing anomalies |
+| Pull-down resistors (4.7kΩ) | R11-R15, R73-R75 | Ensures defined GPIO states at boot                        |
+| ESD clamps                  | D10-D15          | Additional transient protection                            |
+| Schottky clamp (BAT54S)     | D16              | ADC overvoltage protection                                 |
 
 ### Safe Operating Procedures
 
@@ -281,23 +281,24 @@ GPIO13/14 → Transistor → SSR Trigger → Heater Element
 
 ### Mitigation Layers (Current Implementation)
 
-| Layer | Protection | Notes |
-| ----- | ---------- | ----- |
-| 1 | RP2350 internal watchdog | 8-second timeout, resets MCU |
-| 2 | SSR pull-down resistors (R14/R15) | SSR OFF when GPIO tristated during reset |
-| 3 | Machine thermal fuse | Factory-installed on boiler |
-| 4 | Pressure relief valve | Factory-installed mechanical safety |
+| Layer | Protection                        | Notes                                    |
+| ----- | --------------------------------- | ---------------------------------------- |
+| 1     | RP2350 internal watchdog          | 8-second timeout, resets MCU             |
+| 2     | SSR pull-down resistors (R14/R15) | SSR OFF when GPIO tristated during reset |
+| 3     | Machine thermal fuse              | Factory-installed on boiler              |
+| 4     | Pressure relief valve             | Factory-installed mechanical safety      |
 
 ### Future Enhancement: Hardware Watchdog (Optional)
 
 For higher safety assurance (commercial/certification), consider adding an external "dead man switch":
 
-| Component | Part Number | Function |
-| --------- | ----------- | -------- |
-| TPL5010 | Texas Instruments | External watchdog timer |
+| Component  | Part Number                              | Function                            |
+| ---------- | ---------------------------------------- | ----------------------------------- |
+| TPL5010    | Texas Instruments                        | External watchdog timer             |
 | Connection | TPL5010 DONE ← MCU GPIO, WAKE → Pico RUN | Resets MCU if not reset by firmware |
 
 **Implementation:**
+
 - Firmware must toggle the watchdog input every few seconds
 - If MCU hangs, TPL5010 pulls RUN low → system reset → SSRs turn OFF
 
@@ -314,6 +315,7 @@ For **phase-angle control** (dimming) of the AC pump or heater, a Zero-Cross Det
 ### Impact
 
 Without ZCD, the SSRs can only operate in "Slow PWM" (Time Proportional) mode:
+
 - Example: 1 second period, 50% duty = 0.5s ON, 0.5s OFF
 - This is adequate for thermal inertia (heaters) but NOT for pressure profiling
 
@@ -321,10 +323,10 @@ Without ZCD, the SSRs can only operate in "Slow PWM" (Time Proportional) mode:
 
 If AC pump phase control is required:
 
-| Component | Part Number | Function |
-| --------- | ----------- | -------- |
-| Optocoupler ZCD | H11AA1 | Detects AC zero-cross |
-| Connection | AC_L/AC_N → H11AA1 → GPIO interrupt | Sync PWM to mains frequency |
+| Component       | Part Number                         | Function                    |
+| --------------- | ----------------------------------- | --------------------------- |
+| Optocoupler ZCD | H11AA1                              | Detects AC zero-cross       |
+| Connection      | AC_L/AC_N → H11AA1 → GPIO interrupt | Sync PWM to mains frequency |
 
 **Note:** The current HLK-15M05C power supply provides isolated 5V, allowing safe interface with AC via optocoupler.
 

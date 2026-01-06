@@ -69,8 +69,8 @@ Use an integrated isolated AC/DC converter module for safety and simplicity.
 │                                                                                 │
 │    Component Details:                                                          │
 │    ─────────────────                                                           │
-│    F1: Fuse, 10A 250V, 5x20mm glass, slow-blow (relay-switched loads only)   │
-│    F2: Fuse, 2A 250V, 5x20mm, slow-blow (HLK module protection)               │
+│    F1: Fuse, 10A 250VAC, SMD Nano² (Littelfuse 463), slow-blow (relay-switched loads only)   │
+│    F2: Fuse, 2A 250VAC, SMD Nano² (Littelfuse 463), slow-blow (HLK module protection)        │
 │    RV1: MOV/Varistor, 275V AC, 14mm disc (surge protection)                   │
 │    C1: X2 safety capacitor, 100nF 275V AC (EMI filter)                        │
 │                                                                                 │
@@ -216,15 +216,15 @@ Without buffer, R7 provides only 0.3mA to share between LM4040 and NTC loads:
 
 ### Decoupling Capacitor Placement
 
-| Location                | Capacitor  | Type           | Notes                                |
-| ----------------------- | ---------- | -------------- | ------------------------------------ |
-| 5V rail main            | 470µF      | Polymer (6.3V) | Near HLK-15M05C output               |
-| 5V at Pico VSYS         | 100nF      | Ceramic (0805) | Adjacent to pin                      |
-| 5V at each relay driver | 100nF      | Ceramic (0805) | Suppress switching noise             |
-| 3.3V Buck output (U3)   | 2×22µF     | Ceramic (1206) | For stability                        |
+| Location                | Capacitor  | Type               | Notes                                  |
+| ----------------------- | ---------- | ------------------ | -------------------------------------- |
+| 5V rail main            | 470µF      | SMD V-Chip (6.3V)  | Near HLK-15M05C output                 |
+| 5V at Pico VSYS         | 100nF      | Ceramic (0805)     | Adjacent to pin                        |
+| 5V at each relay driver | 100nF      | Ceramic (0805)     | Suppress switching noise               |
+| 3.3V Buck output (U3)   | 2×22µF     | Ceramic (1206)     | For stability                          |
 | **3.3V Rail bulk (C5)** | **47µF**   | **Ceramic (1206)** | **WiFi/relay transient stabilization** |
-| 3.3V at each ADC input  | 100nF      | Ceramic (0603) | Filter network                       |
-| ADC_VREF                | 22µF+100nF | Ceramic        | Reference stability                  |
+| 3.3V at each ADC input  | 100nF      | Ceramic (0603)     | Filter network                         |
+| ADC_VREF                | 22µF+100nF | Ceramic            | Reference stability                    |
 
 ### 3.3V Rail Bulk Capacitance (ECO-05)
 
@@ -235,6 +235,7 @@ Without buffer, R7 provides only 0.3mA to share between LM4040 and NTC loads:
 - **ESP32 current spikes** (up to 500mA during WiFi TX)
 
 **Required Addition:**
+
 - **C5**: 47µF 10V X5R ceramic capacitor (1206 package)
 - **Placement**: Adjacent to TPS563200 output, parallel with C4/C4A
 

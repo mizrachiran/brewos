@@ -4,8 +4,9 @@
 
 | Rev      | Date            | Description                                                                               |
 | -------- | --------------- | ----------------------------------------------------------------------------------------- |
-| **2.29** | **Dec 22 2025** | **CURRENT** - SRif Grounding Architecture (Remove PE from PCB, Chassis Reference System) |
-| 2.28     | Dec 14 2025     | RP2350 Engineering Verification ECOs (5V tolerance, bulk cap, safety docs)               |
+| **2.30** | **Jan 06 2026** | **CURRENT** - SMD Transition (SMD Fuses, V-Chip Caps) & SRif Grounding                    |
+| 2.29     | Dec 22 2025     | SRif Grounding Architecture (Remove PE from PCB, Chassis Reference System)                |
+| 2.28     | Dec 14 2025     | RP2350 Engineering Verification ECOs (5V tolerance, bulk cap, safety docs)                |
 | 2.27     | Dec 14 2025     | Schematic diagram clarifications (VREF, Level Probe, 5V Protection), Netlist cleanup      |
 | 2.26.1   | Dec 11 2025     | Improved SSR wiring diagrams, fixed J26 pin number inconsistencies                        |
 | 2.25     | Dec 9 2025      | J15 Pin 6 SPARE1, removed SW2/R72 (BOOTSEL not available on Pico header)                  |
@@ -23,6 +24,18 @@
 
 ---
 
+## v2.30 (January 06, 2026) - SMD Transition
+
+**Optimization for Manufacturing & Size**
+
+- **Fuses:** Replaced THT 5x20mm glass fuses with Littelfuse 463 Series **SMD Nano²** fuses.
+  - _Benefit:_ Reduces component height from ~15mm to ~4mm. Removes manual assembly step.
+- **Capacitors:** Switched 5V Bulk Capacitor (C2) to **SMD V-Chip** Aluminum Electrolytic.
+  - _Benefit:_ Streamlines assembly.
+- **Safety:** SMD fuses selected specifically for **250VAC High Breaking Capacity** (500A) to prevent arc explosion faults.
+
+---
+
 ## v2.29 (December 22, 2025) - SRif Grounding Architecture
 
 **🔴 CRITICAL SAFETY DESIGN CHANGE: Eliminates L-to-Earth Short Risk**
@@ -32,11 +45,13 @@ This revision implements the "Gicar-style" **Chassis Reference (SRif)** groundin
 ### Core Design Change
 
 **Previous Architecture (v2.28):**
+
 - PE (Protective Earth) connected to PCB via J1 and J24
 - MH1 mounting hole was PTH (Plated Through Hole) serving as PE star ground point
 - Level probe return path via internal PE connection
 
 **New Architecture (v2.29):**
+
 - **HV Section Floating:** No Earth connection on PCB High Voltage side
 - **LV Section Grounded:** Logic Ground (GND) connects to chassis via dedicated J5 (SRif) wire
 - **All Mounting Holes NPTH:** No random grounding through screws
@@ -46,29 +61,31 @@ This revision implements the "Gicar-style" **Chassis Reference (SRif)** groundin
 
 #### 1. Connector Modifications
 
-| Connector | Old Specification | New Specification | Impact |
-| --------- | ----------------- | ----------------- | ------ |
-| **J1** | 3-Pin Spade (L, N, PE) | **2-Pin Spade (L, N only)** | PE pin removed from mains input |
-| **J24** | 3-Position Screw (L, N, PE) | **2-Position Screw (L, N only)** | PE pin removed from power meter HV |
-| **J5** | (Not present) | **1-Pin 6.3mm Spade (SRif)** | New chassis reference connector |
+| Connector | Old Specification           | New Specification                | Impact                             |
+| --------- | --------------------------- | -------------------------------- | ---------------------------------- |
+| **J1**    | 3-Pin Spade (L, N, PE)      | **2-Pin Spade (L, N only)**      | PE pin removed from mains input    |
+| **J24**   | 3-Position Screw (L, N, PE) | **2-Position Screw (L, N only)** | PE pin removed from power meter HV |
+| **J5**    | (Not present)               | **1-Pin 6.3mm Spade (SRif)**     | New chassis reference connector    |
 
 **J5 (SRif) Wiring:**
+
 - Connect J5 to PCB GND (Logic Ground)
 - Wire to boiler/chassis mounting bolt using 18AWG Green/Yellow wire
 - Required for level probe operation and logic grounding
 
 #### 2. Mounting Holes
 
-| Hole | Old (v2.28) | New (v2.29) | Reason |
-| ---- | ----------- | ----------- | ------ |
+| Hole    | Old (v2.28)         | New (v2.29)         | Reason                                  |
+| ------- | ------------------- | ------------------- | --------------------------------------- |
 | **MH1** | PTH (PE star point) | **NPTH (isolated)** | Prevent random grounding through screws |
-| MH2-MH4 | NPTH (isolated) | NPTH (isolated) | No change |
+| MH2-MH4 | NPTH (isolated)     | NPTH (isolated)     | No change                               |
 
 **Rationale:** We do NOT want the board grounding itself randomly through the screws. Grounding happens ONLY through the J5 SRif wire to prevent ground loops and ensure controlled current paths.
 
 #### 3. PCB Layout Isolation Requirements
 
 **Enhanced Keep-Out Zone:**
+
 - Maintain strict **6mm (240 mil) Keep-Out Zone** between any High Voltage trace (L, N, Relay Contacts) and the Low Voltage Ground Pour
 - **Delete all copper** within 6mm of the L/N tracks
 - Verify no Ground plane is under the HLK module's AC pins
@@ -87,6 +104,7 @@ If 'L' shorts to the PCB surface, it hits FR4 (fiberglass), not a Ground Plane. 
 ```
 
 **Level Probe Return Path:**
+
 ```
 AC_OUT (U6) ──► J26-5 ──► PROBE ──► WATER ──► BOILER BODY
                                                        │
@@ -95,33 +113,33 @@ PCB GND ◄────── J5 (SRif) ◄────── WIRE ◄───�
 
 ### Component Changes
 
-| Component | Change | Notes |
-| --------- | ------ | ----- |
-| J1 | 3-pin → 2-pin connector | Remove PE terminal |
-| J24 | 3-pos → 2-pos terminal | Remove PE terminal |
-| J5 | **NEW** - 6.3mm spade | Chassis reference connector |
-| MH1 | PTH → NPTH | Isolated mounting hole |
+| Component | Change                  | Notes                       |
+| --------- | ----------------------- | --------------------------- |
+| J1        | 3-pin → 2-pin connector | Remove PE terminal          |
+| J24       | 3-pos → 2-pos terminal  | Remove PE terminal          |
+| J5        | **NEW** - 6.3mm spade   | Chassis reference connector |
+| MH1       | PTH → NPTH              | Isolated mounting hole      |
 
 ### BOM Impact
 
-| Change Type | Count | Est. Cost Impact |
-| ---------- | ----- | ---------------- |
-| Connector changes | 2 | ~$0 (same part, fewer pins) |
-| New connector (J5) | 1 | ~$0.10 |
-| **Total BOM Δ** | **3** | **+$0.10** |
+| Change Type        | Count | Est. Cost Impact            |
+| ------------------ | ----- | --------------------------- |
+| Connector changes  | 2     | ~$0 (same part, fewer pins) |
+| New connector (J5) | 1     | ~$0.10                      |
+| **Total BOM Δ**    | **3** | **+$0.10**                  |
 
 ### Files Modified
 
-| File | Changes |
-| ---- | ------- |
-| `schematics/Schematic_Reference.md` | Removed PE from J1/J24, added J5 SRif, updated level probe return path |
-| `spec/06-Connectors.md` | Updated J1/J24 to 2-pin, added J5 specification |
-| `spec/08-PCB-Layout.md` | Changed MH1 to NPTH, updated grounding strategy, added isolation requirements |
-| `spec/09-Safety.md` | Replaced grounding hierarchy with SRif architecture, updated safety notes |
-| `spec/07-BOM.md` | Updated connector quantities and specifications |
-| `spec/03-Power-Supply.md` | Removed PE from mains input diagram |
-| `README.md` | Updated connector quick reference and safety warnings |
-| `CHANGELOG.md` | This entry |
+| File                                | Changes                                                                       |
+| ----------------------------------- | ----------------------------------------------------------------------------- |
+| `schematics/Schematic_Reference.md` | Removed PE from J1/J24, added J5 SRif, updated level probe return path        |
+| `spec/06-Connectors.md`             | Updated J1/J24 to 2-pin, added J5 specification                               |
+| `spec/08-PCB-Layout.md`             | Changed MH1 to NPTH, updated grounding strategy, added isolation requirements |
+| `spec/09-Safety.md`                 | Replaced grounding hierarchy with SRif architecture, updated safety notes     |
+| `spec/07-BOM.md`                    | Updated connector quantities and specifications                               |
+| `spec/03-Power-Supply.md`           | Removed PE from mains input diagram                                           |
+| `README.md`                         | Updated connector quick reference and safety warnings                         |
+| `CHANGELOG.md`                      | This entry                                                                    |
 
 ### Design Rationale
 
@@ -130,6 +148,7 @@ The previous design brought Mains Earth (PE) onto the PCB High Voltage side, cre
 
 **Solution:**
 By floating the HV section and grounding only the LV section via a dedicated SRif wire, we:
+
 1. Eliminate the risk of L-to-Earth shorts on the PCB
 2. Maintain safe level probe operation through controlled return path
 3. Prevent ground loops by ensuring single-point grounding
@@ -145,6 +164,7 @@ This approach follows the "Gicar-style" grounding architecture used in professio
 This design change addresses a fundamental safety risk in the previous architecture. The SRif grounding system is a proven approach that eliminates the explosive arc risk while maintaining all functional requirements. All documentation has been updated to reflect the new architecture.
 
 **⚠️ IMPORTANT:** When fabricating boards with this revision:
+
 - Verify J1 and J24 are 2-pin/2-position connectors (not 3-pin)
 - Ensure J5 (SRif) connector is included in BOM
 - All mounting holes must be NPTH (Non-Plated Through Hole)

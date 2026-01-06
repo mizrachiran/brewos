@@ -109,8 +109,8 @@
 
 | Qty | Ref     | Value    | Voltage | Package  | Notes                                      |
 | --- | ------- | -------- | ------- | -------- | ------------------------------------------ |
-| 1   | C1      | 100nF X2 | 275V AC | Radial   | Mains EMI filter                           |
-| 1   | C2      | 470µF    | 6.3V    | Radial   | 5V bulk (Polymer)                          |
+| 1   | C1      | 100nF X2 | 275V AC | Radial   | Mains EMI filter (**Compact 10mm pitch**)  |
+| 1   | C2      | 470µF    | 6.3V    | **SMD**  | 5V bulk (SMD V-Chip 6.3mm or 8mm)          |
 | 1   | C3      | 22µF     | 25V     | 1206     | Buck input (X5R)                           |
 | 2   | C4,C4A  | 22µF     | 10V     | 1206     | Buck output (X5R)                          |
 | 1   | **C5**  | **47µF** | **10V** | **1206** | **3.3V rail bulk (WiFi/relay transients)** |
@@ -136,16 +136,16 @@
 
 ## Electromechanical
 
-| Qty | Ref     | Description       | Part Number             | Notes                 |
-| --- | ------- | ----------------- | ----------------------- | --------------------- |
-| 2   | K1,K3   | Relay 5V 3A       | Panasonic APAN3105      | Slim 5mm              |
-| 1   | K2      | Relay 5V 16A      | Omron G5LE-1A4-E DC5    | **-E variant!**       |
-| 1   | F1      | Fuse 10A + Holder | 0218010.MXP + 01000056Z | Main fuse             |
-| 1   | F2      | Fuse 2A + Holder  | 0218002.MXP + 01000056Z | HLK module            |
-| 1   | RV1     | Varistor 275V     | S14K275                 | 14mm, mains surge     |
-| 2   | RV2-RV3 | Varistor 275V     | S10K275                 | 10mm, arc suppression |
-| 1   | SW1     | Tactile Switch    | EVQP7A01P               | 6×6mm SMD             |
-| 1   | BZ1     | Passive Buzzer    | CEM-1203(42)            | 12mm                  |
+| Qty | Ref     | Description      | Part Number          | Notes                 |
+| --- | ------- | ---------------- | -------------------- | --------------------- |
+| 2   | K1,K3   | Relay 5V 3A      | Panasonic APAN3105   | Slim 5mm              |
+| 1   | K2      | Relay 5V 16A     | Omron G5LE-1A4-E DC5 | **-E variant!**       |
+| 1   | F1      | **Fuse 10A SMD** | **Littelfuse 463**   | **Nano² (10x3mm)**    |
+| 1   | F2      | **Fuse 2A SMD**  | **Littelfuse 463**   | **Nano² (10x3mm)**    |
+| 1   | RV1     | Varistor 275V    | S14K275              | 14mm, mains surge     |
+| 2   | RV2-RV3 | Varistor 275V    | S10K275              | 10mm, arc suppression |
+| 1   | SW1     | Tactile Switch   | EVQP7A01P            | 6×6mm SMD             |
+| 1   | BZ1     | Passive Buzzer   | CEM-1203(42)         | 12mm                  |
 
 ## LEDs
 

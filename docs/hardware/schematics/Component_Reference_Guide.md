@@ -189,15 +189,15 @@
 
 #### Power Supply Filtering (C1-C6)
 
-| Ref | Value    | Voltage | Type    | Function                |
-| --- | -------- | ------- | ------- | ----------------------- |
-| C1  | 100nF X2 | 275V AC | Radial  | Mains EMI filter        |
-| C2  | 470µF    | 6.3V    | Polymer | 5V bulk capacitor       |
-| C3  | 22µF     | 25V     | Ceramic | Buck converter input    |
-| C4  | 22µF     | 10V     | Ceramic | Buck converter output   |
-| C4A | 22µF     | 10V     | Ceramic | Buck output (parallel)  |
-| C5  | 100nF    | 25V     | Ceramic | 3.3V general decoupling |
-| C6  | 100nF    | 25V     | Ceramic | 3.3V digital decoupling |
+| Ref | Value    | Voltage | Type       | Function                |
+| --- | -------- | ------- | ---------- | ----------------------- |
+| C1  | 100nF X2 | 275V AC | Radial     | Mains EMI filter        |
+| C2  | 470µF    | 6.3V    | SMD V-Chip | 5V bulk capacitor       |
+| C3  | 22µF     | 25V     | Ceramic    | Buck converter input    |
+| C4  | 22µF     | 10V     | Ceramic    | Buck converter output   |
+| C4A | 22µF     | 10V     | Ceramic    | Buck output (parallel)  |
+| C5  | 100nF    | 25V     | Ceramic    | 3.3V general decoupling |
+| C6  | 100nF    | 25V     | Ceramic    | 3.3V digital decoupling |
 
 #### ADC Reference & Sensor Filters (C7-C13)
 

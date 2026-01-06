@@ -122,8 +122,8 @@ TVS, ESD protection, filtering
     │ N  (Neutral)├──┐ │    F1                RV1              C1
     │             │  │ │  ┌─────┐          ┌──────┐        ┌──────┐
     └─────────────┘  │ └──┤ 10A ├────┬─────┤ MOV  ├────┬───┤ 100nF├───┬─────► L_FUSED
-                     │    │250V │    │     │ 275V │    │   │ X2   │   │
-                     │    │T/Lag│    │     │ 14mm │    │   │275VAC│   │
+                     │    │SMD  │    │     │ 275V │    │   │ X2   │   │
+                     │    │Nano2│    │     │ 14mm │    │   │275VAC│   │
                      │    └─────┘    │     └──┬───┘    │   └──┬───┘   │
                      │               │        │        │      │       │
                      └───────────────┼────────┴────────┴──────┴───────┴─────► N_FUSED
@@ -137,10 +137,11 @@ TVS, ESD protection, filtering
 
     Component Values:
     ─────────────────
-    F1:  Littelfuse 0218010.MXP, 10A 250V, 5x20mm, Slow-blow (relay loads only ~6A)
-    F2:  Littelfuse 0218002.MXP, 2A 250V, 5x20mm, Slow-blow
+    F1:  Littelfuse 463 Series (0463010.ER), 10A 250VAC, SMD Nano² (Square Brick)
+         ⚠️ MUST be High Breaking Capacity (>100A @ 250VAC) - Do not use standard 2410
+    F2:  Littelfuse 463 Series (0463002.ER), 2A 250VAC, SMD Nano²
     RV1: Epcos S14K275 or Littelfuse V275LA20AP, 275VAC, 14mm disc
-    C1:  TDK B32922C3104M, 100nF, 275VAC, X2 Safety Rated
+    C1:  TDK B32922C3104M, 100nF, 275VAC, X2 Safety Rated (**Compact 10mm pitch**)
 ```
 
 ## 1.2 AC/DC Isolated Power Supply
@@ -159,7 +160,7 @@ TVS, ESD protection, filtering
                               │     ║ISOLATE║            │ ┌─────┴─────┐
     N_FUSED ──────────────────┤ N   ╚═══════╝    -Vout   │ │   470µF   │
                               │                          ├─┤   6.3V    │
-                              │                          │ │  Polymer  │
+                              │                          │ │ SMD V-Chip│
                               └──────────────────────────┘ └─────┬─────┘
                                                                  │
                                                                 ─┴─
@@ -178,7 +179,7 @@ TVS, ESD protection, filtering
     ─────────────────
     U2:  Hi-Link HLK-15M05C (5V 3A/15W) - adequate for ~1.1A peak load
          Alt: Mean Well IRM-20-5 (5V 4A) if more headroom needed
-    C2:  470µF 6.3V Polymer (low ESR, long life in hot environment)
+    C2:  470µF 6.3V SMD V-Chip Aluminum Electrolytic (e.g., Panasonic FKS series)
 ```
 
 ## 1.3 5V to 3.3V Synchronous Buck Converter
@@ -2289,7 +2290,7 @@ using the machine's existing high-voltage wiring. NO HIGH CURRENT flows through 
           │               │   D20   │    │    C2     │
           │               │   TVS   │    │   470µF   │
           │               │SMBJ5.0A │    │   6.3V    │
-          │               │  ──┬──  │    │  Polymer  │
+          │               │  ──┬──  │    │ SMD V-Chip│
           │               │  ──┴──  │    │     │     │
           │               │    │    │    │   ═══     │
           │               └────┬────┘    └─────┬─────┘
@@ -2332,10 +2333,10 @@ using the machine's existing high-voltage wiring. NO HIGH CURRENT flows through 
            - Peak pulse power: 600W (10/1000µs)
            - Purpose: Clamps voltage spikes to protect downstream ICs
 
-      C2:  470µF, 6.3V, Polymer Electrolytic (low ESR)
+      C2:  470µF, 6.3V, SMD V-Chip Aluminum Electrolytic
            - Purpose: Bulk decoupling, absorbs load transients
-           - Note: Polymer type chosen for low ESR and better life in
-                   hot environment inside espresso machine (~60-80°C)
+           - Note: SMD V-Chip type chosen for pick-and-place compatibility
+                   and lower profile in hot environment inside espresso machine (~60-80°C)
 
     PROTECTION BEHAVIOR:
     ────────────────────

@@ -303,9 +303,10 @@ J17─┤            │
 
 ### Power Section
 
-1. **Buck converter**: Tight layout, short SW trace
-2. **Input/output caps**: Adjacent to TPS563200
-3. **Inductor**: Keep away from sensitive analog
+1. **SMD Fuses (F1, F2):** Use wide traces (>3mm) connecting to fuse pads to act as heat sinks.
+2. **Buck converter**: Tight layout, short SW trace
+3. **Input/output caps**: Adjacent to TPS563200
+4. **Inductor**: Keep away from sensitive analog
 
 ### High-Voltage Section
 

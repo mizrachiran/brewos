@@ -97,7 +97,7 @@ R92,Resistor,5.6k_1%,0805,1=5V_DIV,2=GND,,5V monitor lower (ratiometric compensa
 R93,Resistor,20k,0805,1=+3.3V,2=RS485_A,,RS485 failsafe bias pull-up on A line (bus idle state definition)
 R94,Resistor,20k,0805,1=RS485_B,2=GND,,RS485 failsafe bias pull-down on B line (bus idle state definition)
 C1,Capacitor,100nF_X2,Radial,1=L_FUSED,2=N_FUSED,,Mains EMI filter
-C2,Capacitor,470uF_6.3V,Radial_6.3mm,1=+5V,2=GND,,5V bulk cap (Polymer low ESR)
+C2,Capacitor,470uF_6.3V,SMD_V-Chip,1=+5V,2=GND,,5V bulk cap (SMD V-Chip Aluminum Electrolytic)
 C3,Capacitor,22uF_25V,1206,1=+5V,2=GND,,Buck input cap (ceramic X5R)
 C4,Capacitor,22uF_10V,1206,1=+3.3V,2=GND,,Buck output cap (ceramic X5R)
 C4A,Capacitor,22uF_10V,1206,1=+3.3V,2=GND,,Buck output cap 2 (ceramic X5R) - parallel
@@ -119,8 +119,8 @@ C70,Capacitor,100nF,0805,1=+3.3V,2=GND,,MAX3485 VCC decoupling
 C80,Capacitor,100nF,0805,1=+3.3V,2=GND,,OPA2342 (U9) VCC decoupling
 C81,Capacitor,100nF,0805,1=5V_DIV,2=GND,,5V monitor filter
 L1,Inductor,2.2uH_3A,1210,1=SW,2=+3.3V,,Buck inductor (TPS563200) - 2.2µH per TI datasheet for 3.3V output
-F1,Fuse,10A_250V,5x20mm,1=L,2=L_FUSED,,Main mains fuse 10A slow-blow + holder 01000056Z
-F2,Fuse,2A_250V,5x20mm,1=L_FUSED,2=L_HLK,,HLK module secondary fuse 2A slow-blow
+F1,Fuse,10A_250VAC,SMD_Nano2,1=L,2=L_FUSED,,Main mains fuse 10A slow-blow (Littelfuse 463 Series 0463010.ER) - MUST be High Breaking Capacity
+F2,Fuse,2A_250VAC,SMD_Nano2,1=L_FUSED,2=L_HLK,,HLK module secondary fuse 2A slow-blow (Littelfuse 463 Series 0463002.ER)
 RV1,Varistor,275V,14mm,1=L_FUSED,2=N_FUSED,,Mains surge protection (S14K275)
 RV2,Varistor,275V,10mm,1=J3_NO,2=N,,Pump arc suppression MOV across load (S10K275)
 RV3,Varistor,275V,10mm,1=J4_NO,2=N,,Solenoid arc suppression MOV across load (S10K275)
