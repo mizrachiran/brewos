@@ -78,6 +78,32 @@ void BrewWebServer::begin() {
     _server.begin();
     LOG_I("HTTP server started on port %d", WEB_SERVER_PORT);
     LOG_I("WebSocket available at ws://brewos.local/ws");
+    
+    // Create OTA task queue
+    _otaQueue = xQueueCreate(OTA_QUEUE_SIZE, sizeof(OTACommand));
+    if (!_otaQueue) {
+        LOG_E("Failed to create OTA queue");
+    }
+    
+    // Create OTA background task
+    // Stack size: 8192 bytes (firmware streaming needs buffer space)
+    // Priority: 3 (below WiFi task priority 5, above idle)
+    // Core: 1 (same as main loop, but separate task)
+    xTaskCreatePinnedToCore(
+        otaTask,
+        "OTATask",
+        8192,
+        this,
+        3,
+        &_otaTaskHandle,
+        1
+    );
+    
+    if (_otaTaskHandle) {
+        LOG_I("OTA task created on Core 1");
+    } else {
+        LOG_E("Failed to create OTA task");
+    }
 }
 
 void BrewWebServer::setCloudConnection(CloudConnection* cloudConnection) {
@@ -2096,7 +2122,7 @@ void BrewWebServer::handleGetStatus(AsyncWebServerRequest* request) {
     if (jsonBuffer) {
         serializeJson(doc, jsonBuffer, jsonSize);
         request->send(200, "application/json", jsonBuffer);
-        // Buffer will be freed by AsyncWebServer after response
+        free(jsonBuffer);  // request->send() creates a copy, so we must free the original buffer
     } else {
         request->send(500, "application/json", "{\"error\":\"Out of memory\"}");
     }
@@ -2254,10 +2280,21 @@ void BrewWebServer::handleSetWiFi(AsyncWebServerRequest* request, uint8_t* data,
         return;
     }
     
-    String ssid = doc["ssid"] | "";
-    String password = doc["password"] | "";
+    // Extract to temporary buffers to avoid String allocations
+    char ssidBuf[64] = {0};
+    char passwordBuf[128] = {0};
     
-    if (_wifiManager.setCredentials(ssid, password)) {
+    const char* ssidStr = doc["ssid"].as<const char*>();
+    const char* passwordStr = doc["password"].as<const char*>();
+    
+    if (ssidStr) {
+        strncpy(ssidBuf, ssidStr, sizeof(ssidBuf) - 1);
+    }
+    if (passwordStr) {
+        strncpy(passwordBuf, passwordStr, sizeof(passwordBuf) - 1);
+    }
+    
+    if (_wifiManager.setCredentials(ssidBuf, passwordBuf)) {
         // Send response first - connection will happen in loop() after delay
         request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Connecting...\"}");
         
@@ -2454,78 +2491,32 @@ void BrewWebServer::handleStartOTA(AsyncWebServerRequest* request) {
     }
     
     size_t firmwareSize = firmwareFile.size();
+    firmwareFile.close();  // Close file - will reopen in background task
+    
     if (firmwareSize == 0 || firmwareSize > OTA_MAX_SIZE) {
-        firmwareFile.close();
         request->send(400, "application/json", "{\"error\":\"Invalid firmware size\"}");
         return;
     }
     
+    // Check if OTA is already in progress
+    if (_otaInProgress) {
+        request->send(409, "application/json", "{\"error\":\"OTA already in progress\"}");
+        return;
+    }
+    
+    // Send immediate response - OTA will happen in background task
     request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Starting OTA...\"}");
     
-    broadcastLogLevel("info", "Starting Pico firmware update...");
-    
-    // IMPORTANT: Pause packet processing BEFORE sending bootloader command
-    // This prevents the main loop's picoUart.loop() from consuming the bootloader ACK bytes
-    _picoUart.pause();
-    
-    // Step 1: Send bootloader command via UART (serial bootloader - preferred method)
-    // Retry up to 3 times if command fails
-    broadcastLogLevel("info", "Sending bootloader command to Pico...");
-    bool commandSent = false;
-    for (int attempt = 1; attempt <= 3 && !commandSent; attempt++) {
-        if (_picoUart.sendCommand(MSG_CMD_BOOTLOADER, nullptr, 0)) {
-            commandSent = true;
-        } else if (attempt < 3) {
-            broadcastLogLevel("warning", "Retry sending bootloader command...");
-            delay(100);
+    // Queue OTA command to background task (non-blocking)
+    if (_otaQueue) {
+        OTACommand cmd;
+        cmd.type = OTACommand::START_PICO_OTA;
+        if (xQueueSend(_otaQueue, &cmd, pdMS_TO_TICKS(1000)) != pdTRUE) {
+            broadcastLogLevel("error", "Failed to queue OTA command - queue full");
         }
+    } else {
+        broadcastLogLevel("error", "OTA queue not initialized");
     }
-    
-    if (!commandSent) {
-        broadcastLogLevel("error", "Failed to send bootloader command after 3 attempts");
-        _picoUart.resume();
-        firmwareFile.close();
-        return;
-    }
-    
-    // Step 2: Wait for bootloader ACK (0xAA 0x55)
-    // The bootloader sends this ACK to confirm it's ready to receive firmware
-    broadcastLogLevel("info", "Waiting for bootloader ACK...");
-    if (!_picoUart.waitForBootloaderAck(3000)) {
-        broadcastLogLevel("error", "Bootloader ACK timeout - bootloader may not be ready");
-        _picoUart.resume();
-        firmwareFile.close();
-        return;
-    }
-    broadcastLogLevel("info", "Bootloader ACK received, ready to stream firmware");
-    
-    // Step 3: Stream firmware
-    broadcastLogLevel("info", "Streaming firmware to Pico...");
-    bool success = streamFirmwareToPico(firmwareFile, firmwareSize);
-    
-    firmwareFile.close();
-    
-    if (!success) {
-        broadcastLogLevel("error", "Firmware update failed");
-        _picoUart.resume();
-        // Fallback: Try hardware bootloader entry
-        broadcastLogLevel("info", "Attempting hardware bootloader entry (fallback)...");
-        _picoUart.enterBootloader();
-        delay(500);
-        // Note: Hardware bootloader entry requires different protocol (USB bootloader)
-        // This is a fallback for recovery only
-        return;
-    }
-    
-    // Step 4: Reset Pico to boot new firmware
-    delay(1000);
-    broadcastLogLevel("info", "Resetting Pico...");
-    _picoUart.resetPico();
-    
-    // Resume packet processing to receive boot info from Pico
-    _picoUart.resume();
-    
-    broadcastLogLevel("info", "Firmware update complete. Pico should boot with new firmware.");
 }
 
 size_t BrewWebServer::getClientCount() {
@@ -2817,4 +2808,124 @@ void BrewWebServer::handleTestMQTT(AsyncWebServerRequest* request) {
         request->send(500, "application/json", "{\"error\":\"Connection failed\"}");
         broadcastLogLevel("error", "MQTT connection test failed");
     }
+}
+
+// =============================================================================
+// OTA Background Task Implementation
+// =============================================================================
+
+void BrewWebServer::otaTask(void* parameter) {
+    BrewWebServer* self = static_cast<BrewWebServer*>(parameter);
+    OTACommand cmd;
+    
+    while (true) {
+        // Wait for OTA command from queue (blocking wait)
+        if (xQueueReceive(self->_otaQueue, &cmd, portMAX_DELAY) == pdTRUE) {
+            self->processOTACommand(cmd);
+        }
+    }
+}
+
+void BrewWebServer::processOTACommand(const OTACommand& cmd) {
+    switch (cmd.type) {
+        case OTACommand::START_PICO_OTA:
+            executePicoOTA();
+            break;
+    }
+}
+
+void BrewWebServer::executePicoOTA() {
+    // Set OTA in progress flag
+    _otaInProgress = true;
+    
+    broadcastLogLevel("info", "Starting Pico firmware update...");
+    
+    // Check if firmware file exists
+    if (!LittleFS.exists(OTA_FILE_PATH)) {
+        broadcastLogLevel("error", "Firmware file not found");
+        _otaInProgress = false;
+        return;
+    }
+    
+    File firmwareFile = LittleFS.open(OTA_FILE_PATH, "r");
+    if (!firmwareFile) {
+        broadcastLogLevel("error", "Failed to open firmware file");
+        _otaInProgress = false;
+        return;
+    }
+    
+    size_t firmwareSize = firmwareFile.size();
+    if (firmwareSize == 0 || firmwareSize > OTA_MAX_SIZE) {
+        broadcastLogLevel("error", "Invalid firmware size: %zu", firmwareSize);
+        firmwareFile.close();
+        _otaInProgress = false;
+        return;
+    }
+    
+    // IMPORTANT: Pause packet processing BEFORE sending bootloader command
+    // This prevents the main loop's picoUart.loop() from consuming the bootloader ACK bytes
+    _picoUart.pause();
+    
+    // Step 1: Send bootloader command via UART (serial bootloader - preferred method)
+    // Retry up to 3 times if command fails
+    broadcastLogLevel("info", "Sending bootloader command to Pico...");
+    bool commandSent = false;
+    for (int attempt = 1; attempt <= 3 && !commandSent; attempt++) {
+        if (_picoUart.sendCommand(MSG_CMD_BOOTLOADER, nullptr, 0)) {
+            commandSent = true;
+        } else if (attempt < 3) {
+            broadcastLogLevel("warning", "Retry sending bootloader command...");
+            vTaskDelay(pdMS_TO_TICKS(100));  // Use vTaskDelay instead of delay() in FreeRTOS task
+        }
+    }
+    
+    if (!commandSent) {
+        broadcastLogLevel("error", "Failed to send bootloader command after 3 attempts");
+        _picoUart.resume();
+        firmwareFile.close();
+        _otaInProgress = false;
+        return;
+    }
+    
+    // Step 2: Wait for bootloader ACK (0xAA 0x55)
+    // The bootloader sends this ACK to confirm it's ready to receive firmware
+    broadcastLogLevel("info", "Waiting for bootloader ACK...");
+    if (!_picoUart.waitForBootloaderAck(3000)) {
+        broadcastLogLevel("error", "Bootloader ACK timeout - bootloader may not be ready");
+        _picoUart.resume();
+        firmwareFile.close();
+        _otaInProgress = false;
+        return;
+    }
+    broadcastLogLevel("info", "Bootloader ACK received, ready to stream firmware");
+    
+    // Step 3: Stream firmware
+    broadcastLogLevel("info", "Streaming firmware to Pico...");
+    bool success = streamFirmwareToPico(firmwareFile, firmwareSize);
+    
+    firmwareFile.close();
+    
+    if (!success) {
+        broadcastLogLevel("error", "Firmware update failed");
+        _picoUart.resume();
+        // Fallback: Try hardware bootloader entry
+        broadcastLogLevel("info", "Attempting hardware bootloader entry (fallback)...");
+        _picoUart.enterBootloader();
+        vTaskDelay(pdMS_TO_TICKS(500));  // Use vTaskDelay instead of delay() in FreeRTOS task
+        // Note: Hardware bootloader entry requires different protocol (USB bootloader)
+        // This is a fallback for recovery only
+        _otaInProgress = false;
+        return;
+    }
+    
+    // Step 4: Reset Pico to boot new firmware
+    vTaskDelay(pdMS_TO_TICKS(1000));  // Use vTaskDelay instead of delay() in FreeRTOS task
+    broadcastLogLevel("info", "Resetting Pico...");
+    _picoUart.resetPico();
+    
+    // Resume packet processing to receive boot info from Pico
+    _picoUart.resume();
+    
+    broadcastLogLevel("info", "Firmware update complete. Pico should boot with new firmware.");
+    _otaInProgress = false;
 }

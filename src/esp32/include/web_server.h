@@ -8,6 +8,9 @@
 #include "wifi_manager.h"
 #include "ui/ui.h"
 #include "utils/status_change_detector.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/queue.h>
 
 // Forward declarations
 class PicoUART;
@@ -165,6 +168,27 @@ private:
     // Deferred cloud state broadcast (when heap is low right after SSL connect)
     bool _pendingCloudStateBroadcast = false;
     unsigned long _pendingCloudStateBroadcastTime = 0;
+    
+    // OTA task management (for non-blocking OTA operations)
+    QueueHandle_t _otaQueue = nullptr;
+    TaskHandle_t _otaTaskHandle = nullptr;
+    static constexpr int OTA_QUEUE_SIZE = 2;  // Small queue - only one OTA at a time
+    
+    // OTA command structure
+    struct OTACommand {
+        enum Type {
+            START_PICO_OTA
+        } type;
+    };
+    
+    // Static task function for OTA operations
+    static void otaTask(void* parameter);
+    
+    // Process OTA command in background task
+    void processOTACommand(const OTACommand& cmd);
+    
+    // Execute Pico OTA update (called from background task)
+    void executePicoOTA();
 };
 
 #endif // WEB_SERVER_H

@@ -177,7 +177,6 @@ static char diagnosticJsonBuffer[512] = {0};
 static SemaphoreHandle_t diagnosticBufferMutex = nullptr;  // Thread-safe access to diagnostic buffer
 
 // Forward declarations
-void parsePicoStatus(const uint8_t* payload, uint8_t length);
 void handleEncoderEvent(int32_t diff, button_state_t btn);
 static void onPicoPacket(const PicoPacket& packet);
 
@@ -243,7 +242,7 @@ static void onWiFiConnected() {
     }
     
     // Update machine state using thread-safe function that updates both buffers
-    // This prevents lost updates when parsePicoStatus swaps buffers
+    // This prevents lost updates when status parsing swaps buffers
         runtimeState().updateWiFi(true, false, WiFi.RSSI());
     
     // Get IP address for logging (before mutex)
@@ -2227,103 +2226,6 @@ static void loopMonitorMemoryAndTiming() {
                   fragmentation, largestBlock);
         }
     }
-}
-
-/**
- * Parse status message from Pico and update machine state
- * 
- * Status payload structure (from protocol.h status_payload_t):
- * Offset  0-1:  brew_temp (int16, °C * 10)
- * Offset  2-3:  steam_temp (int16, °C * 10)
- * Offset  4-5:  group_temp (int16, °C * 10)
- * Offset  6-7:  pressure (uint16, bar * 100)
- * Offset  8-9:  brew_setpoint (int16, °C * 10)
- * Offset 10-11: steam_setpoint (int16, °C * 10)
- * Offset 12:    brew_output (uint8, 0-100%)
- * Offset 13:    steam_output (uint8, 0-100%)
- * Offset 14:    pump_output (uint8, 0-100%)
- * Offset 15:    state (uint8)
- * Offset 16:    flags (uint8)
- * Offset 17:    water_level (uint8, 0-100%)
- * Offset 18-19: power_watts (uint16)
- * Offset 20-23: uptime_ms (uint32)
- * Offset 24-27: shot_start_timestamp_ms (uint32)
- * Offset 28:    heating_strategy (uint8)
- * Offset 29:    cleaning_reminder (uint8, 0 or 1)
- * Offset 30-31: brew_count (uint16)
- */
-void parsePicoStatus(const uint8_t* payload, uint8_t length) {
-    if (length < 18) return;  // Minimum status size (up to water_level)
-    
-    // Begin update transaction - takes mutex and returns reference to writing buffer
-    // The writing buffer is already initialized with current state (copied in beginUpdate)
-    ui_state_t& state = runtimeState().beginUpdate();
-    
-    // Parse temperatures (int16 scaled by 10 -> float)
-    int16_t brew_temp_raw, steam_temp_raw, group_temp_raw;
-    memcpy(&brew_temp_raw, &payload[0], sizeof(int16_t));
-    memcpy(&steam_temp_raw, &payload[2], sizeof(int16_t));
-    memcpy(&group_temp_raw, &payload[4], sizeof(int16_t));
-    
-    state.brew_temp = brew_temp_raw / 10.0f;
-    state.steam_temp = steam_temp_raw / 10.0f;
-    state.group_temp = group_temp_raw / 10.0f;
-    
-    // Parse pressure (uint16 scaled by 100 -> float)
-    uint16_t pressure_raw;
-    memcpy(&pressure_raw, &payload[6], sizeof(uint16_t));
-    state.pressure = pressure_raw / 100.0f;
-    
-    // Parse setpoints (int16 scaled by 10 -> float)
-    int16_t brew_sp_raw, steam_sp_raw;
-    memcpy(&brew_sp_raw, &payload[8], sizeof(int16_t));
-    memcpy(&steam_sp_raw, &payload[10], sizeof(int16_t));
-    state.brew_setpoint = brew_sp_raw / 10.0f;
-    state.steam_setpoint = steam_sp_raw / 10.0f;
-    
-    // Parse state and flags
-    state.machine_state = payload[15];
-    uint8_t flags = payload[16];
-    
-    state.is_brewing = (flags & 0x01) != 0;
-    state.is_heating = (flags & 0x02) != 0;
-    state.water_low = (flags & 0x08) != 0;
-    // Only update alarm_active from status if we have a valid alarm code
-    // MSG_ALARM messages are the source of truth for alarm state
-    // Status packet flag is just a hint - don't set alarm_active without alarm_code
-    bool statusAlarmFlag = (flags & 0x10) != 0;
-    if (state.alarm_code != ALARM_NONE) {
-        // We have a real alarm code - status flag should match
-        state.alarm_active = statusAlarmFlag;
-    } else {
-        // No alarm code - status flag is unreliable, keep alarm_active false
-        state.alarm_active = false;
-    }
-    
-    // Parse power watts (offset 18-19, if available)
-    if (length >= 20) {
-        uint16_t power_raw;
-        memcpy(&power_raw, &payload[18], sizeof(uint16_t));
-        state.power_watts = power_raw;
-    }
-    
-    // Parse heating strategy (offset 28, if available)
-    if (length >= 30) {
-        state.heating_strategy = payload[28];
-    }
-    
-    // Parse cleaning status (offsets 29-31, if available)
-    if (length >= 32) {
-        state.cleaning_reminder = payload[29] != 0;
-        uint16_t brew_count_raw;
-        memcpy(&brew_count_raw, &payload[30], sizeof(uint16_t));
-        state.brew_count = brew_count_raw;
-    }
-    
-    // End update transaction - swaps buffers atomically and releases mutex
-    runtimeState().endUpdate();
-    
-    // Auto-switch screens is now handled by UI::checkAutoScreenSwitch()
 }
 
 /**

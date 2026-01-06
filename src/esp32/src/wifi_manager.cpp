@@ -11,31 +11,15 @@
 
 // Helper to validate function pointers before calling
 // On ESP32-S3, valid code addresses are in flash/IRAM/DRAM (not PSRAM)
-// Note: Arduino framework doesn't have esp_ptr.h, so we use manual checks
-// These address ranges are standard for ESP32-S3
+// Use ESP-IDF official macros for compatibility across SDK versions
+#include "esp_memory_utils.h"
+
+// Use ESP-IDF official macro for pointer validation
+// esp_ptr_executable() checks if pointer is in executable memory (IRAM, flash, ROM)
+// This is the recommended approach and will work across ESP-IDF version changes
 static inline bool isValidCodePointer(void* ptr) {
     if (!ptr) return false;
-    
-    uintptr_t addr = (uintptr_t)ptr;
-    
-    // Valid ESP32-S3 code/data regions (not PSRAM):
-    // 0x3FF80000 - 0x3FFFFFFF: DRAM (function pointers can reside here)
-    // 0x40000000 - 0x4001FFFF: ROM
-    // 0x40020000 - 0x40027FFF: IRAM 
-    // 0x42000000 - 0x42FFFFFF: Flash mapped code
-    // PSRAM is at 0x3C000000-0x3DFFFFFF - calling this would crash
-    
-    bool inDram = (addr >= 0x3FF80000 && addr <= 0x3FFFFFFF);
-    bool inRom = (addr >= 0x40000000 && addr < 0x40020000);
-    bool inIram = (addr >= 0x40020000 && addr < 0x40028000);
-    // Flash mapping can extend beyond 0x43000000 for larger partitions (up to 32MB)
-    // Use a more permissive check: any address >= 0x42000000 in the code space
-    // This covers standard 16MB flash and larger configurations
-    bool inFlash = (addr >= 0x42000000 && addr < 0x44000000);  // Extended range for up to 32MB flash
-    
-    // Valid if in any code/data region (but NOT PSRAM)
-    // PSRAM pointers cause InstructionFetchError on callback invocation
-    return inDram || inRom || inIram || inFlash;
+    return esp_ptr_executable(ptr);
 }
 
 // Safe callback invocation with validation
@@ -281,17 +265,17 @@ bool WiFiManager::checkCredentials() {
     return hasStoredCredentials();
 }
 
-bool WiFiManager::setCredentials(const String& ssid, const String& password) {
-    if (ssid.length() == 0 || password.length() < 8) {
+bool WiFiManager::setCredentials(const char* ssid, const char* password) {
+    if (!ssid || !password || strlen(ssid) == 0 || strlen(password) < 8) {
         LOG_E("Invalid credentials");
         return false;
     }
     
     // Copy to pending buffers (thread-safe)
     if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
-        strncpy(_pendingSSID, ssid.c_str(), sizeof(_pendingSSID) - 1);
+        strncpy(_pendingSSID, ssid, sizeof(_pendingSSID) - 1);
         _pendingSSID[sizeof(_pendingSSID) - 1] = '\0';
-        strncpy(_pendingPassword, password.c_str(), sizeof(_pendingPassword) - 1);
+        strncpy(_pendingPassword, password, sizeof(_pendingPassword) - 1);
         _pendingPassword[sizeof(_pendingPassword) - 1] = '\0';
         xSemaphoreGive(_mutex);
     }

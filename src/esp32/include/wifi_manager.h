@@ -82,7 +82,7 @@ public:
     // Configuration
     bool hasStoredCredentials();
     bool checkCredentials();  // Load and check if credentials exist (without starting WiFi)
-    bool setCredentials(const String& ssid, const String& password);
+    bool setCredentials(const char* ssid, const char* password);
     void clearCredentials();
     
     // Static IP configuration

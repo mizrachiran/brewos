@@ -10,9 +10,6 @@
 #include "../shared/protocol_defs.h"
 #include <string.h>
 
-// Forward declaration - parsePicoStatus is still in main.cpp
-extern void parsePicoStatus(const uint8_t* payload, uint8_t length);
-
 // External references from main.cpp
 extern PicoUART* picoUart;
 extern BrewWebServer* webServer;
@@ -51,9 +48,8 @@ void PicoProtocolHandler::handlePacket(const PicoPacket& packet) {
             break;
             
         case MSG_STATUS:
-            // Status parsing is complex and uses main.cpp state management
-            // Keep it in main.cpp for now
-            parsePicoStatus(packet.payload, packet.length);
+            // Parse status packet and update RuntimeState
+            handleStatus(packet.payload, packet.length);
             break;
             
         case MSG_POWER_METER:
@@ -282,5 +278,77 @@ void PicoProtocolHandler::updateBackoff(uint32_t now) {
     // This avoids blocking delay() which freezes UI (encoder, display)
     uint32_t backoff_ms = min((uint32_t)(100 * _nackCount), (uint32_t)500);
     _backoffUntil = now + backoff_ms;
+}
+
+void PicoProtocolHandler::handleStatus(const uint8_t* payload, uint8_t length) {
+    if (length < 18) return;  // Minimum status size (up to water_level)
+    
+    // Begin update transaction - takes mutex and returns reference to writing buffer
+    // The writing buffer is already initialized with current state (copied in beginUpdate)
+    ui_state_t& state = runtimeState().beginUpdate();
+    
+    // Parse temperatures (int16 scaled by 10 -> float)
+    int16_t brew_temp_raw, steam_temp_raw, group_temp_raw;
+    memcpy(&brew_temp_raw, &payload[0], sizeof(int16_t));
+    memcpy(&steam_temp_raw, &payload[2], sizeof(int16_t));
+    memcpy(&group_temp_raw, &payload[4], sizeof(int16_t));
+    
+    state.brew_temp = brew_temp_raw / 10.0f;
+    state.steam_temp = steam_temp_raw / 10.0f;
+    state.group_temp = group_temp_raw / 10.0f;
+    
+    // Parse pressure (uint16 scaled by 100 -> float)
+    uint16_t pressure_raw;
+    memcpy(&pressure_raw, &payload[6], sizeof(uint16_t));
+    state.pressure = pressure_raw / 100.0f;
+    
+    // Parse setpoints (int16 scaled by 10 -> float)
+    int16_t brew_sp_raw, steam_sp_raw;
+    memcpy(&brew_sp_raw, &payload[8], sizeof(int16_t));
+    memcpy(&steam_sp_raw, &payload[10], sizeof(int16_t));
+    state.brew_setpoint = brew_sp_raw / 10.0f;
+    state.steam_setpoint = steam_sp_raw / 10.0f;
+    
+    // Parse state and flags
+    state.machine_state = payload[15];
+    uint8_t flags = payload[16];
+    
+    state.is_brewing = (flags & 0x01) != 0;
+    state.is_heating = (flags & 0x02) != 0;
+    state.water_low = (flags & 0x08) != 0;
+    // Only update alarm_active from status if we have a valid alarm code
+    // MSG_ALARM messages are the source of truth for alarm state
+    // Status packet flag is just a hint - don't set alarm_active without alarm_code
+    bool statusAlarmFlag = (flags & 0x10) != 0;
+    if (state.alarm_code != ALARM_NONE) {
+        // We have a real alarm code - status flag should match
+        state.alarm_active = statusAlarmFlag;
+    } else {
+        // No alarm code - status flag is unreliable, keep alarm_active false
+        state.alarm_active = false;
+    }
+    
+    // Parse power watts (offset 18-19, if available)
+    if (length >= 20) {
+        uint16_t power_raw;
+        memcpy(&power_raw, &payload[18], sizeof(uint16_t));
+        state.power_watts = power_raw;
+    }
+    
+    // Parse heating strategy (offset 28, if available)
+    if (length >= 30) {
+        state.heating_strategy = payload[28];
+    }
+    
+    // Parse cleaning status (offsets 29-31, if available)
+    if (length >= 32) {
+        state.cleaning_reminder = payload[29] != 0;
+        uint16_t brew_count_raw;
+        memcpy(&brew_count_raw, &payload[30], sizeof(uint16_t));
+        state.brew_count = brew_count_raw;
+    }
+    
+    // End update transaction - swaps buffers atomically and releases mutex
+    runtimeState().endUpdate();
 }
 

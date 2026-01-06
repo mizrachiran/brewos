@@ -62,6 +62,11 @@ public:
     uint32_t getBackoffUntil() const { return _backoffUntil; }
 
 private:
+    /**
+     * Handle status message
+     * Parses Pico status packet and updates RuntimeState
+     */
+    void handleStatus(const uint8_t* payload, uint8_t length);
     PicoUART* _uart;
     BrewWebServer* _server;
     BrewOS::StateManager* _state;
