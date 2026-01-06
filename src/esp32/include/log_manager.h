@@ -18,10 +18,20 @@
 // Maximum single log entry size
 #define LOG_ENTRY_MAX_SIZE 256
 
+// RTC memory size for crash log persistence (survives reboot)
+#define RTC_LOG_SIZE 2048
+
 // Log source identifier
 enum LogSource {
     LOG_SOURCE_ESP32 = 0,
     LOG_SOURCE_PICO = 1
+};
+
+// Structure to hold crash logs in RTC memory (survives reboot)
+struct RTCLogBuffer {
+    char data[RTC_LOG_SIZE];
+    size_t head;
+    uint32_t magic; // To verify validity on boot
 };
 
 /**

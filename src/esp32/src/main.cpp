@@ -196,7 +196,8 @@ static void setupInitializeWebServer();
 static void setupInitializeMQTT();
 static void setupInitializeScaleAndBBW();
 static void setupInitializeStateManager();
-static void setupInitializeLogManager();
+static void setupInitializeLogManager();  // Early initialization (after filesystem)
+static void setupInitializeLogManagerSettings();  // Settings configuration (after State loaded)
 static void setupInitializeCloudConnection();
 static void setupInitializeNotificationManager();
 
@@ -1296,6 +1297,7 @@ void setup() {
     setupEarlyInitialization();
     setupCheckPendingOTA();
     setupInitializeFilesystem();
+    setupInitializeLogManager();  // Enable early to capture all boot logs
     setupCreateGlobalObjects();
     setupInitializeDisplayAndEncoder();
     setupInitializeUI();
@@ -1307,7 +1309,7 @@ void setup() {
     setupInitializeMQTT();
     setupInitializeScaleAndBBW();
     setupInitializeStateManager();
-    setupInitializeLogManager();
+    setupInitializeLogManagerSettings();  // Check settings and configure Pico forwarding
     setupInitializeCloudConnection();
     setupInitializeNotificationManager();
     
@@ -1531,29 +1533,41 @@ static void setupInitializeStateManager() {
 }
 
 static void setupInitializeLogManager() {
-    // Initialize Log Manager if enabled in settings (dev mode feature)
-    // Only allocates 50KB buffer when enabled - zero impact when disabled
-    if (State.settings().system.logBufferEnabled) {
-        Serial.println("Log buffer enabled in settings - initializing...");
-        if (LogManager::instance().enable()) {
-            Serial.print("Free heap after LogManager: ");
-            Serial.println(ESP.getFreeHeap());
-            
-            // Restore Pico log forwarding setting if it was enabled
-            if (State.settings().system.picoLogForwardingEnabled && picoUart) {
-                // Wait a bit for Pico to be ready (if connected)
-                delay(100);
-                LogManager::instance().setPicoLogForwarding(true, [](uint8_t* payload, size_t len) {
-                    if (picoUart) {
-                        return picoUart->sendCommand(MSG_CMD_LOG_CONFIG, payload, len);
-                    }
-                    return false;
-                });
-                Serial.println("Pico log forwarding restored from settings");
-            }
-        }
+    // Enable Log Manager early to capture all boot logs
+    // This is done right after filesystem initialization so we can restore from flash
+    // and recover crash logs from RTC memory
+    Serial.println("[Early] Initializing Log Manager to capture boot logs...");
+    if (LogManager::instance().enable()) {
+        Serial.print("Free heap after LogManager: ");
+        Serial.println(ESP.getFreeHeap());
+        Serial.println("Log Manager enabled - capturing all boot logs");
     } else {
-        Serial.println("Log buffer disabled (enable in settings/dev mode)");
+        Serial.println("WARNING: Log Manager initialization failed");
+    }
+}
+
+static void setupInitializeLogManagerSettings() {
+    // Configure Log Manager settings after State is loaded
+    // This configures Pico log forwarding based on user settings
+    if (!LogManager::instance().isEnabled()) {
+        // Log Manager wasn't enabled early (shouldn't happen, but handle gracefully)
+        Serial.println("Log Manager not enabled - skipping settings configuration");
+        return;
+    }
+    
+    // Configure Pico log forwarding if enabled in settings
+    if (State.settings().system.picoLogForwardingEnabled && picoUart) {
+        // Wait a bit for Pico to be ready (if connected)
+        delay(100);
+        LogManager::instance().setPicoLogForwarding(true, [](uint8_t* payload, size_t len) {
+            if (picoUart) {
+                return picoUart->sendCommand(MSG_CMD_LOG_CONFIG, payload, len);
+            }
+            return false;
+        });
+        Serial.println("Pico log forwarding enabled from settings");
+    } else {
+        Serial.println("Pico log forwarding disabled in settings");
     }
 }
 

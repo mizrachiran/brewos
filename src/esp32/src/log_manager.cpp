@@ -8,11 +8,17 @@
 #include <freertos/semphr.h>
 #include <stdarg.h>
 #include <LittleFS.h>
+#include <esp_attr.h>  // For RTC_NOINIT_ATTR
 
 // Forward declaration for web server (defined in main.cpp)
 // Helper function to broadcast log via WebSocket (defined in web_server_broadcast.cpp)
 extern "C" void platform_broadcast_log(const char* level, const char* message);
 extern BrewWebServer* webServer;  // Global webServer pointer from main.cpp
+
+// RTC memory buffer for crash log persistence (survives software reset)
+// RTC_NOINIT_ATTR ensures this memory is NOT cleared on boot
+RTC_NOINIT_ATTR RTCLogBuffer rtcLogs;
+const uint32_t RTC_MAGIC = 0xDEADBEEF;
 
 // Global instance pointer
 LogManager* g_logManager = nullptr;
@@ -30,15 +36,14 @@ LogManager::LogManager()
     , _tail(0)
     , _size(0)
     , _wrapped(false)
-    , _mutex(nullptr)
+    , _mutex(nullptr)  // Don't create mutex here - created lazily in enable()
     , _picoLogForwarding(false)
     , _enabled(false)
     , _lastSaveTime(0)
 {
-    // Create mutex early (small memory footprint)
-    _mutex = xSemaphoreCreateMutex();
-    
     // Set global pointer
+    // Note: Mutex is created in enable() to avoid static initialization order issues
+    // Global constructors run before FreeRTOS scheduler is fully initialized
     g_logManager = this;
 }
 
@@ -56,6 +61,17 @@ bool LogManager::enable() {
         return true;  // Already enabled
     }
     
+    // 1. Safe Mutex Creation (Lazy Initialization)
+    // CRITICAL: Create mutex here, not in constructor, to avoid static initialization order issues
+    // Global constructors run before FreeRTOS scheduler is fully initialized
+    if (!_mutex) {
+        _mutex = xSemaphoreCreateMutex();
+        if (!_mutex) {
+            Serial.println("[LogManager] CRITICAL: Failed to create mutex!");
+            return false;
+        }
+    }
+    
     // Allocate buffer in PSRAM if available, otherwise use regular heap
     _buffer = (char*)heap_caps_malloc(LOG_BUFFER_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!_buffer) {
@@ -68,8 +84,10 @@ bool LogManager::enable() {
         return false;
     }
     
-    // Try to restore logs from flash before clearing
-    // This preserves crash logs across reboots
+    // 1. Restore previous session logs from flash FIRST
+    // This sets up the head/tail/buffer state from the last normal shutdown
+    // CRITICAL: Must restore flash first, otherwise restoreFromFlash() will wipe out
+    // any crash logs we add to the buffer (it does memset on the buffer)
     bool restored = restoreFromFlash();
     
     // Only clear if we didn't restore (first time or restore failed)
@@ -79,6 +97,37 @@ bool LogManager::enable() {
         _tail = 0;
         _size = 0;
         _wrapped = false;
+    }
+    
+    // 2. NOW recover Crash Logs from RTC Memory (append them to the end)
+    // RTC memory survives software resets, so we can recover crash logs
+    // This must happen AFTER restoreFromFlash() to avoid being wiped out
+    if (rtcLogs.magic == RTC_MAGIC && rtcLogs.head > 0) {
+        // We have a valid crash log from previous run!
+        // Add it to the main buffer (which already has restored flash logs)
+        addLog(BREWOS_LOG_ERROR, LOG_SOURCE_ESP32, "CRASH DETECTED! Recovering crash log:");
+        
+        // Ensure null termination
+        if (rtcLogs.head < RTC_LOG_SIZE) {
+            rtcLogs.data[rtcLogs.head] = '\0';
+        } else {
+            rtcLogs.data[RTC_LOG_SIZE - 1] = '\0';
+        }
+        
+        // Add the crash log to main buffer (appended after restored flash logs)
+        addLog(BREWOS_LOG_ERROR, LOG_SOURCE_ESP32, rtcLogs.data);
+        
+        // Clean up RTC buffer so we don't report it again
+        rtcLogs.magic = 0;
+        rtcLogs.head = 0;
+        memset(rtcLogs.data, 0, RTC_LOG_SIZE);
+    } else {
+        // Cold boot init - initialize RTC buffer for future crash logs
+        if (rtcLogs.magic != RTC_MAGIC) {
+            rtcLogs.head = 0;
+            memset(rtcLogs.data, 0, RTC_LOG_SIZE);
+            rtcLogs.magic = RTC_MAGIC;
+        }
     }
     
     _enabled = true;
@@ -169,14 +218,22 @@ void LogManager::writeToBuffer(const char* data, size_t len) {
 }
 
 void LogManager::addLog(BrewOSLogLevel level, LogSource source, const char* message) {
-    // No-op if disabled
-    if (!_enabled || !_buffer || !message) return;
+    // No-op if disabled or mutex not created yet
+    // Added !_mutex check for defensive programming
+    if (!_enabled || !_buffer || !message || !_mutex) return;
     
-    // Safety: Don't log from interrupt context (mutex can't be used in ISR)
-    // Note: We rely on mutex timeout to handle ISR cases
-    // If called from ISR, xSemaphoreTake will fail safely
+    // CRITICAL FIX: Check if we are in an ISR context
+    // Calling xSemaphoreTake from an ISR causes a panic/crash on ESP32/FreeRTOS
+    // We must check the context before attempting mutex operations
+    if (xPortInIsrContext()) {
+        // We cannot take a mutex or safely use snprintf/malloc in an ISR
+        // Skip logging from ISR context to avoid crashes
+        // Note: If ISR logging is needed, use a FreeRTOS queue to defer processing
+        return;
+    }
     
     // Take mutex (with timeout to avoid deadlock)
+    // Now safe to take since we've checked _mutex is not null
     if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
         return; // Skip this log entry if can't get mutex
     }
@@ -216,9 +273,13 @@ void LogManager::addLogf(BrewOSLogLevel level, LogSource source, const char* for
     // No-op if disabled
     if (!_enabled || !_buffer || !format) return;
     
-    // Safety: Don't log from interrupt context (mutex can't be used in ISR)
-    // Note: We rely on mutex timeout to handle ISR cases
-    // If called from ISR, xSemaphoreTake will fail safely
+    // CRITICAL FIX: Check if we are in an ISR context
+    // Calling xSemaphoreTake from an ISR causes a panic/crash on ESP32/FreeRTOS
+    if (xPortInIsrContext()) {
+        // We cannot take a mutex or safely use vsnprintf in an ISR
+        // Skip logging from ISR context to avoid crashes
+        return;
+    }
     
     char message[200]; // Larger buffer to avoid truncation
     va_list args;
@@ -238,25 +299,22 @@ String LogManager::getLogsUnsafe() {
     
     if (_wrapped) {
         // Buffer has wrapped - read from tail to end, then from start to head
-        // Read all bytes including nulls (they're part of the log data)
-        for (size_t i = _tail; i < LOG_BUFFER_SIZE; i++) {
-            result += _buffer[i];
-        }
-        for (size_t i = 0; i < _head; i++) {
-            result += _buffer[i];
-        }
+        // Use concat with length to avoid O(N²) character-by-character concatenation
+        size_t len1 = LOG_BUFFER_SIZE - _tail;
+        result.concat(_buffer + _tail, len1);
+        
+        // Read start -> head
+        result.concat(_buffer, _head);
     } else {
         // Buffer hasn't wrapped - simple copy from start to head
-        for (size_t i = 0; i < _head; i++) {
-            result += _buffer[i];
-        }
+        result.concat(_buffer, _head);
     }
     
     return result;
 }
 
 String LogManager::getLogs() {
-    if (!_enabled || !_buffer) return String();
+    if (!_enabled || !_buffer || !_mutex) return String();
     
     // Use longer timeout (5 seconds) to handle cases where mutex is held during save operations
     if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
@@ -275,7 +333,7 @@ size_t LogManager::getLogsSize() {
 }
 
 void LogManager::clear() {
-    if (!_enabled || !_buffer) return;
+    if (!_enabled || !_buffer || !_mutex) return;
     
     if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) {
         return;
@@ -368,9 +426,13 @@ void log_manager_add_logf(int level, LogSource source, const char* format, ...) 
         return;
     }
     
-    // Safety: Don't log from interrupt context (mutex can't be used in ISR)
-    // Note: We rely on mutex timeout to handle ISR cases
-    // If called from ISR, xSemaphoreTake will fail safely
+    // CRITICAL FIX: Check if we are in an ISR context
+    // Calling xSemaphoreTake from an ISR causes a panic/crash on ESP32/FreeRTOS
+    if (xPortInIsrContext()) {
+        // We cannot take a mutex or safely use vsnprintf in an ISR
+        // Skip logging from ISR context to avoid crashes
+        return;
+    }
     
     // Use larger buffer to avoid truncation (LOG_ENTRY_MAX_SIZE is 256, so use 200 for message)
     char message[200];
@@ -679,22 +741,39 @@ String LogManager::getLogsFromFlash() {
         return String("ERROR: Invalid log file data");
     }
     
-    // Read buffer data
+    // Read buffer data - use temporary buffer to avoid O(N²) character-by-character concatenation
     result.reserve(savedSize + 1);
+    
     if (savedWrapped) {
         size_t firstPart = LOG_BUFFER_SIZE - savedTail;
-        for (size_t i = 0; i < firstPart; i++) {
-            char c = binFile.read();
-            if (c >= 0) result += c;
+        // Read first part into temporary buffer
+        char* tempBuf = (char*)malloc(firstPart);
+        if (tempBuf) {
+            if (binFile.read((uint8_t*)tempBuf, firstPart) == firstPart) {
+                result.concat(tempBuf, firstPart);
+            }
+            free(tempBuf);
         }
-        for (size_t i = 0; i < savedHead; i++) {
-            char c = binFile.read();
-            if (c >= 0) result += c;
+        // Read second part
+        if (savedHead > 0) {
+            tempBuf = (char*)malloc(savedHead);
+            if (tempBuf) {
+                if (binFile.read((uint8_t*)tempBuf, savedHead) == savedHead) {
+                    result.concat(tempBuf, savedHead);
+                }
+                free(tempBuf);
+            }
         }
     } else {
-        for (size_t i = 0; i < savedHead; i++) {
-            char c = binFile.read();
-            if (c >= 0) result += c;
+        // Read single contiguous block
+        if (savedHead > 0) {
+            char* tempBuf = (char*)malloc(savedHead);
+            if (tempBuf) {
+                if (binFile.read((uint8_t*)tempBuf, savedHead) == savedHead) {
+                    result.concat(tempBuf, savedHead);
+                }
+                free(tempBuf);
+            }
         }
     }
     
@@ -714,33 +793,58 @@ String LogManager::getLogsComplete() {
 
 void LogManager::addLogDirect(BrewOSLogLevel level, LogSource source, const char* message) {
     // No-op if disabled - but try to write even if not enabled (panic context)
-    if (!_buffer || !message) return;
+    if (!message) return;
     
-    // Direct write without mutex - for panic handler use only
-    // Format: [timestamp] [SOURCE] LEVEL: message\n
-    char entry[LOG_ENTRY_MAX_SIZE];
-    unsigned long timestamp = millis();
+    // 1. Write to standard buffer (in case we don't actually crash/reset)
+    if (_buffer) {
+        // Direct write without mutex - for panic handler use only
+        // Format: [timestamp] [SOURCE] LEVEL: message\n
+        char entry[LOG_ENTRY_MAX_SIZE];
+        unsigned long timestamp = millis();
+        
+        // Calculate available space for message (leave room for prefix and newline)
+        size_t prefixLen = snprintf(entry, sizeof(entry), "[%lu] [%s] %s: ", 
+                                     timestamp, sourceToString(source), levelToString(level));
+        size_t maxMsgLen = sizeof(entry) - prefixLen - 2; // -2 for \n and \0
+        
+        // Truncate message if needed
+        char truncatedMsg[LOG_ENTRY_MAX_SIZE];
+        strncpy(truncatedMsg, message, maxMsgLen);
+        truncatedMsg[maxMsgLen] = '\0';
+        
+        // Format complete entry
+        int len = snprintf(entry, sizeof(entry), "[%lu] [%s] %s: %s\n",
+                           timestamp,
+                           sourceToString(source),
+                           levelToString(level),
+                           truncatedMsg);
+        
+        // Write directly to buffer (no mutex - panic context)
+        if (len > 0) {
+            size_t writeLen = (len < (int)sizeof(entry)) ? len : sizeof(entry) - 1;
+            writeToBuffer(entry, writeLen);
+        }
+    }
     
-    // Calculate available space for message (leave room for prefix and newline)
-    size_t prefixLen = snprintf(entry, sizeof(entry), "[%lu] [%s] %s: ", 
-                                 timestamp, sourceToString(source), levelToString(level));
-    size_t maxMsgLen = sizeof(entry) - prefixLen - 2; // -2 for \n and \0
+    // 2. CRITICAL: Write to RTC Buffer (The Flight Recorder)
+    // RTC memory survives software resets, so crash logs persist across reboots
+    // We use a simple linear append here for safety.
+    // If buffer is full, we stop writing to preserve the *first* crash details.
     
-    // Truncate message if needed
-    char truncatedMsg[LOG_ENTRY_MAX_SIZE];
-    strncpy(truncatedMsg, message, maxMsgLen);
-    truncatedMsg[maxMsgLen] = '\0';
+    if (rtcLogs.magic != RTC_MAGIC) {
+        rtcLogs.magic = RTC_MAGIC;
+        rtcLogs.head = 0;
+        memset(rtcLogs.data, 0, RTC_LOG_SIZE);
+    }
     
-    // Format complete entry
-    int len = snprintf(entry, sizeof(entry), "[%lu] [%s] %s: %s\n",
-                       timestamp,
-                       sourceToString(source),
-                       levelToString(level),
-                       truncatedMsg);
+    // Format crash log entry (keep it small for panic context)
+    char entry[128];
+    int len = snprintf(entry, sizeof(entry), "[CRASH] [%s] %s: %s\n", 
+                       sourceToString(source), levelToString(level), message);
     
-    // Write directly to buffer (no mutex - panic context)
-    if (len > 0) {
-        size_t writeLen = (len < (int)sizeof(entry)) ? len : sizeof(entry) - 1;
-        writeToBuffer(entry, writeLen);
+    if (len > 0 && rtcLogs.head + len < RTC_LOG_SIZE) {
+        memcpy(&rtcLogs.data[rtcLogs.head], entry, len);
+        rtcLogs.head += len;
+        rtcLogs.data[rtcLogs.head] = '\0'; // Ensure null termination
     }
 }
