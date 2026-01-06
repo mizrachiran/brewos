@@ -97,9 +97,10 @@ Plug & play replacement for the factory GICAR control board and PID controller:
 
 | Connector | Type                 | Function                            |
 | --------- | -------------------- | ----------------------------------- |
-| J1        | 6.3mm Spade          | Mains input (L, N, PE)              |
+| J1        | 6.3mm Spade (2-pin)  | Mains input (L, N only - PE removed) |
 | J2-J4     | 6.3mm Spade          | Relay outputs (LED, Pump, Solenoid) |
-| J24       | Screw Terminal 3-pos | Power meter HV (L fused, N, PE)     |
+| J5        | 6.3mm Spade          | Chassis Reference (SRif)           |
+| J24       | Screw Terminal 2-pos | Power meter HV (L fused, N only - PE removed) |
 
 ### Low Voltage (3.3V/5V)
 
@@ -171,7 +172,7 @@ See [BOM](spec/07-BOM.md) for complete bill of materials.
 
 1. **Mains Voltage:** This board handles 220V AC. Only qualified personnel should install.
 2. **Isolation:** Maintain >6mm creepage between HV and LV circuits.
-3. **Grounding:** PE must be connected to machine chassis via MH1 mounting hole.
+3. **Grounding:** PCB uses SRif (Chassis Reference) architecture - connect J5 to chassis via 18AWG wire. No PE connection on PCB HV side.
 4. **Fusing:** 10A fuse (F1) protects relay loads. Heaters use machine's existing fusing.
 
 ---

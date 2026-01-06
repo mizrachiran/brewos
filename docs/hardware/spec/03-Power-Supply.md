@@ -62,9 +62,9 @@ Use an integrated isolated AC/DC converter module for safety and simplicity.
 │                                         │      ═══════    │  │    │  Rail  │ │
 │                                         │                 │  │    │        │ │
 │                                         │  +5V ───────────┼──┼───►│ +5V DC │ │
-│    PE (Earth) ─────[To Chassis]         │                 │  │    │        │ │
-│                                         │  GND ───────────┼──┴───►│  GND   │ │
-│                                         │                 │       │        │ │
+│    ⚠️ NOTE: PE (Protective Earth)      │                 │  │    │        │ │
+│    connection REMOVED from PCB.        │  GND ───────────┼──┴───►│  GND   │ │
+│    HV section is floating.             │                 │       │        │ │
 │                                         └─────────────────┘       └────────┘ │
 │                                                                                 │
 │    Component Details:                                                          │

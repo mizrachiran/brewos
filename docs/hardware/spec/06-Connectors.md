@@ -10,7 +10,9 @@ High-current connections to original machine wiring use 6.3mm (0.25") spade term
 | ----- | ---------------- | ---------- | ---------- | -------------------- |
 | J1-L  | Mains Live       | 6.3mm male | 14 AWG     | Fused, to relay COMs |
 | J1-N  | Mains Neutral    | 6.3mm male | 14 AWG     | Common neutral bus   |
-| J1-PE | Protective Earth | 6.3mm male | 14 AWG     | To chassis           |
+
+**⚠️ NOTE: PE (Protective Earth) pin REMOVED from J1.**
+HV section is now floating - no Earth connection on PCB to prevent L-to-Earth shorts.
 
 ### Relay Outputs (J2-J4)
 
@@ -65,7 +67,7 @@ High-current connections to original machine wiring use 6.3mm (0.25") spade term
 ### Wiring Notes
 
 - **SWITCHES (Pin 1-7):** N.O. switches connect between signal and adjacent GND pin
-- **S3 (Pin 5):** Level probe single wire, ground return via boiler body (PE connection)
+- **S3 (Pin 5):** Level probe single wire, ground return via boiler body → J5 (SRif) → PCB GND
 - **NTCs (Pin 8-11):** 2-wire thermistors, polarity doesn't matter
 - **PRESSURE (Pin 12-14):** 3-wire transducer: +5V (red), GND (black), Signal (yellow/white)
 - **SSRs (Pin 15-18):** Connect to SSR DC input terminals (+5V to SSR+, SSR- to SSR DC-)
@@ -148,15 +150,33 @@ High-current connections to original machine wiring use 6.3mm (0.25") spade term
 
 ## External Power Meter HV (J24)
 
-3-position screw terminal for power meter mains pass-through.
+2-position screw terminal for power meter mains pass-through.
 
 | Pin | Signal  | Notes                |
 | --- | ------- | -------------------- |
 | 1   | L_FUSED | Fused live (from F1) |
 | 2   | N       | Neutral              |
-| 3   | PE      | Protective Earth     |
+
+**⚠️ NOTE: PE (Protective Earth) pin REMOVED from J24.**
+HV section is now floating - no Earth connection on PCB to prevent L-to-Earth shorts.
 
 **⚠️ HIGH VOLTAGE - Connect to power meter only. No CT clamp through PCB.**
+
+---
+
+## Chassis Reference (SRif) - J5
+
+Single 6.3mm male spade terminal for chassis reference connection.
+
+| Pin | Function         | Terminal   | Wire Gauge | Notes                                    |
+| --- | ---------------- | ---------- | ---------- | ---------------------------------------- |
+| J5  | Chassis Reference (SRif) | 6.3mm male | 18 AWG | Connect to PCB GND (Logic Ground) |
+
+**Wiring Instructions:**
+
+> Connect J5 (SRif) to a solid chassis screw or the boiler mounting bolt using 18AWG Green/Yellow wire. This is required for Level Probe operation and Logic Grounding. The return path for the level probe signal is: AC_OUT (U6) → J26-5 → PROBE → WATER → BOILER BODY → J5 (SRif) → PCB GND.
+
+**Part Number:** Keystone 1285 (6.3mm male spade terminal)
 
 ---
 

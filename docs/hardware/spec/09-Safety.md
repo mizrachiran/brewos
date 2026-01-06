@@ -19,7 +19,9 @@
 │                │              │                                                 │
 │    N (Neutral) ┴──────────────┴──────────────────────────► N                   │
 │                                                                                 │
-│    PE (Earth) ───────────────────────────────────────────► Chassis             │
+│    ⚠️ NOTE: PE (Protective Earth) connection REMOVED from PCB.                  │
+│    HV section is now floating - no Earth connection to prevent L-to-Earth      │
+│    shorts.                                                                      │
 │                                                                                 │
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -167,7 +169,8 @@ BAT54S clamps to 3.3V + 0.3V = 3.6V (within RP2350 absolute max).
 3. **Power metering HV does NOT flow through PCB** (external modules handle their own mains)
 4. **Fused live bus** (10A) feeds relay COMs only
 5. **6mm creepage/clearance** required between HV and LV sections
-6. **MH1 = PE star point** (PTH), MH2-4 = NPTH (isolated)
+6. **All mounting holes (MH1-MH4) = NPTH** (isolated) - no PE connection on PCB
+7. **J5 (SRif) provides single chassis reference** - connects PCB GND to chassis via dedicated wire
 
 ### MOV Safety (IEC 60335-1 §19.11.2)
 
@@ -175,6 +178,57 @@ MOVs are placed across **LOADS** (not across relay contacts):
 
 - If MOV shorts → L-N short → fuse clears → safe
 - If MOV was across contacts → actuator bypasses control → dangerous
+
+---
+
+## Grounding Strategy (SRif Architecture)
+
+### New Grounding Approach
+
+This design implements the "Gicar-style" **Chassis Reference (SRif)** grounding system to eliminate the risk of L-to-Earth shorts that could cause explosive arcing.
+
+### Core Concept
+
+Instead of bringing Mains Earth onto the PCB High Voltage side (where it risks arcing to Live), we:
+
+1. **Float the HV Section:** Remove the Earth pin from the main power connector (J1, J24).
+2. **Ground the LV Section:** Connect the Low Voltage Logic Ground (GND) to the machine chassis via a single dedicated wire (**J5 SRif**).
+3. **Result:** The level probe circuit completes its path through: Boiler Metal → Chassis → SRif Wire (J5) → PCB GND.
+
+### Grounding Hierarchy
+
+```
+NEW GROUNDING STRATEGY
+──────────────────────
+
+1. MACHINE CHASSIS is Earthed via the main power cord (Wall Plug).
+2. PCB HV SIDE is Floating (No Earth connection).
+3. PCB LV SIDE (GND) connects to CHASSIS via J5 (SRif).
+
+Safety Benefit:
+If 'L' shorts to the PCB surface, it hits FR4 (fiberglass), not a 
+Ground Plane. It cannot create a dead short or explode. 
+The fuse will eventually blow if it finds a path, but the "Explosive 
+Arc" risk is eliminated.
+```
+
+### Level Probe Return Path
+
+The level probe signal return path is now explicitly via the SRif loop:
+
+```
+Signal Flow:
+AC_OUT (U6) ──► J26-5 ──► PROBE ──► WATER ──► BOILER BODY
+                                                       │
+PCB GND ◄────── J5 (SRif) ◄────── WIRE ◄───────────┘
+```
+
+### Implementation Requirements
+
+- **J5 Connector:** Single 6.3mm male spade terminal connected to PCB GND
+- **Wiring:** 18AWG Green/Yellow wire from J5 to boiler/chassis mounting bolt
+- **Mounting Holes:** All mounting holes (MH1-MH4) must be NPTH (Non-Plated Through Hole) to prevent random grounding
+- **Isolation:** Maintain 6mm Keep-Out Zone between HV traces and LV Ground Pour
 
 ---
 

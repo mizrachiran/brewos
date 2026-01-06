@@ -62,15 +62,15 @@
 
 ### Communication
 
-| Qty | Ref     | Value  | Tolerance | Package | Notes                                  |
-| --- | ------- | ------ | --------- | ------- | -------------------------------------- |
-| 4   | R40-R43 | **1kΩ** | 5%        | 0805    | UART series (5V tolerance protection)  |
-| 1   | R44     | 33Ω    | 5%        | 0805    | I2C series                             |
-| 1   | R45     | 2.2kΩ | 1%        | 0805    | J17 RX level shift (upper) |
-| 1   | R45A    | 3.3kΩ | 1%        | 0805    | J17 RX level shift (lower) |
-| 1   | R45B    | 33Ω   | 5%        | 0805    | J17 RX series              |
-| 2   | R46-R47 | 4.7kΩ | 5%        | 0805    | I2C pull-ups               |
-| 2   | R93-R94 | 20kΩ  | 5%        | 0805    | RS485 failsafe bias        |
+| Qty | Ref     | Value   | Tolerance | Package | Notes                                 |
+| --- | ------- | ------- | --------- | ------- | ------------------------------------- |
+| 4   | R40-R43 | **1kΩ** | 5%        | 0805    | UART series (5V tolerance protection) |
+| 1   | R44     | 33Ω     | 5%        | 0805    | I2C series                            |
+| 1   | R45     | 2.2kΩ   | 1%        | 0805    | J17 RX level shift (upper)            |
+| 1   | R45A    | 3.3kΩ   | 1%        | 0805    | J17 RX level shift (lower)            |
+| 1   | R45B    | 33Ω     | 5%        | 0805    | J17 RX series                         |
+| 2   | R46-R47 | 4.7kΩ   | 5%        | 0805    | I2C pull-ups                          |
+| 2   | R93-R94 | 20kΩ    | 5%        | 0805    | RS485 failsafe bias                   |
 
 ### User Interface
 
@@ -107,18 +107,25 @@
 
 ## Capacitors
 
-| Qty | Ref     | Value    | Voltage | Package | Notes                                       |
-| --- | ------- | -------- | ------- | ------- | ------------------------------------------- |
-| 1   | C1      | 100nF X2 | 275V AC | Radial  | Mains EMI filter                            |
-| 1   | C2      | 470µF    | 6.3V    | Radial  | 5V bulk (Polymer)                           |
-| 1   | C3      | 22µF     | 25V     | 1206    | Buck input (X5R)                            |
-| 2   | C4,C4A  | 22µF     | 10V     | 1206    | Buck output (X5R)                           |
+| Qty | Ref     | Value    | Voltage | Package  | Notes                                      |
+| --- | ------- | -------- | ------- | -------- | ------------------------------------------ |
+| 1   | C1      | 100nF X2 | 275V AC | Radial   | Mains EMI filter                           |
+| 1   | C2      | 470µF    | 6.3V    | Radial   | 5V bulk (Polymer)                          |
+| 1   | C3      | 22µF     | 25V     | 1206     | Buck input (X5R)                           |
+| 2   | C4,C4A  | 22µF     | 10V     | 1206     | Buck output (X5R)                          |
 | 1   | **C5**  | **47µF** | **10V** | **1206** | **3.3V rail bulk (WiFi/relay transients)** |
-| 1   | C7      | 22µF     | 10V     | 1206    | ADC ref bulk                                |
-| 1   | C7A     | 100nF    | 25V     | 0805    | ADC ref HF decoupling                       |
-| ~15 | Various | 100nF    | 25V     | 0805    | Decoupling                                  |
-| 2   | C61-C62 | 10nF     | 50V     | 0805    | Wien bridge timing                          |
-| 1   | C64     | 1µF      | 25V     | 0805    | Level probe AC coupling                     |
+| 1   | C7      | 22µF     | 10V     | 1206     | ADC ref bulk                               |
+| 1   | C7A     | 100nF    | 25V     | 0805     | ADC ref HF decoupling                      |
+| ~15 | Various | 100nF    | 25V     | 0805     | Decoupling                                 |
+| 2   | C61-C62 | 10nF     | 50V     | 0805     | Wien bridge timing                         |
+| 1   | C64     | 1µF      | 25V     | 0805     | Level probe AC coupling                    |
+
+**⚠️ NOTE: Relay Snubber Capacitors (C25/C27) REMOVED**
+
+- Previous design used 50V ceramic capacitors (C25/C27) as relay snubbers
+- These were replaced with MOVs (RV2/RV3) in v2.21 for improved safety and reliability
+- MOVs provide better arc suppression without the risk of capacitor failure
+- See Electromechanical section for RV2/RV3 specifications
 
 ## Inductors
 
@@ -150,16 +157,18 @@
 
 ## Connectors
 
-| Qty | Ref     | Description           | Part Number            | Notes                 |
-| --- | ------- | --------------------- | ---------------------- | --------------------- |
-| 6   | J1-J4   | 6.3mm Spade           | Keystone 1285          | Mains + relay outputs |
-| 1   | **J26** | Screw Terminal 18-pos | Phoenix MKDS 1/18-5.08 | All LV connections    |
-| 1   | J15     | JST-XH 8-pin          | JST B8B-XH-A           | ESP32 module          |
-| 1   | J16     | Header 4-pin          | 2.54mm pitch           | Service/debug         |
-| 1   | J17     | JST-XH 6-pin          | JST B6B-XH-A           | Power meter           |
-| 1   | J20     | Header 2×20           | 2.54mm pitch           | Pico socket           |
-| 1   | J23     | Header 4-pin          | 2.54mm pitch           | I2C accessory         |
-| 1   | J24     | Screw Terminal 3-pos  | 5.08mm pitch           | Power meter HV        |
+| Qty   | Ref     | Description           | Part Number            | Notes                                                  |
+| ----- | ------- | --------------------- | ---------------------- | ------------------------------------------------------ |
+| **2** | **J1**  | **6.3mm Spade**       | **Keystone 1285**      | **Mains input (L, N) - 2 discrete terminals required** |
+| 3     | J2-J4   | 6.3mm Spade           | Keystone 1285          | Relay outputs                                          |
+| 1     | J5      | 6.3mm Spade           | Keystone 1285          | Chassis Reference (SRif)                               |
+| 1     | **J26** | Screw Terminal 18-pos | Phoenix MKDS 1/18-5.08 | All LV connections                                     |
+| 1     | J15     | JST-XH 8-pin          | JST B8B-XH-A           | ESP32 module                                           |
+| 1     | J16     | Header 4-pin          | 2.54mm pitch           | Service/debug                                          |
+| 1     | J17     | JST-XH 6-pin          | JST B6B-XH-A           | Power meter                                            |
+| 1     | J20     | Header 2×20           | 2.54mm pitch           | Pico socket                                            |
+| 1     | J23     | Header 4-pin          | 2.54mm pitch           | I2C accessory                                          |
+| 1     | J24     | Screw Terminal 2-pos  | 5.08mm pitch           | Power meter HV (L, N only - PE removed)                |
 
 ## Solder Jumpers
 
@@ -202,10 +211,9 @@ Test points are organized by function for systematic board bring-up and debuggin
 
 ## Mounting Hardware
 
-| Qty | Ref     | Description      | Notes               |
-| --- | ------- | ---------------- | ------------------- |
-| 1   | MH1     | M3 Mounting Hole | PTH, PE star ground |
-| 3   | MH2-MH4 | M3 Mounting Hole | NPTH, isolated      |
+| Qty | Ref     | Description      | Notes                             |
+| --- | ------- | ---------------- | --------------------------------- |
+| 4   | MH1-MH4 | M3 Mounting Hole | NPTH, isolated (no PE connection) |
 
 ---
 

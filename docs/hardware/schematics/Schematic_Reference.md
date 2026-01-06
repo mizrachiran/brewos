@@ -102,7 +102,8 @@ TVS, ESD protection, filtering
 7. HLK-15M05C isolated power supply (5V 3A)
 8. TPS563200 synchronous buck converter (3.3V 3A, >90% efficient)
 9. MOV arc suppression on inductive loads (across load, not contacts)
-10. Mounting: MH1=PE star point (PTH), MH2-4=NPTH (isolated)
+10. Mounting: MH1=NPTH (isolated), MH2-4=NPTH (isolated) - no PE connection on PCB
+11. J5 (SRif) chassis reference connector - single 6.3mm spade for logic ground to chassis
 
 ---
 
@@ -114,23 +115,25 @@ TVS, ESD protection, filtering
                                     MAINS INPUT & PROTECTION
     ════════════════════════════════════════════════════════════════════════════
 
-    J1 (Mains Input)
+    J1 (Mains Input - 2-Pin)
     ┌─────────────┐
     │ L  (Live)   ├────┬──────────────────────────────────────────────────────────►
     │             │    │
     │ N  (Neutral)├──┐ │    F1                RV1              C1
     │             │  │ │  ┌─────┐          ┌──────┐        ┌──────┐
-    │ PE (Earth)  ├─┐│ └──┤ 10A ├────┬─────┤ MOV  ├────┬───┤ 100nF├───┬─────► L_FUSED
-    └─────────────┘ ││    │250V │    │     │ 275V │    │   │ X2   │   │
-                    ││    │T/Lag│    │     │ 14mm │    │   │275VAC│   │
-        To Chassis  ││    └─────┘    │     └──┬───┘    │   └──┬───┘   │
-        Ground      ││               │        │        │      │       │
-        (if metal   │└───────────────┼────────┴────────┴──────┴───────┴─────► N_FUSED
-        enclosure)  │                │
-                    │                │
-                   ─┴─              ─┴─
-                   GND              GND
-                   (PE)            (Mains)
+    └─────────────┘  │ └──┤ 10A ├────┬─────┤ MOV  ├────┬───┤ 100nF├───┬─────► L_FUSED
+                     │    │250V │    │     │ 275V │    │   │ X2   │   │
+                     │    │T/Lag│    │     │ 14mm │    │   │275VAC│   │
+                     │    └─────┘    │     └──┬───┘    │   └──┬───┘   │
+                     │               │        │        │      │       │
+                     └───────────────┼────────┴────────┴──────┴───────┴─────► N_FUSED
+                                     │
+                                    ─┴─
+                                    GND
+                                  (Mains)
+
+    ⚠️ NOTE: PE (Protective Earth) pin REMOVED from J1.
+    HV section is now floating - no Earth connection on PCB.
 
     Component Values:
     ─────────────────
@@ -167,7 +170,8 @@ TVS, ESD protection, filtering
     ══════
     • Primary side (L, N) is MAINS VOLTAGE - maintain 6mm clearance to secondary
     • Secondary side (-Vout) becomes system GND
-    • GND is ISOLATED from mains PE (earth)
+    • GND is ISOLATED from mains (no PE connection on PCB)
+    • HV section is FLOATING - no Earth connection to prevent L-to-Earth shorts
     • HLK-15M05C is 48×28×18mm - verify clearance to fuse holder
 
     Component Values:
@@ -1262,12 +1266,24 @@ using the machine's existing high-voltage wiring. NO HIGH CURRENT flows through 
                │              ↓                              │              │
                │          AC_SENSE ◄─────────────────────────┘              │
                │         (attenuated                    Boiler Body         │
-               │          if water                      (Grounded via       │
-               │          present)                       Protective Earth)  │
+               │          if water                      (Chassis)           │
+               │          present)                                          │
                │              │                              │              │
+               │              │                             │              │
+               │              │                    ┌────────┴────────┐    │
+               │              │                    │   J5 (SRif)      │    │
+               │              │                    │   6.3mm Spade    │    │
+               │              │                    │   Chassis Ref    │    │
+               │              │                    └────────┬─────────┘    │
+               │              │                             │              │
+               │              │                    ┌────────┴─────────┐     │
+               │              │                    │  18AWG Wire      │     │
+               │              │                    │  Green/Yellow    │     │
+               │              │                    └────────┬─────────┘     │
+               │              │                             │              │
                │              │                             ─┴─             │
                │              │                             GND             │
-               │              │                             (PE)            │
+               │              │                    (PCB Logic Ground)       │
                │              │                                             │
                └──────────────┼─────────────────────────────────────────────┘
                               │
@@ -1781,7 +1797,8 @@ using the machine's existing high-voltage wiring. NO HIGH CURRENT flows through 
     ════════════════════════════════════════════════════════════════════════════
 
     ✅ NO HV MEASUREMENT CIRCUITRY ON CONTROL PCB - METER HANDLES SENSING
-    ✅ J24 provides L/N/PE pass-through to external meter (in existing HV zone)
+    ✅ J24 provides L/N pass-through to external meter (in existing HV zone)
+    ⚠️ NOTE: PE (Protective Earth) pin REMOVED from J24 - HV section is floating
     ✅ Supports TTL UART (direct) or RS485 (differential) meters
     ✅ Compatible with PZEM-004T, JSY-MK-163T/194T, Eastron SDM, and more
 
@@ -2176,7 +2193,8 @@ using the machine's existing high-voltage wiring. NO HIGH CURRENT flows through 
 
     Design Note: No HV measurement circuitry on control PCB
     ────────────────────────────────────────────────────────
-    • J24 routes L/N/PE to external meter (in PCB's existing HV zone)
+    • J24 routes L/N to external meter (in PCB's existing HV zone)
+    ⚠️ NOTE: PE (Protective Earth) pin REMOVED from J24 - HV section is floating
     • CT clamp wires directly to meter module (not via this PCB)
     • Control PCB provides ONLY 5V/3.3V power and UART/RS485 data
     • User wires machine mains directly to external module terminals
@@ -2354,11 +2372,12 @@ using the machine's existing high-voltage wiring. NO HIGH CURRENT flows through 
     L_IN         → J1-L (Mains Live Input)
     L_FUSED      → After F1 fuse (10A) - to relay COMs only
     N            → J1-N (Mains Neutral)
-    PE           → J1-PE (Protective Earth, to chassis)
+    ⚠️ NOTE: PE (Protective Earth) net REMOVED - no Earth connection on PCB
 
     NOTE: No HV measurement circuitry on control PCB. Heaters connect to
-    external SSRs. J24 provides L/N/PE pass-through to meter in existing
+    external SSRs. J24 provides L/N pass-through to meter in existing
     HV zone (same traces as relay L_FUSED bus). PCB provides LV control signals.
+    ⚠️ NOTE: PE (Protective Earth) pin REMOVED from J24 - HV section is floating
 
     RELAY OUTPUT NETS:
     ──────────────────
@@ -2412,11 +2431,18 @@ using the machine's existing high-voltage wiring. NO HIGH CURRENT flows through 
     J17-5  (TX)    → GPIO6 (to meter RX, via 33Ω)
     J17-6  (DE/RE) → GPIO20 (RS485 direction control)
 
-    J24 POWER METER HV TERMINALS (Screw Terminal 3-pos, 5.08mm):
+    J24 POWER METER HV TERMINALS (Screw Terminal 2-pos, 5.08mm):
     ────────────────────────────────────────────────────────────
     J24-1  (L)     → Live FUSED (from L_FUSED bus, after F1)
     J24-2  (N)     → Neutral (from N bus)
-    J24-3  (PE)    → Protective Earth (optional, for DIN rail meters)
+    ⚠️ NOTE: PE (Protective Earth) pin REMOVED from J24.
+    HV section is now floating - no Earth connection on PCB.
+
+    J5 CHASSIS REFERENCE (SRif) - 6.3mm Spade Terminal:
+    ───────────────────────────────────────────────────
+    J5     → PCB GND (Logic Ground)
+    Connect via 18AWG Green/Yellow wire to boiler/chassis mounting bolt.
+    This provides the return path for level probe operation.
 
     NOTE: GPIO23-25 and GPIO29 are used internally by Pico 2 module
           and are NOT available on the 40-pin header.

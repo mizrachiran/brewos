@@ -15,6 +15,68 @@
 | Solder Mask     | Green (both sides)                 |
 | Silkscreen      | White (both sides)                 |
 | IPC Class       | Class 2 minimum                    |
+| **Edge Rails**  | **5mm keep-out zone on all edges** |
+
+---
+
+## Edge Rails (Keep-Out Zone)
+
+### 5mm Edge Clearance Requirement
+
+**All edges of the PCB must maintain a 5mm (200 mil) keep-out zone** where no components, traces, or copper pours are allowed.
+
+### Purpose
+
+1. **Manufacturing Safety:** Prevents components from being damaged during panelization, routing, and depanelization
+2. **Mechanical Clearance:** Ensures proper fit within enclosure and prevents interference with mounting hardware
+3. **Handling Safety:** Provides safe handling area during assembly and installation
+4. **Creepage/Clearance:** Maintains safety margins for high-voltage traces near board edges
+
+### Implementation Rules
+
+| Zone               | Width           | Restrictions                                                          |
+| ------------------ | --------------- | --------------------------------------------------------------------- |
+| **All Edges**      | **5mm minimum** | No components, pads, or traces                                        |
+| **Exceptions**     | -               | Connectors may extend to board edge (but pads must be ≥2mm from edge) |
+| **Mounting Holes** | -               | Holes positioned 5mm from edges (within keep-out zone)                |
+
+### Visual Representation
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ ═══════════════════════════════════════════════════════ │ ← 5mm Edge Rail
+│                                                          │   (Keep-Out Zone)
+│  ┌──────────────────────────────────────────────────┐  │
+│  │                                                  │  │
+│  │         COMPONENT PLACEMENT AREA                 │  │
+│  │         (70mm × 70mm usable area)                │  │
+│  │                                                  │  │
+│  │  • All components must be within this zone      │  │
+│  │  • Traces may route to connectors at edge       │  │
+│  │  • Mounting holes (MH1-MH4) at 5mm from edge    │  │
+│  │                                                  │  │
+│  └──────────────────────────────────────────────────┘  │
+│                                                          │
+│ ═══════════════════════════════════════════════════════ │ ← 5mm Edge Rail
+└─────────────────────────────────────────────────────────┘
+        80mm × 80mm total board size
+```
+
+### Connector Placement Exception
+
+Connectors (J1-J5, J15-J17, J24, J26) may be placed at the board edge, but:
+
+- **Connector body:** May extend to or slightly beyond board edge
+- **Connector pads:** Must maintain ≥2mm clearance from board edge
+- **Traces to connectors:** May route through edge rail zone, but keep as short as possible
+
+### Design Rule Check (DRC) Requirements
+
+When generating Gerber files, ensure DRC rules include:
+
+- **Edge clearance:** 5mm minimum for all components
+- **Edge clearance:** 2mm minimum for connector pads
+- **Edge clearance:** 0.5mm minimum for traces (if routing to edge connectors)
 
 ---
 
@@ -36,7 +98,7 @@
 
 If all connectors cannot fit on the bottom edge:
 
-- **Bottom edge:** All HV connectors (J1-J4, J24) + J26 (sensor screw terminal)
+- **Bottom edge:** All HV connectors (J1-J4, J24) + J26 (sensor screw terminal) + J5 (SRif)
 - **One side edge:** LV JST connectors (J15, J17)
 
 ```
@@ -83,14 +145,19 @@ If all connectors cannot fit on the bottom edge:
 
 ## Mounting Holes
 
-| Hole | Size       | Type | Location | Notes                |
-| ---- | ---------- | ---- | -------- | -------------------- |
-| MH1  | M3 (3.2mm) | PTH  | Corner   | PE star ground point |
-| MH2  | M3 (3.2mm) | NPTH | Corner   | Isolated             |
-| MH3  | M3 (3.2mm) | NPTH | Corner   | Isolated             |
-| MH4  | M3 (3.2mm) | NPTH | Corner   | Isolated             |
+| Hole | Size       | Type | Location | Notes                       |
+| ---- | ---------- | ---- | -------- | --------------------------- |
+| MH1  | M3 (3.2mm) | NPTH | Corner   | Isolated (no PE connection) |
+| MH2  | M3 (3.2mm) | NPTH | Corner   | Isolated                    |
+| MH3  | M3 (3.2mm) | NPTH | Corner   | Isolated                    |
+| MH4  | M3 (3.2mm) | NPTH | Corner   | Isolated                    |
 
-Position all mounting holes 5mm from board edges.
+**⚠️ IMPORTANT:** All mounting holes are NPTH (Non-Plated Through Hole).
+We do NOT want the board grounding itself randomly through the screws.
+Grounding happens ONLY through the J5 (SRif) wire to prevent ground loops
+and ensure controlled current paths.
+
+**Position:** All mounting holes positioned 5mm from board edges (within the edge rail keep-out zone).
 
 ---
 
@@ -162,16 +229,18 @@ Position all mounting holes 5mm from board edges.
 │    │        SLOT         ║                                                │   │
 │    ════════════════════════════════════════════════════════════════════════    │
 │    BOTTOM EDGE - ALL CONNECTORS (enclosure opening)                             │
-│    ┌───┬───┬───┬───┬─────┬──────────────────┬────────┬────────┬──────┐         │
-│    │J1 │J2 │J3 │J4 │ J24 │       J26        │  J15   │  J17   │ J16  │         │
-│    │L/N│LED│PMP│SOL│MTR  │    SENSORS       │ ESP32  │ METER  │DEBUG │         │
-│    │   │   │   │   │ HV  │    (18-pos)      │(8-pin) │(6-pin) │(4pin)│         │
-│    └───┴───┴───┴───┴─────┴──────────────────┴────────┴────────┴──────┘         │
+│    ┌───┬───┬───┬───┬─────┬──────────────────┬────────┬────────┬──────┬────┐   │
+│    │J1 │J2 │J3 │J4 │ J24 │       J26        │  J15   │  J17   │ J16  │ J5 │   │
+│    │L/N│LED│PMP│SOL│MTR  │    SENSORS       │ ESP32  │ METER  │DEBUG │SRif│   │
+│    │   │   │   │   │ HV  │    (18-pos)      │(8-pin) │(6-pin) │(4pin)│    │   │
+│    └───┴───┴───┴───┴─────┴──────────────────┴────────┴────────┴──────┴────┘   │
 │                                                                                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Space Optimization for 80×80mm
+
+**Note:** With 5mm edge rails on all sides, the usable component placement area is **70mm × 70mm**.
 
 | Strategy                   | Implementation                                  |
 | -------------------------- | ----------------------------------------------- |
@@ -180,6 +249,7 @@ Position all mounting holes 5mm from board edges.
 | **Pico orientation**       | Long axis parallel to isolation slot            |
 | **Bottom-edge connectors** | All connectors aligned, vertical entry          |
 | **Component density**      | 0603/0805 passives, tight but DFM-compliant     |
+| **Edge rail compliance**   | All components ≥5mm from board edges            |
 
 ### Fallback: 2-Edge Layout (if 80mm too tight)
 
@@ -243,6 +313,8 @@ J17─┤            │
 2. **Thermal relief**: On relay pads for easier soldering
 3. **MOV placement**: Close to relay terminals
 4. **Slot isolation**: 6mm minimum to LV section
+5. **Keep-Out Zone**: Maintain strict 6mm (240 mil) Keep-Out Zone between any High Voltage trace (L, N, Relay Contacts) and the Low Voltage Ground Pour
+6. **No Ground Plane**: Delete all copper within 6mm of the L/N tracks. Verify no Ground plane is under the HLK module's AC pins
 
 ### EMI Considerations
 
@@ -253,18 +325,30 @@ J17─┤            │
 
 ---
 
-## Grounding Strategy
+## Grounding Strategy (SRif Architecture)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              GROUNDING HIERARCHY                                 │
+│                        NEW GROUNDING STRATEGY (SRif)                             │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                  │
-│                              PE (Chassis Ground)                                │
+│    1. MACHINE CHASSIS is Earthed via the main power cord (Wall Plug).          │
+│    2. PCB HV SIDE is Floating (No Earth connection).                            │
+│    3. PCB LV SIDE (GND) connects to CHASSIS via J5 (SRif).                      │
+│                                                                                  │
+│                              MACHINE CHASSIS                                    │
+│                            (Earthed via wall plug)                              │
 │                                    │                                            │
 │                              ┌─────┴─────┐                                      │
-│                              │    MH1    │  ← PE Star Point (PTH mounting hole) │
-│                              │  (PTH)    │                                      │
+│                              │   J5      │  ← SRif (Chassis Reference)            │
+│                              │ (6.3mm    │    18AWG Green/Yellow wire          │
+│                              │  Spade)   │                                      │
+│                              └─────┬─────┘                                      │
+│                                    │                                            │
+│                                    │                                            │
+│                              ┌─────┴─────┐                                      │
+│                              │  LV GND   │  ← PCB Logic Ground                  │
+│                              │  (Logic)  │                                      │
 │                              └─────┬─────┘                                      │
 │                                    │                                            │
 │                    ┌───────────────┴───────────────┐                            │
@@ -272,6 +356,9 @@ J17─┤            │
 │              ┌─────┴─────┐                   ┌─────┴─────┐                      │
 │              │  HV GND   │                   │  LV GND   │                      │
 │              │  (Mains)  │                   │  (Logic)  │                      │
+│              │           │                   │           │                      │
+│              │ FLOATING  │                   │           │                      │
+│              │ (No PE)   │                   │           │                      │
 │              └─────┬─────┘                   └─────┬─────┘                      │
 │                    │                               │                            │
 │                 Isolated                    ┌──────┴──────┐                     │
@@ -283,10 +370,18 @@ J17─┤            │
 │                                                                                  │
 │    KEY RULES:                                                                   │
 │    ──────────                                                                   │
-│    1. Single connection point between PE and LV GND (at MH1)                   │
+│    1. Single connection point between Chassis and LV GND (at J5 SRif)         │
 │    2. HV GND isolated from LV GND via HLK module                               │
 │    3. AGND and DGND connect at single point near Pico ADC_GND                  │
 │    4. No ground loops - star topology only                                     │
+│    5. All mounting holes (MH1-MH4) are NPTH - no random grounding            │
+│                                                                                  │
+│    Safety Benefit:                                                              │
+│    ───────────────                                                              │
+│    If 'L' shorts to the PCB surface, it hits FR4 (fiberglass), not a           │
+│    Ground Plane. It cannot create a dead short or explode.                     │
+│    The fuse will eventually blow if it finds a path, but the "Explosive        │
+│    Arc" risk is eliminated.                                                    │
 │                                                                                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
