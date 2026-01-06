@@ -62,20 +62,21 @@
 
 ### Communication
 
-| Qty   | Ref           | Value     | Tolerance | Package  | Notes                                          |
-| ----- | ------------- | --------- | --------- | -------- | ---------------------------------------------- |
-| 4     | R40-R43       | **1kΩ**   | 5%        | 0805     | UART series (5V tolerance protection)          |
-| 1     | R44           | 33Ω       | 5%        | 0805     | I2C series                                     |
-| 1     | R45           | 2.2kΩ     | 1%        | 0805     | J17 RX level shift (upper)                     |
-| 1     | R45A          | 3.3kΩ     | 1%        | 0805     | J17 RX level shift (lower)                     |
-| 1     | R45B          | 33Ω       | 5%        | 0805     | J17 RX series                                  |
-| 2     | R46-R47       | 4.7kΩ     | 5%        | 0805     | I2C pull-ups                                   |
-| 2     | R93-R94       | 20kΩ      | 5%        | 0805     | RS485 failsafe bias                            |
-| **2** | **R_USB**     | **27Ω**   | **5%**    | **0805** | **USB D+/D- series termination**               |
-| **2** | **R_CC**      | **5.1kΩ** | **5%**    | **0805** | **USB-C CC1/CC2 pull-downs**                   |
-| **2** | **R_SWD**     | **47Ω**   | **5%**    | **0805** | **SWD Series Protection (J15-6/8)**            |
-| **1** | **R_XTAL**    | **1kΩ**   | **5%**    | **0805** | **Crystal OUT serial termination (if needed)** |
-| **1** | **R_BOOTSEL** | **1kΩ**   | **5%**    | **0805** | **BOOTSEL button pull-up (CS to GND)**         |
+| Qty   | Ref           | Value          | Tolerance | Package  | Notes                                          |
+| ----- | ------------- | -------------- | --------- | -------- | ---------------------------------------------- |
+| 4     | R40-R43       | **1kΩ**        | 5%        | 0805     | UART series (5V tolerance protection)          |
+| 1     | R44           | 33Ω            | 5%        | 0805     | I2C series                                     |
+| 1     | R45           | 2.2kΩ          | 1%        | 0805     | J17 RX level shift (upper)                     |
+| 1     | R45A          | 3.3kΩ          | 1%        | 0805     | J17 RX level shift (lower)                     |
+| 1     | R45B          | 33Ω            | 5%        | 0805     | J17 RX series                                  |
+| 2     | R46-R47       | 4.7kΩ          | 5%        | 0805     | I2C pull-ups                                   |
+| 2     | R93-R94       | 20kΩ           | 5%        | 0805     | RS485 failsafe bias                            |
+| **2** | **R_USB**     | **27Ω**        | **5%**    | **0805** | **USB D+/D- series termination**               |
+| **2** | **R_CC**      | **5.1kΩ**      | **5%**    | **0805** | **USB-C CC1/CC2 pull-downs**                   |
+| **2** | **R_SWD**     | **47Ω**        | **5%**    | **0805** | **SWD Series Protection (J15-6/8)**            |
+| **1** | **R_XTAL**    | **1kΩ**        | **5%**    | **0805** | **Crystal OUT serial termination (if needed)** |
+| **1** | **R_BOOTSEL** | **1kΩ**        | **5%**    | **0805** | **BOOTSEL button pull-up (CS to GND)**         |
+| **2** | **R_VBUS**    | **10kΩ, 20kΩ** | **5%**    | **0805** | **VBUS Detect divider (GPIO24)**               |
 
 ### User Interface
 

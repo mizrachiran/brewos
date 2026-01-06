@@ -77,12 +77,14 @@ The RP2354 has an internal regulator that can run in LDO or SMPS mode. This desi
 
 **No GPIO allocation changes required.** The RP2354A (QFN-60) exposes GPIO 0-29 directly, and all existing netlist signals map directly to corresponding GPIO pins.
 
-**Bonus:** GPIO16, 22, 23, 24, 25, 29 are now available:
+**GPIO Availability:**
 
-- GPIO16 & 22: Disconnected from J15 (traces moved to dedicated SWD pins)
-- GPIO23, 24, 25, 29: Previously internal to Pico module
+- **GPIO16 & 22:** Now available (disconnected from J15, traces moved to dedicated SWD pins)
+- **GPIO23 & 25:** Now available (previously internal to Pico module)
+- **GPIO24:** Used for VBUS Detect (USB-C power detection via 10kΩ/20kΩ divider)
+- **GPIO29:** Used for ADC3 - 5V_MONITOR (ratiometric pressure compensation, from v2.24)
 
-These can be routed to test points or an expansion header.
+GPIO23 and 25 can be routed to test points or an expansion header.
 
 #### 5. USB & Boot Support
 

@@ -235,3 +235,10 @@ Tactile switch for entering USB bootloader mode.
 3. Drag & drop `.uf2` file to flash firmware
 
 **Part Number:** Standard USB-C 16-pin SMD connector (e.g., USB-C-016 or equivalent)
+
+**VBUS Detection (GPIO24):**
+
+- Connect USB-C VBUS (pins A4/B9) to GPIO24 via voltage divider (10kΩ/20kΩ)
+- Allows firmware to detect when USB cable is plugged in
+- Useful for entering "Debug Mode" or "Mass Storage Mode" automatically
+- Divider drops 5V to ~3.3V for safe GPIO input

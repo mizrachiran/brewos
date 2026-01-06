@@ -41,9 +41,9 @@
 │  │  ├── GPIO18 ─── SPARE (SPI0 SCK)                                        │  │
 │  │  ├── GPIO22 ─── **NOW AVAILABLE** (disconnected from J15, traces to SWD)│  │
 │  │  ├── GPIO23 ─── **NOW AVAILABLE** (was internal to Pico module)        │  │
-│  │  ├── GPIO24 ─── **NOW AVAILABLE** (was internal to Pico module)        │  │
+│  │  ├── GPIO24 ─── **VBUS Detect** (USB-C power detection)               │  │
 │  │  ├── GPIO25 ─── **NOW AVAILABLE** (was internal to Pico module)        │  │
-│  │  └── GPIO29 ─── **NOW AVAILABLE** (was internal to Pico module)        │  │
+│  │  └── GPIO29 ─── **ADC3 - 5V_MONITOR** (ratiometric pressure compensation)│  │
 │  └─────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                 │
 │  ┌─────────────────────────────────────────────────────────────────────────┐  │
@@ -114,47 +114,49 @@
 │  │  └── RUN Pin ─── Reset Button (SMD tactile, to GND)                    │  │
 │  └─────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                 │
-│  GPIO UTILIZATION: 25/30 used (GPIO16,22,23,24,25,29 available)              │
+│  GPIO UTILIZATION: 27/30 used (GPIO16,22,23,25 available)                    │
 │  ✅ GPIO16,22: NOW AVAILABLE (disconnected from J15, traces to SWD)          │
-│  ✅ GPIO23-25, GPIO29: NOW AVAILABLE (previously internal to Pico module)     │
+│  ✅ GPIO23,25: NOW AVAILABLE (previously internal to Pico module)            │
+│  ✅ GPIO24: VBUS Detect (USB-C power detection)                               │
+│  ✅ GPIO29: ADC3 - 5V_MONITOR (ratiometric pressure compensation)            │
 │                                                                                 │
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## GPIO Summary Table
 
-| GPIO   | Function                        | Direction | Type        | Pull          | Protection                                      |
-| ------ | ------------------------------- | --------- | ----------- | ------------- | ----------------------------------------------- |
-| 0      | UART0 TX → ESP32                | Output    | Digital     | None          | 1kΩ series (R40)                                |
-| 1      | UART0 RX ← ESP32                | Input     | Digital     | None          | 1kΩ series (R41)                                |
-| 2      | Water Reservoir Switch          | Input     | Digital     | Internal PU   | ESD clamp                                       |
-| 3      | Tank Level Sensor               | Input     | Digital     | Internal PU   | ESD clamp                                       |
-| 4      | Steam Boiler Level (Comparator) | Input     | Digital     | None          | TLV3201 output                                  |
-| 5      | Brew Handle Switch              | Input     | Digital     | Internal PU   | ESD clamp                                       |
-| 6      | Meter TX (UART1)                | Output    | Digital     | None          | 1kΩ series R42 (5V tolerance)                   |
-| 7      | Meter RX (UART1)                | Input     | Digital     | None          | 1kΩ series R43 (5V tolerance)                   |
-| 8      | I2C0 SDA (Accessory)            | I/O       | Digital     | 4.7kΩ ext. PU | Accessory expansion                             |
-| 9      | I2C0 SCL (Accessory)            | Output    | Digital     | 4.7kΩ ext. PU | Accessory expansion                             |
-| 10     | Relay K1 + LED                  | Output    | Digital     | None          | -                                               |
-| 11     | Relay K2 + LED                  | Output    | Digital     | None          | -                                               |
-| 12     | Relay K3 + LED                  | Output    | Digital     | None          | -                                               |
-| 13     | SSR1 Trigger + LED              | Output    | Digital     | None          | -                                               |
-| 14     | SSR2 Trigger + LED              | Output    | Digital     | None          | -                                               |
-| 15     | Status LED                      | Output    | Digital     | None          | -                                               |
-| 16     | **Available**                   | **I/O**   | **Digital** | **None**      | **Disconnected from J15 (traces moved to SWD)** |
-| 17     | SPI0 CS (Spare)                 | Output    | Digital     | None          | -                                               |
-| 18     | SPI0 SCK (Spare)                | Output    | Digital     | None          | -                                               |
-| 19     | Buzzer PWM                      | Output    | PWM         | None          | -                                               |
-| 20     | RS485 DE/RE                     | Output    | Digital     | Pull-down     | MAX3485 direction (TTL mode: NC)                |
-| 21     | WEIGHT_STOP (ESP32→RP2354)      | Input     | Digital     | Pull-down     | Brew-by-weight signal (J15 Pin 7)               |
-| 22     | **Available**                   | **I/O**   | **Digital** | **None**      | **Disconnected from J15 (traces moved to SWD)** |
-| **23** | **Available**                   | **I/O**   | **Digital** | **None**      | **Previously internal to Pico module**          |
-| **24** | **Available**                   | **I/O**   | **Digital** | **None**      | **Previously internal to Pico module**          |
-| **25** | **Available**                   | **I/O**   | **Digital** | **None**      | **Previously internal to Pico module**          |
-| **29** | **Available**                   | **I/O**   | **Digital** | **None**      | **Previously internal to Pico module**          |
-| 26     | ADC0 - Brew NTC                 | Input     | Analog      | None          | RC filter                                       |
-| 27     | ADC1 - Steam NTC                | Input     | Analog      | None          | RC filter                                       |
-| 28     | ADC2 - Pressure                 | Input     | Analog      | None          | RC filter, divider                              |
+| GPIO   | Function                        | Direction | Type        | Pull          | Protection                                         |
+| ------ | ------------------------------- | --------- | ----------- | ------------- | -------------------------------------------------- |
+| 0      | UART0 TX → ESP32                | Output    | Digital     | None          | 1kΩ series (R40)                                   |
+| 1      | UART0 RX ← ESP32                | Input     | Digital     | None          | 1kΩ series (R41)                                   |
+| 2      | Water Reservoir Switch          | Input     | Digital     | Internal PU   | ESD clamp                                          |
+| 3      | Tank Level Sensor               | Input     | Digital     | Internal PU   | ESD clamp                                          |
+| 4      | Steam Boiler Level (Comparator) | Input     | Digital     | None          | TLV3201 output                                     |
+| 5      | Brew Handle Switch              | Input     | Digital     | Internal PU   | ESD clamp                                          |
+| 6      | Meter TX (UART1)                | Output    | Digital     | None          | 1kΩ series R42 (5V tolerance)                      |
+| 7      | Meter RX (UART1)                | Input     | Digital     | None          | 1kΩ series R43 (5V tolerance)                      |
+| 8      | I2C0 SDA (Accessory)            | I/O       | Digital     | 4.7kΩ ext. PU | Accessory expansion                                |
+| 9      | I2C0 SCL (Accessory)            | Output    | Digital     | 4.7kΩ ext. PU | Accessory expansion                                |
+| 10     | Relay K1 + LED                  | Output    | Digital     | None          | -                                                  |
+| 11     | Relay K2 + LED                  | Output    | Digital     | None          | -                                                  |
+| 12     | Relay K3 + LED                  | Output    | Digital     | None          | -                                                  |
+| 13     | SSR1 Trigger + LED              | Output    | Digital     | None          | -                                                  |
+| 14     | SSR2 Trigger + LED              | Output    | Digital     | None          | -                                                  |
+| 15     | Status LED                      | Output    | Digital     | None          | -                                                  |
+| 16     | **Available**                   | **I/O**   | **Digital** | **None**      | **Disconnected from J15 (traces moved to SWD)**    |
+| 17     | SPI0 CS (Spare)                 | Output    | Digital     | None          | -                                                  |
+| 18     | SPI0 SCK (Spare)                | Output    | Digital     | None          | -                                                  |
+| 19     | Buzzer PWM                      | Output    | PWM         | None          | -                                                  |
+| 20     | RS485 DE/RE                     | Output    | Digital     | Pull-down     | MAX3485 direction (TTL mode: NC)                   |
+| 21     | WEIGHT_STOP (ESP32→RP2354)      | Input     | Digital     | Pull-down     | Brew-by-weight signal (J15 Pin 7)                  |
+| 22     | **Available**                   | **I/O**   | **Digital** | **None**      | **Disconnected from J15 (traces moved to SWD)**    |
+| **23** | **Available**                   | **I/O**   | **Digital** | **None**      | **Previously internal to Pico module**             |
+| **24** | **VBUS Detect**                 | **Input** | **Digital** | **None**      | **USB-C VBUS detection (10kΩ/20kΩ divider)**       |
+| **25** | **Available**                   | **I/O**   | **Digital** | **None**      | **Previously internal to Pico module**             |
+| 26     | ADC0 - Brew NTC                 | Input     | Analog      | None          | RC filter                                          |
+| 27     | ADC1 - Steam NTC                | Input     | Analog      | None          | RC filter                                          |
+| 28     | ADC2 - Pressure                 | Input     | Analog      | None          | RC filter, divider                                 |
+| **29** | **ADC3 - 5V_MONITOR**           | **Input** | **Analog**  | **None**      | **5V rail monitor (R91/R92 divider, ratiometric)** |
 
 ## RP2354 GPIO Considerations
 
@@ -190,12 +192,12 @@ Series current-limiting resistors (1kΩ) are mandatory on all GPIO lines that ma
 
 With the migration to discrete RP2354 chip, these GPIOs are now accessible:
 
-| GPIO   | Previous Function (Pico Module) | New Status (RP2354)                       |
-| ------ | ------------------------------- | ----------------------------------------- |
-| GPIO23 | SMPS Power Save (internal)      | **Available** - Can be used for expansion |
-| GPIO24 | VBUS Detect (internal)          | **Available** - Can be used for expansion |
-| GPIO25 | Onboard LED (internal)          | **Available** - Can be used for expansion |
-| GPIO29 | VSYS/3 ADC (internal)           | **Available** - Can be used for expansion |
+| GPIO   | Previous Function (Pico Module) | New Status (RP2354)                                       |
+| ------ | ------------------------------- | --------------------------------------------------------- |
+| GPIO23 | SMPS Power Save (internal)      | **Available** - Can be used for expansion                 |
+| GPIO24 | VBUS Detect (internal)          | **VBUS Detect** - USB-C power detection via divider       |
+| GPIO25 | Onboard LED (internal)          | **Available** - Can be used for expansion                 |
+| GPIO29 | VSYS/3 ADC (internal)           | **ADC3 - 5V_MONITOR** - Ratiometric pressure compensation |
 
 **✅ These GPIOs are now accessible on the RP2354 QFN package and can be routed to test points or expansion headers.**
 

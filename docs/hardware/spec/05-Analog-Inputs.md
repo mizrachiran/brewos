@@ -174,4 +174,4 @@ See [Power Supply](03-Power-Supply.md#precision-adc-voltage-reference-buffered) 
 | ADC0 | GPIO26 | Brew NTC        | 0-3.0V     | ~31 counts/°C     |
 | ADC1 | GPIO27 | Steam NTC       | 0-3.0V     | ~25 counts/°C     |
 | ADC2 | GPIO28 | Pressure        | 0.32-2.88V | ~200 counts/bar   |
-| ADC3 | GPIO29 | Internal VSYS/3 | N/A        | System monitoring |
+| ADC3 | GPIO29 | 5V_MONITOR      | 0-3.0V     | 5V rail monitor (ratiometric pressure compensation) |
