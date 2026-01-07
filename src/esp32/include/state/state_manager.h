@@ -216,6 +216,7 @@ private:
     // Deferred shot history save (to avoid blocking main loop)
     bool _shotHistoryDirty = false;
     uint32_t _lastShotHistorySave = 0;
+    uint16_t _lastSavedShotCount = 0;  // Track last saved count to avoid unnecessary saves
     static constexpr uint32_t SHOT_HISTORY_SAVE_DELAY = 5000;  // Save 5 seconds after shot completes (increased to avoid UI operations)
     
     // Schedule callback
@@ -225,7 +226,7 @@ private:
     void loadSettings();
     void loadStats();
     void loadShotHistory();
-    void saveShotHistory();
+    bool saveShotHistory();  // Returns true on success, false on failure
     void loadScheduleSettings();
     
     // Helpers

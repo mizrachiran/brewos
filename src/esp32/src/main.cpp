@@ -709,10 +709,12 @@ static void handlePicoDiagnostics(const PicoPacket& packet) {
 }
 
 static void setupEarlyInitialization() {
+#if ENABLE_SCREEN
     // Turn on backlight immediately so user knows device is running
     // Backlight is GPIO7, active LOW (LOW = ON)
     pinMode(7, OUTPUT);
     digitalWrite(7, LOW);
+#endif
     
     // Initialize Serial (USB CDC if enabled, hardware UART if disabled)
     // When USB CDC is disabled (ARDUINO_USB_MODE=0), Serial uses hardware UART
@@ -721,6 +723,8 @@ static void setupEarlyInitialization() {
     #if ARDUINO_USB_MODE == 1
     // USB CDC mode - set timeout to prevent blocking
     Serial.setTxTimeoutMs(10);  // Short timeout - won't block long if no USB host
+    // Give USB CDC time to initialize (not waiting, just a brief delay)
+    delay(100);
     #endif
     
     // Note: Watchdog is kept enabled - it helps catch hangs and crashes
@@ -750,10 +754,20 @@ static void setupEarlyInitialization() {
     
     Serial.print("Internal heap: ");
     Serial.println(ESP.getFreeHeap());
+    
+    // PSRAM diagnostics - check if PSRAM is available and working
+    size_t psramSize = ESP.getPsramSize();
+    size_t psramFree = ESP.getFreePsram();
     Serial.print("PSRAM size: ");
-    Serial.println(ESP.getPsramSize());
+    Serial.print(psramSize);
+    Serial.print(" bytes (");
+    Serial.print(psramSize / 1024 / 1024);
+    Serial.println(" MB)");
     Serial.print("PSRAM free: ");
-    Serial.println(ESP.getFreePsram());
+    Serial.print(psramFree);
+    Serial.print(" bytes (");
+    Serial.print(psramFree / 1024 / 1024);
+    Serial.println(" MB)");
     
     // Check memory allocation strategy
     // Small allocations (<4KB) should use internal RAM for speed
@@ -771,10 +785,25 @@ static void setupEarlyInitialization() {
     if (largeAlloc) {
         uintptr_t largeAddr = (uintptr_t)largeAlloc;
         bool largeInPSRAM = (largeAddr >= ESP32S3_PSRAM_START && largeAddr < ESP32S3_PSRAM_END);
-        Serial.printf("Large alloc (64KB): 0x%08X (%s)\n", largeAddr, largeInPSRAM ? "PSRAM - OK" : "Internal RAM - PSRAM not working!");
+        if (largeInPSRAM) {
+            Serial.printf("Large alloc (64KB): 0x%08X (PSRAM - OK)\n", largeAddr);
+            Serial.println("PSRAM initialization: SUCCESS");
+        } else {
+            Serial.printf("Large alloc (64KB): 0x%08X (Internal RAM - PSRAM not working!)\n", largeAddr);
+            if (psramSize == 0) {
+                Serial.println("WARNING: PSRAM not detected - hardware may not have PSRAM");
+            } else {
+                Serial.println("WARNING: PSRAM detected but allocation failed - check configuration");
+            }
+        }
         free(largeAlloc);
     } else {
         Serial.println("WARNING: PSRAM allocation failed - PSRAM may not be available");
+        if (psramSize == 0) {
+            Serial.println("  -> PSRAM size is 0 - hardware likely does not have PSRAM");
+        } else {
+            Serial.printf("  -> PSRAM size: %u bytes, but allocation failed\n", (unsigned)psramSize);
+        }
     }
     free(smallAlloc);
     
@@ -960,12 +989,14 @@ static void setupInitializeFilesystem() {
 }
 
 static void setupCreateGlobalObjects() {
+#if ENABLE_SCREEN
     // Turn on backlight so user knows device is running
     // IMPORTANT: Backlight is ACTIVE LOW on VIEWESMART UEDX48480021-MD80E!
     Serial.println("[3/8] Turning on backlight...");
     pinMode(7, OUTPUT);
     digitalWrite(7, LOW);  // Active LOW - LOW = ON, HIGH = OFF
     Serial.println("Backlight ON (active low)");
+#endif
     
     // Construct global objects NOW (after Serial is initialized)
     // CRITICAL: Allocate in internal RAM (not PSRAM) to avoid InstructionFetchError
@@ -1166,7 +1197,7 @@ static void setupInitializePicoUART() {
     protocolHandler.begin(picoUart, webServer, &BrewOS::StateManager::getInstance(), powerMeterManager);
     Serial.println("Protocol handler initialized");
     
-    // Pico reset is now available via GPIO20 (repurposed from USB D-)
+    // Pico reset is now available via PICO_RUN_PIN (GPIO20 screen / GPIO4 no-screen)
     // No longer conflicts with display reset pin (GPIO8)
     // Note: Pico reset can be performed via picoUart->resetPico() if needed
 }

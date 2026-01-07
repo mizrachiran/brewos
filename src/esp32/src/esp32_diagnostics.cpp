@@ -12,7 +12,7 @@
 #include <string.h>
 
 // =============================================================================
-// GPIO19 (WEIGHT_STOP) Output Test
+// WEIGHT_STOP_PIN Output Test (GPIO19 screen / GPIO6 no-screen)
 // =============================================================================
 
 uint8_t diag_test_weight_stop_output(diag_result_t* result, PicoUART* picoUart) {
@@ -31,7 +31,7 @@ uint8_t diag_test_weight_stop_output(diag_result_t* result, PicoUART* picoUart) 
     digitalWrite(WEIGHT_STOP_PIN, LOW);
     delay(50);  // Allow signal to settle
     
-    // Test HIGH state - set GPIO19 HIGH
+    // Test HIGH state - set WEIGHT_STOP_PIN HIGH
     // If Pico is running test 0x13 (WEIGHT_STOP_INPUT) at the same time,
     // it should read GPIO21 HIGH, verifying the signal path works
     digitalWrite(WEIGHT_STOP_PIN, HIGH);
@@ -49,14 +49,14 @@ uint8_t diag_test_weight_stop_output(diag_result_t* result, PicoUART* picoUart) 
     // If wiring is missing, Pico test 0x13 will fail to see the HIGH state.
     result->status = DIAG_STATUS_PASS;
     result->raw_value = 1;
-    strncpy(result->message, "GPIO19 toggled HIGH/LOW (verify Pico test 0x13)", sizeof(result->message) - 1);
+    strncpy(result->message, "WEIGHT_STOP_PIN toggled HIGH/LOW (verify Pico test 0x13)", sizeof(result->message) - 1);
     
-    LOG_I("Diagnostics: WEIGHT_STOP (GPIO19) output test - signal toggled");
+    LOG_I("Diagnostics: WEIGHT_STOP (GPIO%d) output test - signal toggled", WEIGHT_STOP_PIN);
     return DIAG_STATUS_PASS;
 }
 
 // =============================================================================
-// GPIO20 (PICO_RUN) Output Test
+// PICO_RUN_PIN Output Test (GPIO20 screen / GPIO4 no-screen)
 // =============================================================================
 
 uint8_t diag_test_pico_run_output(diag_result_t* result, PicoUART* picoUart) {
@@ -96,14 +96,14 @@ uint8_t diag_test_pico_run_output(diag_result_t* result, PicoUART* picoUart) {
         // We can't distinguish these cases without more complex coordination
         result->status = DIAG_STATUS_PASS;
         result->raw_value = 1;
-        strncpy(result->message, "GPIO20 toggled (Pico still running)", sizeof(result->message) - 1);
-        LOG_I("Diagnostics: PICO_RUN (GPIO20) output test - signal toggled, Pico connected");
+        strncpy(result->message, "PICO_RUN_PIN toggled (Pico still running)", sizeof(result->message) - 1);
+        LOG_I("Diagnostics: PICO_RUN (GPIO%d) output test - signal toggled, Pico connected", PICO_RUN_PIN);
     } else {
         // Pico disconnected - might have reset (unlikely with 1ms pulse) or other issue
         result->status = DIAG_STATUS_WARN;
         result->raw_value = 0;
-        strncpy(result->message, "GPIO20 toggled (Pico disconnected?)", sizeof(result->message) - 1);
-        LOG_W("Diagnostics: PICO_RUN (GPIO20) output test - Pico not connected");
+        strncpy(result->message, "PICO_RUN_PIN toggled (Pico disconnected?)", sizeof(result->message) - 1);
+        LOG_W("Diagnostics: PICO_RUN (GPIO%d) output test - Pico not connected", PICO_RUN_PIN);
     }
     
     return result->status;

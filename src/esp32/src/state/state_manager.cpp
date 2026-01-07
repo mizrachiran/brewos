@@ -70,25 +70,35 @@ void StateManager::loop() {
     }
     
     // Deferred shot history save (non-blocking, on-demand only)
-    // Only save if there are actual shots in history (avoid unnecessary saves)
+    // Only save if there are actual shots in history AND something changed (avoid unnecessary saves)
     // Save 5 seconds after shot completes to avoid blocking main loop during UI operations
     if (_shotHistoryDirty && (millis() - _lastShotHistorySave >= SHOT_HISTORY_SAVE_DELAY)) {
-        // Only save if there are shots to save (on-demand)
-        if (_shotHistory.count > 0) {
+        // Only save if there are shots to save AND count changed since last save
+        if (_shotHistory.count > 0 && _shotHistory.count != _lastSavedShotCount) {
             // Only save if we have enough heap (indicates system is not under heavy load)
             // This prevents blocking during critical operations like screen switching
             size_t freeHeap = ESP.getFreeHeap();
             if (freeHeap > 60000) {  // Only save if we have plenty of heap (system is idle)
-                _shotHistoryDirty = false;
-                saveShotHistory();
+                // Clear dirty flag only AFTER successful save
+                if (saveShotHistory()) {
+                    _shotHistoryDirty = false;
+                    _lastSavedShotCount = _shotHistory.count;
+                    _lastShotHistorySave = millis();
+                } else {
+                    // Save failed - keep dirty flag set and retry in 2 seconds
+                    _lastShotHistorySave = millis() - (SHOT_HISTORY_SAVE_DELAY - 2000);
+                }
             } else {
                 // Defer further if heap is low (system is busy with UI/network operations)
                 // Reset timer to retry in 2 seconds
                 _lastShotHistorySave = millis() - (SHOT_HISTORY_SAVE_DELAY - 2000);
             }
         } else {
-            // No shots to save - clear dirty flag
+            // No shots to save OR count hasn't changed - clear dirty flag
             _shotHistoryDirty = false;
+            if (_shotHistory.count == 0) {
+                _lastSavedShotCount = 0;
+            }
         }
     }
     
@@ -547,6 +557,7 @@ void StateManager::loadShotHistory() {
     if (!LittleFS.exists(SHOT_HISTORY_FILE)) {
         Serial.println("[State] No shot history (fresh flash) - starting empty");
         _shotHistory.clear();  // Ensure clean state
+        _lastSavedShotCount = 0;
         return;
     }
     
@@ -554,75 +565,103 @@ void StateManager::loadShotHistory() {
     if (!file) {
         Serial.println("[State] Failed to open shot history - using defaults");
         _shotHistory.clear();
+        _lastSavedShotCount = 0;
         return;
     }
     
-    // Limit file size to prevent memory issues
     size_t fileSize = file.size();
-    if (fileSize > 50000) {  // 50KB max
-        Serial.print("[State] Shot history file too large: ");
-        Serial.print(fileSize);
-        Serial.println(" bytes - using defaults");
+    
+    // Binary format only - check minimum size
+    if (fileSize < 6) {
+        Serial.println("[State] Shot history file too small - using defaults");
         file.close();
         _shotHistory.clear();
+        _lastSavedShotCount = 0;
         return;
     }
     
-    // Use PSRAM for large shot history (up to 50KB)
-    SpiRamJsonDocument doc(fileSize + 256);  // Size based on file + some overhead
-    DeserializationError error = deserializeJson(doc, file);
+    // Allocate buffer (binary format is small, ~2KB max)
+    uint8_t* buffer = (uint8_t*)heap_caps_malloc(fileSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!buffer) {
+        buffer = (uint8_t*)malloc(fileSize);
+    }
+    
+    if (!buffer) {
+        Serial.println("[State] Failed to allocate buffer for shot history");
+        file.close();
+        _shotHistory.clear();
+        _lastSavedShotCount = 0;
+        return;
+    }
+    
+    // Read entire file
+    file.readBytes((char*)buffer, fileSize);
     file.close();
     
-    if (error) {
-        Serial.print("[State] Shot history parse error: ");
-        Serial.println(error.c_str());
-        _shotHistory.clear();  // Use defaults on parse error
-        return;
+    // Parse binary format
+    if (_shotHistory.fromBinary(buffer, fileSize)) {
+        Serial.printf("[State] Loaded shot history: %d entries (%zu bytes)\n", _shotHistory.count, fileSize);
+        _lastSavedShotCount = _shotHistory.count;
+    } else {
+        Serial.println("[State] Invalid shot history format - using defaults");
+        _shotHistory.clear();
+        _lastSavedShotCount = 0;
     }
     
-    // Safely parse JSON array with error handling
-    if (doc.is<JsonArray>()) {
-        JsonArray arr = doc.as<JsonArray>();
-        // Check if array is valid before parsing
-        if (!arr.isNull()) {
-            _shotHistory.fromJson(arr);
-            Serial.print("[State] Loaded shot history: ");
-            Serial.print(_shotHistory.count);
-            Serial.println(" entries");
-        } else {
-            Serial.println("[State] Shot history JSON array is null - using defaults");
-            _shotHistory.clear();
-        }
-    } else {
-        Serial.println("[State] Shot history is not an array - using defaults");
-        _shotHistory.clear();
-    }
+    free(buffer);
 }
 
-void StateManager::saveShotHistory() {
-    // This operation can take 2-4 seconds - add yield points to allow network operations
-    File file = LittleFS.open(SHOT_HISTORY_FILE, "w");
-    if (!file) {
-        Serial.println("[State] Failed to write shot history");
-        return;
+bool StateManager::saveShotHistory() {
+    // Binary format is much faster than JSON (50-100ms vs 2-4 seconds)
+    // Format: [magic:4][version:1][count:1][records:count*40]
+    const size_t headerSize = 6;
+    const size_t recordSize = sizeof(ShotRecord);
+    const size_t maxSize = headerSize + (MAX_SHOT_HISTORY * recordSize);  // ~2006 bytes max
+    
+    // Allocate buffer in PSRAM if available, otherwise heap
+    uint8_t* buffer = (uint8_t*)heap_caps_malloc(maxSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!buffer) {
+        buffer = (uint8_t*)malloc(maxSize);
+        if (!buffer) {
+            Serial.println("[State] Failed to allocate buffer for shot history");
+            return false;
+        }
     }
     
-    // Use PSRAM for large shot history serialization
-    SpiRamJsonDocument doc(8192);
-    JsonArray arr = doc.to<JsonArray>();
-    _shotHistory.toJson(arr);
+    // Serialize to binary format
+    size_t written = _shotHistory.toBinary(buffer, maxSize);
+    if (written == 0) {
+        free(buffer);
+        Serial.println("[State] Failed to serialize shot history");
+        return false;
+    }
     
-    // Yield before slow file write to allow network operations
+    // Yield before file operations
     yield();
     
-    serializeJson(doc, file);
+    // Write to file
+    File file = LittleFS.open(SHOT_HISTORY_FILE, "w");
+    if (!file) {
+        free(buffer);
+        Serial.println("[State] Failed to open shot history file for writing");
+        return false;
+    }
     
-    // Yield during file close (can be slow)
+    size_t bytesWritten = file.write(buffer, written);
+    free(buffer);
+    
+    // Yield during file close
     yield();
     
     file.close();
     
-    Serial.printf("[State] Shot history saved (%d entries)\n", _shotHistory.count);
+    if (bytesWritten != written) {
+        Serial.printf("[State] Shot history write incomplete: %zu/%zu bytes\n", bytesWritten, written);
+        return false;
+    }
+    
+    Serial.printf("[State] Shot history saved (%d entries, %zu bytes)\n", _shotHistory.count, written);
+    return true;
 }
 
 void StateManager::addShotRecord(const ShotRecord& shot) {
@@ -645,6 +684,8 @@ void StateManager::rateShot(uint8_t index, uint8_t rating) {
 
 void StateManager::clearShotHistory() {
     _shotHistory.clear();
+    _shotHistoryDirty = false;
+    _lastSavedShotCount = 0;
     LittleFS.remove(SHOT_HISTORY_FILE);
 }
 

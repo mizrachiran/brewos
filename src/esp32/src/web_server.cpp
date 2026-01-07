@@ -229,16 +229,52 @@ void BrewWebServer::setupRoutes() {
     
     // WiFi Setup page - served from PROGMEM (flash memory, not RAM/PSRAM)
     // HTML is defined in wifi_setup_page.h
+    // Uses callback-based chunked streaming to avoid allocating 34KB in RAM
     _server.on("/setup", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        // Copy from PROGMEM to regular RAM for AsyncWebServer
         size_t htmlLen = strlen_P(WIFI_SETUP_PAGE_HTML);
-        char* htmlBuffer = (char*)heap_caps_malloc(htmlLen + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if (htmlBuffer) {
-            strcpy_P(htmlBuffer, WIFI_SETUP_PAGE_HTML);
-            request->send(200, "text/html", htmlBuffer);
-            // Buffer will be freed by AsyncWebServer after response
+        size_t freeHeap = ESP.getFreeHeap();
+        
+        size_t largestBlock = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        LOG_D("Serving WiFi setup page (%zu bytes, free heap: %zu bytes, largest block: %zu bytes)", 
+              htmlLen, freeHeap, largestBlock);
+        
+        // Use chunked response with callback to stream from PROGMEM
+        // This avoids allocating 34KB+ in RAM which can fail in AP mode
+        // The callback provides data in chunks as needed by AsyncWebServer
+        AsyncWebServerResponse* response = request->beginChunkedResponse("text/html", 
+            [htmlLen](uint8_t* buffer, size_t maxLen, size_t index) -> size_t {
+                // Check if we're done
+                if (index >= htmlLen) {
+                    return 0;
+                }
+                
+                // Calculate chunk size
+                size_t remaining = htmlLen - index;
+                size_t chunkSize = (remaining < maxLen) ? remaining : maxLen;
+                
+                // Copy directly from PROGMEM to buffer (no intermediate allocation)
+                memcpy_P(buffer, WIFI_SETUP_PAGE_HTML + index, chunkSize);
+                
+                return chunkSize;
+            });
+        
+        if (response) {
+            request->send(response);
         } else {
-            request->send(500, "text/plain", "Out of memory");
+            // Fallback: try to allocate full buffer if chunked response failed
+            LOG_W("Chunked response failed, trying full buffer allocation");
+            char* htmlBuffer = (char*)heap_caps_malloc(htmlLen + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+            if (!htmlBuffer) {
+                htmlBuffer = (char*)malloc(htmlLen + 1);
+            }
+            if (htmlBuffer) {
+                strcpy_P(htmlBuffer, WIFI_SETUP_PAGE_HTML);
+                request->send(200, "text/html", htmlBuffer);
+            } else {
+                LOG_E("Failed to allocate %zu bytes for WiFi setup page (heap: %zu bytes, largest: %zu bytes)", 
+                      htmlLen + 1, freeHeap, largestBlock);
+                request->send(500, "text/plain", "Out of memory");
+            }
         }
     });
     
@@ -1829,7 +1865,7 @@ void BrewWebServer::setupRoutes() {
     _server.on("/api/diagnostics/run", HTTP_POST, [this](AsyncWebServerRequest* request) {
         broadcastLogLevel("info", "Running hardware diagnostics...");
         
-        // Run ESP32-side diagnostic tests first (GPIO19 and GPIO20)
+        // Run ESP32-side diagnostic tests first (WEIGHT_STOP_PIN and PICO_RUN_PIN)
         LOG_I("Starting ESP32-side diagnostic tests: WEIGHT_STOP=0x%02X, PICO_RUN=0x%02X", 
               DIAG_TEST_WEIGHT_STOP_OUTPUT, DIAG_TEST_PICO_RUN_OUTPUT);
         uint8_t esp32Tests[] = { DIAG_TEST_WEIGHT_STOP_OUTPUT, DIAG_TEST_PICO_RUN_OUTPUT };
@@ -1889,7 +1925,7 @@ void BrewWebServer::setupRoutes() {
             
             uint8_t testId = doc["testId"] | 0;
             
-            // Check if this is an ESP32-side test (GPIO19/GPIO20)
+            // Check if this is an ESP32-side test (WEIGHT_STOP_PIN/PICO_RUN_PIN)
             if (esp32_diagnostics_is_esp32_test(testId)) {
                 // Run ESP32-side test locally
                 diag_result_t result;

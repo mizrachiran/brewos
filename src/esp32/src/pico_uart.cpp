@@ -27,11 +27,11 @@ void PicoUART::begin() {
     Serial1.begin(PICO_UART_BAUD, SERIAL_8N1, PICO_UART_RX_PIN, PICO_UART_TX_PIN);
     
     // Initialize control pins
-    // GPIO20 (PICO_RUN_PIN) - repurposed from USB D- for Pico reset control
+    // PICO_RUN_PIN: GPIO20 (screen variant) or GPIO4 (no-screen variant)
+    // WEIGHT_STOP_PIN: GPIO19 (screen variant) or GPIO6 (no-screen variant)
     pinMode(PICO_RUN_PIN, OUTPUT);
     digitalWrite(PICO_RUN_PIN, HIGH);      // HIGH = Pico running (LOW = reset)
     
-    // GPIO19 (WEIGHT_STOP_PIN) - repurposed from USB D+ for brew-by-weight signal
     pinMode(WEIGHT_STOP_PIN, OUTPUT);
     digitalWrite(WEIGHT_STOP_PIN, LOW);    // LOW = no weight stop signal
     
@@ -257,7 +257,7 @@ bool PicoUART::enterBootloader() {
 void PicoUART::resetPico() {
     LOG_I("Resetting Pico via GPIO%d...", PICO_RUN_PIN);
     
-    // Pull RUN pin LOW to reset Pico (GPIO20 repurposed from USB D-)
+    // Pull RUN pin LOW to reset Pico (PICO_RUN_PIN)
     digitalWrite(PICO_RUN_PIN, LOW);
     delay(100);
     digitalWrite(PICO_RUN_PIN, HIGH);  // Release - Pico will boot

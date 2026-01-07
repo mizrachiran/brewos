@@ -73,10 +73,17 @@
 #define WEBSOCKET_PATH          "/ws"
 
 // -----------------------------------------------------------------------------
-// UART - Debug/Serial Communication (Hardware UART adapter)
+// UART - Debug/Serial Communication
 // -----------------------------------------------------------------------------
-#define DEBUG_UART_TX_PIN       37              // Hardware UART TX (GPIO37)
-#define DEBUG_UART_RX_PIN       36              // Hardware UART RX (GPIO36)
+#if ENABLE_SCREEN
+    // Screen variant: USB CDC disabled, use hardware UART for debug
+    #define DEBUG_UART_TX_PIN       37              // Hardware UART TX (GPIO37)
+    #define DEBUG_UART_RX_PIN       36              // Hardware UART RX (GPIO36)
+#else
+    // No-screen variant: USB CDC enabled, Serial uses USB CDC (GPIO19/20)
+    // Hardware UART pins not used for debug (Serial uses USB CDC)
+    // GPIO37/36 may be used for Pico UART instead
+#endif
 #define DEBUG_UART_BAUD         115200
 
 // -----------------------------------------------------------------------------
@@ -84,30 +91,77 @@
 // -----------------------------------------------------------------------------
 #define PICO_UART_NUM           1               // UART1
 #define PICO_UART_BAUD          PROTOCOL_BAUD_RATE
-#define PICO_UART_TX_PIN        43              // ESP32 TX -> Pico RX (GPIO1)
-#define PICO_UART_RX_PIN        44              // ESP32 RX <- Pico TX (GPIO0)
+#if ENABLE_SCREEN
+    // Screen variant: GPIO43/44 available on display module
+    #define PICO_UART_TX_PIN        43              // ESP32 TX -> Pico RX (GPIO1) → J15 Pin 4
+    #define PICO_UART_RX_PIN        44              // ESP32 RX <- Pico TX (GPIO0) → J15 Pin 3
+#else
+    // No-screen variant (ESP32-S3 N8R8): GPIO43/44 not available
+    // GPIO36 not available (connected to Octal SPI flash/PSRAM)
+    // Use GPIO37 for TX (was DEBUG_UART_TX, but USB CDC enabled so Serial uses USB)
+    // Use GPIO35 for RX (available on N8R8)
+    #define PICO_UART_TX_PIN        37              // ESP32 TX -> Pico RX (GPIO1) → J15 Pin 4
+                                                    // GPIO37 = Safe GPIO available on N8R8
+    #define PICO_UART_RX_PIN        35              // ESP32 RX <- Pico TX (GPIO0) → J15 Pin 3
+                                                    // GPIO35 = Safe GPIO available on N8R8
+#endif
 
 // Pico control pins
-// NOTE: GPIO20 (D-) is repurposed from USB CDC for Pico reset control
-// USB CDC is disabled to free up GPIO19/20 for GPIO functions
-#define PICO_RUN_PIN            20              // Controls Pico RUN (reset) → J15 Pin 5
-                                                // GPIO20 = USB D- (repurposed as GPIO)
-
-// J15 Pin 6 - SPARE1: ESP32 GPIO9 ↔ Pico GPIO16 (4.7kΩ pull-down on Pico side)
-#define SPARE1_PIN              9               // J15 Pin 6 - General purpose bidirectional I/O
-
-// Brew-by-weight signal
-// NOTE: GPIO19 (D+) is repurposed from USB CDC for weight stop signal
-// USB CDC is disabled to free up GPIO19/20 for GPIO functions
-#define WEIGHT_STOP_PIN         19              // ESP32 GPIO19 → J15 Pin 7 → Pico GPIO21 (4.7kΩ pull-down)
-                                                // GPIO19 = USB D+ (repurposed as GPIO)
-                                                // Set HIGH when target weight reached, LOW otherwise
-
-// J15 Pin 8 - SPARE2: ESP32 GPIO22 ↔ Pico GPIO22 (4.7kΩ pull-down on Pico side)
-#define SPARE2_PIN              22              // J15 Pin 8 - General purpose bidirectional I/O
+#if ENABLE_SCREEN
+    // Screen variant: USB CDC disabled, GPIO19/20 repurposed for GPIO functions
+    // NOTE: GPIO20 (D-) is repurposed from USB CDC for Pico reset control
+    // USB CDC is disabled to free up GPIO19/20 for GPIO functions
+    #define PICO_RUN_PIN            20              // Controls Pico RUN (reset) → J15 Pin 5
+                                                    // GPIO20 = USB D- (repurposed as GPIO)
+    
+    // Brew-by-weight signal
+    // NOTE: GPIO19 (D+) is repurposed from USB CDC for weight stop signal
+    // USB CDC is disabled to free up GPIO19/20 for GPIO functions
+    #define WEIGHT_STOP_PIN         19              // ESP32 GPIO19 → J15 Pin 7 → Pico GPIO21 (4.7kΩ pull-down)
+                                                    // GPIO19 = USB D+ (repurposed as GPIO)
+                                                    // Set HIGH when target weight reached, LOW otherwise
+#else
+    // No-screen variant (ESP32-S3 N8R8): USB CDC enabled for serial logs
+    // USB CDC uses GPIO19/20 (D+/D-) for USB Serial communication (not repurposed)
+    #define PICO_RUN_PIN            4               // Controls Pico RUN (reset) → J15 Pin 5
+                                                    // GPIO4 = Safe GPIO for no-screen variant
+    
+    // Brew-by-weight signal
+    #define WEIGHT_STOP_PIN         6               // ESP32 GPIO6 → J15 Pin 7 → Pico GPIO21 (4.7kΩ pull-down)
+                                                    // GPIO6 = Safe GPIO for no-screen variant
+                                                    // Set HIGH when target weight reached, LOW otherwise
+#endif
 
 // Buffer sizes
 #define PICO_RX_BUFFER_SIZE     256
+
+// -----------------------------------------------------------------------------
+// SWD - Pico Debug/Flash Interface
+// -----------------------------------------------------------------------------
+#if ENABLE_SCREEN
+    // Screen variant (UEDX48480021-MD80E): SWD available on TX2/RX2
+    // Pin 6: SWDIO - ESP32 TX2 (GPIO17) ↔ RP2354 SWDIO Pin, 47Ω series (R_SWD)
+    // Pin 8: SWCLK - ESP32 RX2 (GPIO16) ↔ RP2354 SWCLK Pin, 47Ω series (R_SWD)
+    // NOTE: Screen variant uses UART bootloader for OTA, but SWD pins are available for debugging
+    #define SWD_DIO_PIN             17              // ESP32 TX2 -> Pico SWDIO (J15 Pin 6)
+    #define SWD_CLK_PIN             16              // ESP32 RX2 -> Pico SWCLK (J15 Pin 8)
+    #define SWD_RESET_PIN           PICO_RUN_PIN    // Use existing PICO_RUN_PIN for reset
+    
+    // Screen variant: J15 Pin 6 & 8 also have spare GPIOs available
+    // J15 Pin 6 - SPARE1: ESP32 GPIO9 ↔ Pico GPIO16 (4.7kΩ pull-down on Pico side)
+    #define SPARE1_PIN              9               // J15 Pin 6 - General purpose bidirectional I/O
+    
+    // J15 Pin 8 - SPARE2: ESP32 GPIO22 ↔ Pico GPIO22 (4.7kΩ pull-down on Pico side)
+    #define SPARE2_PIN              22              // J15 Pin 8 - General purpose bidirectional I/O
+#else
+    // No-screen variant (ESP32-S3 N8R8): SWD used for Pico OTA
+    // Pin 6: SWDIO - ESP32 TX2 (GPIO17) ↔ RP2354 SWDIO Pin, 47Ω series (R_SWD)
+    // Pin 8: SWCLK - ESP32 RX2 (GPIO16) ↔ RP2354 SWCLK Pin, 47Ω series (R_SWD)
+    // NOTE: On ESP32-S3, UART2 TX = GPIO17, UART2 RX = GPIO16
+    #define SWD_DIO_PIN             17              // ESP32 TX2 -> Pico SWDIO (J15 Pin 6)
+    #define SWD_CLK_PIN             16              // ESP32 RX2 -> Pico SWCLK (J15 Pin 8)
+    #define SWD_RESET_PIN           PICO_RUN_PIN    // Use existing PICO_RUN_PIN for reset
+#endif // ENABLE_SCREEN
 
 // -----------------------------------------------------------------------------
 // OTA Configuration
@@ -123,7 +177,7 @@
 #define GITHUB_ESP32_NOSCREEN_ASSET "brewos_esp32_noscreen.bin" // No screen
 #define GITHUB_ESP32_LITTLEFS_ASSET "brewos_esp32_littlefs.bin"
 
-// Pico firmware assets by machine type (UF2 format)
+// Pico firmware assets by machine type
 // Use .bin files for OTA (raw binary format that bootloader can flash directly)
 // UF2 format is only for USB drag-and-drop flashing
 #define GITHUB_PICO_DUAL_BOILER_ASSET     "brewos_dual_boiler.bin"
@@ -136,6 +190,9 @@
 // -----------------------------------------------------------------------------
 // Debug
 // -----------------------------------------------------------------------------
+// DEBUG_SERIAL uses Serial (USB CDC when enabled, hardware UART when disabled)
+// For screen variant: USB CDC disabled, Serial uses hardware UART (GPIO36/37)
+// For no-screen variant: USB CDC enabled, Serial uses USB CDC (GPIO19/20)
 #define DEBUG_SERIAL            Serial
 #define DEBUG_BAUD              115200
 

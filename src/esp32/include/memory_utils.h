@@ -29,21 +29,29 @@ static const char* MEMORY_TAG = "PSRAM";
  */
 struct SpiRamAllocator {
     void* allocate(size_t size) {
-        // Try PSRAM first
-        void* ptr = heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if (ptr) {
-            return ptr;
+        // Check if PSRAM is available before trying to allocate
+        size_t psramFree = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+        
+        // Only try PSRAM if it's actually available and has free space
+        if (psramFree > 0) {
+            void* ptr = heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+            if (ptr) {
+                return ptr;
+            }
+            // Only log if PSRAM exists but allocation failed (indicates fragmentation or exhaustion)
+            // Skip logging if PSRAM is not available at all (hardware limitation)
+            if (psramFree >= size) {
+                // PSRAM exists and has space, but allocation failed - log as warning
+                ESP_LOGW(MEMORY_TAG, "Alloc failed: %u bytes (PSRAM free: %u, internal free: %u)",
+                         (unsigned)size, 
+                         (unsigned)psramFree,
+                         (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+            }
         }
-        // Log PSRAM allocation failure for diagnostics
-        ESP_LOGW(MEMORY_TAG, "Alloc failed: %u bytes (PSRAM free: %u, internal free: %u)",
-                 (unsigned)size, 
-                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
-                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
-        // Fallback to internal RAM if PSRAM fails
-        ptr = malloc(size);
-        if (ptr) {
-            ESP_LOGW(MEMORY_TAG, "Fallback to internal RAM succeeded for %u bytes", (unsigned)size);
-        } else {
+        
+        // Fallback to internal RAM if PSRAM fails or unavailable
+        void* ptr = malloc(size);
+        if (!ptr) {
             ESP_LOGE(MEMORY_TAG, "CRITICAL: Both PSRAM and internal alloc failed for %u bytes!", (unsigned)size);
         }
         return ptr;
@@ -55,20 +63,26 @@ struct SpiRamAllocator {
     }
     
     void* reallocate(void* ptr, size_t new_size) {
-        // Try to reallocate in PSRAM
-        void* new_ptr = heap_caps_realloc(ptr, new_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if (new_ptr) {
-            return new_ptr;
+        // Check if PSRAM is available before trying to reallocate
+        size_t psramFree = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+        
+        // Only try PSRAM if it's actually available and has free space
+        if (psramFree > 0) {
+            void* new_ptr = heap_caps_realloc(ptr, new_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+            if (new_ptr) {
+                return new_ptr;
+            }
+            // Only log if PSRAM exists but reallocation failed
+            if (psramFree >= new_size) {
+                ESP_LOGW(MEMORY_TAG, "Realloc failed: %u bytes (PSRAM free: %u)",
+                         (unsigned)new_size, 
+                         (unsigned)psramFree);
+            }
         }
-        // Log realloc failure
-        ESP_LOGW(MEMORY_TAG, "Realloc failed: %u bytes (PSRAM free: %u)",
-                 (unsigned)new_size, 
-                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+        
         // Fallback: allocate new block in internal RAM
-        new_ptr = malloc(new_size);
-        if (new_ptr) {
-            ESP_LOGW(MEMORY_TAG, "Realloc fallback to internal RAM for %u bytes", (unsigned)new_size);
-        } else {
+        void* new_ptr = malloc(new_size);
+        if (!new_ptr) {
             ESP_LOGE(MEMORY_TAG, "CRITICAL: Realloc failed completely for %u bytes!", (unsigned)new_size);
         }
         return new_ptr;

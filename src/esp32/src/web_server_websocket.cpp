@@ -1192,7 +1192,7 @@ void BrewWebServer::handleDiagnosticsCommand(JsonDocument& doc, const String& cm
     if (cmd == "run_diagnostics") {
         broadcastLogLevel("info", "Running hardware diagnostics...");
         
-        // Run ESP32-side diagnostic tests first (GPIO19 and GPIO20)
+        // Run ESP32-side diagnostic tests first (WEIGHT_STOP_PIN and PICO_RUN_PIN)
         LOG_I("Starting ESP32-side diagnostic tests: WEIGHT_STOP=0x%02X, PICO_RUN=0x%02X", 
               DIAG_TEST_WEIGHT_STOP_OUTPUT, DIAG_TEST_PICO_RUN_OUTPUT);
         uint8_t esp32Tests[] = { DIAG_TEST_WEIGHT_STOP_OUTPUT, DIAG_TEST_PICO_RUN_OUTPUT };

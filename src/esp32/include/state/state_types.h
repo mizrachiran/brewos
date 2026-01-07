@@ -351,6 +351,14 @@ struct ShotHistory {
     void toJson(JsonArray& arr) const;
     bool fromJson(JsonArrayConst arr);
     void clear();
+    
+    // Binary serialization (much faster than JSON for persistence)
+    // Format: [magic:4][version:1][count:1][records:count*sizeof(ShotRecord)]
+    // Magic: "SHOT" (0x53484F54)
+    static constexpr uint32_t BINARY_MAGIC = 0x53484F54;  // "SHOT"
+    static constexpr uint8_t BINARY_VERSION = 1;
+    size_t toBinary(uint8_t* buffer, size_t bufferSize) const;  // Returns bytes written, 0 on error
+    bool fromBinary(const uint8_t* buffer, size_t bufferSize);   // Returns true on success
 };
 
 // =============================================================================

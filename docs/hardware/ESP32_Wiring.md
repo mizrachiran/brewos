@@ -8,16 +8,16 @@ This document explains how to connect an ESP32 display module (including debug/d
 
 The control PCB provides an 8-pin JST-XH connector (J15) for the ESP32 display module:
 
-| Pin | Signal      | Direction | Voltage | Notes                                                        |
-| --- | ----------- | --------- | ------- | ------------------------------------------------------------ |
-| 1   | 5V          | Power Out | 5V DC   | Power supply for ESP32 (300-500mA)                           |
-| 2   | GND         | Ground    | 0V      | Common ground                                                |
-| 3   | TX          | Input     | 3.3V    | RP2354 TX → ESP32 RX (GPIO0, 33Ω series R40 + TVS D_UART_TX) |
-| 4   | RX          | Output    | 3.3V    | ESP32 TX → RP2354 RX (GPIO1, 33Ω series R41 + TVS D_UART_RX) |
-| 5   | RUN         | Output    | 3.3V    | ESP32 GPIO8 → RP2354 RUN pin (reset control)                 |
-| 6   | SWDIO       | I/O       | 3.3V    | ESP32 TX2 ↔ RP2354 SWDIO (dedicated pin, 47Ω series)         |
-| 7   | WEIGHT_STOP | Output    | 3.3V    | ESP32 GPIO19 → RP2354 GPIO21 (4.7kΩ pull-down)               |
-| 8   | SWCLK       | I/O       | 3.3V    | ESP32 RX2 ↔ RP2354 SWCLK (dedicated pin, 47Ω series)         |
+| Pin | Signal      | Direction | Voltage | Notes                                                                       |
+| --- | ----------- | --------- | ------- | --------------------------------------------------------------------------- |
+| 1   | 5V          | Power Out | 5V DC   | Power supply for ESP32 (300-500mA)                                          |
+| 2   | GND         | Ground    | 0V      | Common ground                                                               |
+| 3   | TX          | Input     | 3.3V    | RP2354 TX → ESP32 RX (GPIO0, 33Ω series R40 + TVS D_UART_TX)                |
+| 4   | RX          | Output    | 3.3V    | ESP32 TX → RP2354 RX (GPIO1, 33Ω series R41 + TVS D_UART_RX)                |
+| 5   | RUN         | Output    | 3.3V    | ESP32 GPIO20 (screen) / GPIO4 (no-screen) → RP2354 RUN pin (reset control)  |
+| 6   | SWDIO       | I/O       | 3.3V    | ESP32 TX2 (GPIO17) ↔ RP2354 SWDIO (dedicated pin, 47Ω series)               |
+| 7   | WEIGHT_STOP | Output    | 3.3V    | ESP32 GPIO19 (screen) / GPIO6 (no-screen) → RP2354 GPIO21 (4.7kΩ pull-down) |
+| 8   | SWCLK       | I/O       | 3.3V    | ESP32 RX2 (GPIO16) ↔ RP2354 SWCLK (dedicated pin, 47Ω series)               |
 
 **⚠️ CRITICAL:** Always power the control PCB BEFORE connecting USB to ESP32 module. See [Safety - 5V Tolerance](spec/09-Safety.md#rp2354-5v-tolerance-and-power-sequencing) for details.
 
@@ -25,7 +25,9 @@ The control PCB provides an 8-pin JST-XH connector (J15) for the ESP32 display m
 
 ## ESP32 GPIO Pin Assignment
 
-The ESP32 firmware uses the following GPIO pins (defined in `src/esp32/include/config.h`):
+The ESP32 firmware uses different GPIO pins depending on whether the screen variant or no-screen variant is used. GPIO assignments are defined in `src/esp32/include/config.h` and automatically selected based on the `ENABLE_SCREEN` build flag.
+
+### Screen Variant (Default)
 
 | ESP32 GPIO | Function         | J15 Pin | RP2354 Side       | Notes               |
 | ---------- | ---------------- | ------- | ----------------- | ------------------- |
@@ -35,6 +37,23 @@ The ESP32 firmware uses the following GPIO pins (defined in `src/esp32/include/c
 | TX2        | SWDIO            | Pin 6   | SWDIO (dedicated) | SWD data I/O        |
 | GPIO19     | WEIGHT_STOP      | Pin 7   | GPIO21            | USB D+ (repurposed) |
 | RX2        | SWCLK            | Pin 8   | SWCLK (dedicated) | SWD clock           |
+
+**Note:** USB CDC is disabled in the screen variant to free up GPIO19/20 for GPIO functions.
+
+### No-Screen Variant (Headless Mode)
+
+**Target:** ESP32-S3 N8R8 module
+
+| ESP32 GPIO | Function         | J15 Pin | RP2354 Side       | Notes                |
+| ---------- | ---------------- | ------- | ----------------- | -------------------- |
+| GPIO37     | UART TX → RP2354 | Pin 4   | GPIO1 (RX)        | GPIO43 not available |
+| GPIO35     | UART RX ← RP2354 | Pin 3   | GPIO0 (TX)        | GPIO44 not available |
+| GPIO4      | RUN control      | Pin 5   | RP2354 RUN        | Safe GPIO            |
+| GPIO17     | SWDIO            | Pin 6   | SWDIO (dedicated) | SWD data I/O (TX2)   |
+| GPIO6      | WEIGHT_STOP      | Pin 7   | GPIO21            | Safe GPIO            |
+| GPIO16     | SWCLK            | Pin 8   | SWCLK (dedicated) | SWD clock (RX2)      |
+
+**Note:** USB CDC is **enabled** in the no-screen variant for serial logs over USB. GPIO19/20 are used for USB D+/D- and are not available for GPIO functions. The Pico interface uses GPIO4 (reset), GPIO6 (brew-by-weight), GPIO37 (UART TX), GPIO35 (UART RX), GPIO17 (SWDIO), and GPIO16 (SWCLK). GPIO37/35 are used instead of GPIO43/44 because GPIO43/44 are not available on ESP32-S3 N8R8 modules. GPIO36 is also not available (connected to Octal SPI flash/PSRAM).
 
 ## Debug Board Compatibility
 
@@ -64,21 +83,25 @@ Most ESP32 debug boards have:
 
 3. **Connect UART:**
 
-   - ESP32 GPIO43 (TX) → J15 Pin 4 (RX)
-   - ESP32 GPIO44 (RX) ← J15 Pin 3 (TX)
+   - **Screen variant:** ESP32 GPIO43 (TX) → J15 Pin 4 (RX), GPIO44 (RX) ← J15 Pin 3 (TX)
+   - **No-screen variant:** ESP32 GPIO37 (TX) → J15 Pin 4 (RX), GPIO35 (RX) ← J15 Pin 3 (TX)
+     - GPIO43/44 not available on N8R8 modules
+     - GPIO36 not available (connected to Octal SPI flash/PSRAM)
 
 4. **Connect control pins:**
 
-   - ESP32 GPIO20 → J15 Pin 5 (RUN) - USB D- repurposed as GPIO
+   - **Screen variant:** ESP32 GPIO20 → J15 Pin 5 (RUN) - USB D- repurposed as GPIO
+   - **No-screen variant:** ESP32 GPIO4 → J15 Pin 5 (RUN) - Safe GPIO
 
 5. **Connect SWD interface:**
 
-   - ESP32 TX2 → J15 Pin 6 (SWDIO) - SWD data I/O
-   - ESP32 RX2 → J15 Pin 8 (SWCLK) - SWD clock
+   - ESP32 TX2 (GPIO17) → J15 Pin 6 (SWDIO) - SWD data I/O
+   - ESP32 RX2 (GPIO16) → J15 Pin 8 (SWCLK) - SWD clock
 
 6. **Connect brew-by-weight:**
 
-   - **ESP32 GPIO19 → J15 Pin 7 (WEIGHT_STOP)** - USB D+ repurposed as GPIO
+   - **Screen variant:** ESP32 GPIO19 → J15 Pin 7 (WEIGHT_STOP) - USB D+ repurposed as GPIO
+   - **No-screen variant:** ESP32 GPIO6 → J15 Pin 7 (WEIGHT_STOP) - Safe GPIO
 
 ### Example Wiring Diagram
 
@@ -89,12 +112,12 @@ Most ESP32 debug boards have:
 │  ┌──────────────┐                                           │
 │  │  ESP32-S3    │                                           │
 │  │              │                                           │
-│  │  GPIO43 ─────┼──► J15 Pin 4 (RX)                         │
-│  │  GPIO44 ◄────┼─── J15 Pin 3 (TX)                         │
-│  │  GPIO20 ─────┼──► J15 Pin 5 (RUN) USB D- repurposed  │
-│  │  TX2    ─────┼──► J15 Pin 6 (SWDIO)                      │
-│  │  GPIO19 ─────┼──► J15 Pin 7 (WEIGHT_STOP) USB D+ repurposed │
-│  │  RX2    ─────┼──► J15 Pin 8 (SWCLK)                      │
+│  │  GPIO43/37 ──┼──► J15 Pin 4 (RX) (43=screen, 37=noscreen)│
+│  │  GPIO44/35 ◄─┼─── J15 Pin 3 (TX) (44=screen, 35=noscreen)│
+│  │  GPIO20/4 ───┼──► J15 Pin 5 (RUN) (20=screen, 4=noscreen)│
+│  │  TX2 (GPIO17)─┼──► J15 Pin 6 (SWDIO)                      │
+│  │  GPIO19/6 ───┼──► J15 Pin 7 (WEIGHT_STOP) (19=screen, 6=noscreen)│
+│  │  RX2 (GPIO16)─┼──► J15 Pin 8 (SWCLK)                      │
 │  │  5V     ─────┼──► J15 Pin 1 (5V)                         │
 │  │  GND    ─────┼──► J15 Pin 2 (GND)                        │
 │  └──────────────┘                                           │
@@ -111,24 +134,37 @@ Most ESP32 debug boards have:
 │  Pin 2: GND ──────────────────────────────────────────────┐ │
 │  Pin 3: TX  ──────────────────────────────────────────────┐ │
 │  Pin 4: RX  ──────────────────────────────────────────────┐ │
-│  Pin 5: RUN (GPIO20, USB D-) ────────────────────────────┐ │
-│  Pin 6: SWDIO (TX2) ─────────────────────────────────────┐ │
-│  Pin 7: WEIGHT_STOP (GPIO19, USB D+) ────────────────────┐ │
-│  Pin 8: SWCLK (RX2) ─────────────────────────────────────┐ │
+│  Pin 5: RUN (GPIO20/4) ─────────────────────────────────┐ │
+│  Pin 6: SWDIO (TX2/GPIO17) ─────────────────────────────┐ │
+│  Pin 7: WEIGHT_STOP (GPIO19/6) ──────────────────────────┐ │
+│  Pin 8: SWCLK (RX2/GPIO16) ─────────────────────────────┐ │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## USB CDC Disabled
+## USB CDC Configuration
 
-**Important:** USB CDC (Serial over USB) is disabled in the firmware to free up GPIO19 (D+) and GPIO20 (D-) for GPIO functions.
+USB CDC (Serial over USB) configuration depends on the firmware variant:
+
+### Screen Variant: USB CDC Disabled
+
+**Important:** USB CDC is disabled in the screen variant firmware to free up GPIO19 (D+) and GPIO20 (D-) for GPIO functions.
 
 - **GPIO19 (D+)** is used for WEIGHT_STOP signal
 - **GPIO20 (D-)** is used for RP2354 RUN (reset) control
 - **USB bootloader** still works (separate from USB CDC)
 - **Serial debugging** available via hardware UART (GPIO36/37) or WiFi/OTA
 
-To re-enable USB CDC, see `docs/development/USB_CDC_Re-enable.md`.
+### No-Screen Variant: USB CDC Enabled
+
+**Important:** USB CDC is **enabled** in the no-screen variant firmware for serial logs over USB.
+
+- **GPIO19/20** are used for USB D+/D- (USB CDC Serial)
+- **Serial logs** are available over USB connection
+- **Pico interface** uses GPIO4 (reset) and GPIO6 (brew-by-weight) instead of GPIO19/20
+- **USB bootloader** still works (separate from USB CDC)
+
+To enable/disable USB CDC, configure `ARDUINO_USB_MODE` and `ARDUINO_USB_CDC_ON_BOOT` in `platformio.ini`. See `docs/development/USB_CDC_Re-enable.md` for details.
 
 ## Brew-by-Weight Connection (WEIGHT_STOP)
 
@@ -140,7 +176,8 @@ The WEIGHT_STOP signal allows the ESP32 (connected to a Bluetooth scale) to sign
 
 **ESP32 Side:**
 
-- Use **GPIO19** (USB D+ repurposed as GPIO - configure in `config.h`)
+- **Screen variant:** Use **GPIO19** (USB D+ repurposed as GPIO)
+- **No-screen variant:** Use **GPIO6** (safe GPIO, USB CDC enabled)
 - Wire to J15 Pin 7
 
 **Control PCB Side:**
@@ -153,7 +190,10 @@ The WEIGHT_STOP signal allows the ESP32 (connected to a Bluetooth scale) to sign
 
 ```cpp
 // In src/esp32/include/config.h
-#define WEIGHT_STOP_PIN         19              // ESP32 GPIO19 (USB D+ repurposed)
+// GPIO assignment is automatic based on ENABLE_SCREEN flag:
+// Screen variant: GPIO19 (USB D+ repurposed)
+// No-screen variant: GPIO6 (safe GPIO, USB CDC enabled)
+#define WEIGHT_STOP_PIN         // Automatically set based on variant
 
 // In your brew-by-weight code:
 void onTargetWeightReached() {
@@ -279,11 +319,13 @@ J15 Connector (Control PCB)          ESP32 Debug Board
 ───────────────────────────          ──────────────────
 Pin 1 (5V)    ────────────────────►  5V
 Pin 2 (GND)   ────────────────────►  GND
-Pin 3 (TX)    ────────────────────►  GPIO44 (RX)
-Pin 4 (RX)    ◄────────────────────  GPIO43 (TX)
-Pin 5 (RUN)    ────────────────────►  GPIO20 (USB D- repurposed)
+Pin 3 (TX)    ────────────────────►  GPIO44 (RX) - Screen variant
+                                      GPIO35 (RX) - No-screen variant (N8R8)
+Pin 4 (RX)    ◄────────────────────  GPIO43 (TX) - Screen variant
+                                      GPIO37 (TX) - No-screen variant (N8R8)
+Pin 5 (RUN)    ────────────────────►  GPIO20 (Screen) / GPIO4 (No-screen)
 Pin 6 (SWDIO)  ────────────────────►  TX2 (SWD data I/O)
-Pin 7 (WGHT)   ────────────────────►  GPIO19 (USB D+ repurposed)
+Pin 7 (WGHT)   ────────────────────►  GPIO19 (Screen) / GPIO6 (No-screen)
 Pin 8 (SWCLK)  ────────────────────►  RX2 (SWD clock)
 ```
 
@@ -293,16 +335,23 @@ Pin 8 (SWCLK)  ────────────────────►  
 
 1. **Check power:** Measure 5V at J15 Pin 1
 2. **Check UART:** Verify TX/RX are not swapped
+   - **Screen variant:** GPIO43 (TX) → J15 Pin 4, GPIO44 (RX) ← J15 Pin 3
+   - **No-screen variant:** GPIO37 (TX) → J15 Pin 4, GPIO35 (RX) ← J15 Pin 3
 3. **Check baud rate:** UART communication uses 921600 baud (PROTOCOL_BAUD_RATE). USB serial debug uses 115200 baud.
 4. **Check ground:** Ensure GND is connected (Pin 2)
+5. **No-screen variant:** Verify GPIO37/35 are used (GPIO43/44 not available on N8R8 modules, GPIO36 not available - connected to flash/PSRAM)
 
 ### WEIGHT_STOP Not Working
 
-1. **Check wiring:** Verify ESP32 GPIO19 → J15 Pin 7
+1. **Check wiring:**
+   - **Screen variant:** Verify ESP32 GPIO19 → J15 Pin 7
+   - **No-screen variant:** Verify ESP32 GPIO6 → J15 Pin 7
 2. **Check RP2354 side:** Verify J15 Pin 7 → RP2354 GPIO21
 3. **Test signal:** Use multimeter to verify ESP32 drives pin HIGH
 4. **Check pull-down:** RP2354 has 4.7kΩ pull-down (R73), should read LOW when ESP32 pin is LOW
-5. **Note:** GPIO19 is USB D+ repurposed - USB CDC must be disabled in platformio.ini
+5. **Note:**
+   - **Screen variant:** GPIO19 is USB D+ repurposed - USB CDC must be disabled in platformio.ini
+   - **No-screen variant:** GPIO6 is used - USB CDC is enabled, GPIO19/20 are for USB
 
 ### SWD Interface Not Working
 
@@ -316,29 +365,40 @@ Pin 8 (SWCLK)  ────────────────────►  
 OTA updates use the **software bootloader** via UART. For blank chips, use SWD interface.
 
 1. **Check UART connection:** Verify TX/RX are connected correctly
-2. **Check RUN pin:** ESP32 GPIO20 → J15 Pin 5 → RP2354 RUN (for reset after update)
+2. **Check RUN pin:**
+   - **Screen variant:** ESP32 GPIO20 → J15 Pin 5 → RP2354 RUN (for reset after update)
+   - **No-screen variant:** ESP32 GPIO4 → J15 Pin 5 → RP2354 RUN (for reset after update)
 3. **Verify RP2354 firmware:** Software bootloader requires working firmware
 4. **For blank chips:** Use SWD interface (J15 Pins 6/8) for factory flash
-5. **Note:** GPIO20 is USB D- repurposed - USB CDC must be disabled in platformio.ini
+5. **Note:**
+   - **Screen variant:** GPIO20 is USB D- repurposed - USB CDC must be disabled in platformio.ini
+   - **No-screen variant:** GPIO4 is used - USB CDC is enabled, GPIO19/20 are for USB
 
 ## Custom GPIO Assignment
 
-If your debug board uses different GPIO pins, update `src/esp32/include/config.h`:
+GPIO assignments are automatically configured based on the `ENABLE_SCREEN` build flag in `src/esp32/include/config.h`:
 
 ```cpp
-// Example: Using GPIO5 for WEIGHT_STOP instead of GPIO19
-#define WEIGHT_STOP_PIN         5               // Your GPIO number
+#if ENABLE_SCREEN
+    // Screen variant: USB CDC disabled, GPIO19/20 repurposed
+    #define PICO_RUN_PIN            20
+    #define WEIGHT_STOP_PIN         19
+#else
+    // No-screen variant: USB CDC enabled, use different GPIOs
+    #define PICO_RUN_PIN            4
+    #define WEIGHT_STOP_PIN         6
+#endif
 ```
 
-Then wire:
+If you need to use different GPIO pins, modify these definitions accordingly.
 
-- ESP32 GPIO5 → J15 Pin 7 (WEIGHT_STOP)
+**Note:**
 
-**Note:** If using GPIO19/20, USB CDC must be disabled. See `docs/development/USB_CDC_Re-enable.md` for details.
+- **Screen variant:** If using GPIO19/20, USB CDC must be disabled in `platformio.ini`
+- **No-screen variant:** GPIO19/20 are reserved for USB CDC - use other GPIOs for Pico interface
+- **SWD Interface:** J15 Pins 6/8 connect to dedicated SWDIO/SWCLK pins on RP2354, not GPIOs. These cannot be reassigned.
 
-**SWD Interface:** J15 Pins 6/8 connect to dedicated SWDIO/SWCLK pins on RP2354, not GPIOs. These cannot be reassigned.
-
-The RP2354 side doesn't need changes - it always reads from GPIO21.
+The RP2354 side doesn't need changes - it always reads from GPIO21 for WEIGHT_STOP and uses RUN pin for reset.
 
 ## Next Steps
 

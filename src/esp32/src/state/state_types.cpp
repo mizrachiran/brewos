@@ -1,4 +1,5 @@
 #include "state/state_types.h"
+#include <string.h>  // For memcpy
 
 namespace BrewOS {
 
@@ -564,6 +565,90 @@ bool ShotHistory::fromJson(JsonArrayConst arr) {
 void ShotHistory::clear() {
     head = 0;
     count = 0;
+}
+
+size_t ShotHistory::toBinary(uint8_t* buffer, size_t bufferSize) const {
+    // Header: magic (4) + version (1) + count (1) = 6 bytes
+    // Data: count * sizeof(ShotRecord) = count * 40 bytes
+    const size_t headerSize = 6;
+    const size_t recordSize = sizeof(ShotRecord);
+    const size_t totalSize = headerSize + (count * recordSize);
+    
+    if (!buffer || bufferSize < totalSize) {
+        return 0;  // Buffer too small
+    }
+    
+    size_t offset = 0;
+    
+    // Write magic number
+    memcpy(buffer + offset, &BINARY_MAGIC, 4);
+    offset += 4;
+    
+    // Write version
+    buffer[offset++] = BINARY_VERSION;
+    
+    // Write count
+    buffer[offset++] = count;
+    
+    // Write records in order (oldest to newest for consistency)
+    // We need to write them in chronological order, not ring buffer order
+    for (uint8_t i = 0; i < count; i++) {
+        // Get shot at index (0 = most recent, count-1 = oldest)
+        const ShotRecord* shot = getShot(count - 1 - i);  // Start with oldest
+        if (shot) {
+            memcpy(buffer + offset, shot, recordSize);
+            offset += recordSize;
+        }
+    }
+    
+    return offset;
+}
+
+bool ShotHistory::fromBinary(const uint8_t* buffer, size_t bufferSize) {
+    if (!buffer || bufferSize < 6) {
+        return false;  // Too small for header
+    }
+    
+    // Read magic
+    uint32_t magic;
+    memcpy(&magic, buffer, 4);
+    if (magic != BINARY_MAGIC) {
+        return false;  // Invalid magic
+    }
+    
+    // Read version
+    uint8_t version = buffer[4];
+    if (version != BINARY_VERSION) {
+        return false;  // Unsupported version
+    }
+    
+    // Read count
+    uint8_t fileCount = buffer[5];
+    if (fileCount > MAX_SHOT_HISTORY) {
+        return false;  // Invalid count
+    }
+    
+    const size_t headerSize = 6;
+    const size_t recordSize = sizeof(ShotRecord);
+    const size_t expectedSize = headerSize + (fileCount * recordSize);
+    
+    if (bufferSize < expectedSize) {
+        return false;  // Incomplete data
+    }
+    
+    // Clear existing history
+    clear();
+    
+    // Read records (oldest to newest) and add them
+    size_t offset = headerSize;
+    for (uint8_t i = 0; i < fileCount; i++) {
+        ShotRecord shot;
+        memcpy(&shot, buffer + offset, recordSize);
+        addShot(shot);  // addShot handles ring buffer logic
+        offset += recordSize;
+    }
+    
+    return true;
 }
 
 // =============================================================================

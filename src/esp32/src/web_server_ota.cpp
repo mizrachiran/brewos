@@ -1,6 +1,9 @@
 #include "web_server.h"
 #include "config.h"
 #include "pico_uart.h"
+#if !ENABLE_SCREEN
+#include "pico_swd.h"
+#endif
 #include "cloud_connection.h"
 #include "mqtt_client.h"
 #include "scale/scale_manager.h"
@@ -841,7 +844,13 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
     }
     
     // Flash to Pico
+#if ENABLE_SCREEN
+    // Screen variant: Use UART bootloader (original working implementation)
     broadcastOtaProgress(&_ws, "flash", 40, "Installing Pico firmware...");
+#else
+    // No-screen variant: Use SWD
+    broadcastOtaProgress(&_ws, "flash", 40, "Installing Pico firmware (SWD)...");
+#endif
     
     File flashFile = LittleFS.open(OTA_FILE_PATH, "r");
     if (!flashFile) {
@@ -851,6 +860,11 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
         cleanupOtaFiles();
         return false;
     }
+    
+#if ENABLE_SCREEN
+    // =============================================================================
+    // UART BOOTLOADER METHOD (Screen Variant)
+    // =============================================================================
     
     // Send bootloader command
     broadcastOtaProgress(&_ws, "flash", 42, "Preparing device...");
@@ -874,7 +888,6 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
     // Give Pico time to process command and enter bootloader mode
     // Pico sends protocol ACK, waits 50ms, then sends 0xAA 0x55
     LOG_I("Sent bootloader command, waiting for Pico to enter bootloader...");
-    // REMOVED delay(200) to prevent UART buffer overflow from Pico logs
     feedWatchdog();
     
     // Wait for bootloader ACK with timeout
@@ -909,7 +922,7 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
     broadcastOtaProgress(&_ws, "flash", 45, "Installing...");
     feedWatchdog();
     
-    // Stream to Pico
+    // Stream to Pico via UART bootloader
     bool success = streamFirmwareToPico(flashFile, firmwareSize);
     flashFile.close();
     
@@ -943,6 +956,68 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
     
     // Clear connection state so we can detect when Pico actually reconnects
     _picoUart.clearConnectionState();
+    
+#else
+    // =============================================================================
+    // SWD METHOD (No-Screen Variant)
+    // =============================================================================
+    
+    broadcastOtaProgress(&_ws, "flash", 42, "Connecting via SWD...");
+    feedWatchdog();
+    
+    // Pause UART to prevent interference with SWD
+    _picoUart.pause();
+    LOG_I("Paused UART packet processing for SWD");
+    
+    // Initialize SWD interface
+    PicoSWD swd(SWD_DIO_PIN, SWD_CLK_PIN, SWD_RESET_PIN);
+    
+    if (!swd.begin()) {
+        LOG_E("SWD connection failed");
+        broadcastLogLevel("error", "Update error: SWD connection failed");
+        broadcastOtaProgress(&_ws, "error", 0, "SWD connection failed");
+        _picoUart.resume();  // Resume on failure
+        flashFile.close();
+        cleanupOtaFiles();
+        return false;
+    }
+    
+    broadcastOtaProgress(&_ws, "flash", 45, "Flashing firmware...");
+    feedWatchdog();
+    
+    // Flash firmware via SWD
+    bool success = swd.flashFirmware(flashFile, firmwareSize);
+    
+    // Clean up SWD connection
+    swd.end();
+    
+    flashFile.close();
+    
+    // Clean up temp file regardless of success
+    cleanupOtaFiles();
+    
+    if (!success) {
+        LOG_E("SWD firmware flashing failed");
+        broadcastLogLevel("error", "Update error: Installation failed");
+        broadcastOtaProgress(&_ws, "error", 0, "Installation failed");
+        _picoUart.resume();  // Resume on failure
+        return false;
+    }
+    
+    // Reset Pico via SWD or hardware pin
+    LOG_I("Resetting Pico after SWD flash...");
+    swd.resetTarget();
+    
+    broadcastOtaProgress(&_ws, "flash", 55, "Waiting for device restart...");
+    
+    // Resume packet processing to detect when Pico comes back
+    _picoUart.resume();
+    LOG_I("Resumed UART packet processing");
+    
+    // Clear connection state so we can detect when Pico actually reconnects
+    _picoUart.clearConnectionState();
+    
+#endif
     
     // Wait for Pico to self-reset and reconnect
     // The bootloader copies firmware (~3-5s for 22 sectors * ~100ms each) then resets.

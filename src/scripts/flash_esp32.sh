@@ -244,8 +244,8 @@ elif [ "$DO_CLEAN" = false ]; then
     quiet_echo "${YELLOW}  Consider running without --no-clean to force a fresh build${NC}"
 fi
 
-# Build LittleFS image if not firmware-only and screen variant
-if [ "$FIRMWARE_ONLY" = false ] && [ "$VARIANT" = "screen" ]; then
+# Build LittleFS image if not firmware-only (both screen and noscreen variants need web files)
+if [ "$FIRMWARE_ONLY" = false ]; then
     # Double-check data directory exists and has files before building LittleFS
     if [ ! -d "$WEB_DATA_DIR" ] || [ -z "$(ls -A "$WEB_DATA_DIR" 2>/dev/null)" ]; then
         echo -e "${RED}✗ Data directory is empty or missing: $WEB_DATA_DIR${NC}" >&2
