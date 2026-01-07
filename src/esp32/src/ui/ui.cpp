@@ -69,44 +69,31 @@ bool UI::begin() {
     // Initialize theme
     theme_init();
     
-    // Create only essential screens at startup (lazy load others on demand)
-    // Essential: HOME, IDLE, BREWING (main workflow screens)
-    createIdleScreen();
-    createHomeScreen();
-    createBrewingScreen();
-    createSettingsScreen();  // Frequently accessed
-    createSplashScreen();     // Needed immediately for boot
-    
-    // Lazy-loaded screens (created on first use):
-    // - SCREEN_SETUP (WiFi setup - rare)
-    // - SCREEN_COMPLETE (after brewing - can destroy after use)
-    // - SCREEN_TEMP_SETTINGS (temp editing - can destroy after)
-    // - SCREEN_SCALE (scale pairing - can destroy after)
-    // - SCREEN_CLOUD (cloud pairing - can destroy after)
-    // - SCREEN_ALARM (only when alarm active)
-    // - SCREEN_OTA (only during OTA)
-    
-    // Show splash screen immediately (no animation for first load)
-    if (_screens[SCREEN_SPLASH]) {
-        _currentScreen = SCREEN_SPLASH;
-        _previousScreen = SCREEN_SPLASH;
-        lv_scr_load(_screens[SCREEN_SPLASH]);
-        
-        // Force LVGL to process and flush the entire screen
-        lv_obj_invalidate(_screens[SCREEN_SPLASH]);
-        for (int i = 0; i < 15; i++) {
-            uint32_t tasks = lv_timer_handler();
-            if (tasks == 0 && i > 5) break;
-#ifndef SIMULATOR
-            vTaskDelay(pdMS_TO_TICKS(5));
-#else
-            platform_delay(5);
-#endif
-        }
-        LOG_I("Initial screen (SPLASH) loaded");
+    // Initialize screen pointers to nullptr (all screens start unloaded)
+    for (int i = 0; i < SCREEN_COUNT; i++) {
+        _screens[i] = nullptr;
     }
     
-    LOG_I("UI initialized with %d screens", SCREEN_COUNT);
+    // Create and show splash screen immediately (needed for boot)
+    ensureScreenExists(SCREEN_SPLASH);
+    _currentScreen = SCREEN_SPLASH;
+    _previousScreen = SCREEN_SPLASH;
+    lv_scr_load(_screens[SCREEN_SPLASH]);
+    
+    // Force LVGL to process and flush the entire screen
+    lv_obj_invalidate(_screens[SCREEN_SPLASH]);
+    for (int i = 0; i < 15; i++) {
+        uint32_t tasks = lv_timer_handler();
+        if (tasks == 0 && i > 5) break;
+#ifndef SIMULATOR
+        vTaskDelay(pdMS_TO_TICKS(5));
+#else
+        platform_delay(5);
+#endif
+    }
+    LOG_I("Initial screen (SPLASH) loaded");
+    
+    LOG_I("UI initialized - screens will be loaded on demand");
     return true;
 }
 
@@ -151,29 +138,45 @@ void UI::update(const ui_state_t& state) {
         }
     }
     
+    // Update current screen (only if it exists)
+    if (_screens[_currentScreen] == nullptr) {
+        // Screen doesn't exist - ensure it's created
+        ensureScreenExists(_currentScreen);
+    }
+    
     // Update current screen
     switch (_currentScreen) {
         case SCREEN_SETUP:
-            updateSetupScreen();
+            if (_screens[SCREEN_SETUP]) {
+                updateSetupScreen();
+            }
             break;
         case SCREEN_IDLE:
-            updateIdleScreen();
+            if (_screens[SCREEN_IDLE]) {
+                updateIdleScreen();
+            }
             break;
         case SCREEN_HOME:
-            updateHomeScreen();
-            // Invalidate screen after update to ensure changes are flushed
             if (_screens[SCREEN_HOME]) {
+                updateHomeScreen();
+                // Invalidate screen after update to ensure changes are flushed
                 lv_obj_invalidate(_screens[SCREEN_HOME]);
             }
             break;
         case SCREEN_BREWING:
-            updateBrewingScreen();
+            if (_screens[SCREEN_BREWING]) {
+                updateBrewingScreen();
+            }
             break;
         case SCREEN_COMPLETE:
-            updateCompleteScreen();
+            if (_screens[SCREEN_COMPLETE]) {
+                updateCompleteScreen();
+            }
             break;
         case SCREEN_SETTINGS:
-            updateSettingsScreen();
+            if (_screens[SCREEN_SETTINGS]) {
+                updateSettingsScreen();
+            }
             break;
         case SCREEN_TEMP_SETTINGS:
 #ifndef SIMULATOR
@@ -193,10 +196,14 @@ void UI::update(const ui_state_t& state) {
             // Cloud screen updates are event-driven (refresh button)
             break;
         case SCREEN_ALARM:
-            updateAlarmScreen();
+            if (_screens[SCREEN_ALARM]) {
+                updateAlarmScreen();
+            }
             break;
         case SCREEN_OTA:
-            updateOtaScreen();
+            if (_screens[SCREEN_OTA]) {
+                updateOtaScreen();
+            }
             break;
         default:
             break;
@@ -209,46 +216,7 @@ void UI::showScreen(screen_id_t screen) {
         return;
     }
     
-    // Lazy load screen if it doesn't exist
-    if (!_screens[screen]) {
-        LOG_I("Lazy loading screen: %d", screen);
-        switch (screen) {
-            case SCREEN_SETUP:
-                createSetupScreen();
-                break;
-            case SCREEN_COMPLETE:
-                createCompleteScreen();
-                break;
-            case SCREEN_TEMP_SETTINGS:
-                createTempSettingsScreen();
-                break;
-            case SCREEN_SCALE:
-                createScaleScreen();
-                break;
-            case SCREEN_CLOUD:
-                createCloudScreen();
-                break;
-            case SCREEN_ALARM:
-                createAlarmScreen();
-                break;
-            case SCREEN_OTA:
-                createOtaScreen();
-                break;
-            default:
-                LOG_E("Cannot lazy load screen: %d", screen);
-                return;
-        }
-        // Yield after screen creation to allow network operations
-        yield();
-    }
-    
-    if (!_screens[screen]) {
-        LOG_W("Screen creation failed: %d", screen);
-        return;
-    }
-    
     // Rate limit screen switches to prevent rapid toggling (min 100ms between switches)
-    // Reduced from 500ms for snappier navigation
     static uint32_t last_switch_time = 0;
     uint32_t now = lv_tick_get();
     if (now - last_switch_time < 100 && _currentScreen != screen) {
@@ -262,57 +230,14 @@ void UI::showScreen(screen_id_t screen) {
         return;
     }
     
-    // Save old screen info before switching
-    screen_id_t oldScreen = _currentScreen;
-    lv_obj_t* oldScreenObj = _screens[oldScreen];
-    
-    _previousScreen = _currentScreen;
-    _currentScreen = screen;
-    
-    // Reset settings screen state when entering it
-    // This ensures editing modes are cleared from previous visits
-    if (screen == SCREEN_SETTINGS) {
-        screen_settings_reset();
+    // Ensure the target screen exists (create if needed)
+    if (!ensureScreenExists(screen)) {
+        LOG_E("Failed to create screen: %d", screen);
+        return;
     }
     
-    // IMPORTANT: Load new screen FIRST before deleting old one
-    // LVGL crashes if you delete the active screen without loading another first
-    lv_scr_load(_screens[screen]);
-    
-    // NOW destroy old screen if it's a rarely-used one (free memory)
-    // Keep essential screens: HOME, IDLE, BREWING, SETTINGS, SPLASH
-    if (oldScreen != SCREEN_HOME && 
-        oldScreen != SCREEN_IDLE && 
-        oldScreen != SCREEN_BREWING && 
-        oldScreen != SCREEN_SETTINGS &&
-        oldScreen != SCREEN_SPLASH &&
-        oldScreenObj) {
-        LOG_I("Destroying screen to free memory: %d", oldScreen);
-        lv_obj_del(oldScreenObj);
-        _screens[oldScreen] = nullptr;
-        // Yield after screen deletion to allow network operations
-        yield();
-    }
-    
-    // Focus an object on the new screen (for encoder navigation)
-    lv_group_t* group = lv_group_get_default();
-    if (group) {
-        // Focus next until we find an object on the current screen
-        lv_obj_t* focused = lv_group_get_focused(group);
-        if (focused && lv_obj_get_screen(focused) != _screens[screen]) {
-            // Current focus is on wrong screen, find one on the right screen
-            uint32_t count = lv_group_get_obj_count(group);
-            for (uint32_t i = 0; i < count; i++) {
-                lv_group_focus_next(group);
-                focused = lv_group_get_focused(group);
-                if (focused && lv_obj_get_screen(focused) == _screens[screen]) {
-                    break;
-                }
-            }
-        }
-    }
-    
-    LOG_I("Switched to screen: %d", screen);
+    // Perform the screen switch
+    switchToScreen(screen);
 }
 
 void UI::showNotification(const char* message, uint16_t duration_ms) {
@@ -734,15 +659,21 @@ void UI::updateSetupScreen() {
 }
 
 void UI::updateIdleScreen() {
-    screen_idle_update(&_state);
+    if (_screens[SCREEN_IDLE]) {
+        screen_idle_update(&_state);
+    }
 }
 
 void UI::updateHomeScreen() {
-    screen_home_update(_screens[SCREEN_HOME], &_state);
+    if (_screens[SCREEN_HOME]) {
+        screen_home_update(_screens[SCREEN_HOME], &_state);
+    }
 }
 
 void UI::updateBrewingScreen() {
-    screen_brewing_update(&_state);
+    if (_screens[SCREEN_BREWING]) {
+        screen_brewing_update(&_state);
+    }
 }
 
 void UI::updateCompleteScreen() {
@@ -750,11 +681,13 @@ void UI::updateCompleteScreen() {
 }
 
 void UI::updateSettingsScreen() {
-    screen_settings_update(&_state);
-    
-    // Update display settings values from State
-    const auto& displaySettings = State.settings().display;
-    screen_settings_set_display_values(displaySettings.brightness, displaySettings.screenTimeout);
+    if (_screens[SCREEN_SETTINGS]) {
+        screen_settings_update(&_state);
+        
+        // Update display settings values from State
+        const auto& displaySettings = State.settings().display;
+        screen_settings_set_display_values(displaySettings.brightness, displaySettings.screenTimeout);
+    }
 }
 
 void UI::updateAlarmScreen() {
@@ -763,6 +696,152 @@ void UI::updateAlarmScreen() {
 
 void UI::updateOtaScreen() {
     // OTA screen is updated when set
+}
+
+// =============================================================================
+// Screen Memory Management Methods
+// =============================================================================
+
+bool UI::ensureScreenExists(screen_id_t screen) {
+    if (screen >= SCREEN_COUNT) {
+        LOG_W("Invalid screen ID: %d", screen);
+        return false;
+    }
+    
+    // Screen already exists
+    if (_screens[screen] != nullptr) {
+        return true;
+    }
+    
+    // Create the screen
+    LOG_I("Creating screen: %d", screen);
+    switch (screen) {
+        case SCREEN_SETUP:
+            createSetupScreen();
+            break;
+        case SCREEN_IDLE:
+            createIdleScreen();
+            break;
+        case SCREEN_HOME:
+            createHomeScreen();
+            break;
+        case SCREEN_BREWING:
+            createBrewingScreen();
+            break;
+        case SCREEN_COMPLETE:
+            createCompleteScreen();
+            break;
+        case SCREEN_SETTINGS:
+            createSettingsScreen();
+            break;
+        case SCREEN_TEMP_SETTINGS:
+            createTempSettingsScreen();
+            break;
+        case SCREEN_SCALE:
+            createScaleScreen();
+            break;
+        case SCREEN_CLOUD:
+            createCloudScreen();
+            break;
+        case SCREEN_ALARM:
+            createAlarmScreen();
+            break;
+        case SCREEN_OTA:
+            createOtaScreen();
+            break;
+        case SCREEN_SPLASH:
+            createSplashScreen();
+            break;
+        default:
+            LOG_E("Unknown screen ID: %d", screen);
+            return false;
+    }
+    
+    // Verify creation succeeded
+    if (_screens[screen] == nullptr) {
+        LOG_E("Screen creation failed: %d", screen);
+        return false;
+    }
+    
+    // Yield after screen creation to allow network operations
+    yield();
+    
+    return true;
+}
+
+void UI::destroyScreen(screen_id_t screen) {
+    if (screen >= SCREEN_COUNT) {
+        LOG_W("Invalid screen ID: %d", screen);
+        return;
+    }
+    
+    // Don't destroy if screen doesn't exist
+    if (_screens[screen] == nullptr) {
+        return;
+    }
+    
+    // Don't destroy the currently active screen (must switch away first)
+    if (_currentScreen == screen) {
+        LOG_W("Cannot destroy active screen: %d", screen);
+        return;
+    }
+    
+    LOG_I("Destroying screen: %d", screen);
+    lv_obj_del(_screens[screen]);
+    _screens[screen] = nullptr;
+    
+    // Yield after screen deletion to allow network operations
+    yield();
+}
+
+void UI::switchToScreen(screen_id_t screen) {
+    if (screen >= SCREEN_COUNT || _screens[screen] == nullptr) {
+        LOG_E("Cannot switch to invalid or non-existent screen: %d", screen);
+        return;
+    }
+    
+    // Save old screen info before switching
+    screen_id_t oldScreen = _currentScreen;
+    lv_obj_t* oldScreenObj = _screens[oldScreen];
+    
+    // Update screen tracking
+    _previousScreen = _currentScreen;
+    _currentScreen = screen;
+    
+    // Reset settings screen state when entering it
+    // This ensures editing modes are cleared from previous visits
+    if (screen == SCREEN_SETTINGS) {
+        screen_settings_reset();
+    }
+    
+    // IMPORTANT: Load new screen FIRST before deleting old one
+    // LVGL crashes if you delete the active screen without loading another first
+    lv_scr_load(_screens[screen]);
+    
+    // Destroy the old screen to free memory (unless it's the same as new screen)
+    if (oldScreen != screen && oldScreenObj != nullptr) {
+        destroyScreen(oldScreen);
+    }
+    
+    // Focus an object on the new screen (for encoder navigation)
+    lv_group_t* group = lv_group_get_default();
+    if (group) {
+        // Focus next until we find an object on the current screen
+        lv_obj_t* focused = lv_group_get_focused(group);
+        if (focused && lv_obj_get_screen(focused) != _screens[screen]) {
+            // Current focus is on wrong screen, find one on the right screen
+            uint32_t count = lv_group_get_obj_count(group);
+            for (uint32_t i = 0; i < count; i++) {
+                lv_group_focus_next(group);
+                focused = lv_group_get_focused(group);
+                if (focused && lv_obj_get_screen(focused) == _screens[screen]) {
+                    break;
+                }
+            }
+        }
+    }
+    
+    LOG_I("Switched to screen: %d (destroyed previous: %d)", screen, oldScreen);
 }
 
 // =============================================================================
@@ -924,44 +1003,37 @@ lv_color_t UI::getStateColor(uint8_t state) {
 void UI::rebuildScreens() {
     LOG_I("Rebuilding screens for theme change...");
     
-    // Remember current screen
+    // 1. Clean up all inactive screens first
     screen_id_t current = _currentScreen;
-    
-    // Store old screen pointers
-    lv_obj_t* old_screens[SCREEN_COUNT];
     for (int i = 0; i < SCREEN_COUNT; i++) {
-        old_screens[i] = _screens[i];
-        _screens[i] = nullptr;
-    }
-    
-    // Create new screens with new theme colors
-    createSetupScreen();
-    createIdleScreen();
-    createHomeScreen();
-    createBrewingScreen();
-    createCompleteScreen();
-    createSettingsScreen();
-    createTempSettingsScreen();
-    createScaleScreen();
-    createCloudScreen();
-    createAlarmScreen();
-    createOtaScreen();
-    createSplashScreen();
-    
-    // Switch to new screen first (before deleting old ones)
-    if (_screens[current]) {
-        lv_scr_load(_screens[current]);
-        _currentScreen = current;
-    }
-    
-    // Now safely delete old screens
-    for (int i = 0; i < SCREEN_COUNT; i++) {
-        if (old_screens[i]) {
-            lv_obj_del(old_screens[i]);
+        if (i != current && _screens[i] != nullptr) {
+            destroyScreen((screen_id_t)i);
         }
     }
     
-    // Update with current state
+    // 2. Handle the active screen carefully: Create NEW -> Load NEW -> Delete OLD
+    if (_screens[current] != nullptr) {
+        lv_obj_t* old_screen_obj = _screens[current];
+        
+        // Mark slot as empty so ensureScreenExists creates a FRESH one
+        _screens[current] = nullptr;
+        
+        // Create the new screen (populated with new theme)
+        ensureScreenExists(current);
+        
+        // Load the new screen FIRST (LVGL golden rule: always have an active screen)
+        if (_screens[current] != nullptr) {
+            lv_scr_load(_screens[current]);
+            // NOW it is safe to delete the old object
+            lv_obj_del(old_screen_obj);
+        } else {
+            // Creation failed! Restore the old one to prevent black screen of death
+            _screens[current] = old_screen_obj;
+            LOG_E("Failed to rebuild screen %d, keeping old one", current);
+        }
+    }
+    
+    // 3. Refresh data on the new screen
     update(_state);
     
     LOG_I("Screens rebuilt");

@@ -263,6 +263,11 @@ private:
     void updateAlarmScreen();
     void updateOtaScreen();
     
+    // Screen memory management
+    bool ensureScreenExists(screen_id_t screen);
+    void destroyScreen(screen_id_t screen);
+    void switchToScreen(screen_id_t screen);
+    
     // Helper methods
     const char* getStateText(uint8_t state);
     const char* getStrategyText(uint8_t strategy);
