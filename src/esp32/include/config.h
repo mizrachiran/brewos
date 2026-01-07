@@ -73,20 +73,6 @@
 #define WEBSOCKET_PATH          "/ws"
 
 // -----------------------------------------------------------------------------
-// UART - Debug/Serial Communication
-// -----------------------------------------------------------------------------
-#if ENABLE_SCREEN
-    // Screen variant: USB CDC disabled, use hardware UART for debug
-    #define DEBUG_UART_TX_PIN       37              // Hardware UART TX (GPIO37)
-    #define DEBUG_UART_RX_PIN       36              // Hardware UART RX (GPIO36)
-#else
-    // No-screen variant: USB CDC enabled, Serial uses USB CDC (GPIO19/20)
-    // Hardware UART pins not used for debug (Serial uses USB CDC)
-    // GPIO37/36 may be used for Pico UART instead
-#endif
-#define DEBUG_UART_BAUD         115200
-
-// -----------------------------------------------------------------------------
 // UART - Pico Communication (ESP32 side pins)
 // -----------------------------------------------------------------------------
 #define PICO_UART_NUM           1               // UART1
@@ -97,13 +83,13 @@
     #define PICO_UART_RX_PIN        44              // ESP32 RX <- Pico TX (GPIO0) → J15 Pin 3
 #else
     // No-screen variant (ESP32-S3 N16R8): GPIO43/44 not available
-    // GPIO36 not available (connected to Octal SPI flash/PSRAM)
-    // Use GPIO37 for TX (was DEBUG_UART_TX, but USB CDC enabled so Serial uses USB)
-    // Use GPIO35 for RX (available on N16R8)
-    #define PICO_UART_TX_PIN        37              // ESP32 TX -> Pico RX (GPIO1) → J15 Pin 4
-                                                    // GPIO37 = Safe GPIO available on N16R8
-    #define PICO_UART_RX_PIN        35              // ESP32 RX <- Pico TX (GPIO0) → J15 Pin 3
-                                                    // GPIO35 = Safe GPIO available on N16R8
+    // CRITICAL: GPIO35, GPIO36, GPIO37 are reserved for Octal PSRAM (SPIIO6, SPIIO7, SPIDQS)
+    // Cannot use GPIO35/37 for UART - they conflict with PSRAM hardware interface
+    // Use GPIO41/42 for UART1 (safe pins, not used by Octal PSRAM)
+    #define PICO_UART_TX_PIN        41              // ESP32 TX -> Pico RX (GPIO1) → J15 Pin 4
+                                                    // GPIO41 = Safe GPIO, UART1 TX (not used by Octal PSRAM)
+    #define PICO_UART_RX_PIN        42              // ESP32 RX <- Pico TX (GPIO0) → J15 Pin 3
+                                                    // GPIO42 = Safe GPIO, UART1 RX (not used by Octal PSRAM)
 #endif
 
 // Pico control pins

@@ -42,18 +42,25 @@ The ESP32 firmware uses different GPIO pins depending on whether the screen vari
 
 ### No-Screen Variant (Headless Mode)
 
-**Target:** ESP32-S3 N8R8 module
+**Target:** ESP32-S3 N16R8 module
 
 | ESP32 GPIO | Function         | J15 Pin | RP2354 Side       | Notes                |
 | ---------- | ---------------- | ------- | ----------------- | -------------------- |
-| GPIO37     | UART TX → RP2354 | Pin 4   | GPIO1 (RX)        | GPIO43 not available |
-| GPIO35     | UART RX ← RP2354 | Pin 3   | GPIO0 (TX)        | GPIO44 not available |
+| GPIO41     | UART TX → RP2354 | Pin 4   | GPIO1 (RX)        | GPIO43 not available, GPIO37 reserved for Octal PSRAM |
+| GPIO42     | UART RX ← RP2354 | Pin 3   | GPIO0 (TX)        | GPIO44 not available, GPIO35 reserved for Octal PSRAM |
 | GPIO4      | RUN control      | Pin 5   | RP2354 RUN        | Safe GPIO            |
 | GPIO17     | SWDIO            | Pin 6   | SWDIO (dedicated) | SWD data I/O (TX2)   |
 | GPIO6      | WEIGHT_STOP      | Pin 7   | GPIO21            | Safe GPIO            |
 | GPIO16     | SWCLK            | Pin 8   | SWCLK (dedicated) | SWD clock (RX2)      |
 
-**Note:** USB CDC is **enabled** in the no-screen variant for serial logs over USB. GPIO19/20 are used for USB D+/D- and are not available for GPIO functions. The Pico interface uses GPIO4 (reset), GPIO6 (brew-by-weight), GPIO37 (UART TX), GPIO35 (UART RX), GPIO17 (SWDIO), and GPIO16 (SWCLK). GPIO37/35 are used instead of GPIO43/44 because GPIO43/44 are not available on ESP32-S3 N8R8 modules. GPIO36 is also not available (connected to Octal SPI flash/PSRAM).
+**Note:** USB CDC is **enabled** in the no-screen variant for serial logs over USB. GPIO19/20 are used for USB D+/D- and are not available for GPIO functions. The Pico interface uses GPIO4 (reset), GPIO6 (brew-by-weight), GPIO41 (UART TX), GPIO42 (UART RX), GPIO17 (SWDIO), and GPIO16 (SWCLK). 
+
+**CRITICAL:** GPIO35, GPIO36, and GPIO37 are **reserved for Octal PSRAM** on ESP32-S3 N16R8 modules:
+- GPIO35 = SPIIO6 (Octal PSRAM data line 6)
+- GPIO36 = SPIIO7 (Octal PSRAM data line 7)  
+- GPIO37 = SPIDQS (Octal PSRAM data strobe)
+
+These pins **cannot** be used for UART or any other GPIO functions. GPIO41/42 are used for UART1 instead of GPIO35/37 to avoid PSRAM conflicts.
 
 ## Debug Board Compatibility
 
@@ -84,9 +91,9 @@ Most ESP32 debug boards have:
 3. **Connect UART:**
 
    - **Screen variant:** ESP32 GPIO43 (TX) → J15 Pin 4 (RX), GPIO44 (RX) ← J15 Pin 3 (TX)
-   - **No-screen variant:** ESP32 GPIO37 (TX) → J15 Pin 4 (RX), GPIO35 (RX) ← J15 Pin 3 (TX)
-     - GPIO43/44 not available on N8R8 modules
-     - GPIO36 not available (connected to Octal SPI flash/PSRAM)
+   - **No-screen variant:** ESP32 GPIO41 (TX) → J15 Pin 4 (RX), GPIO42 (RX) ← J15 Pin 3 (TX)
+     - GPIO43/44 not available on N16R8 modules
+     - GPIO35/36/37 reserved for Octal PSRAM (cannot be used for UART)
 
 4. **Connect control pins:**
 
@@ -153,7 +160,8 @@ USB CDC (Serial over USB) configuration depends on the firmware variant:
 - **GPIO19 (D+)** is used for WEIGHT_STOP signal
 - **GPIO20 (D-)** is used for RP2354 RUN (reset) control
 - **USB bootloader** still works (separate from USB CDC)
-- **Serial debugging** available via hardware UART (GPIO36/37) or WiFi/OTA
+- **Serial debugging** available via hardware UART (auto-selected by framework) or WiFi/OTA
+- **Note:** GPIO36/37 are reserved for Octal PSRAM and cannot be used for UART
 
 ### No-Screen Variant: USB CDC Enabled
 
@@ -320,9 +328,9 @@ J15 Connector (Control PCB)          ESP32 Debug Board
 Pin 1 (5V)    ────────────────────►  5V
 Pin 2 (GND)   ────────────────────►  GND
 Pin 3 (TX)    ────────────────────►  GPIO44 (RX) - Screen variant
-                                      GPIO35 (RX) - No-screen variant (N8R8)
+                                      GPIO42 (RX) - No-screen variant (N16R8)
 Pin 4 (RX)    ◄────────────────────  GPIO43 (TX) - Screen variant
-                                      GPIO37 (TX) - No-screen variant (N8R8)
+                                      GPIO41 (TX) - No-screen variant (N16R8)
 Pin 5 (RUN)    ────────────────────►  GPIO20 (Screen) / GPIO4 (No-screen)
 Pin 6 (SWDIO)  ────────────────────►  TX2 (SWD data I/O)
 Pin 7 (WGHT)   ────────────────────►  GPIO19 (Screen) / GPIO6 (No-screen)
@@ -336,10 +344,10 @@ Pin 8 (SWCLK)  ────────────────────►  
 1. **Check power:** Measure 5V at J15 Pin 1
 2. **Check UART:** Verify TX/RX are not swapped
    - **Screen variant:** GPIO43 (TX) → J15 Pin 4, GPIO44 (RX) ← J15 Pin 3
-   - **No-screen variant:** GPIO37 (TX) → J15 Pin 4, GPIO35 (RX) ← J15 Pin 3
+   - **No-screen variant:** GPIO41 (TX) → J15 Pin 4, GPIO42 (RX) ← J15 Pin 3
 3. **Check baud rate:** UART communication uses 921600 baud (PROTOCOL_BAUD_RATE). USB serial debug uses 115200 baud.
 4. **Check ground:** Ensure GND is connected (Pin 2)
-5. **No-screen variant:** Verify GPIO37/35 are used (GPIO43/44 not available on N8R8 modules, GPIO36 not available - connected to flash/PSRAM)
+5. **No-screen variant:** Verify GPIO41/42 are used (GPIO43/44 not available on N16R8 modules, GPIO35/36/37 reserved for Octal PSRAM)
 
 ### WEIGHT_STOP Not Working
 
