@@ -49,22 +49,23 @@
 
 ### Diodes & Protection
 
-| Ref | Part Number | Function                        | Package |
-| --- | ----------- | ------------------------------- | ------- |
-| D1  | UF4007      | K1 flyback diode                | DO-41   |
-| D2  | UF4007      | K2 flyback diode                | DO-41   |
-| D3  | UF4007      | K3 flyback diode                | DO-41   |
-| D10 | PESD5V0S1BL | Water switch ESD protection     | SOD-323 |
-| D11 | PESD5V0S1BL | Tank level ESD protection       | SOD-323 |
-| D12 | PESD5V0S1BL | Steam level ESD protection      | SOD-323 |
-| D13 | PESD5V0S1BL | Brew switch ESD protection      | SOD-323 |
-| D14 | PESD5V0S1BL | Brew NTC ESD protection         | SOD-323 |
-| D15 | PESD5V0S1BL | Steam NTC ESD protection        | SOD-323 |
-| D16 | BAT54S      | Pressure ADC overvoltage clamp  | SOT-23  |
-| D20 | SMBJ5.0A    | 5V rail TVS protection          | SMB     |
-| D21 | SM712       | RS485 A/B line surge protection | SOT-23  |
-| D23 | BZT52C3V3   | Service port TX 3.3V clamp      | SOD-123 |
-| D24 | BZT52C3V3   | Service port RX 3.3V clamp      | SOD-123 |
+| Ref        | Part Number | Function                                              | Package |
+| ---------- | ----------- | ----------------------------------------------------- | ------- |
+| D1         | UF4007      | K1 flyback diode                                      | DO-41   |
+| D2         | UF4007      | K2 flyback diode                                      | DO-41   |
+| D3         | UF4007      | K3 flyback diode                                      | DO-41   |
+| D10        | PESD5V0S1BL | Water switch ESD protection                           | SOD-323 |
+| D11        | PESD5V0S1BL | Tank level ESD protection                             | SOD-323 |
+| D12        | PESD5V0S1BL | Steam level ESD protection                            | SOD-323 |
+| D13        | PESD5V0S1BL | Brew switch ESD protection                            | SOD-323 |
+| D14        | PESD5V0S1BL | Brew NTC ESD protection                               | SOD-323 |
+| D15        | PESD5V0S1BL | Steam NTC ESD protection                              | SOD-323 |
+| D16        | BAT54S      | Pressure ADC overvoltage clamp (fast Schottky)        | SOT-23  |
+| D_PRESSURE | BZT52C3V3   | Pressure ADC hard clamp (3.3V Zener, parallel to D16) | SOD-123 |
+| D20        | SMBJ5.0A    | 5V rail TVS protection                                | SMB     |
+| D21        | SM712       | RS485 A/B line surge protection                       | SOT-23  |
+| D23        | BZT52C3V3   | Service port TX 3.3V clamp                            | SOD-123 |
+| D24        | BZT52C3V3   | Service port RX 3.3V clamp                            | SOD-123 |
 
 ---
 
@@ -85,20 +86,22 @@
 
 #### Sensor Input Networks (R1-R10)
 
-| Ref | Value | Tolerance | Function                            |
-| --- | ----- | --------- | ----------------------------------- |
-| R1  | 3.3kΩ | 1%        | Brew NTC pull-up (50kΩ sensors)     |
-| R1A | 1.5kΩ | 1%        | Brew NTC parallel (10kΩ via JP1)    |
-| R2  | 1.2kΩ | 1%        | Steam NTC pull-up (50kΩ sensors)    |
-| R2A | 680Ω  | 1%        | Steam NTC parallel (10kΩ via JP2)   |
-| R3  | 10kΩ  | 1%        | Pressure transducer divider (lower) |
-| R4  | 5.6kΩ | 1%        | Pressure transducer divider (upper) |
-| R5  | 1kΩ   | 1%        | Brew NTC ADC series protection      |
-| R6  | 1kΩ   | 1%        | Steam NTC ADC series protection     |
-| R7  | 1kΩ   | 1%        | LM4040 voltage reference bias       |
-| R8  | 47Ω   | 1%        | ADC VREF buffer isolation           |
-| R9  | 33kΩ  | 1%        | TPS563200 feedback divider (upper)  |
-| R10 | 10kΩ  | 1%        | TPS563200 feedback divider (lower)  |
+| Ref         | Value | Tolerance | Function                                                            |
+| ----------- | ----- | --------- | ------------------------------------------------------------------- |
+| R1          | 3.3kΩ | 1%        | Brew NTC pull-up (50kΩ sensors)                                     |
+| R1A         | 1.5kΩ | 1%        | Brew NTC parallel (10kΩ via JP1)                                    |
+| R2          | 1.2kΩ | 1%        | Steam NTC pull-up (50kΩ sensors)                                    |
+| R2A         | 680Ω  | 1%        | Steam NTC parallel (10kΩ via JP2)                                   |
+| R3          | 10kΩ  | 1%        | Pressure transducer divider (lower)                                 |
+| R4          | 5.6kΩ | 1%        | Pressure transducer divider (upper)                                 |
+| R5          | 1kΩ   | 1%        | Brew NTC ADC series protection                                      |
+| R6          | 1kΩ   | 1%        | Steam NTC ADC series protection                                     |
+| R_HUM_BREW  | 10kΩ  | 5%        | Mains hum filter resistor (Brew NTC, fc≈1.6kHz, 50/60Hz rejection)  |
+| R_HUM_STEAM | 10kΩ  | 5%        | Mains hum filter resistor (Steam NTC, fc≈1.6kHz, 50/60Hz rejection) |
+| R7          | 1kΩ   | 1%        | LM4040 voltage reference bias                                       |
+| R8          | 47Ω   | 1%        | ADC VREF buffer isolation                                           |
+| R9          | 33kΩ  | 1%        | TPS563200 feedback divider (upper)                                  |
+| R10         | 10kΩ  | 1%        | TPS563200 feedback divider (lower)                                  |
 
 #### Digital I/O Pull-ups/Pull-downs (R11-R19)
 
@@ -204,14 +207,16 @@
 
 #### ADC Reference & Sensor Filters (C7-C13)
 
-| Ref | Value | Voltage | Type    | Function                   |
-| --- | ----- | ------- | ------- | -------------------------- |
-| C7  | 22µF  | 10V     | Ceramic | ADC VREF bulk              |
-| C7A | 100nF | 25V     | Ceramic | ADC VREF HF decoupling     |
-| C8  | 100nF | 25V     | Ceramic | Brew NTC filter            |
-| C9  | 100nF | 25V     | Ceramic | Steam NTC filter           |
-| C11 | 100nF | 25V     | Ceramic | Pressure transducer filter |
-| C13 | 100µF | 10V     | Radial  | ESP32 bulk capacitor       |
+| Ref         | Value | Voltage | Type    | Function                                                             |
+| ----------- | ----- | ------- | ------- | -------------------------------------------------------------------- |
+| C7          | 22µF  | 10V     | Ceramic | ADC VREF bulk                                                        |
+| C7A         | 100nF | 25V     | Ceramic | ADC VREF HF decoupling                                               |
+| C8          | 100nF | 25V     | Ceramic | Brew NTC filter (DC blocking)                                        |
+| C9          | 100nF | 25V     | Ceramic | Steam NTC filter (DC blocking)                                       |
+| C_HUM_BREW  | 10nF  | 25V     | Ceramic | Mains hum filter capacitor (Brew NTC, fc≈1.6kHz, 50/60Hz rejection)  |
+| C_HUM_STEAM | 10nF  | 25V     | Ceramic | Mains hum filter capacitor (Steam NTC, fc≈1.6kHz, 50/60Hz rejection) |
+| C11         | 100nF | 25V     | Ceramic | Pressure transducer filter                                           |
+| C13         | 100µF | 10V     | Radial  | ESP32 bulk capacitor                                                 |
 
 #### Level Probe Circuit (C60-C65)
 

@@ -19,7 +19,7 @@ Custom control PCB for ECM Synchronika dual-boiler espresso machine.
 | Document                                      | Description                                         |
 | --------------------------------------------- | --------------------------------------------------- |
 | [Overview](spec/01-Overview.md)               | System architecture, design goals, electrical specs |
-| [GPIO Allocation](spec/02-GPIO-Allocation.md) | Complete RP2354 pin mapping, GPIO errata          |
+| [GPIO Allocation](spec/02-GPIO-Allocation.md) | Complete RP2354 pin mapping, GPIO errata            |
 | [Power Supply](spec/03-Power-Supply.md)       | AC/DC isolation, buck converter, ADC reference      |
 | [Outputs](spec/04-Outputs.md)                 | Relay drivers, SSR triggers, indicator LEDs         |
 | [Analog Inputs](spec/05-Analog-Inputs.md)     | NTC thermistors, pressure transducer                |
@@ -60,11 +60,12 @@ All 9 schematic sheets are embedded in the [Schematic Reference](schematics/Sche
 
 ### Testing & Support
 
-| Document                              | Description                        |
-| ------------------------------------- | ---------------------------------- |
-| [Test Procedures](Test_Procedures.md) | Manufacturing test and validation  |
-| [ESP32 Wiring](ESP32_Wiring.md)       | Display module integration         |
-| [CHANGELOG](CHANGELOG.md)             | Version history and design changes |
+| Document                                  | Description                                       |
+| ----------------------------------------- | ------------------------------------------------- |
+| [Test Procedures](Test_Procedures.md)     | Manufacturing test and validation                 |
+| [ESP32 Wiring](ESP32_Wiring.md)           | Display module integration                        |
+| [CHANGELOG](CHANGELOG.md)                 | Version history and design changes                |
+| [Engineering Tasks](Engineering_Tasks.md) | Pre-production checklist and implementation tasks |
 
 ---
 
@@ -95,11 +96,11 @@ Plug & play replacement for the factory GICAR control board and PID controller:
 
 ### High Voltage (220V AC)
 
-| Connector | Type                 | Function                            |
-| --------- | -------------------- | ----------------------------------- |
-| J1        | 6.3mm Spade (2-pin)  | Mains input (L, N only - PE removed) |
-| J2-J4     | 6.3mm Spade          | Relay outputs (LED, Pump, Solenoid) |
-| J5        | 6.3mm Spade          | Chassis Reference (SRif)           |
+| Connector | Type                 | Function                                      |
+| --------- | -------------------- | --------------------------------------------- |
+| J1        | 6.3mm Spade (2-pin)  | Mains input (L, N only - PE removed)          |
+| J2-J4     | 6.3mm Spade          | Relay outputs (LED, Pump, Solenoid)           |
+| J5        | 6.3mm Spade          | Chassis Reference (SRif)                      |
 | J24       | Screw Terminal 2-pos | Power meter HV (L fused, N only - PE removed) |
 
 ### Low Voltage (3.3V/5V)

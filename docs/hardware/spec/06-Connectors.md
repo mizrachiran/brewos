@@ -108,6 +108,19 @@ Pins 6 and 8 connect to the **dedicated SWDIO and SWCLK physical pins** on the R
 
 **Part Number:** JST B8B-XH-A (8-pin, 2.54mm pitch)
 
+**⚠️ CRITICAL: ESP32 RF Subsystem Isolation**
+
+The ESP32-S3 module **MUST** use an external antenna connected via u.FL/IPEX connector. The ECM Synchronika's stainless steel chassis acts as a Faraday cage, blocking Wi-Fi/Bluetooth signals if an onboard PCB trace antenna is used.
+
+**Requirements:**
+
+- ESP32 module must have u.FL/IPEX antenna connector (NOT PCB trace antenna)
+- External antenna must be routed outside the machine chassis
+- Antenna cable length: 10-20cm recommended (keep as short as possible)
+- Antenna type: 2.4GHz/5GHz dual-band compatible (Wi-Fi 6 capable)
+
+**Failure Mode:** If onboard antenna is used, Wi-Fi range will be <1 meter and Bluetooth pairing will fail, rendering the display module non-functional for remote access.
+
 ---
 
 ## Service/Debug Port (J16)

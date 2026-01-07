@@ -22,6 +22,7 @@
 | 3     | D1-D3                    | Fast Flyback   | UF4007        | DO-41       | 75ns recovery                 |
 | 6     | D10-D15                  | ESD Protection | PESD5V0S1BL   | SOD-323     | Sensor inputs                 |
 | 1     | D16                      | Schottky Clamp | BAT54S        | SOT-23      | Pressure ADC protection       |
+| **1** | **D_PRESSURE**           | **Zener**      | **BZT52C3V3** | **SOD-123** | **Pressure ADC hard clamp (parallel to D16)** |
 | 1     | D20                      | TVS Diode      | SMBJ5.0A      | SMB         | 5V rail protection            |
 | 1     | D21                      | RS485 TVS      | SM712         | SOT-23      | A/B line protection           |
 | 2     | D23-D24                  | Zener          | BZT52C3V3     | SOD-123     | Service port clamp            |
@@ -38,6 +39,7 @@
 | 1     | R2              | 1.2kΩ    | 1%        | 0805     | Steam NTC pull-up                           |
 | 1     | R2A             | 680Ω     | 1%        | 0805     | Steam NTC parallel (via JP2)                |
 | 2     | R5-R6           | 1kΩ      | 1%        | 0805     | NTC ADC series protection                   |
+| **2** | **R_HUM_BREW, R_HUM_STEAM** | **10kΩ** | **5%**    | **0805** | **Mains hum filter (50/60Hz rejection, fc≈1.6kHz)** |
 | 1     | R3              | 10kΩ     | 1%        | 0805     | Pressure divider (to GND)                   |
 | 1     | R4              | 5.6kΩ    | 1%        | 0805     | Pressure divider (series)                   |
 | 1     | R7              | 1kΩ      | 1%        | 0805     | LM4040 bias                                 |
@@ -131,6 +133,7 @@
 | ~15    | Various         | 100nF     | 25V     | 0805     | Decoupling                                                                        |
 | 2      | C61-C62         | 10nF      | 50V     | 0805     | Wien bridge timing                                                                |
 | 1      | C64             | 1µF       | 25V     | 0805     | Level probe AC coupling                                                           |
+| **2**  | **C_HUM_BREW, C_HUM_STEAM** | **10nF** | **25V** | **0805** | **Mains hum filter (50/60Hz rejection, fc≈1.6kHz)** |
 | **2**  | **C_XTAL**      | **22pF**  | **50V** | **0603** | **Crystal load capacitors (calculated: C_L = 2×(15pF-3pF) = 24pF, use 22pF std)** |
 
 **⚠️ NOTE: Relay Snubber Capacitors (C25/C27) REMOVED**

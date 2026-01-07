@@ -333,9 +333,46 @@ J17─┤            │
 
 ### Implementation
 
-- **Routed slot** between HV and LV sections (minimum 2mm wide)
+- **Milled slot** between HV and LV sections (minimum 2mm wide, full PCB thickness)
 - **No copper pour** in isolation zone
 - **Conformal coating** recommended for production
+
+**⚠️ CRITICAL: Mains Creepage Slots (IPC-2221B Compliance)**
+
+Standard FR4 coating is NOT sufficient for high-voltage isolation. IPC-2221B standards require **physical milled slots (cutouts)** in the PCB between High-Voltage Relay contacts and Low-Voltage logic sections.
+
+**Requirements:**
+- **Slot width:** Minimum 2mm (80 mil) milled cutout
+- **Slot depth:** Full PCB thickness (1.6mm)
+- **Clearance:** >3mm (120 mil) between any HV trace and LV section
+- **Location:** Between relay contacts (K1, K2, K3) and all LV components
+- **Verification:** Visual inspection required - slots must be visible on both top and bottom layers
+
+**Rationale:** If contamination (moisture, dust, flux residue) bridges the isolation gap, a milled slot prevents arcing by creating a physical air gap. Standard solder mask alone cannot prevent tracking under fault conditions.
+
+**Implementation Example:**
+```
+┌─────────────────────────────────────────────────────────┐
+│  HV SECTION (Relays, MOVs, Fuses)                      │
+│  ┌─────┐  ┌─────┐  ┌─────┐                             │
+│  │ K1  │  │ K2  │  │ K3  │                             │
+│  └─────┘  └─────┘  └─────┘                             │
+│                                                          │
+│  ═══════════════════════════════════════════════════   │ ← Milled Slot
+│  ═══════════════════════════════════════════════════   │   (2mm wide)
+│                                                          │
+│  LV SECTION (MCU, Sensors, Logic)                       │
+│  ┌─────┐  ┌─────┐  ┌─────┐                             │
+│  │RP2354│  │ U5  │  │ U9  │                             │
+│  └─────┘  └─────┘  └─────┘                             │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Gerber File Requirements:**
+- Add milled slot as a "routed slot" or "plated slot" layer in PCB design software
+- Specify slot width: 2mm minimum
+- Ensure slot extends full PCB thickness (no copper in slot)
+- Verify with PCB manufacturer that slots will be milled (not just routed)
 
 ---
 

@@ -63,14 +63,14 @@ Machine MCB (16A): House circuit protection
 
 | Boundary              | Type       | Creepage  | Clearance | Implementation         |
 | --------------------- | ---------- | --------- | --------- | ---------------------- |
-| Mains → 5V DC         | Reinforced | **6.0mm** | **4.0mm** | Routed slot + wide gap |
+| Mains → 5V DC         | Reinforced | **6.0mm** | **4.0mm** | Milled slot + wide gap |
 | Relay coil → contacts | Basic      | 3.0mm     | 2.5mm     | Internal relay design  |
 | Phase → Neutral       | Functional | 2.5mm     | 2.5mm     | Trace spacing          |
 | HV GND → LV GND       | Reinforced | 6.0mm     | 4.0mm     | Via HLK isolation      |
 
 ### PCB Implementation
 
-- **Routed slot** (minimum 2mm wide) between HV and LV sections
+- **Milled slot** (minimum 2mm wide, full PCB thickness) between HV and LV sections
 - **No copper pour** crosses isolation boundary
 - **Silkscreen warning** at HV/LV boundary
 
@@ -88,7 +88,7 @@ Machine MCB (16A): House circuit protection
 | GPIO5 (Brew)     | ESD clamp      | PESD5V0S1BL (D13)   | SOD-323                |
 | ADC0 (Brew NTC)  | ESD clamp      | PESD5V0S1BL (D14)   | SOD-323                |
 | ADC1 (Steam NTC) | ESD clamp      | PESD5V0S1BL (D15)   | SOD-323                |
-| ADC2 (Pressure)  | Schottky clamp | BAT54S (D16)        | Overvoltage protection |
+| ADC2 (Pressure)  | Schottky + Zener | BAT54S (D16) + BZT52C3V3 | Overvoltage protection (dual clamp) |
 | 5V Rail          | TVS            | SMBJ5.0A (D20)      | Surge protection       |
 | RS485 A/B        | TVS            | SM712 (D21)         | Asymmetric (-7V/+12V)  |
 | Service TX/RX    | Zener clamp    | BZT52C3V3 (D23/D24) | 5V TTL protection      |
@@ -104,11 +104,25 @@ PRESS_SIG ────────┬──────────────�
              │   R3    │              │   D16     │
              └────┬────┘              │ Schottky  │
                   │                   └─────┬─────┘
-                 GND                       +3.3V
+                 GND                       │
+                                           │
+                                    ┌──────┴──────┐
+                                    │  BZT52C3V3  │
+                                    │  D_PRESSURE │
+                                    │   Zener     │
+                                    └──────┬──────┘
+                                           │
+                                         +3.3V
 ```
 
+**Dual-Clamp Protection Strategy:**
+- **BAT54S (D16):** Fast Schottky clamp (low forward voltage, fast response)
+- **BZT52C3V3 (D_PRESSURE):** Hard Zener clamp (3.3V breakdown, provides absolute limit)
+
 **Protection Scenario:** If R3 fails open, full 5V appears at GPIO28.
-BAT54S clamps to 3.3V + 0.3V = 3.6V (within RP2354 absolute max).
+- BAT54S clamps to 3.3V + 0.3V = 3.6V (fast response)
+- BZT52C3V3 provides hard clamp at 3.3V (absolute maximum protection)
+- Both clamps work in parallel for redundant protection
 
 ---
 
@@ -178,6 +192,30 @@ MOVs are placed across **LOADS** (not across relay contacts):
 
 - If MOV shorts → L-N short → fuse clears → safe
 - If MOV was across contacts → actuator bypasses control → dangerous
+
+### Safety Interlock Wiring Verification
+
+**⚠️ CRITICAL REQUIREMENT:** SSR control outputs **MUST NOT** bypass the physical High-Limit Thermostats (165°C switches) on the boilers.
+
+**Verification Checklist:**
+
+- [ ] **SSR wiring:** External SSRs connect to machine's existing heater wiring, which includes high-limit thermostats in series
+- [ ] **No bypass:** PCB SSR control signals (J26 pins 15-18) are LOW-VOLTAGE DC control only - they do NOT carry mains power
+- [ ] **Physical interlock:** Machine's factory-installed high-limit thermostats remain in series with heater elements
+- [ ] **Failsafe:** If firmware crashes with SSR ON, high-limit thermostat will still open at 165°C, cutting power to heater
+
+**Wiring Diagram Verification:**
+```
+Mains L ──► [High-Limit Thermostat] ──► [SSR AC Input] ──► [Heater Element] ──► N
+                              │
+                              │ (Physical switch, opens at 165°C)
+                              │
+PCB Control: J26-15/16 ──► [SSR DC Control] (5V DC, <20mA)
+                              │
+                              └─► SSR turns ON/OFF based on firmware control
+```
+
+**Safety Benefit:** This provides a **non-software failsafe** against thermal runaway if the firmware crashes in an "ON" state. The high-limit thermostat is a mechanical switch that operates independently of the control board.
 
 ---
 

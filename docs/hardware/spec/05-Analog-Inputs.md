@@ -48,12 +48,37 @@ Different espresso machine brands use different NTC sensor values. **Solder jump
 │             │                                      │                           │
 │        ┌────┴────┐                            ┌────┴────┐                      │
 │        │ 100nF   │  RC filter                 │ 100nF   │  RC filter           │
+│        │  C8     │  (DC blocking)             │  C9     │  (DC blocking)       │
+│        └────┬────┘                            └────┬────┘                      │
+│             │                                      │                           │
+│        ┌────┴────┐                            ┌────┴────┐                      │
+│        │ 10kΩ    │  Mains hum filter          │ 10kΩ    │  Mains hum filter    │
+│        │  R_HUM  │  (fc ≈ 1.6kHz)             │  R_HUM  │  (fc ≈ 1.6kHz)       │
+│        └────┬────┘                            └────┬────┘                      │
+│             │                                      │                           │
+│        ┌────┴────┐                            ┌────┴────┐                      │
+│        │ 10nF    │  Low-pass filter           │ 10nF    │  Low-pass filter     │
+│        │  C_HUM  │  (50/60Hz rejection)        │  C_HUM  │  (50/60Hz rejection) │
 │        └────┬────┘                            └────┬────┘                      │
 │             │                                      │                           │
 │            GND                           ──────► GPIO26/ADC0    GPIO27/ADC1    │
 │                                                                                 │
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**⚠️ CRITICAL: Mains Hum Filtering**
+
+Sensor wires run parallel to high-voltage heater wires inside the machine chassis, picking up 50/60Hz mains hum that must be filtered before the ADC.
+
+**Filter Design:**
+
+- **R_HUM:** 10kΩ series resistor (limits current, forms RC filter with C_HUM)
+- **C_HUM:** 10nF ceramic capacitor to GND (low-pass filter)
+- **Cutoff frequency:** fc = 1/(2π × R × C) = 1/(2π × 10kΩ × 10nF) ≈ **1.6kHz**
+- **Attenuation at 50Hz:** ~32× (30dB) - sufficient to reject mains hum
+- **Attenuation at 60Hz:** ~27× (28dB) - sufficient to reject mains hum
+
+**Placement:** R_HUM and C_HUM must be placed immediately before the ADC input pin, after the existing 100nF filter capacitor (C8/C9).
 
 ### Why Different Pull-up Resistors?
 
@@ -139,6 +164,14 @@ Maximum ADC sensitivity occurs when R_pullup ≈ R_NTC at target temperature:
 │    D16 (BAT54S): Dual Schottky clamps ADC input to 3.3V+0.3V = 3.6V max      │
 │    This protects against R3 open-circuit fault (full 5V at GPIO28)           │
 │                                                                                 │
+│    ⚠️ CRITICAL: Additional Zener Clamp Required                               │
+│    ────────────────────────────────────────────────────────────────────────── │
+│    D_PRESSURE (BZT52C3V3): 3.3V Zener diode must be added in parallel to      │
+│    BAT54S at GPIO28 input. Pressure sensors are ratiometric 5V devices. If    │
+│    the voltage divider fails or ground lifts, it can dump 5V directly into   │
+│    the ADC pin. The Zener provides hard clamping to 3.3V, ensuring ADC       │
+│    protection even under fault conditions.                                    │
+│                                                                                 │
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -169,12 +202,12 @@ See [Power Supply](03-Power-Supply.md#precision-adc-voltage-reference-buffered) 
 
 ### ADC Channel Summary
 
-| ADC  | GPIO   | Signal          | Range      | Resolution        |
-| ---- | ------ | --------------- | ---------- | ----------------- |
-| ADC0 | GPIO26 | Brew NTC        | 0-3.0V     | ~31 counts/°C     |
-| ADC1 | GPIO27 | Steam NTC       | 0-3.0V     | ~25 counts/°C     |
-| ADC2 | GPIO28 | Pressure        | 0.32-2.88V | ~200 counts/bar   |
-| ADC3 | GPIO29 | 5V_MONITOR      | 0-3.0V     | 5V rail monitor (ratiometric pressure compensation) |
+| ADC  | GPIO   | Signal     | Range      | Resolution                                          |
+| ---- | ------ | ---------- | ---------- | --------------------------------------------------- |
+| ADC0 | GPIO26 | Brew NTC   | 0-3.0V     | ~31 counts/°C                                       |
+| ADC1 | GPIO27 | Steam NTC  | 0-3.0V     | ~25 counts/°C                                       |
+| ADC2 | GPIO28 | Pressure   | 0.32-2.88V | ~200 counts/bar                                     |
+| ADC3 | GPIO29 | 5V_MONITOR | 0-3.0V     | 5V rail monitor (ratiometric pressure compensation) |
 
 ---
 
