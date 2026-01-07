@@ -10,7 +10,7 @@ This document tracks the implementation and optimization tasks necessary to fina
 
 ## Required Changes List (Critical Actions)
 
-*These items address safety, hardware longevity, and immediate failure risks. They must be implemented in the schematic before any PCB manufacturing.*
+_These items address safety, hardware longevity, and immediate failure risks. They must be implemented in the schematic before any PCB manufacturing._
 
 ### ✅ 1. AC-Drive for Water Level Probe
 
@@ -47,6 +47,7 @@ This document tracks the implementation and optimization tasks necessary to fina
 - **Documentation:** Added to `spec/06-Connectors.md` - J15 ESP32 Display Module section
 
 **Action Required:**
+
 - [ ] Verify ESP32 module selection includes u.FL/IPEX connector (NOT PCB trace antenna)
 - [ ] Update ESP32 module BOM with antenna connector requirement
 - [ ] Add antenna cable specification (10-20cm, 2.4GHz/5GHz compatible)
@@ -116,6 +117,7 @@ This document tracks the implementation and optimization tasks necessary to fina
 - **Current Design:** Assumes standard 3950K Beta value
 
 **Action Required:**
+
 - [ ] Measure ECM P6037 NTC Beta value (or obtain from ECM datasheet)
 - [ ] Verify ADC range coverage with measured Beta value
 - [ ] Update firmware calibration tables if Beta differs from assumed value
@@ -208,6 +210,7 @@ This document tracks the implementation and optimization tasks necessary to fina
 - **Documentation:** Added to `spec/08-PCB-Layout.md` - Creepage and Clearance section
 
 **Action Required:**
+
 - [ ] Add milled slot layer to PCB design software
 - [ ] Verify slot placement between all HV components and LV section
 - [ ] Confirm with PCB manufacturer that slots will be milled (not just routed)
@@ -225,6 +228,7 @@ This document tracks the implementation and optimization tasks necessary to fina
 - **Documentation:** Added to `spec/05-Analog-Inputs.md` - NTC Thermistor Interface section
 
 **Action Required:**
+
 - [ ] Add R_HUM (10kΩ) and C_HUM (10nF) to schematic for both ADC0 and ADC1
 - [ ] Place components immediately before ADC input pin (after existing 100nF filter)
 - [ ] Update netlist.csv with new component references
@@ -242,6 +246,7 @@ This document tracks the implementation and optimization tasks necessary to fina
 - **Documentation:** Added to `spec/05-Analog-Inputs.md` - Pressure Transducer Interface section
 
 **Action Required:**
+
 - [ ] Add BZT52C3V3 (D_PRESSURE) to schematic, parallel to BAT54S at GPIO28
 - [ ] Update netlist.csv with new component reference
 - [ ] Verify dual-clamp protection: Schottky (fast) + Zener (hard clamp)
@@ -271,6 +276,7 @@ This document tracks the implementation and optimization tasks necessary to fina
 - **Documentation:** See `spec/09-Safety.md` - Hardware Interlock Considerations section
 
 **Action Required:**
+
 - [ ] Verify firmware implements RP2354 watchdog kick routine
 - [ ] Test watchdog recovery behavior during firmware hang
 - [ ] Consider external watchdog (TPL5010) for commercial certification
@@ -286,6 +292,7 @@ This document tracks the implementation and optimization tasks necessary to fina
 - **Documentation:** See `spec/05-Analog-Inputs.md` - ADC Reference Design section
 
 **Action Required:**
+
 - [ ] Implement firmware calibration routine using reference thermometer
 - [ ] Account for RP2354 ADC E9 errata (leakage current) in calibration
 - [ ] Document calibration procedure for end users
@@ -324,18 +331,22 @@ This document tracks the implementation and optimization tasks necessary to fina
 ## Next Steps
 
 1. **Schematic Updates:**
+
    - Add mains hum filtering (R_HUM, C_HUM) to ADC inputs
    - Add pressure sensor Zener clamp (BZT52C3V3)
 
 2. **PCB Layout Updates:**
+
    - Add milled slots between HV and LV sections
    - Verify creepage/clearance compliance
 
 3. **Component Verification:**
+
    - Verify ESP32 module includes u.FL/IPEX connector
    - Measure ECM P6037 NTC Beta value
 
 4. **Firmware Integration:**
+
    - Implement watchdog kick routine
    - Implement calibration routine
 
@@ -348,4 +359,3 @@ This document tracks the implementation and optimization tasks necessary to fina
 
 **Last Updated:** January 2026  
 **Next Review:** Before PCB fabrication order
-

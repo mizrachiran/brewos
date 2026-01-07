@@ -8,16 +8,16 @@ This document explains how to connect an ESP32 display module (including debug/d
 
 The control PCB provides an 8-pin JST-XH connector (J15) for the ESP32 display module:
 
-| Pin | Signal      | Direction | Voltage | Notes                                        |
-| --- | ----------- | --------- | ------- | -------------------------------------------- |
-| 1   | 5V          | Power Out | 5V DC   | Power supply for ESP32 (300-500mA)           |
-| 2   | GND         | Ground    | 0V      | Common ground                                |
+| Pin | Signal      | Direction | Voltage | Notes                                                        |
+| --- | ----------- | --------- | ------- | ------------------------------------------------------------ |
+| 1   | 5V          | Power Out | 5V DC   | Power supply for ESP32 (300-500mA)                           |
+| 2   | GND         | Ground    | 0V      | Common ground                                                |
 | 3   | TX          | Input     | 3.3V    | RP2354 TX → ESP32 RX (GPIO0, 33Ω series R40 + TVS D_UART_TX) |
 | 4   | RX          | Output    | 3.3V    | ESP32 TX → RP2354 RX (GPIO1, 33Ω series R41 + TVS D_UART_RX) |
-| 5   | RUN         | Output    | 3.3V    | ESP32 GPIO8 → RP2354 RUN pin (reset control)   |
-| 6   | SWDIO       | I/O       | 3.3V    | ESP32 TX2 ↔ RP2354 SWDIO (dedicated pin, 47Ω series) |
-| 7   | WEIGHT_STOP | Output    | 3.3V    | ESP32 GPIO19 → RP2354 GPIO21 (4.7kΩ pull-down) |
-| 8   | SWCLK       | I/O       | 3.3V    | ESP32 RX2 ↔ RP2354 SWCLK (dedicated pin, 47Ω series) |
+| 5   | RUN         | Output    | 3.3V    | ESP32 GPIO8 → RP2354 RUN pin (reset control)                 |
+| 6   | SWDIO       | I/O       | 3.3V    | ESP32 TX2 ↔ RP2354 SWDIO (dedicated pin, 47Ω series)         |
+| 7   | WEIGHT_STOP | Output    | 3.3V    | ESP32 GPIO19 → RP2354 GPIO21 (4.7kΩ pull-down)               |
+| 8   | SWCLK       | I/O       | 3.3V    | ESP32 RX2 ↔ RP2354 SWCLK (dedicated pin, 47Ω series)         |
 
 **⚠️ CRITICAL:** Always power the control PCB BEFORE connecting USB to ESP32 module. See [Safety - 5V Tolerance](spec/09-Safety.md#rp2354-5v-tolerance-and-power-sequencing) for details.
 
@@ -27,14 +27,14 @@ The control PCB provides an 8-pin JST-XH connector (J15) for the ESP32 display m
 
 The ESP32 firmware uses the following GPIO pins (defined in `src/esp32/include/config.h`):
 
-| ESP32 GPIO | Function          | J15 Pin | RP2354 Side | Notes               |
-| ---------- | ----------------- | ------- | ----------- | ------------------- |
-| GPIO43     | UART TX → RP2354   | Pin 4   | GPIO1 (RX)  |                     |
-| GPIO44     | UART RX ← RP2354   | Pin 3   | GPIO0 (TX)  |                     |
-| GPIO20     | RUN control        | Pin 5   | RP2354 RUN  | USB D- (repurposed) |
-| TX2        | SWDIO              | Pin 6   | SWDIO (dedicated) | SWD data I/O |
-| GPIO19     | WEIGHT_STOP        | Pin 7   | GPIO21       | USB D+ (repurposed) |
-| RX2        | SWCLK              | Pin 8   | SWCLK (dedicated) | SWD clock |
+| ESP32 GPIO | Function         | J15 Pin | RP2354 Side       | Notes               |
+| ---------- | ---------------- | ------- | ----------------- | ------------------- |
+| GPIO43     | UART TX → RP2354 | Pin 4   | GPIO1 (RX)        |                     |
+| GPIO44     | UART RX ← RP2354 | Pin 3   | GPIO0 (TX)        |                     |
+| GPIO20     | RUN control      | Pin 5   | RP2354 RUN        | USB D- (repurposed) |
+| TX2        | SWDIO            | Pin 6   | SWDIO (dedicated) | SWD data I/O        |
+| GPIO19     | WEIGHT_STOP      | Pin 7   | GPIO21            | USB D+ (repurposed) |
+| RX2        | SWCLK            | Pin 8   | SWCLK (dedicated) | SWD clock           |
 
 ## Debug Board Compatibility
 
