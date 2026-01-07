@@ -96,14 +96,14 @@
     #define PICO_UART_TX_PIN        43              // ESP32 TX -> Pico RX (GPIO1) → J15 Pin 4
     #define PICO_UART_RX_PIN        44              // ESP32 RX <- Pico TX (GPIO0) → J15 Pin 3
 #else
-    // No-screen variant (ESP32-S3 N8R8): GPIO43/44 not available
+    // No-screen variant (ESP32-S3 N16R8): GPIO43/44 not available
     // GPIO36 not available (connected to Octal SPI flash/PSRAM)
     // Use GPIO37 for TX (was DEBUG_UART_TX, but USB CDC enabled so Serial uses USB)
-    // Use GPIO35 for RX (available on N8R8)
+    // Use GPIO35 for RX (available on N16R8)
     #define PICO_UART_TX_PIN        37              // ESP32 TX -> Pico RX (GPIO1) → J15 Pin 4
-                                                    // GPIO37 = Safe GPIO available on N8R8
+                                                    // GPIO37 = Safe GPIO available on N16R8
     #define PICO_UART_RX_PIN        35              // ESP32 RX <- Pico TX (GPIO0) → J15 Pin 3
-                                                    // GPIO35 = Safe GPIO available on N8R8
+                                                    // GPIO35 = Safe GPIO available on N16R8
 #endif
 
 // Pico control pins
@@ -121,7 +121,7 @@
                                                     // GPIO19 = USB D+ (repurposed as GPIO)
                                                     // Set HIGH when target weight reached, LOW otherwise
 #else
-    // No-screen variant (ESP32-S3 N8R8): USB CDC enabled for serial logs
+    // No-screen variant (ESP32-S3 N16R8): USB CDC enabled for serial logs
     // USB CDC uses GPIO19/20 (D+/D-) for USB Serial communication (not repurposed)
     #define PICO_RUN_PIN            4               // Controls Pico RUN (reset) → J15 Pin 5
                                                     // GPIO4 = Safe GPIO for no-screen variant
@@ -154,7 +154,7 @@
     // J15 Pin 8 - SPARE2: ESP32 GPIO22 ↔ Pico GPIO22 (4.7kΩ pull-down on Pico side)
     #define SPARE2_PIN              22              // J15 Pin 8 - General purpose bidirectional I/O
 #else
-    // No-screen variant (ESP32-S3 N8R8): SWD used for Pico OTA
+    // No-screen variant (ESP32-S3 N16R8): SWD used for Pico OTA
     // Pin 6: SWDIO - ESP32 TX2 (GPIO17) ↔ RP2354 SWDIO Pin, 47Ω series (R_SWD)
     // Pin 8: SWCLK - ESP32 RX2 (GPIO16) ↔ RP2354 SWCLK Pin, 47Ω series (R_SWD)
     // NOTE: On ESP32-S3, UART2 TX = GPIO17, UART2 RX = GPIO16

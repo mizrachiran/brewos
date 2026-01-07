@@ -184,8 +184,34 @@ def sync_wifi_setup_page():
         print(f"[pre_build] Warning: WiFi setup sync failed: {e}")
         print("[pre_build] Continuing build...")
 
+def ensure_psram_config():
+    """
+    Ensure PSRAM is configured for Octal mode for ESP32-S3 N16R8 module.
+    This creates/updates sdkconfig.defaults if building for noscreen variant.
+    """
+    env_name = env.get("PIOENV", "")
+    
+    # Only apply PSRAM config for noscreen variant
+    if "noscreen" not in env_name:
+        return
+    
+    project_dir = Path(env.get("PROJECT_DIR", "."))
+    sdkconfig_defaults = project_dir / "sdkconfig.defaults"
+    
+    # Use noscreen-specific config file
+    sdkconfig_env_specific = project_dir / "sdkconfig.defaults.esp32s3-noscreen"
+    
+    if sdkconfig_env_specific.exists():
+        # Copy environment-specific config to sdkconfig.defaults
+        import shutil
+        shutil.copy2(sdkconfig_env_specific, sdkconfig_defaults)
+        print(f"[pre_build] Applied PSRAM config from {sdkconfig_env_specific.name}")
+
 # Run patch immediately when script loads (before library compilation)
 patch_nimble_config()
+
+# Ensure PSRAM config is applied
+ensure_psram_config()
 
 # Sync WiFi setup page (runs before compilation)
 sync_wifi_setup_page()

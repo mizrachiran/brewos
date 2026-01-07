@@ -769,6 +769,20 @@ static void setupEarlyInitialization() {
     Serial.print(psramFree / 1024 / 1024);
     Serial.println(" MB)");
     
+    // Check if PSRAM initialization failed at boot (ESP-IDF error would have been logged)
+    if (psramSize == 0) {
+        Serial.println("⚠️  PSRAM: Not available (hardware may not have PSRAM or initialization failed)");
+        Serial.println("   System will use internal RAM only - this is OK for operation");
+        Serial.println("   If you expected PSRAM, check:");
+        Serial.println("   1. Hardware variant (N16R8 should have 8MB PSRAM)");
+        Serial.println("   2. Boot logs for PSRAM initialization errors");
+    } else if (psramFree == 0) {
+        Serial.println("⚠️  PSRAM: Detected but exhausted (0 bytes free)");
+        Serial.println("   System will fallback to internal RAM for allocations");
+    } else {
+        Serial.printf("✓ PSRAM: %u MB available\n", (unsigned)(psramFree / 1024 / 1024));
+    }
+    
     // Check memory allocation strategy
     // Small allocations (<4KB) should use internal RAM for speed
     // Large allocations (>4KB) can use PSRAM

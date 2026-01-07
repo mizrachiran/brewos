@@ -7,7 +7,7 @@
 #   --no-clean: Skip clean rebuild (faster, but may use cached code)
 #   --factory-reset: Erase entire flash before flashing (complete clean slate)
 #   --quiet, -q: Suppress non-essential output (faster execution)
-#   --noscreen: Build and flash headless variant (no screen)
+#   --noscreen: Build and flash headless variant (N16R8 - 16MB Flash, 8MB Octal PSRAM)
 
 set -e
 set -o pipefail  # Make pipes fail if any command in the pipeline fails
@@ -211,8 +211,8 @@ fi
 
 # Build firmware (PlatformIO will rebuild only changed files unless --clean was used)
 if [ "$VARIANT" = "noscreen" ]; then
-    status_log "Compiling firmware (headless variant)..."
-    quiet_echo "${BLUE}Building ESP32 firmware (headless - no screen)...${NC}"
+    status_log "Compiling firmware (headless variant - N16R8)..."
+    quiet_echo "${BLUE}Building ESP32 firmware (headless - no screen, N16R8: 16MB Flash, 8MB Octal PSRAM)...${NC}"
 else
     status_log "Compiling firmware..."
     quiet_echo "${BLUE}Running PlatformIO build...${NC}"
@@ -233,6 +233,16 @@ fi
 FIRMWARE_HASH=$(shasum -a 256 "$FIRMWARE" 2>/dev/null | head -c 16)
 status_log "Firmware build complete (hash: $FIRMWARE_HASH)"
 quiet_echo "${GREEN}✓ Build complete - Firmware hash: ${CYAN}$FIRMWARE_HASH${NC}"
+
+# Verify partition table exists
+if [ "$VARIANT" = "noscreen" ]; then
+    PARTITION_FILE="$ESP32_DIR/partitions_16MB.csv"
+    if [ ! -f "$PARTITION_FILE" ]; then
+        echo -e "${RED}✗ Partition file not found: $PARTITION_FILE${NC}" >&2
+        exit 1
+    fi
+    quiet_echo "${BLUE}✓ Using 16MB partition table (N16R8)${NC}"
+fi
 
 # Verify the build includes our changes by checking for the new code pattern
 # This helps catch cases where the build might be using cached/old code
@@ -430,6 +440,7 @@ fi
 status_log "Preparing to flash to $PORT"
 quiet_echo "📍 Port: ${GREEN}$PORT${NC}"
 quiet_echo "📦 Variant: ${GREEN}$VARIANT${NC}"
+quiet_echo "📦 Environment: ${GREEN}$ENV_NAME${NC}"
 quiet_echo "📦 Firmware: ${GREEN}$(basename $FIRMWARE)${NC} ($(du -h "$FIRMWARE" | cut -f1))"
 if [ "$FIRMWARE_ONLY" = false ]; then
     if [ -d "$WEB_DATA_DIR" ] && [ -n "$(ls -A "$WEB_DATA_DIR" 2>/dev/null)" ]; then

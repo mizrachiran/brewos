@@ -496,50 +496,15 @@ bool LogManager::saveToFlash() {
         return false;  // Nothing to save
     }
     
-    // Append RAM logs to flash file (text format, not binary)
-    File file = LittleFS.open("/logs.txt", "a");  // Append mode
+    // --- FIX: Use "w" (Overwrite) instead of "a" (Append) ---
+    // This creates a clean snapshot of the current buffer.
+    // It avoids duplication and the need to read back/truncate the file.
+    File file = LittleFS.open("/logs.txt", "w");
     if (file) {
-        // Write RAM buffer logs
         file.print(ramLogs);
         file.flush();
         file.close();
-        
-        // Check file size and truncate if needed (keep only most recent logs)
-        File sizeCheck = LittleFS.open("/logs.txt", "r");
-        if (sizeCheck) {
-            size_t fileSize = sizeCheck.size();
-            sizeCheck.close();
-            
-            if (fileSize > LOG_FLASH_MAX_SIZE) {
-                // Read entire file, keep only the last LOG_FLASH_MAX_SIZE bytes
-                File readFile = LittleFS.open("/logs.txt", "r");
-                if (readFile) {
-                    String allLogs = readFile.readString();
-                    readFile.close();
-                    
-                    // Keep only the last LOG_FLASH_MAX_SIZE bytes (most recent logs)
-                    if (allLogs.length() > LOG_FLASH_MAX_SIZE) {
-                        allLogs = allLogs.substring(allLogs.length() - LOG_FLASH_MAX_SIZE);
-                        // Find first newline to avoid cutting in the middle of a log entry
-                        int firstNewline = allLogs.indexOf('\n');
-                        if (firstNewline > 0) {
-                            allLogs = allLogs.substring(firstNewline + 1);
-                        }
-                    }
-                    
-                    // Write truncated logs back
-                    File truncFile = LittleFS.open("/logs.txt", "w");
-                    if (truncFile) {
-                        truncFile.print(allLogs);
-                        truncFile.flush();
-                        truncFile.close();
-                        success = true;
-                    }
-                }
-            } else {
-                success = true;
-            }
-        }
+        success = true;
     }
     
     // Also keep binary format for restoreFromFlash (for backward compatibility)

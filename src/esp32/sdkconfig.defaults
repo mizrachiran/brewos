@@ -1,0 +1,29 @@
+# ESP32-S3 N16R8 PSRAM Configuration
+# This file configures PSRAM for ESP32-S3 N16R8 module (16MB Flash, 8MB Octal PSRAM)
+#
+# This sdkconfig file is used by PlatformIO to configure ESP-IDF settings
+# for proper PSRAM initialization in Octal mode
+
+# Enable PSRAM support
+CONFIG_SPIRAM=y
+
+# Set PSRAM mode to Octal (required for N16R8 module with Octal PSRAM)
+# This is the critical setting that fixes "wrong PSRAM line mode" errors
+CONFIG_SPIRAM_MODE_OCT=y
+
+# PSRAM size: 8MB (8388608 bytes) - auto-detected, but explicit for clarity
+CONFIG_SPIRAM_SIZE=8388608
+
+# PSRAM speed: 80MHz (default for Octal PSRAM)
+# Options: CONFIG_SPIRAM_SPEED_40M, CONFIG_SPIRAM_SPEED_80M, CONFIG_SPIRAM_SPEED_120M
+CONFIG_SPIRAM_SPEED_80M=y
+
+# Enable PSRAM in malloc (allows heap_caps_malloc to use PSRAM)
+CONFIG_SPIRAM_USE_MALLOC=y
+
+# Keep small allocations (<256 bytes) in internal RAM for performance
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=256
+
+# Use capability-based allocation (required for heap_caps_malloc)
+CONFIG_SPIRAM_USE_CAPS_ALLOC=y
+
