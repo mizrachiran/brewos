@@ -267,6 +267,7 @@ PCB GND ◄── C_SRif (AC) / R_SRif (DC block) ◄── J5 (SRif) ◄──�
 - **C-R Network:** Parallel combination of R_SRif (1MΩ) and C_SRif (100nF)
   - C_SRif allows 1kHz AC signal return (low impedance at AC)
   - R_SRif blocks DC loop currents (high impedance at DC)
+  - **⚠️ CRITICAL - C_SRif Voltage Rating:** This capacitor connects Logic Ground to Chassis Earth. In a fault condition (Live short to Chassis), this capacitor could see mains voltage transients before the breaker trips. **C_SRif MUST be rated for at least 250V AC (X2 Safety rating preferred) or 630V DC.** A standard 50V ceramic capacitor is a safety risk (could fail short, creating a ground loop).
 - **Wiring:** 18AWG Green/Yellow wire from J5 to boiler/chassis mounting bolt
 - **Mounting Holes:** All mounting holes (MH1-MH4) must be NPTH (Non-Plated Through Hole) to prevent random grounding
 - **Isolation:** Maintain 6mm Keep-Out Zone between HV traces and LV Ground Pour

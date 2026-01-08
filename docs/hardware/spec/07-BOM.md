@@ -16,37 +16,37 @@
 
 ## Transistors and Diodes
 
-| Qty   | Ref                      | Description    | Part Number   | Package     | Notes                         |
-| ----- | ------------------------ | -------------- | ------------- | ----------- | ----------------------------- |
-| 5     | Q1-Q5                    | NPN Transistor | MMBT2222A     | SOT-23      | 3 relay + 2 SSR drivers       |
-| 3     | D1-D3                    | Fast Flyback   | UF4007        | DO-41       | 75ns recovery                 |
-| 6     | D10-D15                  | ESD Protection | PESD5V0S1BL   | SOD-323     | Sensor inputs                 |
-| 1     | D16                      | Schottky Clamp | BAT54S        | SOT-23      | Pressure ADC protection       |
-| **1** | **D_PRESSURE**           | **TVS Diode**   | **PESD3V3S1BL** | **SOD-323** | **Pressure ADC hard clamp (parallel to D16, low-leakage)** |
-| 1     | D20                      | TVS Diode      | SMBJ5.0A      | SMB         | 5V rail protection            |
-| 1     | D21                      | RS485 TVS      | SM712         | SOT-23      | A/B line protection           |
-| 2     | D23-D24                  | Zener          | BZT52C3V3     | SOD-123     | Service port clamp            |
-| **2** | **D_UART_TX, D_UART_RX** | **TVS Diode**  | **ESDALC6V1** | **SOD-323** | **UART ESD protection (J15)** |
+| Qty   | Ref                      | Description    | Part Number     | Package     | Notes                                                      |
+| ----- | ------------------------ | -------------- | --------------- | ----------- | ---------------------------------------------------------- |
+| 5     | Q1-Q5                    | NPN Transistor | MMBT2222A       | SOT-23      | 3 relay + 2 SSR drivers                                    |
+| 3     | D1-D3                    | Fast Flyback   | UF4007          | DO-41       | 75ns recovery                                              |
+| 6     | D10-D15                  | ESD Protection | PESD5V0S1BL     | SOD-323     | Sensor inputs                                              |
+| 1     | D16                      | Schottky Clamp | BAT54S          | SOT-23      | Pressure ADC protection                                    |
+| **1** | **D_PRESSURE**           | **TVS Diode**  | **PESD3V3S1BL** | **SOD-323** | **Pressure ADC hard clamp (parallel to D16, low-leakage)** |
+| 1     | D20                      | TVS Diode      | SMBJ5.0A        | SMB         | 5V rail protection                                         |
+| 1     | D21                      | RS485 TVS      | SM712           | SOT-23      | A/B line protection                                        |
+| 2     | D23-D24                  | Zener          | BZT52C3V3       | SOD-123     | Service port clamp                                         |
+| **2** | **D_UART_TX, D_UART_RX** | **TVS Diode**  | **ESDALC6V1**   | **SOD-323** | **UART ESD protection (J15)**                              |
 
 ## Resistors
 
 ### Analog Signal Conditioning
 
-| Qty   | Ref             | Value    | Tolerance | Package  | Notes                                       |
-| ----- | --------------- | -------- | --------- | -------- | ------------------------------------------- |
-| 1     | R1              | 3.3kΩ    | 1%        | 0805     | Brew NTC pull-up                            |
-| 1     | R1A             | 1.5kΩ    | 1%        | 0805     | Brew NTC parallel (via JP1)                 |
-| 1     | R2              | 1.2kΩ    | 1%        | 0805     | Steam NTC pull-up                           |
-| 1     | R2A             | 680Ω     | 1%        | 0805     | Steam NTC parallel (via JP2)                |
-| 2     | R5-R6           | 1kΩ      | 1%        | 0805     | NTC ADC series protection                   |
+| Qty   | Ref                         | Value    | Tolerance | Package  | Notes                                               |
+| ----- | --------------------------- | -------- | --------- | -------- | --------------------------------------------------- |
+| 1     | R1                          | 3.3kΩ    | 1%        | 0805     | Brew NTC pull-up                                    |
+| 1     | R1A                         | 1.5kΩ    | 1%        | 0805     | Brew NTC parallel (via JP1)                         |
+| 1     | R2                          | 1.2kΩ    | 1%        | 0805     | Steam NTC pull-up                                   |
+| 1     | R2A                         | 680Ω     | 1%        | 0805     | Steam NTC parallel (via JP2)                        |
+| 2     | R5-R6                       | 1kΩ      | 1%        | 0805     | NTC ADC series protection                           |
 | **2** | **R_HUM_BREW, R_HUM_STEAM** | **10kΩ** | **5%**    | **0805** | **Mains hum filter (50/60Hz rejection, fc≈1.6kHz)** |
-| 1     | R3              | 10kΩ     | 1%        | 0805     | Pressure divider (to GND)                   |
-| 1     | R4              | 5.6kΩ    | 1%        | 0805     | Pressure divider (series)                   |
-| 1     | R7              | 1kΩ      | 1%        | 0805     | LM4040 bias                                 |
-| 1     | R8              | 47Ω      | 1%        | 0805     | ADC VREF buffer isolation                   |
-| **1** | **R_VREG_AVDD** | **33Ω**  | **5%**    | **0805** | **VREG_AVDD RC filter (series)**            |
-| **1** | **R_SRif**      | **1MΩ**  | **5%**    | **0805** | **SRif DC blocking (parallel with C_SRif)** |
-| **1** | **R_QSPI_CS**   | **10kΩ** | **5%**    | **0805** | **QSPI_SS pull-up (boot protection)**       |
+| 1     | R3                          | 10kΩ     | 1%        | 0805     | Pressure divider (to GND)                           |
+| 1     | R4                          | 5.6kΩ    | 1%        | 0805     | Pressure divider (series)                           |
+| 1     | R7                          | 1kΩ      | 1%        | 0805     | LM4040 bias                                         |
+| 1     | R8                          | 47Ω      | 1%        | 0805     | ADC VREF buffer isolation                           |
+| **1** | **R_VREG_AVDD**             | **33Ω**  | **5%**    | **0805** | **VREG_AVDD RC filter (series)**                    |
+| **1** | **R_SRif**                  | **1MΩ**  | **5%**    | **0805** | **SRif DC blocking (parallel with C_SRif)**         |
+| **1** | **R_QSPI_CS**               | **10kΩ** | **5%**    | **0805** | **QSPI_SS pull-up (boot protection)**               |
 
 ### Digital I/O
 
@@ -69,17 +69,17 @@
 
 ### Communication
 
-| Qty   | Ref        | Value   | Tolerance | Package  | Notes                                                            |
-| ----- | ---------- | ------- | --------- | -------- | ---------------------------------------------------------------- |
-| 4     | R40-R43    | **1kΩ** | 5%        | 0805     | UART series (5V tolerance protection) + TVS diodes (D_UART_TX/RX) |
-| 1     | R44        | 1kΩ     | 5%        | 0805     | Power meter TX series (5V tolerance protection)                  |
-| 1     | R45        | 2.2kΩ   | 1%        | 0805     | J17 RX level shift (upper)                                       |
-| 1     | R45A       | 3.3kΩ   | 1%        | 0805     | J17 RX level shift (lower)                                       |
-| 1     | R45B       | 33Ω     | 5%        | 0805     | J17 RX series                                                    |
-| 2     | R46-R47    | 4.7kΩ   | 5%        | 0805     | I2C pull-ups                                                     |
-| 2     | R93-R94    | 20kΩ    | 5%        | 0805     | RS485 failsafe bias                                              |
-| **2** | **R_SWD**  | **47Ω** | **5%**    | **0805** | **SWD Series Protection (J15-6/8)**                              |
-| **1** | **R_XTAL** | **1kΩ** | **5%**    | **0805** | **Crystal OUT serial termination (if needed)**                   |
+| Qty   | Ref        | Value   | Tolerance | Package  | Notes                                                                    |
+| ----- | ---------- | ------- | --------- | -------- | ------------------------------------------------------------------------ |
+| 4     | R40-R43    | **1kΩ** | 5%        | 0805     | UART series (5V tolerance protection) + TVS diodes (D_UART_TX/RX)        |
+| 1     | R44        | 1kΩ     | 5%        | 0805     | Power meter TX series (5V tolerance protection)                          |
+| 1     | R45        | 2.2kΩ   | 1%        | 0805     | J17 RX level shift (upper)                                               |
+| 1     | R45A       | 3.3kΩ   | 1%        | 0805     | J17 RX level shift (lower)                                               |
+| 1     | R45B       | 33Ω     | 5%        | 0805     | J17 RX series                                                            |
+| 2     | R46-R47    | 4.7kΩ   | 5%        | 0805     | I2C pull-ups                                                             |
+| 2     | R93-R94    | 20kΩ    | 5%        | 0805     | RS485 failsafe bias                                                      |
+| **2** | **R_SWD**  | **47Ω** | **5%**    | **0805** | **SWD Series Protection (J15-6/8)**                                      |
+| **1** | **R_XTAL** | **1kΩ** | **5%**    | **0805** | **Crystal series resistor (recommended to prevent overdriving crystal)** |
 
 ### User Interface
 
@@ -116,25 +116,25 @@
 
 ## Capacitors
 
-| Qty    | Ref             | Value     | Voltage | Package  | Notes                                                                             |
-| ------ | --------------- | --------- | ------- | -------- | --------------------------------------------------------------------------------- |
-| 1      | C1              | 100nF X2  | 275V AC | Radial   | Mains EMI filter (**Compact 10mm pitch**)                                         |
-| 1      | C2              | 470µF     | 6.3V    | **SMD**  | **5V bulk (105°C Aluminum Polymer, e.g., Panasonic OS-CON)**                      |
-| **1**  | **C_VREG_AVDD** | **100nF** | **25V** | **0805** | **VREG_AVDD RC filter (parallel to GND)**                                         |
-| **1**  | **C_SRif**      | **100nF** | **25V** | **0805** | **SRif AC coupling (parallel with R_SRif)**                                       |
-| 1      | C3              | 22µF      | 25V     | 1206     | Buck input (X5R)                                                                  |
-| 2      | C4,C4A          | 22µF      | 10V     | 1206     | Buck output (X5R)                                                                 |
-| 1      | **C5**          | **47µF**  | **10V** | **1206** | **3.3V rail bulk (WiFi/relay transients)**                                        |
-| 1      | C7              | 22µF      | 10V     | 1206     | ADC ref bulk                                                                      |
-| 1      | C7A             | 100nF     | 25V     | 0805     | ADC ref HF decoupling                                                             |
-| **~6** | **C_IOVDD**     | **100nF** | **25V** | **0805** | **RP2354 IOVDD decoupling (one per pin)**                                         |
-| **1**  | **C_DVDD**      | **10µF**  | **10V** | **1206** | **RP2354 DVDD bulk (external LDO output)**                                        |
-| **1**  | **C_DVDD2**     | **100nF** | **25V** | **0805** | **RP2354 DVDD decoupling (external LDO output)**                                  |
-| ~15    | Various         | 100nF     | 25V     | 0805     | Decoupling                                                                        |
-| 2      | C61-C62         | 10nF      | 50V     | 0805     | Wien bridge timing                                                                |
-| 1      | C64             | 1µF       | 25V     | 0805     | Level probe AC coupling                                                           |
-| **2**  | **C_HUM_BREW, C_HUM_STEAM** | **10nF** | **25V** | **0805** | **Mains hum filter (50/60Hz rejection, fc≈1.6kHz)** |
-| **2**  | **C_XTAL**      | **22pF**  | **50V** | **0603** | **Crystal load capacitors (calculated: C_L = 2×(15pF-3pF) = 24pF, use 22pF std)** |
+| Qty    | Ref                         | Value     | Voltage          | Package  | Notes                                                                                            |
+| ------ | --------------------------- | --------- | ---------------- | -------- | ------------------------------------------------------------------------------------------------ |
+| 1      | C1                          | 100nF X2  | 275V AC          | Radial   | Mains EMI filter (**Compact 10mm pitch**)                                                        |
+| 1      | C2                          | 470µF     | 6.3V             | **SMD**  | **5V bulk (105°C Aluminum Polymer, e.g., Panasonic OS-CON)**                                     |
+| **1**  | **C_VREG_AVDD**             | **100nF** | **25V**          | **0805** | **VREG_AVDD RC filter (parallel to GND)**                                                        |
+| **1**  | **C_SRif**                  | **100nF** | **250V AC (X2)** | **0805** | **SRif AC coupling (parallel with R_SRif) - MUST be X2 safety rated for mains fault protection** |
+| 1      | C3                          | 22µF      | 25V              | 1206     | Buck input (X5R)                                                                                 |
+| 2      | C4,C4A                      | 22µF      | 10V              | 1206     | Buck output (X5R)                                                                                |
+| 1      | **C5**                      | **47µF**  | **10V**          | **1206** | **3.3V rail bulk (WiFi/relay transients)**                                                       |
+| 1      | C7                          | 22µF      | 10V              | 1206     | ADC ref bulk                                                                                     |
+| 1      | C7A                         | 100nF     | 25V              | 0805     | ADC ref HF decoupling                                                                            |
+| **~6** | **C_IOVDD**                 | **100nF** | **25V**          | **0805** | **RP2354 IOVDD decoupling (one per pin)**                                                        |
+| **1**  | **C_DVDD**                  | **10µF**  | **10V**          | **1206** | **RP2354 DVDD bulk (external LDO output)**                                                       |
+| **1**  | **C_DVDD2**                 | **100nF** | **25V**          | **0805** | **RP2354 DVDD decoupling (external LDO output)**                                                 |
+| ~15    | Various                     | 100nF     | 25V              | 0805     | Decoupling                                                                                       |
+| 2      | C61-C62                     | 10nF      | 50V              | 0805     | Wien bridge timing                                                                               |
+| 1      | C64                         | 1µF       | 25V              | 0805     | Level probe AC coupling                                                                          |
+| **2**  | **C_HUM_BREW, C_HUM_STEAM** | **10nF**  | **25V**          | **0805** | **Mains hum filter (50/60Hz rejection, fc≈1.6kHz)**                                              |
+| **2**  | **C_XTAL**                  | **22pF**  | **50V**          | **0603** | **Crystal load capacitors (calculated: C_L = 2×(15pF-3pF) = 24pF, use 22pF std)**                |
 
 **⚠️ NOTE: Relay Snubber Capacitors (C25/C27) REMOVED**
 
@@ -154,7 +154,7 @@
 ## Electromechanical
 
 | Qty   | Ref     | Description      | Part Number          | Notes                                                                     |
-| ----- | ------- | ---------------- | -------------------- | ------------------------------------------------------------------------- | --------------------- |
+| ----- | ------- | ---------------- | -------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | 2     | K1,K3   | Relay 5V 3A      | Panasonic APAN3105   | Slim 5mm                                                                  |
 | 1     | K2      | Relay 5V 16A     | Omron G5LE-1A4-E DC5 | **-E variant!**                                                           |
 | 1     | F1      | **Fuse 10A SMD** | **Littelfuse 463**   | **Nano² (10x3mm), Time-Lag (Slow-Blow) Ceramic, K_temp=0.75-0.80 @ 80°C** |
@@ -163,7 +163,7 @@
 | 2     | RV2-RV3 | Varistor 275V    | S10K275              | 10mm, arc suppression                                                     |
 | 1     | SW1     | Tactile Switch   | EVQP7A01P            | 6×6mm SMD (Reset)                                                         |
 | 1     | BZ1     | Passive Buzzer   | CEM-1203(42)         | 12mm                                                                      |
-| **1** | **Y1**  | **Crystal**      | **12 MHz**           | **HC-49 or SMD**                                                          | **Main clock source** |
+| **1** | **Y1**  | **Crystal**      | **12 MHz**           | **HC-49 or SMD**                                                          | **Main clock source (REQUIRED for USB/PLL operation). Recommended: Abracon ABM8-12.000MHZ-B2-T or equivalent characterized part** |
 
 ## LEDs
 

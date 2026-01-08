@@ -187,7 +187,7 @@
 | R93    | 20kΩ  | 5%        | RS485 A line failsafe pull-up              |
 | R94    | 20kΩ  | 5%        | RS485 B line failsafe pull-down            |
 | R_SWD  | 47Ω   | 5%        | SWDIO/SWCLK series protection (J15-6/8)    |
-| R_XTAL | 1kΩ   | 5%        | Crystal OUT serial termination (if needed) |
+| R_XTAL | 1kΩ   | 5%        | Crystal series resistor (recommended to prevent overdriving crystal, per Raspberry Pi recommendations) |
 
 ---
 

@@ -165,11 +165,19 @@ and ensure controlled current paths.
 
 ### High-Voltage Section (220V AC)
 
-| Current      | Min Trace Width | Notes              |
-| ------------ | --------------- | ------------------ |
-| 16A (pump)   | 5mm             | K2 relay path      |
-| 5A (general) | 2mm             | K1, K3 relay paths |
-| Mains L/N    | 3mm             | Input traces       |
+| Current              | Min Trace Width (1oz)     | Min Trace Width (2oz)       | Notes                                                                                   |
+| -------------------- | ------------------------- | --------------------------- | --------------------------------------------------------------------------------------- |
+| 10A (fused live bus) | **7mm** (or polygon pour) | **3.5mm** (or polygon pour) | **Fused live bus feeding relays - use polygon pours on both layers stitched with vias** |
+| 16A (pump)           | 5mm                       | 2.5mm                       | K2 relay path                                                                           |
+| 5A (general)         | 2mm                       | 1mm                         | K1, K3 relay paths                                                                      |
+| Mains L/N            | 3mm                       | 1.5mm                       | Input traces                                                                            |
+
+**⚠️ CRITICAL - 10A Fused Live Bus:**
+
+- For 10A current on standard 1oz copper, trace width must be **~7mm** to keep temperature rise <10°C
+- For 2oz copper, trace width must be **~3.5mm**
+- **Recommendation:** Since space is tight (80×80mm), use **Polygon Pours (Zones)** on both Top and Bottom layers stitched with vias for the High-Voltage Live and Neutral paths, rather than simple traces
+- This provides better current distribution and thermal management
 
 ### Low-Voltage Section
 
@@ -289,15 +297,16 @@ If cost constraints require 2-layer, the following stackup is acceptable but wit
 
 **Note:** With 5mm edge rails on all sides, the usable component placement area is **70mm × 70mm**.
 
-| Strategy                   | Implementation                                  |
-| -------------------------- | ----------------------------------------------- |
-| **Vertical HLK placement** | Stand HLK-15M05C upright if needed (48×28×18mm) |
-| **Relay clustering**       | K1, K3 (slim 5mm) flanking K2 (standard)        |
-| **RP2354 placement**       | QFN-60 package, keep crystal close to XIN/XOUT  |
-| **Crystal placement**      | 12MHz crystal + load caps within 5mm of RP2354  |
-| **Bottom-edge connectors** | All connectors aligned, vertical entry          |
-| **Component density**      | 0603/0805 passives, tight but DFM-compliant     |
-| **Edge rail compliance**   | All components ≥5mm from board edges            |
+| Strategy                   | Implementation                                                                                                     |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Vertical HLK placement** | Stand HLK-15M05C upright if needed (48×28×18mm)                                                                    |
+| **Relay clustering**       | K1, K3 (slim 5mm) flanking K2 (standard)                                                                           |
+| **RP2354 placement**       | QFN-60 package (7×7mm), keep crystal close to XIN/XOUT, verify thermal pad connection                              |
+| **Crystal placement**      | 12MHz crystal + load caps within 5mm of RP2354                                                                     |
+| **QFN-60 footprint**       | **VERIFY:** Use QFN-60 (7×7mm) footprint, NOT QFN-80 (10×10mm). Thermal pad must connect to GND with multiple vias |
+| **Bottom-edge connectors** | All connectors aligned, vertical entry                                                                             |
+| **Component density**      | 0603/0805 passives, tight but DFM-compliant                                                                        |
+| **Edge rail compliance**   | All components ≥5mm from board edges                                                                               |
 
 ### Fallback: 2-Edge Layout (if 80mm too tight)
 
@@ -342,6 +351,7 @@ J17─┤            │
 Standard FR4 coating is NOT sufficient for high-voltage isolation. IPC-2221B standards require **physical milled slots (cutouts)** in the PCB between High-Voltage Relay contacts and Low-Voltage logic sections.
 
 **Requirements:**
+
 - **Slot width:** Minimum 2mm (80 mil) milled cutout
 - **Slot depth:** Full PCB thickness (1.6mm)
 - **Clearance:** >3mm (120 mil) between any HV trace and LV section
@@ -351,6 +361,7 @@ Standard FR4 coating is NOT sufficient for high-voltage isolation. IPC-2221B sta
 **Rationale:** If contamination (moisture, dust, flux residue) bridges the isolation gap, a milled slot prevents arcing by creating a physical air gap. Standard solder mask alone cannot prevent tracking under fault conditions.
 
 **Implementation Example:**
+
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  HV SECTION (Relays, MOVs, Fuses)                      │
@@ -369,6 +380,7 @@ Standard FR4 coating is NOT sufficient for high-voltage isolation. IPC-2221B sta
 ```
 
 **Gerber File Requirements:**
+
 - Add milled slot as a "routed slot" or "plated slot" layer in PCB design software
 - Specify slot width: 2mm minimum
 - Ensure slot extends full PCB thickness (no copper in slot)
@@ -385,28 +397,44 @@ Standard FR4 coating is NOT sufficient for high-voltage isolation. IPC-2221B sta
 3. **Ferrite bead** (FB1): Place between digital and analog 3.3V
 4. **Reference capacitors** (C7, C7A): Place directly at U9 output
 5. **NTC filter caps** (C8, C9): Place close to ADC pins
+6. **⚠️ CRITICAL - Thermal Isolation:** Place NTC analog front-end (ADC resistors R1/R2, filter caps C8/C9, hum filters R_HUM/C_HUM) **physically far away** from heat-generating components:
+   - **F1 (10A Fuse):** Generates localized heat during high-current operation
+   - **K2 (Pump Relay):** Generates heat during extended pump operation
+   - **Minimum distance:** ≥20mm from F1 and K2 to prevent thermal gradients affecting temperature reading accuracy
+   - **Thermal vias:** Do NOT place thermal vias near NTC circuits (they conduct heat from bottom layer)
 
 ### RP2354 MCU Section (v2.31)
 
-1. **Crystal placement**: 12MHz crystal (Y1) + load caps (C_XTAL) within 5mm of XIN/XOUT pins
+1. **⚠️ CRITICAL - QFN-60 Footprint Verification:**
+   - **Package:** RP2354A uses **QFN-60 (7×7mm)** footprint, NOT QFN-80 (10×10mm)
+   - **Pin 1 orientation:** Verify Pin 1 marker matches RP2354A datasheet (typically corner dot/bevel)
+   - **Pad dimensions:** Verify pad size matches QFN-60 specification (typically 0.25mm × 0.5mm)
+   - **Thermal pad:** Central thermal pad (GND) must connect to PCB ground plane with **multiple vias** (minimum 4 vias, preferably 9 in 3×3 grid) for heat dissipation
+   - **Via size:** Use 0.2mm vias with 0.1mm thermal relief spokes (prevents tombstoning during reflow)
+   - **Solder paste:** Thermal pad requires 50-80% paste coverage (check stencil design)
+2. **Crystal placement**: 12MHz crystal (Y1) + load caps (C_XTAL) + series resistor (R_XTAL) within 5mm of XIN/XOUT pins
+   - **Crystal selection**: Raspberry Pi recommends using characterized crystal parts (e.g., Abracon ABM8-12.000MHZ-B2-T) with recommended external components
    - **Load capacitance calculation**: C_L,external = 2 × (C_L,crystal - C_stray)
    - Typical: C_L,crystal = 12-20pF (from crystal datasheet), C_stray = 2-5pF (PCB + MCU pins)
-   - Result: C_XTAL = 2 × (15pF - 3pF) = 24pF each → use 22pF standard value
+   - Result: C_XTAL = 2 × (15pF - 3pF) = 24pF each → use 22pF standard value (or 15pF/27pF per crystal datasheet)
+   - **Series resistor (R_XTAL)**: 1kΩ resistor in series with XOUT pin to prevent overdriving the crystal (recommended by Raspberry Pi)
    - **Ground guard ring**: Surround crystal on layer below to prevent frequency pulling from EMI
-2. **Decoupling**: 100nF ceramic cap at each IOVDD pin, placed as close as possible
-3. **Core voltage (DVDD)**: External LDO (U4) generates 1.1V
+   - **⚠️ CRITICAL:** Crystal (Y1) is **REQUIRED** for USB operation and reliable high-speed PLL (150MHz) performance. Internal ring oscillator (ROSC) is not precise enough for 921k baud UART or accurate timing.
+   - **Alternative**: External active clock signal can be supplied to XIN pin if internal oscillator circuit is disabled in software (not recommended for this design)
+3. **Decoupling**: 100nF ceramic cap at each IOVDD pin, placed as close as possible
+4. **Core voltage (DVDD)**: External LDO (U4) generates 1.1V
    - **LDO placement**: Close to RP2354, minimize trace length to DVDD pins
    - **Decoupling**: 10µF bulk (1206) + 100nF (0805) on LDO output, placed near DVDD pins
    - **L2 inductor REMOVED**: No longer needed (internal SMPS disabled)
-4. **VREG pins configuration**:
+5. **VREG pins configuration**:
    - VREG_VIN: Connect to +3.3V
    - VREG_AVDD: Connect to +3.3V via RC filter (33Ω + 100nF)
    - VREG_LX: Leave unconnected (floating)
    - VREG_PGND: Connect to ground plane
-5. **QSPI pin protection**:
+6. **QSPI pin protection**:
    - QSPI_SS (CSn): Add 10kΩ pull-up to +3.3V (R_QSPI_CS) to ensure defined state during POR
    - Prevents parasitic boot mode entry that could corrupt internal flash boot sequence
-6. **SWD routing**: SWDIO/SWCLK (dedicated pins) traces to J15 Pins 6/8 via 47Ω series resistors (R_SWD)
+7. **SWD routing**: SWDIO/SWCLK (dedicated pins) traces to J15 Pins 6/8 via 47Ω series resistors (R_SWD)
    - Route as differential-like pair with ground guard trace
    - Keep short and away from noisy signals
    - Add RUN (reset) line to debug header if not present
@@ -577,3 +605,48 @@ Standard FR4 coating is NOT sufficient for high-voltage isolation. IPC-2221B sta
 | Cable entry | Gland or grommet recommended |
 
 **Note:** Conformal coating on PCB provides additional moisture protection.
+
+---
+
+## Manufacturing Pre-Flight Checklist
+
+**⚠️ CRITICAL:** Verify all items below before exporting Gerber files for fabrication.
+
+### Component Verification
+
+- [ ] **Crystal (Y1):** 12MHz crystal (recommended: Abracon ABM8-12.000MHZ-B2-T or equivalent characterized part) + load capacitors (C_XTAL1, C_XTAL2 = 22pF) + series resistor (R_XTAL = 1kΩ) added to schematic/BOM/layout
+- [ ] **Crystal placement:** Within 5mm of RP2354 XIN/XOUT pins (Pins 20/21)
+- [ ] **Series resistor:** R_XTAL (1kΩ) connected in series with XOUT pin to prevent overdriving crystal (per Raspberry Pi recommendations)
+- [ ] **C_SRif voltage rating:** Verify capacitor is **250V AC (X2 safety rating)** or **630V DC**, NOT 25V standard ceramic
+
+### Footprint Verification
+
+- [ ] **RP2354 QFN-60:** Verify footprint is **QFN-60 (7×7mm)**, NOT QFN-80 (10×10mm)
+- [ ] **Pin 1 orientation:** Verify Pin 1 marker matches RP2354A datasheet
+- [ ] **Thermal pad:** Central GND pad connected to ground plane with **multiple vias** (minimum 4, preferably 9 in 3×3 grid)
+- [ ] **Via thermal relief:** Use 0.1mm thermal relief spokes to prevent tombstoning during reflow
+
+### Power Trace Verification
+
+- [ ] **10A Fused Live Bus:** Trace width ≥7mm (1oz) or ≥3.5mm (2oz), OR use **polygon pours** on both layers stitched with vias
+- [ ] **Polygon pours:** Verify HV Live and Neutral use polygon pours (zones) rather than simple traces for better current distribution
+- [ ] **Temperature rise:** Verify trace width keeps temperature rise <10°C at 10A
+
+### Thermal Considerations
+
+- [ ] **NTC placement:** Verify NTC analog front-end (R1/R2, C8/C9, R_HUM/C_HUM) is **≥20mm away** from F1 (fuse) and K2 (pump relay)
+- [ ] **Thermal vias:** Do NOT place thermal vias near NTC circuits (they conduct heat from bottom layer)
+
+### Safety Verification
+
+- [ ] **Isolation slots:** Verify 6mm isolation slots between HV and LV sections
+- [ ] **Keep-out zones:** Verify 6mm keep-out zone between HV traces and LV ground pour
+- [ ] **Edge clearance:** Verify 5mm edge clearance for all components (except connectors)
+
+### Design Rule Check (DRC)
+
+- [ ] **Run DRC:** Verify all design rules pass (trace width, clearance, via size, etc.)
+- [ ] **Gerber review:** Review all Gerber layers before sending to manufacturer
+- [ ] **Assembly drawing:** Verify component placement matches assembly drawing
+
+**Once all items are checked, the board is ready for fabrication.**
