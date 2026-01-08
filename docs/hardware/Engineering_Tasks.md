@@ -359,3 +359,4 @@ _These items address safety, hardware longevity, and immediate failure risks. Th
 
 **Last Updated:** January 2026  
 **Next Review:** Before PCB fabrication order
+

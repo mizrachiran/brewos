@@ -1573,21 +1573,11 @@ using the machine's existing high-voltage wiring. NO HIGH CURRENT flows through 
                                            │
                                       ESP32 RX2
                                     (GPIO16)
-                                           │
-                                      ┌────┴────┐
-                                      │ R_SWD  │
-                                      │  4.7kΩ │ (CRITICAL: E9 errata fix)
-                                      │Pull-down│
-                                      └────┬────┘
-                                           │
-                                          ─┴─
-                                          GND
 
     • SWDIO and SWCLK are dedicated physical pins on RP2354 (not multiplexed GPIOs)
     • 47Ω series resistors (R_SWDIO, R_SWCLK) provide ESD/ringing protection
-    • **4.7kΩ pull-down on SWCLK (R_SWD_PD) is REQUIRED** to fix RP2354 errata E9
-    • E9 errata: SWCLK internal pull-down can latch high (~2.2V), causing OTA failures
-    • External pull-down ensures SWCLK stays LOW when not driven, preventing "ACK 0x07" errors
+    • **NO pull-down resistors needed on SWD lines** - dedicated SWD pins are separate from GPIO bank
+    • RP2350 E9 errata affects GPIO Input Buffer circuitry, NOT the dedicated Debug Port interface
     • Used for factory flash and recovery (blank chips, corrupted firmware)
 
 
@@ -1645,7 +1635,7 @@ using the machine's existing high-voltage wiring. NO HIGH CURRENT flows through 
     Pin 5: RUN     ← ESP32 GPIO20/4 (to RP2354 RUN pin, screen/noscreen variant)
     Pin 6: SWDIO   ↔ ESP32 TX2 (GPIO17) ↔ RP2354 SWDIO (dedicated pin, 47Ω series)
     Pin 7: WGHT    ← ESP32 GPIO19/6 (to RP2354 GPIO21, screen/noscreen variant) - Brew-by-weight stop signal
-    Pin 8: SWCLK   ↔ ESP32 RX2 (GPIO16) ↔ RP2354 SWCLK (dedicated pin, 47Ω series + 4.7kΩ pull-down)
+    Pin 8: SWCLK   ↔ ESP32 RX2 (GPIO16) ↔ RP2354 SWCLK (dedicated pin, 47Ω series only)
 
     Component Values:
     ─────────────────
@@ -1655,7 +1645,9 @@ using the machine's existing high-voltage wiring. NO HIGH CURRENT flows through 
     R73:       4.7kΩ 5%, 0805 (WEIGHT_STOP pull-down, RP2350 E9)
     R_SWDIO:   47Ω 5%, 0805 (SWDIO series protection, J15 Pin 6)
     R_SWCLK:   47Ω 5%, 0805 (SWCLK series protection, J15 Pin 8)
-    R_SWD_PD:  4.7kΩ 5%, 0805 (SWCLK pull-down, CRITICAL for RP2354 E9 errata fix)
+    
+    **Note:** SWD lines (SWDIO/SWCLK) use dedicated pins and do NOT require pull-down resistors.
+    The RP2350 E9 errata affects GPIO inputs only, not the dedicated Debug Port interface.
     C13:       100µF 10V, Electrolytic (ESP32 power decoupling)
 
     **Note:** R74 and R75 are DNP (Do Not Populate) in v2.31 - GPIO16/22 are no longer used for SWD.

@@ -87,9 +87,9 @@ HV section is now floating - no Earth connection on PCB to prevent L-to-Earth sh
 | 3   | RP2354_TX   | RP2354→ESP32     | GPIO0 via 33Ω (R40, ESD/ringing protection) + TVS (D_UART_TX) |
 | 4   | RP2354_RX   | ESP32→RP2354     | GPIO1 via 33Ω (R41, ESD/ringing protection) + TVS (D_UART_RX) |
 | 5   | RP2354_RUN  | ESP32→RP2354     | Reset control                                                 |
-| 6   | **SWDIO**   | **ESP32↔RP2354** | **RP2354 SWDIO Pin ↔ ESP32 TX2, 47Ω series (R_SWD)**          |
-| 7   | WEIGHT_STOP | ESP32→RP2354     | GPIO21, 4.7kΩ pull-down (R73)                                 |
-| 8   | **SWCLK**   | **ESP32↔RP2354** | **RP2354 SWCLK Pin ↔ ESP32 RX2, 47Ω series (R_SWD)**          |
+| 6   | **SWDIO**   | **ESP32↔RP2354** | **RP2354 SWDIO Pin ↔ ESP32 TX2, 47Ω series (R_SWDIO) only**   |
+| 7   | WEIGHT_STOP | ESP32→RP2354     | GPIO21, 4.7kΩ pull-down (R73, RP2350 E9 errata)               |
+| 8   | **SWCLK**   | **ESP32↔RP2354** | **RP2354 SWCLK Pin ↔ ESP32 RX2, 47Ω series (R_SWCLK) only**   |
 
 **SWD Interface (v2.31):**
 Pins 6 and 8 connect to the **dedicated SWDIO and SWCLK physical pins** on the RP2354 (NOT GPIO 16/22). This enables:
@@ -98,7 +98,10 @@ Pins 6 and 8 connect to the **dedicated SWDIO and SWCLK physical pins** on the R
 - Hardware-level recovery if firmware is corrupted
 - Remote debugging capability (GDB via ESP32)
 
-**Important:** GPIO 16 and 22 are now available for other uses since J15 traces connect to the dedicated SWD pins instead.
+**Important:** 
+- GPIO 16 and 22 are now available for other uses since J15 traces connect to the dedicated SWD pins instead.
+- **SWD lines use 47Ω series resistors only** - NO pull-down resistors needed. The RP2350 E9 errata affects GPIO Input Buffer circuitry, NOT the dedicated Debug Port interface.
+- **GPIO inputs (e.g., GPIO21/WEIGHT_STOP) require 4.7kΩ pull-down resistors** for E9 errata mitigation, but SWD lines do not.
 
 **ESD Protection:**
 

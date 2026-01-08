@@ -94,7 +94,7 @@ R74,Resistor,DNP,0805,,,,DNP - No longer used (v2.31: GPIO16 no longer used for 
 R75,Resistor,DNP,0805,,,,DNP - No longer used (v2.31: GPIO22 no longer used for SWD)
 R_SWDIO,Resistor,47R,0805,1=SWDIO,2=J15_6,,SWDIO series protection (J15 Pin 6)
 R_SWCLK,Resistor,47R,0805,1=SWCLK,2=J15_8,,SWCLK series protection (J15 Pin 8)
-R_SWD_PD,Resistor,4.7k,0805,1=GND,2=SWCLK,,SWCLK pull-down (CRITICAL for RP2354 errata E9)
+R_SWD_PD,Resistor,DNP,0805,,,,DNP - Not needed (v2.31: SWD uses dedicated pins, no pull-down required)
 R81,Resistor,10k_1%,0805,1=AC_OUT,2=OPA_NEG,,Level probe oscillator feedback
 R82,Resistor,4.7k_1%,0805,1=OPA_NEG,2=GND,,Level probe gain setting (A_CL=3.13)
 R83,Resistor,10k_1%,0805,1=OPA_POS,2=WIEN1,,Level probe Wien bridge
