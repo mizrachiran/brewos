@@ -16,17 +16,19 @@
 
 ## Transistors and Diodes
 
-| Qty   | Ref                      | Description    | Part Number     | Package     | Notes                                                      |
-| ----- | ------------------------ | -------------- | --------------- | ----------- | ---------------------------------------------------------- |
-| 5     | Q1-Q5                    | NPN Transistor | MMBT2222A       | SOT-23      | 3 relay + 2 SSR drivers                                    |
-| 3     | D1-D3                    | Fast Flyback   | UF4007          | DO-41       | 75ns recovery                                              |
-| 6     | D10-D15                  | ESD Protection | PESD5V0S1BL     | SOD-323     | Sensor inputs                                              |
-| 1     | D16                      | Schottky Clamp | BAT54S          | SOT-23      | Pressure ADC protection                                    |
-| **1** | **D_PRESSURE**           | **TVS Diode**  | **PESD3V3S1BL** | **SOD-323** | **Pressure ADC hard clamp (parallel to D16, low-leakage)** |
-| 1     | D20                      | TVS Diode      | SMBJ5.0A        | SMB         | 5V rail protection                                         |
-| 1     | D21                      | RS485 TVS      | SM712           | SOT-23      | A/B line protection                                        |
-| 2     | D23-D24                  | Zener          | BZT52C3V3       | SOD-123     | Service port clamp                                         |
-| **2** | **D_UART_TX, D_UART_RX** | **TVS Diode**  | **ESDALC6V1**   | **SOD-323** | **UART ESD protection (J15)**                              |
+| Qty   | Ref                      | Description    | Part Number     | Package     | Notes                                                                                           |
+| ----- | ------------------------ | -------------- | --------------- | ----------- | ----------------------------------------------------------------------------------------------- |
+| 5     | Q1-Q5                    | NPN Transistor | MMBT2222A       | SOT-23      | 3 relay + 2 SSR drivers                                                                         |
+| 3     | D1-D3                    | Fast Flyback   | UF4007          | DO-41       | 75ns recovery                                                                                   |
+| 6     | D10-D15                  | ESD Protection | PESD5V0S1BL     | SOD-323     | Sensor inputs                                                                                   |
+| 1     | D16                      | Schottky Clamp | BAT54S          | SOT-23      | Pressure ADC protection                                                                         |
+| **1** | **D_PRESSURE**           | **TVS Diode**  | **PESD3V3S1BL** | **SOD-323** | **Pressure ADC hard clamp (parallel to D16, low-leakage)**                                      |
+| 1     | D20                      | TVS Diode      | SMBJ5.0A        | SMB         | 5V rail protection                                                                              |
+| 1     | D21                      | RS485 TVS      | SM712           | SOT-23      | A/B line protection                                                                             |
+| 2     | D23-D24                  | Zener          | BZT52C3V3       | SOD-123     | Service port clamp                                                                              |
+| **2** | **D_UART_TX, D_UART_RX** | **TVS Diode**  | **ESDALC6V1**   | **SOD-323** | **UART ESD protection (J15)**                                                                   |
+| **1** | **D_VBUS**               | **Schottky**   | **SS14**        | **SMA**     | **VBUS to VSYS isolation (1A rating required for ESP32 load, prevents backfeeding HLK module)** |
+| **2** | **D_USB_DP, D_USB_DM**   | **TVS Diode**  | **PESD5V0S1BL** | **SOD-323** | **USB D+/D- ESD protection (J_USB)**                                                            |
 
 ## Resistors
 
@@ -69,17 +71,20 @@
 
 ### Communication
 
-| Qty   | Ref        | Value   | Tolerance | Package  | Notes                                                                    |
-| ----- | ---------- | ------- | --------- | -------- | ------------------------------------------------------------------------ |
-| 4     | R40-R43    | **1kΩ** | 5%        | 0805     | UART series (5V tolerance protection) + TVS diodes (D_UART_TX/RX)        |
-| 1     | R44        | 1kΩ     | 5%        | 0805     | Power meter TX series (5V tolerance protection)                          |
-| 1     | R45        | 2.2kΩ   | 1%        | 0805     | J17 RX level shift (upper)                                               |
-| 1     | R45A       | 3.3kΩ   | 1%        | 0805     | J17 RX level shift (lower)                                               |
-| 1     | R45B       | 33Ω     | 5%        | 0805     | J17 RX series                                                            |
-| 2     | R46-R47    | 4.7kΩ   | 5%        | 0805     | I2C pull-ups                                                             |
-| 2     | R93-R94    | 20kΩ    | 5%        | 0805     | RS485 failsafe bias                                                      |
-| **2** | **R_SWD**  | **47Ω** | **5%**    | **0805** | **SWD Series Protection (J15-6/8)**                                      |
-| **1** | **R_XTAL** | **1kΩ** | **5%**    | **0805** | **Crystal series resistor (recommended to prevent overdriving crystal)** |
+| Qty   | Ref                    | Value        | Tolerance | Package  | Notes                                                                                                  |
+| ----- | ---------------------- | ------------ | --------- | -------- | ------------------------------------------------------------------------------------------------------ |
+| 4     | R40-R43                | **1kΩ**      | 5%        | 0805     | UART series (5V tolerance protection) + TVS diodes (D_UART_TX/RX)                                      |
+| 1     | R44                    | 1kΩ          | 5%        | 0805     | Power meter TX series (5V tolerance protection)                                                        |
+| 1     | R45                    | 2.2kΩ        | 1%        | 0805     | J17 RX level shift (upper)                                                                             |
+| 1     | R45A                   | 3.3kΩ        | 1%        | 0805     | J17 RX level shift (lower)                                                                             |
+| 1     | R45B                   | 33Ω          | 5%        | 0805     | J17 RX series                                                                                          |
+| 2     | R46-R47                | 4.7kΩ        | 5%        | 0805     | I2C pull-ups                                                                                           |
+| 2     | R93-R94                | 20kΩ         | 5%        | 0805     | RS485 failsafe bias                                                                                    |
+| **2** | **R_SWD**              | **47Ω**      | **5%**    | **0805** | **SWD Series Protection (J15-6/8)**                                                                    |
+| **1** | **R_XTAL**             | **1kΩ**      | **5%**    | **0805** | **Crystal series resistor (recommended to prevent overdriving crystal)**                               |
+| **2** | **R_CC1, R_CC2**       | **5.1kΩ**    | **1%**    | **0603** | **USB-C CC pull-down resistors (5.1kΩ for 5V power)**                                                  |
+| **1** | **F_USB**              | **PTC Fuse** | **1A**    | **1206** | **VBUS overcurrent protection (replaces R_VBUS, protects against USB power faults)**                   |
+| **2** | **R_USB_DP, R_USB_DM** | **27Ω**      | **1%**    | **0603** | **USB D+/D- series termination (required for RP2354 USB impedance matching, place close to MCU pins)** |
 
 ### User Interface
 
@@ -175,17 +180,18 @@
 
 ## Connectors
 
-| Qty   | Ref     | Description           | Part Number            | Notes                                                  |
-| ----- | ------- | --------------------- | ---------------------- | ------------------------------------------------------ |
-| **2** | **J1**  | **6.3mm Spade**       | **Keystone 1285**      | **Mains input (L, N) - 2 discrete terminals required** |
-| 3     | J2-J4   | 6.3mm Spade           | Keystone 1285          | Relay outputs                                          |
-| 1     | J5      | 6.3mm Spade           | Keystone 1285          | Chassis Reference (SRif)                               |
-| 1     | **J26** | Screw Terminal 18-pos | Phoenix MKDS 1/18-5.08 | All LV connections                                     |
-| 1     | J15     | JST-XH 8-pin          | JST B8B-XH-A           | ESP32 module (SWD support on Pins 6,8)                 |
-| 1     | J16     | Header 4-pin          | 2.54mm pitch           | Service/debug                                          |
-| 1     | J17     | JST-XH 6-pin          | JST B6B-XH-A           | Power meter                                            |
-| 1     | J23     | Header 4-pin          | 2.54mm pitch           | I2C accessory                                          |
-| 1     | J24     | Screw Terminal 2-pos  | 5.08mm pitch           | Power meter HV (L, N only - PE removed)                |
+| Qty   | Ref       | Description           | Part Number                     | Notes                                                          |
+| ----- | --------- | --------------------- | ------------------------------- | -------------------------------------------------------------- |
+| **2** | **J1**    | **6.3mm Spade**       | **Keystone 1285**               | **Mains input (L, N) - 2 discrete terminals required**         |
+| 3     | J2-J4     | 6.3mm Spade           | Keystone 1285                   | Relay outputs                                                  |
+| 1     | J5        | 6.3mm Spade           | Keystone 1285                   | Chassis Reference (SRif)                                       |
+| 1     | **J26**   | Screw Terminal 18-pos | Phoenix MKDS 1/18-5.08          | All LV connections                                             |
+| 1     | J15       | JST-XH 8-pin          | JST B8B-XH-A                    | ESP32 module (SWD support on Pins 6,8)                         |
+| 1     | J16       | Header 4-pin          | 2.54mm pitch                    | Service/debug                                                  |
+| 1     | J17       | JST-XH 6-pin          | JST B6B-XH-A                    | Power meter                                                    |
+| 1     | J23       | Header 4-pin          | 2.54mm pitch                    | I2C accessory                                                  |
+| 1     | J24       | Screw Terminal 2-pos  | 5.08mm pitch                    | Power meter HV (L, N only - PE removed)                        |
+| **1** | **J_USB** | **USB-C Connector**   | **USB-C 2.0 (e.g., USB-C-016)** | **RP2354 USB programming/debug (VBUS, D+, D-, GND, CC1, CC2)** |
 
 ## Solder Jumpers
 

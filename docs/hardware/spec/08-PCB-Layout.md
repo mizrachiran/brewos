@@ -284,11 +284,11 @@ If cost constraints require 2-layer, the following stackup is acceptable but wit
 │    │        SLOT         ║                                                │   │
 │    ════════════════════════════════════════════════════════════════════════    │
 │    BOTTOM EDGE - ALL CONNECTORS (enclosure opening)                             │
-│    ┌───┬───┬───┬───┬─────┬──────────────────┬────────┬────────┬──────┬────┐ │
-│    │J1 │J2 │J3 │J4 │ J24 │       J26        │  J15   │  J17   │ J16  │ J5 │ │
-│    │L/N│LED│PMP│SOL│MTR  │    SENSORS       │ ESP32  │ METER  │DEBUG │SRif│ │
-│    │   │   │   │   │ HV  │    (18-pos)      │(8-pin) │(6-pin) │(4pin)│    │ │
-│    └───┴───┴───┴───┴─────┴──────────────────┴────────┴────────┴──────┴────┘ │
+│    ┌───┬───┬───┬───┬─────┬──────────────────┬────────┬────────┬──────┬────┬──────┐ │
+│    │J1 │J2 │J3 │J4 │ J24 │       J26        │  J15   │  J17   │ J16  │ J5 │J_USB │ │
+│    │L/N│LED│PMP│SOL│MTR  │    SENSORS       │ ESP32  │ METER  │DEBUG │SRif│ USB-C│ │
+│    │   │   │   │   │ HV  │    (18-pos)      │(8-pin) │(6-pin) │(4pin)│    │      │ │
+│    └───┴───┴───┴───┴─────┴──────────────────┴────────┴────────┴──────┴────┴──────┘ │
 │                                                                                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -438,6 +438,17 @@ Standard FR4 coating is NOT sufficient for high-voltage isolation. IPC-2221B sta
    - Route as differential-like pair with ground guard trace
    - Keep short and away from noisy signals
    - Add RUN (reset) line to debug header if not present
+8. **USB-C port (J_USB)**: USB D+/D- routing to RP2354 USB pins
+   - **USB D+/D- traces**: Route as differential pair (90Ω impedance, if possible)
+   - **Length matching**: Keep D+ and D- traces equal length (±0.1mm)
+   - **ESD protection**: Place **D_USB_DP/D_USB_DM (PESD5V0S1BL) as close as possible to the USB Connector (J_USB)**. This shunts ESD spikes at the entry point before they enter the board's internal circuitry (best practice per Raspberry Pi guidelines).
+   - **Termination resistors**: Place **R_USB_DP/R_USB_DM (27Ω) as close as possible to the RP2354 USB pins** (required for impedance matching). Signal flow: Connector → ESD Diode → Trace → Termination Resistor → MCU.
+   - **VBUS routing**: VBUS → F_USB (1A PTC fuse) → D_VBUS (SS14, 1A Schottky) → VSYS
+   - **CC resistors**: Place R_CC1/R_CC2 (5.1kΩ) close to connector CC pins
+   - **Ground**: Solid ground plane under USB traces, connect connector shield to GND
+   - **Placement**: USB-C connector on bottom edge, **covered or internal** (requiring panel removal to access) to discourage casual use while machine is mains-powered
+   - **⚠️ CRITICAL:** D_VBUS must be 1A rated (SS14) for ESP32 load. BAT54S (200mA) will fail.
+   - **⚠️ CRITICAL:** 27Ω termination resistors are required for stable USB communication. Without them, USB may be unstable or fail.
 
 ### Power Section
 

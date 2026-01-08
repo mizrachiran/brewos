@@ -150,6 +150,44 @@ The ESP32-S3 module **MUST** use an external antenna connected via u.FL/IPEX con
 
 ---
 
+## USB-C Programming Port (J_USB)
+
+USB-C connector for direct RP2354 programming and debugging via USB.
+
+| Pin  | Signal | Notes                                                         |
+| ---- | ------ | ------------------------------------------------------------- |
+| VBUS | VBUS   | USB power (5V), connected to VSYS via D_VBUS (Schottky diode) |
+| D+   | USB_DP | USB data positive, to RP2354 USB D+ pin                       |
+| D-   | USB_DM | USB data negative, to RP2354 USB D- pin                       |
+| GND  | GND    | USB ground                                                    |
+| CC1  | CC1    | Configuration channel 1 (5.1kΩ pull-down)                     |
+| CC2  | CC2    | Configuration channel 2 (5.1kΩ pull-down)                     |
+
+**Features:**
+
+- **Direct USB programming:** Connect USB-C cable to PC for firmware flashing via USB bootloader
+- **USB CDC Serial:** Supports USB serial communication (if enabled in firmware)
+- **Power input:** VBUS (5V) can power the board via VSYS (isolated from HLK module via D_VBUS)
+- **CC resistors:** 5.1kΩ pull-downs on CC1/CC2 enable 5V power delivery
+
+**⚠️ SAFETY WARNINGS:**
+
+- **NEVER connect USB while mains-powered:** See [USB Debugging Safety](spec/09-Safety.md#usb-debugging-safety) for details
+- **Floating ground risk:** USB shield is not hard-earthed (SRif architecture)
+- **Power sequencing:** If using USB power, ensure IOVDD is present before applying signals to GPIOs
+- **Physical safety:** USB port should be **covered or internal** (requiring panel removal to access) to discourage casual use while machine is mains-powered. This prevents ground loop hazards and floating ground risks.
+
+**Protection:**
+
+- **F_USB:** 1A PTC fuse protects against USB power faults (replaces undersized R_VBUS)
+- **D_VBUS:** SS14 Schottky diode (1A rating) prevents backfeeding HLK module when USB is connected. **Critical:** Must be 1A rated for ESP32 load (355mA typical, 910mA peak)
+- **D_USB_DP/D_USB_DM:** PESD5V0S1BL ESD protection diodes (**placed close to USB Connector J_USB** - shunts ESD spikes at entry point before they enter board, per Raspberry Pi best practices)
+- **R_USB_DP/R_USB_DM:** 27Ω series termination resistors (**placed close to RP2354 USB pins** - required for USB impedance matching). Signal flow: Connector → ESD Diode → Trace → Termination Resistor → MCU.
+
+**Part Number:** USB-C 2.0 connector (e.g., USB-C-016, Molex 47346-0001, or equivalent)
+
+---
+
 ## Power Meter Interface (J17)
 
 6-pin JST-XH for external power meter (PZEM-004T, JSY-MK, Eastron SDM, etc.).

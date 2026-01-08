@@ -166,6 +166,15 @@ J20,Connector,Header_2x20,2.54mm,,,,"Pico socket"
 J23,Connector,Header_4pos,2.54mm,1=+3.3V,2=GND,3=I2C0_SDA,4=I2C0_SCL,I2C accessory port (GPIO8/9)
 J24,Connector,Screw_2pos,5.08mm,1=L_FUSED,2=N,External power meter HV input (L/N only - PE removed, HV section floating)
 J26,Connector,Screw_18pos,5.08mm,1=GPIO2,2=GND,3=GPIO3,4=GND,5=PROBE,6=GPIO5,7=GND,8=ADC0,9=GND,10=ADC1,11=GND,12=+5V,13=GND,14=PRESS_SIG,15=+5V,16=SSR1_NEG,17=+5V,18=SSR2_NEG,Unified LV terminal 18-pos (switches + NTCs + pressure + SSRs)
+J_USB,Connector,USB-C_2.0,USB-C,1=VBUS,2=USB_DP_CONN,3=USB_DM_CONN,4=GND,5=CC1,6=CC2,RP2354 USB-C programming/debug port (VBUS→VSYS via F_USB/D_VBUS, D+/D- to RP2354 USB pins via R_USB_DP/DM)
+R_CC1,Resistor,5.1k_1%,0603,1=CC1,2=GND,,USB-C CC1 pull-down (5.1kΩ for 5V power delivery)
+R_CC2,Resistor,5.1k_1%,0603,1=CC2,2=GND,,USB-C CC2 pull-down (5.1kΩ for 5V power delivery)
+F_USB,Fuse,PTC_1A,1206,1=VBUS,2=VBUS_FILT,,VBUS overcurrent protection (PTC fuse, protects against USB power faults, replaces undersized R_VBUS)
+D_VBUS,Schottky_Diode,SS14,SMA,A=VBUS_FILT,K=VSYS,,VBUS to VSYS isolation diode (1A rating required for ESP32 load ~355mA typical/910mA peak, prevents backfeeding HLK module when USB connected)
+R_USB_DP,Resistor,27R_1%,0603,1=USB_DP_CONN,2=USB_DP_MCU,,USB D+ series termination (27Ω required for RP2354 USB impedance matching, place close to MCU pin before ESD diode)
+R_USB_DM,Resistor,27R_1%,0603,1=USB_DM_CONN,2=USB_DM_MCU,,USB D- series termination (27Ω required for RP2354 USB impedance matching, place close to MCU pin before ESD diode)
+D_USB_DP,ESD_Diode,PESD5V0S1BL,SOD-323,A=GND,K=USB_DP_CONN,,USB D+ ESD protection (Place close to USB Connector J_USB - shunts ESD spikes at entry point before they enter board)
+D_USB_DM,ESD_Diode,PESD5V0S1BL,SOD-323,A=GND,K=USB_DM_CONN,,USB D- ESD protection (Place close to USB Connector J_USB - shunts ESD spikes at entry point before they enter board)
 TP1,Test_Point,GPIO20_Spare,1.5mm,1=GPIO20,,,GPIO20/RS485_DE test point
 TP2,Test_Point,ADC_VREF,1.5mm,1=ADC_VREF,,,ADC reference test point (3.0V buffered)
 TP3,Test_Point,5V_MONITOR,1.5mm,1=5V_DIV,,,5V monitor test point (~1.8V at 5V nominal) - for ratiometric calibration

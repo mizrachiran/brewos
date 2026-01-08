@@ -80,18 +80,19 @@ Machine MCB (16A): House circuit protection
 
 ### Input Protection Summary
 
-| Signal           | Protection     | Device              | Notes                  |
-| ---------------- | -------------- | ------------------- | ---------------------- |
-| GPIO2 (Water)    | ESD clamp      | PESD5V0S1BL (D10)   | SOD-323                |
-| GPIO3 (Tank)     | ESD clamp      | PESD5V0S1BL (D11)   | SOD-323                |
-| GPIO4 (Level)    | ESD clamp      | PESD5V0S1BL (D12)   | SOD-323                |
-| GPIO5 (Brew)     | ESD clamp      | PESD5V0S1BL (D13)   | SOD-323                |
-| ADC0 (Brew NTC)  | ESD clamp      | PESD5V0S1BL (D14)   | SOD-323                |
-| ADC1 (Steam NTC) | ESD clamp      | PESD5V0S1BL (D15)   | SOD-323                |
-| ADC2 (Pressure)  | Schottky + TVS   | BAT54S (D16) + PESD3V3S1BL | Overvoltage protection (dual clamp, low-leakage TVS) |
-| 5V Rail          | TVS            | SMBJ5.0A (D20)      | Surge protection       |
-| RS485 A/B        | TVS            | SM712 (D21)         | Asymmetric (-7V/+12V)  |
-| Service TX/RX    | Zener clamp    | BZT52C3V3 (D23/D24) | 5V TTL protection      |
+| Signal           | Protection     | Device                     | Notes                                                |
+| ---------------- | -------------- | -------------------------- | ---------------------------------------------------- |
+| GPIO2 (Water)    | ESD clamp      | PESD5V0S1BL (D10)          | SOD-323                                              |
+| GPIO3 (Tank)     | ESD clamp      | PESD5V0S1BL (D11)          | SOD-323                                              |
+| GPIO4 (Level)    | ESD clamp      | PESD5V0S1BL (D12)          | SOD-323                                              |
+| GPIO5 (Brew)     | ESD clamp      | PESD5V0S1BL (D13)          | SOD-323                                              |
+| ADC0 (Brew NTC)  | ESD clamp      | PESD5V0S1BL (D14)          | SOD-323                                              |
+| ADC1 (Steam NTC) | ESD clamp      | PESD5V0S1BL (D15)          | SOD-323                                              |
+| ADC2 (Pressure)  | Schottky + TVS | BAT54S (D16) + PESD3V3S1BL | Overvoltage protection (dual clamp, low-leakage TVS) |
+| 5V Rail          | TVS            | SMBJ5.0A (D20)             | Surge protection                                     |
+| RS485 A/B        | TVS            | SM712 (D21)                | Asymmetric (-7V/+12V)                                |
+| Service TX/RX    | Zener clamp    | BZT52C3V3 (D23/D24)        | 5V TTL protection                                    |
+| USB D+/D-        | ESD clamp      | PESD5V0S1BL (D_USB_DP/DM)  | USB ESD protection (J_USB)                           |
 
 ### Pressure ADC Protection Detail
 
@@ -116,10 +117,12 @@ PRESS_SIG ────────┬──────────────�
 ```
 
 **Dual-Clamp Protection Strategy:**
+
 - **BAT54S (D16):** Fast Schottky clamp (low forward voltage, fast response)
 - **PESD3V3S1BL (D_PRESSURE):** Low-leakage TVS clamp (3.3V breakdown, <1µA leakage at 2.8V)
 
 **Protection Scenario:** If R3 fails open, full 5V appears at GPIO28.
+
 - BAT54S clamps to 3.3V + 0.3V = 3.6V (fast response)
 - PESD3V3S1BL provides hard clamp at 3.3V with minimal leakage at operating voltages (preserves measurement accuracy)
 - Both clamps work in parallel for redundant protection
@@ -205,6 +208,7 @@ MOVs are placed across **LOADS** (not across relay contacts):
 - [ ] **Failsafe:** If firmware crashes with SSR ON, high-limit thermostat will still open at 165°C, cutting power to heater
 
 **Wiring Diagram Verification:**
+
 ```
 Mains L ──► [High-Limit Thermostat] ──► [SSR AC Input] ──► [Heater Element] ──► N
                               │
@@ -279,6 +283,7 @@ PCB GND ◄── C_SRif (AC) / R_SRif (DC block) ◄── J5 (SRif) ◄──�
 **Consequences:**
 
 - **Steam Boiler Level Probe:** Reads "No Water" (high impedance = HIGH signal)
+
   - Autofill will attempt to run but will timeout (safe failure)
   - Heater will not turn on if firmware requires valid level reading (safe)
   - Ensure firmware handles "infinite fill" timeout gracefully (e.g., 30-second timeout with error indication)
@@ -320,12 +325,12 @@ The RP2354 "5V Tolerant" GPIO feature has a critical caveat documented in the da
 
 ### Protection Mechanisms Implemented
 
-| Protection                   | Component             | Purpose                                            |
-| ---------------------------- | --------------------- | -------------------------------------------------- |
+| Protection                   | Component             | Purpose                                                                          |
+| ---------------------------- | --------------------- | -------------------------------------------------------------------------------- |
 | Series resistors (1kΩ) + TVS | R40-R43, D_UART_TX/RX | 5V tolerance protection (limits fault current to <500µA during power sequencing) |
-| Pull-down resistors (4.7kΩ)  | R11-R15, R73-R75      | Ensures defined GPIO states at boot                |
-| ESD clamps                   | D10-D15               | Additional transient protection                    |
-| Schottky clamp (BAT54S)      | D16                   | ADC overvoltage protection                         |
+| Pull-down resistors (4.7kΩ)  | R11-R15, R73-R75      | Ensures defined GPIO states at boot                                              |
+| ESD clamps                   | D10-D15               | Additional transient protection                                                  |
+| Schottky clamp (BAT54S)      | D16                   | ADC overvoltage protection                                                       |
 
 ### Safe Operating Procedures
 
