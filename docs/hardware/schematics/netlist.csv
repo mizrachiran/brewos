@@ -56,6 +56,7 @@ R10,Resistor,10k_1%,0805,1=FB,2=GND,,TPS563200 feedback lower (sets 3.3V output)
 R_VREG_AVDD,Resistor,33R,0805,1=+3.3V,2=VREG_AVDD_FILT,,VREG_AVDD RC filter (series resistor)
 R_SRif,Resistor,1M,0805,1=J5,2=GND,,SRif DC blocking (parallel with C_SRif, prevents DC ground loops)
 R_QSPI_CS,Resistor,10k,0805,1=+3.3V,2=QSPI_SS,,QSPI_SS pull-up (boot protection, prevents parasitic boot mode entry)
+R_BOOTSEL,Resistor,1k,0805,1=QSPI_SS,2=BOOTSEL_NET,,BOOTSEL current limiting (protects QSPI_SS if button pressed during active flash access)
 R11,Resistor,4.7k,0805,1=GPIO10,2=GND,,K1 relay driver pull-down (per RP2350 errata E9)
 R12,Resistor,4.7k,0805,1=GPIO11,2=GND,,K2 relay driver pull-down (per RP2350 errata E9)
 R13,Resistor,4.7k,0805,1=GPIO12,2=GND,,K3 relay driver pull-down (per RP2350 errata E9)
@@ -148,6 +149,7 @@ RV1,Varistor,275V,14mm,1=L_FUSED,2=N_FUSED,,Mains surge protection (S14K275)
 RV2,Varistor,275V,10mm,1=J3_NO,2=N,,Pump arc suppression MOV across load (S10K275)
 RV3,Varistor,275V,10mm,1=J4_NO,2=N,,Solenoid arc suppression MOV across load (S10K275)
 SW1,Switch,Tactile_6x6mm,SMD,1=RP2354_RUN,2=GND,,Reset button (active-low via R71 pull-up)
+SW2,Switch,Tactile_6x6mm,SMD,1=BOOTSEL_NET,2=GND,,BOOTSEL button (Bootloader Entry - hold during reset to enter USB boot mode)
 BZ1,Buzzer,Passive_12mm,TH,1=BZ1_POS,2=GND,,Passive piezo buzzer
 FB1,Ferrite_Bead,600R_100MHz,0603,1=+3.3V,2=3V3_ANALOG,,ADC reference section isolation (feeds R7→LM4040→U9A→ADC_VREF)
 JP1,Solder_Jumper,Open,2-pad,1=ADC_VREF,2=R1A,,Brew NTC selection (OPEN=50kΩ ECM/Profitec, CLOSE=10kΩ Rocket/Gaggia)
@@ -159,7 +161,8 @@ J2,Connector,Terminal_2pos,6.3mm_Spade,1=J2_COM,2=J2_NO,,K1 output (Mains indica
 J3,Connector,Terminal_2pos,6.3mm_Spade,1=J3_COM,2=J3_NO,,K2 output (Pump)
 J4,Connector,Terminal_2pos,6.3mm_Spade,1=J4_COM,2=J4_NO,,K3 output (Solenoid)
 J5,Connector,Terminal_1pos,6.3mm_Spade,1=J5,Chassis Reference (SRif) - connects to PCB GND via C-R network (R_SRif + C_SRif parallel)
-J15,Connector,JST-XH_8pos,2.54mm,1=+5V,2=GND,3=RP2354_TX,4=RP2354_RX,5=RP2354_RUN,6=SWDIO,7=WEIGHT_STOP,8=SWCLK,ESP32 display (v2.31: SWD on dedicated pins 6/8, not GPIO16/22)
+J15,Connector,JST-XH_8pos,2.54mm,1=+5V,2=GND,3=RP2354_TX,4=RP2354_RX,5=J15_RUN,6=SWDIO,7=WEIGHT_STOP,8=SWCLK,ESP32 display (v2.31: SWD on dedicated pins 6/8, not GPIO16/22) - Pin 5 via R_RUN_EXT to prevent short-circuit with SW1
+R_RUN_EXT,Resistor,1k,0805,1=J15_5,2=RP2354_RUN,,Series resistor for external reset (prevents short-circuit when SW1 pressed while ESP32 drives HIGH, limits current to ~3.3mA)
 J16,Connector,Header_4pos,2.54mm,1=+3.3V,2=GND,3=SERVICE_TX,4=SERVICE_RX,Service/debug (shared GPIO0/1 with J15)
 J17,Connector,JST-XH_6pos,2.54mm,1=+3.3V,2=+5V,3=GND,4=J17_RX,5=J17_TX,6=RS485_DERE,Power meter interface (TTL/RS485) - 6-pin per v2.21 spec
 J20,Connector,Header_2x20,2.54mm,,,,"Pico socket"

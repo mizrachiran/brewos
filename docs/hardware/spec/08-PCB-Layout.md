@@ -434,10 +434,18 @@ Standard FR4 coating is NOT sufficient for high-voltage isolation. IPC-2221B sta
 6. **QSPI pin protection**:
    - QSPI_SS (CSn): Add 10kΩ pull-up to +3.3V (R_QSPI_CS) to ensure defined state during POR
    - Prevents parasitic boot mode entry that could corrupt internal flash boot sequence
+   - **BOOTSEL button (SW2)**: Add tactile switch for USB bootloader entry
+     - Connection: QSPI_SS → R_BOOTSEL (1kΩ) → SW2 → GND
+     - Usage: Hold SW2, press & release SW1 (Reset), release SW2 → Enters USB boot mode
+     - Placement: Accessible to user, near SW1 (Reset button)
+     - Protection: R_BOOTSEL (1kΩ) limits current if button pressed during active flash access
 7. **SWD routing**: SWDIO/SWCLK (dedicated pins) traces to J15 Pins 6/8 via 47Ω series resistors (R_SWD)
    - Route as differential-like pair with ground guard trace
    - Keep short and away from noisy signals
-   - Add RUN (reset) line to debug header if not present
+   - **Reset line protection**: Place R_RUN_EXT (1kΩ) between J15 Pin 5 and RP2354_RUN net
+     - Prevents short-circuit when SW1 (Reset button) is pressed while ESP32 drives RUN HIGH
+     - Limits current to ~3.3mA (safe for ESP32 GPIO)
+     - Placement: Near J15 connector
 8. **USB-C port (J_USB)**: USB D+/D- routing to RP2354 USB pins
    - **USB D+/D- traces**: Route as differential pair (90Ω impedance, if possible)
    - **Length matching**: Keep D+ and D- traces equal length (±0.1mm)

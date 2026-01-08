@@ -80,16 +80,16 @@ HV section is now floating - no Earth connection on PCB to prevent L-to-Earth sh
 
 8-pin JST-XH connector for external ESP32 display module. **Updated in v2.31 for SWD support.**
 
-| Pin | Signal      | Direction        | Notes                                                          |
-| --- | ----------- | ---------------- | -------------------------------------------------------------- |
-| 1   | +5V         | Power            | ESP32 power                                                    |
-| 2   | GND         | Power            | Ground                                                         |
-| 3   | RP2354_TX   | RP2354→ESP32     | GPIO0 via 1kΩ (R40, 5V tolerance protection) + TVS (D_UART_TX) |
-| 4   | RP2354_RX   | ESP32→RP2354     | GPIO1 via 1kΩ (R41, 5V tolerance protection) + TVS (D_UART_RX) |
-| 5   | RP2354_RUN  | ESP32→RP2354     | Reset control                                                  |
-| 6   | **SWDIO**   | **ESP32↔RP2354** | **RP2354 SWDIO Pin ↔ ESP32 TX2, 47Ω series (R_SWDIO) only**    |
-| 7   | WEIGHT_STOP | ESP32→RP2354     | GPIO21, 4.7kΩ pull-down (R73, RP2350 E9 errata)                |
-| 8   | **SWCLK**   | **ESP32↔RP2354** | **RP2354 SWCLK Pin ↔ ESP32 RX2, 47Ω series (R_SWCLK) only**    |
+| Pin | Signal      | Direction        | Notes                                                               |
+| --- | ----------- | ---------------- | ------------------------------------------------------------------- |
+| 1   | +5V         | Power            | ESP32 power                                                         |
+| 2   | GND         | Power            | Ground                                                              |
+| 3   | RP2354_TX   | RP2354→ESP32     | GPIO0 via 1kΩ (R40, 5V tolerance protection) + TVS (D_UART_TX)      |
+| 4   | RP2354_RX   | ESP32→RP2354     | GPIO1 via 1kΩ (R41, 5V tolerance protection) + TVS (D_UART_RX)      |
+| 5   | RP2354_RUN  | ESP32→RP2354     | Reset control (via 1kΩ R_RUN_EXT - prevents short-circuit with SW1) |
+| 6   | **SWDIO**   | **ESP32↔RP2354** | **RP2354 SWDIO Pin ↔ ESP32 TX2, 47Ω series (R_SWDIO) only**         |
+| 7   | WEIGHT_STOP | ESP32→RP2354     | GPIO21, 4.7kΩ pull-down (R73, RP2350 E9 errata)                     |
+| 8   | **SWCLK**   | **ESP32↔RP2354** | **RP2354 SWCLK Pin ↔ ESP32 RX2, 47Ω series (R_SWCLK) only**         |
 
 **SWD Interface (v2.31):**
 Pins 6 and 8 connect to the **dedicated SWDIO and SWCLK physical pins** on the RP2354 (NOT GPIO 16/22). This enables:
