@@ -85,8 +85,8 @@
 | **2** | **R_CC1, R_CC2**       | **5.1kΩ**    | **1%**    | **0603** | **USB-C CC pull-down resistors (5.1kΩ for 5V power)**                                                  |
 | **1** | **F_USB**              | **PTC Fuse** | **1A**    | **1206** | **VBUS overcurrent protection (replaces R_VBUS, protects against USB power faults)**                   |
 | **2** | **R_USB_DP, R_USB_DM** | **27Ω**      | **1%**    | **0603** | **USB D+/D- series termination (required for RP2354 USB impedance matching, place close to MCU pins)** |
-| **1** | **R_RUN_EXT**          | **1kΩ**      | **5%**    | **0805** | **External reset protection (prevents short-circuit when SW1 pressed while ESP32 drives HIGH)** |
-| **1** | **R_BOOTSEL**          | **1kΩ**      | **5%**    | **0805** | **BOOTSEL current limiting (protects QSPI_SS if button pressed during active flash access)** |
+| **1** | **R_RUN_EXT**          | **1kΩ**      | **5%**    | **0805** | **External reset protection (prevents short-circuit when SW1 pressed while ESP32 drives HIGH)**        |
+| **1** | **R_BOOTSEL**          | **1kΩ**      | **5%**    | **0805** | **BOOTSEL current limiting (protects QSPI_SS if button pressed during active flash access)**           |
 
 ### User Interface
 
@@ -160,18 +160,18 @@
 
 ## Electromechanical
 
-| Qty   | Ref     | Description      | Part Number          | Notes                                                                     |
-| ----- | ------- | ---------------- | -------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| 2     | K1,K3   | Relay 5V 3A      | Panasonic APAN3105   | Slim 5mm                                                                  |
-| 1     | K2      | Relay 5V 16A     | Omron G5LE-1A4-E DC5 | **-E variant!**                                                           |
-| 1     | F1      | **Fuse 10A SMD** | **Littelfuse 463**   | **Nano² (10x3mm), Time-Lag (Slow-Blow) Ceramic, K_temp=0.75-0.80 @ 80°C** |
-| 1     | F2      | **Fuse 2A SMD**  | **Littelfuse 463**   | **Nano² (10x3mm), Time-Lag (Slow-Blow) Ceramic, High I²t rating**         |
-| 1     | RV1     | Varistor 275V    | S14K275              | 14mm, mains surge                                                         |
-| 2     | RV2-RV3 | Varistor 275V    | S10K275              | 10mm, arc suppression                                                     |
-| 1     | SW1     | Tactile Switch   | EVQP7A01P            | 6×6mm SMD (Reset)                                                         |
+| Qty   | Ref     | Description        | Part Number          | Notes                                                                     |
+| ----- | ------- | ------------------ | -------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| 2     | K1,K3   | Relay 5V 3A        | Panasonic APAN3105   | Slim 5mm                                                                  |
+| 1     | K2      | Relay 5V 16A       | Omron G5LE-1A4-E DC5 | **-E variant!**                                                           |
+| 1     | F1      | **Fuse 10A SMD**   | **Littelfuse 463**   | **Nano² (10x3mm), Time-Lag (Slow-Blow) Ceramic, K_temp=0.75-0.80 @ 80°C** |
+| 1     | F2      | **Fuse 2A SMD**    | **Littelfuse 463**   | **Nano² (10x3mm), Time-Lag (Slow-Blow) Ceramic, High I²t rating**         |
+| 1     | RV1     | Varistor 275V      | S14K275              | 14mm, mains surge                                                         |
+| 2     | RV2-RV3 | Varistor 275V      | S10K275              | 10mm, arc suppression                                                     |
+| 1     | SW1     | Tactile Switch     | EVQP7A01P            | 6×6mm SMD (Reset)                                                         |
 | **1** | **SW2** | **Tactile Switch** | **EVQP7A01P**        | **6×6mm SMD (BOOTSEL - Bootloader Entry)**                                |
-| 1     | BZ1     | Passive Buzzer   | CEM-1203(42)         | 12mm                                                                      |
-| **1** | **Y1**  | **Crystal**      | **12 MHz**           | **HC-49 or SMD**                                                          | **Main clock source (REQUIRED for USB/PLL operation). Recommended: Abracon ABM8-12.000MHZ-B2-T or equivalent characterized part** |
+| 1     | BZ1     | Passive Buzzer     | CEM-1203(42)         | 12mm                                                                      |
+| **1** | **Y1**  | **Crystal**        | **12 MHz**           | **HC-49 or SMD**                                                          | **Main clock source (REQUIRED for USB/PLL operation). Recommended: Abracon ABM8-12.000MHZ-B2-T or equivalent characterized part** |
 
 ## LEDs
 
