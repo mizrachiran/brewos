@@ -22,7 +22,7 @@
 | 3     | D1-D3                    | Fast Flyback   | UF4007        | DO-41       | 75ns recovery                 |
 | 6     | D10-D15                  | ESD Protection | PESD5V0S1BL   | SOD-323     | Sensor inputs                 |
 | 1     | D16                      | Schottky Clamp | BAT54S        | SOT-23      | Pressure ADC protection       |
-| **1** | **D_PRESSURE**           | **Zener**      | **BZT52C3V3** | **SOD-123** | **Pressure ADC hard clamp (parallel to D16)** |
+| **1** | **D_PRESSURE**           | **TVS Diode**   | **PESD3V3S1BL** | **SOD-323** | **Pressure ADC hard clamp (parallel to D16, low-leakage)** |
 | 1     | D20                      | TVS Diode      | SMBJ5.0A      | SMB         | 5V rail protection            |
 | 1     | D21                      | RS485 TVS      | SM712         | SOT-23      | A/B line protection           |
 | 2     | D23-D24                  | Zener          | BZT52C3V3     | SOD-123     | Service port clamp            |

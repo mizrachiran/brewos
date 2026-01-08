@@ -164,13 +164,18 @@ Maximum ADC sensitivity occurs when R_pullup ≈ R_NTC at target temperature:
 │    D16 (BAT54S): Dual Schottky clamps ADC input to 3.3V+0.3V = 3.6V max      │
 │    This protects against R3 open-circuit fault (full 5V at GPIO28)           │
 │                                                                                 │
-│    ⚠️ CRITICAL: Additional Zener Clamp Required                               │
+│    ⚠️ CRITICAL: Additional TVS Clamp Required                                  │
 │    ────────────────────────────────────────────────────────────────────────── │
-│    D_PRESSURE (BZT52C3V3): 3.3V Zener diode must be added in parallel to      │
-│    BAT54S at GPIO28 input. Pressure sensors are ratiometric 5V devices. If    │
-│    the voltage divider fails or ground lifts, it can dump 5V directly into   │
-│    the ADC pin. The Zener provides hard clamping to 3.3V, ensuring ADC       │
-│    protection even under fault conditions.                                    │
+│    D_PRESSURE (PESD3V3S1BL or ESD3V3): 3.3V TVS diode must be added in        │
+│    parallel to BAT54S at GPIO28 input. Pressure sensors are ratiometric 5V   │
+│    devices. If the voltage divider fails or ground lifts, it can dump 5V      │
+│    directly into the ADC pin.                                                  │
+│                                                                                 │
+│    **Why TVS instead of Zener?** Low-voltage Zeners (BZT52C3V3) have a soft  │
+│    breakdown knee and leak significant current (10-50µA) at 2.5-2.8V. Since    │
+│    the max pressure reading is 2.88V, Zener leakage causes non-linear errors │
+│    at high pressures. TVS diodes have sharper breakdown curves and lower      │
+│    leakage (<1µA at 2.8V), preserving measurement accuracy.                    │
 │                                                                                 │
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -193,10 +198,13 @@ V_adc_5V = ADC_5V_monitor × 3.0V / 4095
 // Calculate actual 5V rail voltage (divider: R91=10kΩ, R92=5.6kΩ)
 V_5V_actual = V_adc_5V × (10kΩ + 5.6kΩ) / 5.6kΩ = V_adc_5V × 2.786
 
-// Ratiometric compensation: scale sensor voltage by actual vs nominal 5V
+// Ratiometric compensation: normalize sensor voltage to what it would be at 5.0V
+// If 5V rail sags to 4.5V, sensor output drops by 10%. We must DIVIDE by the ratio
+// to correct it (or multiply by the inverse ratio).
 V_sensor_nominal = V_adc_pressure × 15.6kΩ / 10kΩ = V_adc_pressure × 1.56
-V_sensor_actual = V_sensor_nominal × (V_5V_actual / 5.0V)
+V_sensor_actual = V_sensor_nominal × (5.0V / V_5V_actual)  // CORRECTED: multiply by inverse ratio
 
+// Example: If rail=4.5V (0.9×), sensor reads 0.9V. Formula: 0.9V × (5.0/4.5) = 1.0V ✓
 // Calculate pressure (0.5-4.5V range = 0-16 bar)
 Pressure_bar = (V_sensor_actual - 0.5V) × 16 bar / 4.0V
 ```

@@ -241,15 +241,16 @@ _These items address safety, hardware longevity, and immediate failure risks. Th
 **Status:** ⚠️ **PARTIALLY IMPLEMENTED** - Additional Zener clamp required
 
 - **Current:** BAT54S (D16) Schottky clamp already implemented
-- **Additional:** BZT52C3V3 (3.3V Zener) must be added in parallel
+- **Additional:** PESD3V3S1BL (3.3V TVS) must be added in parallel (NOT Zener - low-leakage TVS preserves measurement accuracy)
 - **Rationale:** Pressure sensors are ratiometric 5V devices. If divider fails or ground lifts, 5V can dump into ADC pin
+- **Why TVS not Zener:** Low-voltage Zeners leak significant current (10-50µA) at 2.5-2.8V, causing non-linear errors at max pressure (2.88V). TVS diodes have <1µA leakage at 2.8V.
 - **Documentation:** Added to `spec/05-Analog-Inputs.md` - Pressure Transducer Interface section
 
 **Action Required:**
 
-- [ ] Add BZT52C3V3 (D_PRESSURE) to schematic, parallel to BAT54S at GPIO28
-- [ ] Update netlist.csv with new component reference
-- [ ] Verify dual-clamp protection: Schottky (fast) + Zener (hard clamp)
+- [ ] Add PESD3V3S1BL (D_PRESSURE) to schematic, parallel to BAT54S at GPIO28
+- [ ] Update netlist.csv with new component reference (TVS diode, not Zener)
+- [ ] Verify dual-clamp protection: Schottky (fast) + TVS (hard clamp, low-leakage)
 
 ---
 
@@ -322,7 +323,7 @@ _These items address safety, hardware longevity, and immediate failure risks. Th
 2. **NTC Beta Values:** Measure ECM P6037 Beta value and verify ADC range
 3. **Mains Creepage Slots:** Add milled slots to PCB layout
 4. **Mains Hum Filtering:** Add R_HUM + C_HUM to schematic
-5. **Pressure Sensor ADC Protection:** Add BZT52C3V3 Zener clamp
+5. **Pressure Sensor ADC Protection:** Add PESD3V3S1BL TVS clamp (low-leakage, NOT Zener)
 6. **Watchdog Configuration:** Verify firmware implementation
 7. **Calibration Routine:** Implement firmware calibration
 
@@ -333,7 +334,7 @@ _These items address safety, hardware longevity, and immediate failure risks. Th
 1. **Schematic Updates:**
 
    - Add mains hum filtering (R_HUM, C_HUM) to ADC inputs
-   - Add pressure sensor Zener clamp (BZT52C3V3)
+   - Add pressure sensor TVS clamp (PESD3V3S1BL - low-leakage, preserves measurement accuracy)
 
 2. **PCB Layout Updates:**
 
@@ -359,4 +360,3 @@ _These items address safety, hardware longevity, and immediate failure risks. Th
 
 **Last Updated:** January 2026  
 **Next Review:** Before PCB fabrication order
-

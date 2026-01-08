@@ -88,7 +88,7 @@ Machine MCB (16A): House circuit protection
 | GPIO5 (Brew)     | ESD clamp      | PESD5V0S1BL (D13)   | SOD-323                |
 | ADC0 (Brew NTC)  | ESD clamp      | PESD5V0S1BL (D14)   | SOD-323                |
 | ADC1 (Steam NTC) | ESD clamp      | PESD5V0S1BL (D15)   | SOD-323                |
-| ADC2 (Pressure)  | Schottky + Zener | BAT54S (D16) + BZT52C3V3 | Overvoltage protection (dual clamp) |
+| ADC2 (Pressure)  | Schottky + TVS   | BAT54S (D16) + PESD3V3S1BL | Overvoltage protection (dual clamp, low-leakage TVS) |
 | 5V Rail          | TVS            | SMBJ5.0A (D20)      | Surge protection       |
 | RS485 A/B        | TVS            | SM712 (D21)         | Asymmetric (-7V/+12V)  |
 | Service TX/RX    | Zener clamp    | BZT52C3V3 (D23/D24) | 5V TTL protection      |
@@ -117,11 +117,11 @@ PRESS_SIG ────────┬──────────────�
 
 **Dual-Clamp Protection Strategy:**
 - **BAT54S (D16):** Fast Schottky clamp (low forward voltage, fast response)
-- **BZT52C3V3 (D_PRESSURE):** Hard Zener clamp (3.3V breakdown, provides absolute limit)
+- **PESD3V3S1BL (D_PRESSURE):** Low-leakage TVS clamp (3.3V breakdown, <1µA leakage at 2.8V)
 
 **Protection Scenario:** If R3 fails open, full 5V appears at GPIO28.
 - BAT54S clamps to 3.3V + 0.3V = 3.6V (fast response)
-- BZT52C3V3 provides hard clamp at 3.3V (absolute maximum protection)
+- PESD3V3S1BL provides hard clamp at 3.3V with minimal leakage at operating voltages (preserves measurement accuracy)
 - Both clamps work in parallel for redundant protection
 
 ---

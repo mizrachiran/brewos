@@ -26,7 +26,7 @@ D13,ESD_Diode,PESD5V0S1BL,SOD-323,A=GND,K=GPIO5,,Brew switch ESD
 D14,ESD_Diode,PESD5V0S1BL,SOD-323,A=GND,K=ADC0,,Brew NTC ESD
 D15,ESD_Diode,PESD5V0S1BL,SOD-323,A=GND,K=ADC1,,Steam NTC ESD
 D16,Schottky_Diode,BAT54S,SOT-23,A1=GPIO28,A2=GND,K=+3.3V,Pressure ADC2 overvoltage protection (fast Schottky clamp)
-D_PRESSURE,Zener_Diode,BZT52C3V3,SOD-123,A=GND,K=GPIO28,,Pressure ADC2 hard clamp (3.3V Zener, parallel to D16 for redundant protection)
+D_PRESSURE,TVS_Diode,PESD3V3S1BL,SOD-323,A=GND,K=GPIO28,,Pressure ADC2 hard clamp (3.3V TVS, low-leakage, parallel to D16 for redundant protection)
 D20,TVS_Diode,SMBJ5.0A,SMB,A=GND,K=+5V,,5V rail protection
 D21,TVS_Diode,SM712,SOT-23,1=RS485_A,2=GND,3=RS485_B,RS485 A/B line surge protection (-7V to +12V asymmetric)
 D23,Zener_Diode,BZT52C3V3,SOD-123,A=GND,K=J16_3,,Service port TX 3.3V clamp (protects from 5V TTL adapters)

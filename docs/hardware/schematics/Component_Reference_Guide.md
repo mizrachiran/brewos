@@ -61,7 +61,7 @@
 | D14        | PESD5V0S1BL | Brew NTC ESD protection                               | SOD-323 |
 | D15        | PESD5V0S1BL | Steam NTC ESD protection                              | SOD-323 |
 | D16        | BAT54S      | Pressure ADC overvoltage clamp (fast Schottky)        | SOT-23  |
-| D_PRESSURE | BZT52C3V3   | Pressure ADC hard clamp (3.3V Zener, parallel to D16) | SOD-123 |
+| D_PRESSURE | PESD3V3S1BL | Pressure ADC hard clamp (3.3V TVS, low-leakage, parallel to D16) | SOD-323 |
 | D20        | SMBJ5.0A    | 5V rail TVS protection                                | SMB     |
 | D21        | SM712       | RS485 A/B line surge protection                       | SOT-23  |
 | D23        | BZT52C3V3   | Service port TX 3.3V clamp                            | SOD-123 |
