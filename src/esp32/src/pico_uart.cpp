@@ -395,8 +395,28 @@ size_t PicoUART::streamFirmwareChunk(const uint8_t* data, size_t len, uint32_t c
         return 0;
     }
     
-    // Flush to ensure data is sent
+    // CRITICAL: Flush and wait to ensure all data is fully transmitted
+    // The Pico's UART FIFO is only 32 bytes, and we need to ensure the entire
+    // chunk (8 byte header + data + 1 byte checksum) is sent before continuing
     Serial1.flush();
+    
+    // Calculate total bytes sent (header + data + checksum)
+    size_t totalBytes = 8 + len + 1;
+    
+    // Wait for UART to finish transmitting all bytes
+    // ESP32 UART at 115200 baud = ~11520 bytes/sec = ~87us per byte
+    // Add 50% margin for safety: ~130us per byte
+    // For worst case (200 byte chunk + 9 overhead = 209 bytes): ~27ms
+    uint32_t transmitTimeUs = (totalBytes * 130);  // microseconds per byte
+    if (transmitTimeUs < 1000) {
+        delayMicroseconds(transmitTimeUs);
+    } else {
+        delay(transmitTimeUs / 1000 + 1);  // Convert to milliseconds, add 1ms margin
+    }
+    
+    // Additional small delay to ensure data is fully received and processed by Pico
+    // This gives the Pico time to read from its UART FIFO before we send the next chunk
+    delayMicroseconds(200);
     
     return len;
 }

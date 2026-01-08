@@ -615,6 +615,8 @@ static bool downloadToFile(const char* url, const char* filePath,
     // Configure secure client (services are paused to free memory for SSL buffers)
     WiFiClientSecure client;
     client.setInsecure();
+    // CRITICAL FIX: Set underlying TCP timeout to prevent indefinite hangs
+    client.setTimeout(15); // 15 seconds read timeout
     
     HTTPClient http;
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
@@ -710,13 +712,23 @@ static bool downloadToFile(const char* url, const char* filePath,
         return false;
     }
     
-    uint8_t buffer[OTA_BUFFER_SIZE];
+    // FIX: Allocate buffer on HEAP, not stack.
+    // WiFiClientSecure uses a lot of stack; a stack buffer increases crash risk.
+    std::unique_ptr<uint8_t[]> buffer(new (std::nothrow) uint8_t[OTA_BUFFER_SIZE]);
+    if (!buffer) {
+        LOG_E("Failed to allocate buffer");
+        file.close();
+        http.end();
+        return false;
+    }
+    
     size_t written = 0;
     unsigned long lastYield = millis();
     unsigned long lastDataReceived = millis();
     unsigned long lastConsoleLog = millis();
     unsigned long lastConnectionCheck = millis();
-    constexpr unsigned long STALL_TIMEOUT_MS = 15000;  // Reduced from 30s to 15s
+    // FIX: Increased stall timeout for slow GitHub connections
+    constexpr unsigned long STALL_TIMEOUT_MS = 30000;  // 30 seconds
     constexpr unsigned long CONNECTION_CHECK_INTERVAL_MS = 2000;  // Check connection health every 2s
     unsigned long noDataCount = 0;
     
@@ -769,20 +781,21 @@ static bool downloadToFile(const char* url, const char* filePath,
             // Limit read size to prevent blocking main loop for too long
             // Read in smaller chunks with yields to allow main loop to run
             size_t maxChunkSize = min(available, (size_t)4096);  // Max 4KB per chunk
-            size_t toRead = min(maxChunkSize, sizeof(buffer));
+            size_t toRead = min(maxChunkSize, (size_t)OTA_BUFFER_SIZE);  // Use allocated size
             
             // Yield before potentially blocking read operation
             feedWatchdog();
             yield();
             
-            size_t bytesRead = stream->readBytes(buffer, toRead);
+            // Read with the heap buffer
+            size_t bytesRead = stream->readBytes(buffer.get(), toRead);
             
             if (bytesRead > 0) {
                 // Yield before potentially blocking write operation
                 feedWatchdog();
                 yield();
                 
-                size_t bytesWritten = file.write(buffer, bytesRead);
+                size_t bytesWritten = file.write(buffer.get(), bytesRead);
                 if (bytesWritten != bytesRead) {
                     LOG_E("Write error: %d/%d bytes (filesystem full?)", bytesWritten, bytesRead);
                     file.close();
@@ -820,9 +833,9 @@ static bool downloadToFile(const char* url, const char* filePath,
                 }
             }
             
-            // Yield and delay to prevent tight loop blocking main task
+            // FIX: If connected but no data, wait briefly to avoid spinning too tight
             yield();
-            delay(10);  // 10ms delay to allow other tasks to run
+            delay(5);  // 5ms delay to allow other tasks to run
             feedWatchdog();
         }
     }
@@ -1085,7 +1098,10 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
     // UART BOOTLOADER METHOD (Default - SWD disabled until fixed)
     // =============================================================================
     
-    // Send bootloader command
+    // Retry configuration (defined at function scope for use in multiple retry loops)
+    const int MAX_HANDSHAKE_RETRIES = 3;  // Retry bootloader handshake up to 3 times
+    
+    // Send bootloader command with retry mechanism
     broadcastOtaProgress(&_ws, "flash", 42, "Preparing device...");
     feedWatchdog();
     
@@ -1093,32 +1109,60 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
     // This prevents the main loop's picoUart.loop() from consuming the bootloader ACK bytes
     _picoUart.pause();
     LOG_I("Paused UART packet processing for bootloader handshake");
+    bool handshakeSuccess = false;
     
-    if (!_picoUart.sendCommand(MSG_CMD_BOOTLOADER, nullptr, 0)) {
-        LOG_E("Failed to send bootloader command");
-        broadcastLogLevel("error", "Update error: Device not responding");
-        broadcastOtaProgress(&_ws, "error", 0, "Device not responding");
-        _picoUart.resume();  // Resume on failure
-        flashFile.close();
-        cleanupOtaFiles();
-        return false;
-    }
-    
-    // Give Pico time to process command and enter bootloader mode
-    // Pico sends protocol ACK, waits 50ms, then sends 0xAA 0x55
-    LOG_I("Sent bootloader command, waiting for Pico to enter bootloader...");
-    feedWatchdog();
-    
-    // Wait for bootloader ACK with timeout
-    feedWatchdog();
-    if (!_picoUart.waitForBootloaderAck(5000)) {
-        LOG_E("Bootloader ACK timeout");
-        broadcastLogLevel("error", "Update error: Device not ready");
-        broadcastOtaProgress(&_ws, "error", 0, "Device not ready");
-        _picoUart.resume();  // Resume on failure
-        flashFile.close();
-        cleanupOtaFiles();
-        return false;
+    for (int handshakeRetry = 0; handshakeRetry < MAX_HANDSHAKE_RETRIES && !handshakeSuccess; handshakeRetry++) {
+        if (handshakeRetry > 0) {
+            LOG_W("Retrying bootloader handshake (attempt %d/%d)...", handshakeRetry + 1, MAX_HANDSHAKE_RETRIES);
+            broadcastOtaProgress(&_ws, "flash", 42, "Retrying device connection...");
+            feedWatchdog();
+            
+            // Drain UART buffer before retry
+            while (Serial1.available()) {
+                Serial1.read();
+            }
+            delay(500);  // Wait before retry
+        }
+        
+        if (!_picoUart.sendCommand(MSG_CMD_BOOTLOADER, nullptr, 0)) {
+            LOG_W("Failed to send bootloader command (attempt %d/%d)", handshakeRetry + 1, MAX_HANDSHAKE_RETRIES);
+            if (handshakeRetry < MAX_HANDSHAKE_RETRIES - 1) {
+                continue;  // Retry
+            } else {
+                LOG_E("Failed to send bootloader command after %d attempts", MAX_HANDSHAKE_RETRIES);
+                broadcastLogLevel("error", "Update error: Device not responding");
+                broadcastOtaProgress(&_ws, "error", 0, "Device not responding");
+                _picoUart.resume();  // Resume on failure
+                flashFile.close();
+                cleanupOtaFiles();
+                return false;
+            }
+        }
+        
+        // Give Pico time to process command and enter bootloader mode
+        // Pico sends protocol ACK, waits 50ms, then sends 0xAA 0x55
+        LOG_I("Sent bootloader command, waiting for Pico to enter bootloader...");
+        feedWatchdog();
+        
+        // Wait for bootloader ACK with timeout
+        feedWatchdog();
+        if (_picoUart.waitForBootloaderAck(5000)) {
+            handshakeSuccess = true;
+            LOG_I("Bootloader handshake successful");
+        } else {
+            LOG_W("Bootloader ACK timeout (attempt %d/%d)", handshakeRetry + 1, MAX_HANDSHAKE_RETRIES);
+            if (handshakeRetry < MAX_HANDSHAKE_RETRIES - 1) {
+                // Will retry
+            } else {
+                LOG_E("Bootloader ACK timeout after %d attempts", MAX_HANDSHAKE_RETRIES);
+                broadcastLogLevel("error", "Update error: Device not ready");
+                broadcastOtaProgress(&_ws, "error", 0, "Device not ready");
+                _picoUart.resume();  // Resume on failure
+                flashFile.close();
+                cleanupOtaFiles();
+                return false;
+            }
+        }
     }
     
     // CRITICAL: Wait for Pico to fully enter bootloader mode
@@ -1141,17 +1185,87 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
     broadcastOtaProgress(&_ws, "flash", 45, "Installing...");
     feedWatchdog();
     
-    // Stream to Pico via UART bootloader
-    bool success = streamFirmwareToPico(flashFile, firmwareSize);
+    // Stream to Pico via UART bootloader with retry mechanism
+    const int MAX_UPDATE_RETRIES = 2;  // Retry entire update once if it fails
+    bool success = false;
+    
+    for (int updateRetry = 0; updateRetry < MAX_UPDATE_RETRIES && !success; updateRetry++) {
+        if (updateRetry > 0) {
+            LOG_W("Retrying Pico firmware update (attempt %d/%d)...", updateRetry + 1, MAX_UPDATE_RETRIES);
+            broadcastOtaProgress(&_ws, "flash", 45, "Retrying installation...");
+            feedWatchdog();
+            
+            // Reset file position for retry
+            flashFile.seek(0);
+            
+            // Drain UART and wait a bit before retry
+            while (Serial1.available()) {
+                Serial1.read();
+            }
+            delay(500);
+            
+            // Re-do bootloader handshake for retry (with its own retry mechanism)
+            bool retryHandshakeSuccess = false;
+            for (int retryHandshakeAttempt = 0; retryHandshakeAttempt < MAX_HANDSHAKE_RETRIES && !retryHandshakeSuccess; retryHandshakeAttempt++) {
+                if (retryHandshakeAttempt > 0) {
+                    LOG_W("Retrying bootloader handshake on update retry (attempt %d/%d)...", 
+                          retryHandshakeAttempt + 1, MAX_HANDSHAKE_RETRIES);
+                    delay(500);
+                    while (Serial1.available()) {
+                        Serial1.read();
+                    }
+                }
+                
+                if (!_picoUart.sendCommand(MSG_CMD_BOOTLOADER, nullptr, 0)) {
+                    LOG_W("Failed to send bootloader command on update retry (attempt %d/%d)", 
+                          retryHandshakeAttempt + 1, MAX_HANDSHAKE_RETRIES);
+                    if (retryHandshakeAttempt < MAX_HANDSHAKE_RETRIES - 1) {
+                        continue;  // Retry handshake
+                    } else {
+                        break;  // Give up on this update retry
+                    }
+                }
+                
+                if (_picoUart.waitForBootloaderAck(5000)) {
+                    retryHandshakeSuccess = true;
+                } else {
+                    LOG_W("Bootloader ACK timeout on update retry (attempt %d/%d)", 
+                          retryHandshakeAttempt + 1, MAX_HANDSHAKE_RETRIES);
+                    if (retryHandshakeAttempt < MAX_HANDSHAKE_RETRIES - 1) {
+                        continue;  // Retry handshake
+                    } else {
+                        break;  // Give up on this update retry
+                    }
+                }
+            }
+            
+            if (!retryHandshakeSuccess) {
+                LOG_E("Bootloader handshake failed on update retry, will try next update retry...");
+                continue;  // Try next update retry
+            }
+            
+            delay(150);
+            while (Serial1.available()) {
+                Serial1.read();
+            }
+        }
+        
+        success = streamFirmwareToPico(flashFile, firmwareSize);
+        
+        if (!success && updateRetry < MAX_UPDATE_RETRIES - 1) {
+            LOG_W("Update attempt %d failed, will retry...", updateRetry + 1);
+        }
+    }
+    
     flashFile.close();
     
     // Clean up temp file regardless of success
     cleanupOtaFiles();
     
     if (!success) {
-        LOG_E("Pico firmware streaming failed");
-        broadcastLogLevel("error", "Update error: Installation failed");
-        broadcastOtaProgress(&_ws, "error", 0, "Installation failed");
+        LOG_E("Pico firmware streaming failed after %d attempts", MAX_UPDATE_RETRIES);
+        broadcastLogLevel("error", "Update error: Installation failed after retries");
+        broadcastOtaProgress(&_ws, "error", 0, "Installation failed after retries");
         _picoUart.resume();  // Resume on failure
         return false;
     }
@@ -1259,6 +1373,9 @@ void BrewWebServer::startGitHubOTA(const String& version) {
     // Configure secure client (services are paused to free memory for SSL buffers)
     WiFiClientSecure client;
     client.setInsecure(); // Skip cert verification for speed/simplicity
+    // CRITICAL FIX: Set explicit read timeout.
+    // Default is often -1 (wait forever) or too short.
+    client.setTimeout(15); // 15 seconds read timeout
     
     // Download ESP32 firmware
     HTTPClient http;
@@ -1485,6 +1602,9 @@ void BrewWebServer::updateLittleFS(const char* tag) {
     // Configure secure client (services are paused to free memory for SSL buffers)
     WiFiClientSecure client;
     client.setInsecure();
+    // CRITICAL FIX: Set explicit read timeout.
+    // Default is often -1 (wait forever) or too short.
+    client.setTimeout(15); // 15 seconds read timeout
     
     HTTPClient http;
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);

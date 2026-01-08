@@ -1285,6 +1285,27 @@ static void setupWaitForPicoConnection() {
             } else {
                 Serial.println("Ping sent but no response received");
                 // Serial.flush(); // Removed - can block on USB CDC
+                
+                // Try resetting Pico and retrying ping
+                Serial.println("Resetting Pico and retrying...");
+                picoUart->resetPico();
+                delay(1000);  // Wait for Pico to boot after reset
+                picoUart->loop();  // Process any initial data
+                
+                // Retry ping after reset
+                if (picoUart->sendPing()) {
+                    Serial.println("Ping sent after reset, waiting 500ms for response...");
+                    delay(500);
+                    picoUart->loop();
+                    if (picoUart->isConnected()) {
+                        picoConnected = true;
+                        Serial.println("Pico responded to ping after reset - connected!");
+                    } else {
+                        Serial.println("Ping sent after reset but no response received");
+                    }
+                } else {
+                    Serial.println("Failed to send ping after reset");
+                }
             }
         } else {
             Serial.println("Failed to send ping");

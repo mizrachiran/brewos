@@ -2644,6 +2644,7 @@ String BrewWebServer::getContentType(const String& filename) {
 
 bool BrewWebServer::streamFirmwareToPico(File& firmwareFile, size_t firmwareSize) {
     const size_t CHUNK_SIZE = 200;  // Bootloader protocol supports up to 256 bytes per chunk
+    const int MAX_CHUNK_RETRIES = 3;  // Retry failed chunks up to 3 times
     uint8_t buffer[CHUNK_SIZE];
     size_t bytesSent = 0;
     uint32_t chunkNumber = 0;
@@ -2661,46 +2662,87 @@ bool BrewWebServer::streamFirmwareToPico(File& firmwareFile, size_t firmwareSize
             return false;
         }
         
-        // Stream chunk via bootloader protocol (raw UART, not packet protocol)
-        size_t sent = _picoUart.streamFirmwareChunk(buffer, bytesRead, chunkNumber);
-        if (sent != bytesRead) {
-            LOG_E("Failed to send chunk %d: %d/%d bytes", chunkNumber, sent, bytesRead);
-            broadcastLogLevel("error", "Firmware streaming error at chunk %d", chunkNumber);
-            return false;
-        }
+        // Retry loop for individual chunks
+        bool chunkSuccess = false;
+        int chunkRetry = 0;
         
-        // LOCK-STEP PROTOCOL: Wait for Pico to ACK (0xAA) after each chunk
-        // This ensures the Pico has finished flash operations before we send more data.
-        // The Pico's UART FIFO is only 32 bytes - without this handshake, we overflow it
-        // during slow flash erase operations (~50ms).
-        bool ackReceived = false;
-        unsigned long ackStart = millis();
-        const unsigned long ACK_TIMEOUT_MS = 2000;  // 2 second timeout (flash ops can be slow)
-        
-        while ((millis() - ackStart) < ACK_TIMEOUT_MS) {
-            if (Serial1.available()) {
-                uint8_t byte = Serial1.read();
-                if (byte == 0xAA) {
-                    ackReceived = true;
-                    break;
-                } else if (byte == 0xFF) {
-                    // Error marker from Pico
-                    uint8_t errorCode = 0;
-                    if (Serial1.available()) {
-                        errorCode = Serial1.read();
-                    }
-                    LOG_E("Pico reported error 0x%02X during chunk %d", errorCode, chunkNumber);
-                    broadcastLogLevel("error", "Pico error during flash at chunk %d", chunkNumber);
-                    return false;
+        while (!chunkSuccess && chunkRetry < MAX_CHUNK_RETRIES) {
+            if (chunkRetry > 0) {
+                LOG_W("Retrying chunk %d (attempt %d/%d)...", chunkNumber, chunkRetry + 1, MAX_CHUNK_RETRIES);
+                // Drain any leftover bytes from previous attempt
+                while (Serial1.available()) {
+                    Serial1.read();
                 }
-                // Ignore other bytes (could be debug output on wrong line)
+                delay(50);  // Small delay before retry
             }
-            delay(1);  // Small delay to avoid busy-waiting
+            
+            // Stream chunk via bootloader protocol (raw UART, not packet protocol)
+            size_t sent = _picoUart.streamFirmwareChunk(buffer, bytesRead, chunkNumber);
+            if (sent != bytesRead) {
+                LOG_E("Failed to send chunk %d: %d/%d bytes", chunkNumber, sent, bytesRead);
+                chunkRetry++;
+                continue;  // Retry this chunk
+            }
+            
+            // LOCK-STEP PROTOCOL: Wait for Pico to ACK (0xAA) after each chunk
+            // This ensures the Pico has finished flash operations before we send more data.
+            // The Pico's UART FIFO is only 32 bytes - without this handshake, we overflow it
+            // during slow flash erase operations (~50ms).
+            bool ackReceived = false;
+            uint8_t errorCode = 0;
+            unsigned long ackStart = millis();
+            const unsigned long ACK_TIMEOUT_MS = 2000;  // 2 second timeout (flash ops can be slow)
+            
+            while ((millis() - ackStart) < ACK_TIMEOUT_MS) {
+                if (Serial1.available()) {
+                    uint8_t byte = Serial1.read();
+                    if (byte == 0xAA) {
+                        ackReceived = true;
+                        chunkSuccess = true;  // Chunk succeeded
+                        break;
+                    } else if (byte == 0xFF) {
+                        // Error marker from Pico
+                        if (Serial1.available()) {
+                            errorCode = Serial1.read();
+                        }
+                        // Don't break here - wait for timeout to ensure we read all error bytes
+                        // But mark that we got an error
+                    }
+                    // Ignore other bytes (could be debug output on wrong line)
+                }
+                delay(1);  // Small delay to avoid busy-waiting
+            }
+            
+            if (!ackReceived) {
+                if (errorCode != 0) {
+                    // Map error codes to human-readable messages
+                    const char* errorMsg = "Unknown error";
+                    switch (errorCode) {
+                        case 1: errorMsg = "Timeout"; break;
+                        case 2: errorMsg = "Invalid magic"; break;
+                        case 3: errorMsg = "Invalid size"; break;
+                        case 4: errorMsg = "Invalid chunk"; break;
+                        case 5: errorMsg = "Checksum mismatch"; break;
+                        case 6: errorMsg = "Flash write failed"; break;
+                        case 7: errorMsg = "Flash erase failed"; break;
+                        default: errorMsg = "Unknown error"; break;
+                    }
+                    LOG_W("Pico reported error 0x%02X (%s) during chunk %d", errorCode, errorMsg, chunkNumber);
+                } else {
+                    LOG_W("Timeout waiting for ACK after chunk %d", chunkNumber);
+                }
+                
+                chunkRetry++;
+                if (chunkRetry < MAX_CHUNK_RETRIES) {
+                    LOG_I("Will retry chunk %d...", chunkNumber);
+                }
+            }
         }
         
-        if (!ackReceived) {
-            LOG_E("Timeout waiting for ACK after chunk %d", chunkNumber);
-            broadcastLogLevel("error", "Pico not responding at chunk %d", chunkNumber);
+        // If chunk failed after all retries, abort
+        if (!chunkSuccess) {
+            LOG_E("Chunk %d failed after %d retries", chunkNumber, MAX_CHUNK_RETRIES);
+            broadcastLogLevel("error", "Firmware streaming failed at chunk %d", chunkNumber);
             return false;
         }
         
