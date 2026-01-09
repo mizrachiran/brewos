@@ -665,6 +665,9 @@ void StatisticsManager::loadFromFlash() {
 }
 
 void StatisticsManager::saveToFlash() {
+    // Yield before starting expensive file operations
+    yield();
+    
     // Save lifetime stats
     {
         JsonDocument doc;
@@ -674,11 +677,14 @@ void StatisticsManager::saveToFlash() {
         JsonObject maintObj = doc["maintenance"].to<JsonObject>();
         _maintenance.toJson(maintObj);
         
+        yield(); // Yield before file write
+        
         File file = LittleFS.open(STATS_FILE, "w");
         if (file) {
             serializeJson(doc, file);
             file.close();
         }
+        yield(); // Yield after file write
     }
     
     // Save brew history
@@ -686,17 +692,24 @@ void StatisticsManager::saveToFlash() {
         JsonDocument doc;
         JsonArray arr = doc.to<JsonArray>();
         
+        // Yield periodically during large array building
         for (size_t i = 0; i < _brewHistoryCount; i++) {
+            if (i > 0 && (i % 50 == 0)) {
+                yield(); // Yield every 50 items to prevent blocking
+            }
             int idx = (_brewHistoryHead - _brewHistoryCount + i + STATS_MAX_BREW_HISTORY) % STATS_MAX_BREW_HISTORY;
             JsonObject obj = arr.add<JsonObject>();
             _brewHistory[idx].toJson(obj);
         }
+        
+        yield(); // Yield before file write
         
         File file = LittleFS.open(BREW_HISTORY_FILE, "w");
         if (file) {
             serializeJson(doc, file);
             file.close();
         }
+        yield(); // Yield after file write
     }
     
     // Save power history
@@ -704,17 +717,24 @@ void StatisticsManager::saveToFlash() {
         JsonDocument doc;
         JsonArray arr = doc.to<JsonArray>();
         
+        // Yield periodically during large array building
         for (size_t i = 0; i < _powerSamplesCount; i++) {
+            if (i > 0 && (i % 100 == 0)) {
+                yield(); // Yield every 100 items to prevent blocking
+            }
             int idx = (_powerSamplesHead - _powerSamplesCount + i + STATS_MAX_POWER_SAMPLES) % STATS_MAX_POWER_SAMPLES;
             JsonObject obj = arr.add<JsonObject>();
             _powerSamples[idx].toJson(obj);
         }
+        
+        yield(); // Yield before file write
         
         File file = LittleFS.open(POWER_HISTORY_FILE, "w");
         if (file) {
             serializeJson(doc, file);
             file.close();
         }
+        yield(); // Yield after file write
     }
     
     // Save daily summaries
@@ -722,17 +742,24 @@ void StatisticsManager::saveToFlash() {
         JsonDocument doc;
         JsonArray arr = doc.to<JsonArray>();
         
+        // Yield periodically during array building
         for (size_t i = 0; i < _dailySummariesCount; i++) {
+            if (i > 0 && (i % 30 == 0)) {
+                yield(); // Yield every 30 items to prevent blocking
+            }
             int idx = (_dailySummariesHead - _dailySummariesCount + i + STATS_MAX_DAILY_HISTORY) % STATS_MAX_DAILY_HISTORY;
             JsonObject obj = arr.add<JsonObject>();
             _dailySummaries[idx].toJson(obj);
         }
+        
+        yield(); // Yield before file write
         
         File file = LittleFS.open(DAILY_HISTORY_FILE, "w");
         if (file) {
             serializeJson(doc, file);
             file.close();
         }
+        yield(); // Yield after file write
     }
     
     Serial.println("[Stats] Saved to flash");

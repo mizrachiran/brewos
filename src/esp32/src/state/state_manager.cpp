@@ -502,12 +502,17 @@ void StateManager::loadStats() {
 }
 
 void StateManager::saveStats() {
+    // Yield before NVS operations to prevent blocking
+    yield();
+    
     _prefs.begin(NVS_STATS, false);
     
     _prefs.putULong("totalShots", _stats.totalShots);
     _prefs.putULong("totalSteam", _stats.totalSteamCycles);
     _prefs.putFloat("totalKwh", _stats.totalKwh);
     _prefs.putULong("totalOn", _stats.totalOnTimeMinutes);
+    
+    yield(); // Yield after first batch of writes
     
     _prefs.putULong("sinceDesc", _stats.shotsSinceDescale);
     _prefs.putULong("sinceGrp", _stats.shotsSinceGroupClean);
@@ -517,6 +522,8 @@ void StateManager::saveStats() {
     _prefs.putULong("lastBack", _stats.lastBackflushTimestamp);
     
     _prefs.end();
+    
+    yield(); // Yield after NVS operations complete
     
     LOG_I("Stats saved");
 }

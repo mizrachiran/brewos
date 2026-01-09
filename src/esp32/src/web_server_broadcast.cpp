@@ -547,7 +547,8 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
         
         isKeepaliveForced = false;  // Reset flag (declared at function scope above)
         
-        if (!localChanged && !isFirstLocalMessage) {
+        // Only set keepalive if we actually have local clients
+        if (hasLocalClients && !localChanged && !isFirstLocalMessage) {
             unsigned long timeSinceLastKeepalive = now - lastLocalKeepalive;
             if (timeSinceLastKeepalive >= LOCAL_KEEPALIVE_INTERVAL) {
                 // Force send status as keepalive for local clients
@@ -568,6 +569,11 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
     }
     
     // Early exit: only build JSON/MessagePack if we have local clients OR need to send to cloud
+    // If keepalive was forced but there are no local clients, skip everything (keepalive is only for local clients)
+    if (isKeepaliveForced && !hasLocalClients) {
+        return;  // Keepalive is only for local clients, skip if none connected
+    }
+    
     if (!hasLocalClients && !shouldSendToCloud) {
         return;  // No one to send to, skip expensive JSON building
     }
@@ -616,25 +622,44 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
     if (!sendFullStatus && (cloudChanged || localChanged) && !isFirstLocalMessage) {
         // Check if this is a keepalive send - if keepalive was forced, send lightweight keepalive
         // Otherwise, try to build delta status
-        if (isKeepaliveForced) {
+        if (isKeepaliveForced && hasLocalClients) {
             // This is a keepalive - send lightweight message instead of expensive full status
             // This prevents blocking the main loop with expensive operations when idle
+            // Only send if we actually have local clients
             doc.clear();
             doc["type"] = "keepalive";
             doc["seq"] = statusSequence;
             doc["uptime"] = millis();
             
+            // Yield before serialization
+            yield();
+            
             // Serialize lightweight keepalive to MessagePack
             size_t msgpackSize = MessagePackHelper::serialize(doc, g_statusBuffer, STATUS_BUFFER_SIZE);
+            
+            // Yield after serialization
+            yield();
+            
             if (msgpackSize > 0 && hasLocalClients) {
                 // Send lightweight keepalive to local clients
+                size_t clientIndex = 0;
                 for (auto& client : _ws.getClients()) {
+                    // Yield every 2 clients to prevent blocking
+                    if (clientIndex > 0 && (clientIndex % 2 == 0)) {
+                        yield();
+                    }
+                    clientIndex++;
+                    
                     if (client.status() == WS_CONNECTED && client.canSend()) {
                         client.binary(g_statusBuffer, msgpackSize);
+                        yield(); // Yield after each send
                     }
                 }
             }
             // Skip expensive full status building for keepalive
+            return;
+        } else if (isKeepaliveForced && !hasLocalClients) {
+            // Keepalive was forced but no clients - just return early to avoid expensive operations
             return;
         } else {
             // Build delta status - use the changed fields from the appropriate detector
@@ -935,6 +960,9 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
     // Stats Section - Only included on first connection or periodic sync
     // =========================================================================
     if (includeStats) {
+        // Yield before expensive stats operations
+        yield();
+        
         JsonObject stats = doc["stats"].to<JsonObject>();
         
         // Get current statistics
@@ -952,6 +980,9 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
         daily["avgBrewTimeMs"] = dailyStats.avgBrewTimeMs;
         daily["totalKwh"] = dailyStats.totalKwh;
         
+        // Yield after daily stats
+        yield();
+        
         // Lifetime stats
         JsonObject lifetime = stats["lifetime"].to<JsonObject>();
         lifetime["totalShots"] = fullStats.lifetime.totalShots;
@@ -961,6 +992,9 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
         // Session stats
         stats["sessionShots"] = fullStats.sessionShots;
         stats["shotsToday"] = dailyStats.shotCount;
+        
+        // Yield after all stats are added to JSON
+        yield();
     }
     
         // =========================================================================
@@ -994,6 +1028,8 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
     
     // Serialize to MessagePack binary format (much smaller than JSON)
     // Only do this expensive operation if we actually need to send
+    // Yield before expensive serialization
+    yield();
     size_t msgpackSize = MessagePackHelper::serialize(doc, g_statusBuffer, STATUS_BUFFER_SIZE);
     
     // Yield after expensive serialization to prevent blocking main loop
@@ -1028,9 +1064,10 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
             // getClients() returns references, so use auto& and access with . not ->
             size_t clientIndex = 0;
             for (auto& client : _ws.getClients()) {
-                // Yield periodically during client iteration to prevent blocking main loop
+                // Yield more frequently during client iteration to prevent blocking main loop
                 // This is critical when there are multiple clients or slow network
-                if (clientIndex > 0 && (clientIndex % 5 == 0)) {
+                // Yield every 2 clients instead of every 5 to prevent 3+ second blocks
+                if (clientIndex > 0 && (clientIndex % 2 == 0)) {
                     yield();
                 }
                 clientIndex++;
@@ -1041,25 +1078,42 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
                     // WebSocket protocol-level pings don't trigger browser's onmessage event,
                     // so the client's lastMessageTime never updates and it marks connection as stale.
                     // We must send actual messages (binary MessagePack or text JSON) that trigger onmessage.
+                    // Check queue status before sending to avoid blocking
+                    bool queueAvailable = client.canSend();
+                    
                     if (isKeepaliveForced) {
-                        // Force send keepalive - this is critical for connection stability
-                        // Always send the status message, even if queue appears full
-                        // The client needs to receive messages to update its lastMessageTime
-                        if (g_statusBuffer && msgpackSize > 0 && msgpackSize <= STATUS_BUFFER_SIZE) {
+                        // Force send keepalive - but only if queue has space to avoid blocking
+                        // If queue is full, skip this keepalive rather than blocking for 3+ seconds
+                        if (queueAvailable && g_statusBuffer && msgpackSize > 0 && msgpackSize <= STATUS_BUFFER_SIZE) {
                             client.binary(g_statusBuffer, msgpackSize);
+                            // Yield after each send to prevent blocking main loop
+                            yield();
+                        } else if (!queueAvailable) {
+                            // Queue full - skip keepalive to avoid blocking (client will get next update)
+                            LOG_D("Client %u queue full, skipping keepalive to avoid blocking", client.id());
                         } else {
                             LOG_E("Invalid buffer or size: g_statusBuffer=%p, msgpackSize=%zu, STATUS_BUFFER_SIZE=%d", 
                                   g_statusBuffer, msgpackSize, STATUS_BUFFER_SIZE);
                         }
-                    } else if (client.canSend()) {
+                    } else if (queueAvailable) {
                         // Normal status update - only send if queue has space
                         client.binary(g_statusBuffer, msgpackSize);
+                        // Yield after each send to prevent blocking main loop
+                        yield();
                     } else {
                         // Queue full for normal update - skip unless it's initial status
                         if (isFirstLocalMessage) {
-                            LOG_W("Client %u queue full but sending initial status anyway", client.id());
+                            // For first message, try to send even if queue appears full
+                            // But add timeout protection - if it takes too long, skip it
+                            unsigned long sendStart = millis();
                             if (g_statusBuffer && msgpackSize > 0 && msgpackSize <= STATUS_BUFFER_SIZE) {
                                 client.binary(g_statusBuffer, msgpackSize);
+                                // Yield after send to prevent blocking
+                                yield();
+                                unsigned long sendTime = millis() - sendStart;
+                                if (sendTime > 100) {
+                                    LOG_W("Client %u initial send took %lu ms (queue may be blocking)", client.id(), sendTime);
+                                }
                             }
                         } else {
                             LOG_D("Client %u send queue full, skipping this update", client.id());
@@ -1191,6 +1245,8 @@ void BrewWebServer::broadcastDeviceInfo() {
             // Defensive: Check client is connected and ready before sending
             if (client.status() == WS_CONNECTED && client.canSend() && jsonBuffer) {
                 client.text(jsonBuffer);
+                // Yield after each send to prevent blocking main loop
+                yield();
             }
         }
     }
