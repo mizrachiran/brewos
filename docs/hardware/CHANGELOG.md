@@ -100,6 +100,11 @@ The most robust approach is to wire the RP2354's **SWD (Serial Wire Debug)** int
 
 **Important:** SWDIO and SWCLK are **dedicated physical pins** on the RP2354, NOT multiplexed on GPIO 16/22. GPIO 16 and 22 are now available for other uses since J15 traces connect to the dedicated SWD pins.
 
+**Series Resistor Values (Optimized):**
+
+- **R_SWDIO:** 47Ω (J15 Pin 6) - Provides ESD protection
+- **R_SWCLK:** 22Ω (J15 Pin 8) - Optimized for signal integrity and reduced ringing
+
 **Why SWD is Better:**
 
 1. **Factory Flash:** ESP32 can bit-bang SWD protocol to flash blank RP2354

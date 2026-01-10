@@ -78,7 +78,8 @@
 | 1     | R45A                   | 3.3kΩ        | 1%        | 0805     | J17 RX level shift (lower)                                                                             |
 | 1     | R45B                   | 33Ω          | 5%        | 0805     | J17 RX series                                                                                          |
 | 2     | R93-R94                | 20kΩ         | 5%        | 0805     | RS485 failsafe bias                                                                                    |
-| **2** | **R_SWD**              | **47Ω**      | **5%**    | **0805** | **SWD Series Protection (J15-6/8)**                                                                    |
+| **1** | **R_SWDIO**            | **47Ω**      | **5%**    | **0805** | **SWDIO Series Protection (J15-6)**                                                                  |
+| **1** | **R_SWCLK**            | **22Ω**      | **5%**    | **0805** | **SWCLK Series Protection (J15-8, optimized for signal integrity)**                                  |
 | **1** | **R_XTAL**             | **1kΩ**      | **5%**    | **0805** | **Crystal series resistor (recommended to prevent overdriving crystal)**                               |
 | **2** | **R_CC1, R_CC2**       | **5.1kΩ**    | **1%**    | **0603** | **USB-C CC pull-down resistors (5.1kΩ for 5V power)**                                                  |
 | **1** | **F_USB**              | **PTC Fuse** | **1A**    | **1206** | **VBUS overcurrent protection (replaces R_VBUS, protects against USB power faults)**                   |

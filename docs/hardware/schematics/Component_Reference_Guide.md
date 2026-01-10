@@ -49,21 +49,21 @@
 
 ### Diodes & Protection
 
-| Ref        | Part Number | Function                                              | Package |
-| ---------- | ----------- | ----------------------------------------------------- | ------- |
-| D1         | UF4007      | K1 flyback diode                                      | DO-41   |
-| D2         | UF4007      | K2 flyback diode                                      | DO-41   |
-| D3         | UF4007      | K3 flyback diode                                      | DO-41   |
-| D10        | PESD5V0S1BL | Water switch ESD protection                           | SOD-323 |
-| D11        | PESD5V0S1BL | Tank level ESD protection                             | SOD-323 |
-| D12        | PESD5V0S1BL | Steam level ESD protection                            | SOD-323 |
-| D13        | PESD5V0S1BL | Brew switch ESD protection                            | SOD-323 |
-| D14        | PESD5V0S1BL | Brew NTC ESD protection                               | SOD-323 |
-| D15        | PESD5V0S1BL | Steam NTC ESD protection                              | SOD-323 |
-| D16        | BAT54S      | Pressure ADC overvoltage clamp (fast Schottky)        | SOT-23  |
+| Ref        | Part Number | Function                                                         | Package |
+| ---------- | ----------- | ---------------------------------------------------------------- | ------- |
+| D1         | UF4007      | K1 flyback diode                                                 | DO-41   |
+| D2         | UF4007      | K2 flyback diode                                                 | DO-41   |
+| D3         | UF4007      | K3 flyback diode                                                 | DO-41   |
+| D10        | PESD5V0S1BL | Water switch ESD protection                                      | SOD-323 |
+| D11        | PESD5V0S1BL | Tank level ESD protection                                        | SOD-323 |
+| D12        | PESD5V0S1BL | Steam level ESD protection                                       | SOD-323 |
+| D13        | PESD5V0S1BL | Brew switch ESD protection                                       | SOD-323 |
+| D14        | PESD5V0S1BL | Brew NTC ESD protection                                          | SOD-323 |
+| D15        | PESD5V0S1BL | Steam NTC ESD protection                                         | SOD-323 |
+| D16        | BAT54S      | Pressure ADC overvoltage clamp (fast Schottky)                   | SOT-23  |
 | D_PRESSURE | PESD3V3S1BL | Pressure ADC hard clamp (3.3V TVS, low-leakage, parallel to D16) | SOD-323 |
-| D20        | SMBJ5.0A    | 5V rail TVS protection                                | SMB     |
-| D21        | SM712       | RS485 A/B line surge protection                       | SOT-23  |
+| D20        | SMBJ5.0A    | 5V rail TVS protection                                           | SMB     |
+| D21        | SM712       | RS485 A/B line surge protection                                  | SOT-23  |
 
 ---
 
@@ -142,9 +142,9 @@
 
 | Ref  | Value | Tolerance | Function                                                         |
 | ---- | ----- | --------- | ---------------------------------------------------------------- |
-| R40  | 1kΩ   | 5%        | ESP32 UART TX series (5V tolerance protection) + TVS (D_UART_TX)  |
-| R41  | 1kΩ   | 5%        | ESP32 UART RX series (5V tolerance protection) + TVS (D_UART_RX)  |
-| R44  | 1kΩ   | 5%        | Power meter TX series (5V tolerance protection)                   |
+| R40  | 1kΩ   | 5%        | ESP32 UART TX series (5V tolerance protection) + TVS (D_UART_TX) |
+| R41  | 1kΩ   | 5%        | ESP32 UART RX series (5V tolerance protection) + TVS (D_UART_RX) |
+| R44  | 1kΩ   | 5%        | Power meter TX series (5V tolerance protection)                  |
 | R45  | 2.2kΩ | 1%        | J17 RX level shift (upper)                                       |
 | R45A | 3.3kΩ | 1%        | J17 RX level shift (lower)                                       |
 | R45B | 33Ω   | 5%        | J17 RX series (post-divider)                                     |
@@ -174,14 +174,15 @@
 
 #### Ratiometric Compensation & RS485 Biasing (R91-R94)
 
-| Ref    | Value | Tolerance | Function                                   |
-| ------ | ----- | --------- | ------------------------------------------ |
-| R91    | 10kΩ  | 1%        | 5V monitor divider (upper)                 |
-| R92    | 5.6kΩ | 1%        | 5V monitor divider (lower)                 |
-| R93    | 20kΩ  | 5%        | RS485 A line failsafe pull-up              |
-| R94    | 20kΩ  | 5%        | RS485 B line failsafe pull-down            |
-| R_SWD  | 47Ω   | 5%        | SWDIO/SWCLK series protection (J15-6/8)    |
-| R_XTAL | 1kΩ   | 5%        | Crystal series resistor (recommended to prevent overdriving crystal, per Raspberry Pi recommendations) |
+| Ref     | Value | Tolerance | Function                                                                                               |
+| ------- | ----- | --------- | ------------------------------------------------------------------------------------------------------ |
+| R91     | 10kΩ  | 1%        | 5V monitor divider (upper)                                                                             |
+| R92     | 5.6kΩ | 1%        | 5V monitor divider (lower)                                                                             |
+| R93     | 20kΩ  | 5%        | RS485 A line failsafe pull-up                                                                          |
+| R94     | 20kΩ  | 5%        | RS485 B line failsafe pull-down                                                                        |
+| R_SWDIO | 47Ω   | 5%        | SWDIO series protection (J15-6)                                                                        |
+| R_SWCLK | 22Ω   | 5%        | SWCLK series protection (J15-8, optimized)                                                             |
+| R_XTAL  | 1kΩ   | 5%        | Crystal series resistor (recommended to prevent overdriving crystal, per Raspberry Pi recommendations) |
 
 ---
 
@@ -261,12 +262,12 @@
 
 #### Low Voltage Connectors
 
-| Ref | Type              | Pins | Function                                      |
-| --- | ----------------- | ---- | --------------------------------------------- |
-| J15 | JST-XH 2.54mm     | 8    | ESP32 display + brew-by-weight                |
-| J17 | JST-XH 2.54mm     | 6    | Power meter interface (LV)                    |
-| J24 | Screw terminal    | 2    | Power meter HV input (L, N only - PE removed) |
-| J26 | Screw terminal    | 18   | Unified LV terminal (sensors, SSRs)           |
+| Ref | Type           | Pins | Function                                      |
+| --- | -------------- | ---- | --------------------------------------------- |
+| J15 | JST-XH 2.54mm  | 8    | ESP32 display + brew-by-weight                |
+| J17 | JST-XH 2.54mm  | 6    | Power meter interface (LV)                    |
+| J24 | Screw terminal | 2    | Power meter HV input (L, N only - PE removed) |
+| J26 | Screw terminal | 18   | Unified LV terminal (sensors, SSRs)           |
 
 ---
 

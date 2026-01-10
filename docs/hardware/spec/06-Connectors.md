@@ -89,7 +89,7 @@ HV section is now floating - no Earth connection on PCB to prevent L-to-Earth sh
 | 5   | RP2354_RUN  | ESP32→RP2354     | Reset control (via 1kΩ R_RUN_EXT - prevents short-circuit with SW1) |
 | 6   | **SWDIO**   | **ESP32↔RP2354** | **RP2354 SWDIO Pin ↔ ESP32 TX2, 47Ω series (R_SWDIO) only**         |
 | 7   | WEIGHT_STOP | ESP32→RP2354     | GPIO21, 4.7kΩ pull-down (R73, RP2350 E9 errata)                     |
-| 8   | **SWCLK**   | **ESP32↔RP2354** | **RP2354 SWCLK Pin ↔ ESP32 RX2, 47Ω series (R_SWCLK) only**         |
+| 8   | **SWCLK**   | **ESP32↔RP2354** | **RP2354 SWCLK Pin ↔ ESP32 RX2, 22Ω series (R_SWCLK) only**         |
 
 **SWD Interface (v2.31):**
 Pins 6 and 8 connect to the **dedicated SWDIO and SWCLK physical pins** on the RP2354 (NOT GPIO 16/22). This enables:
@@ -101,7 +101,7 @@ Pins 6 and 8 connect to the **dedicated SWDIO and SWCLK physical pins** on the R
 **Important:**
 
 - GPIO 16 and 22 are now available for other uses since J15 traces connect to the dedicated SWD pins instead.
-- **SWD lines use 47Ω series resistors only** - NO pull-down resistors needed. The RP2350 E9 errata affects GPIO Input Buffer circuitry, NOT the dedicated Debug Port interface.
+- **SWD lines use series resistors only** (R_SWDIO: 47Ω, R_SWCLK: 22Ω optimized) - NO pull-down resistors needed. The RP2350 E9 errata affects GPIO Input Buffer circuitry, NOT the dedicated Debug Port interface.
 - **GPIO inputs (e.g., GPIO21/WEIGHT_STOP) require 4.7kΩ pull-down resistors** for E9 errata mitigation, but SWD lines do not.
 
 **5V Tolerance & ESD Protection:**

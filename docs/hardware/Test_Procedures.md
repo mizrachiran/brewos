@@ -545,7 +545,7 @@ Verify UART communication between RP2354 and ESP32 display module, and test the 
 > - ESP32 controls RP2354's **RUN** pin (J15 Pin 5) via GPIO20
 > - **SWDIO** (J15 Pin 6): ESP32 TX2 ↔ RP2354 SWDIO (dedicated pin, 47Ω series)
 > - **WEIGHT_STOP** (J15 Pin 7): ESP32 GPIO19 → RP2354 GPIO21 (4.7kΩ pull-down)
-> - **SWCLK** (J15 Pin 8): ESP32 RX2 ↔ RP2354 SWCLK (dedicated pin, 47Ω series)
+> - **SWCLK** (J15 Pin 8): ESP32 RX2 ↔ RP2354 SWCLK (dedicated pin, 22Ω series)
 
 ### Required
 
@@ -564,7 +564,7 @@ Verify UART communication between RP2354 and ESP32 display module, and test the 
 | 5       | RUN         | RUN pin         | GPIO20           | 10kΩ pull-up    |
 | 6       | SWDIO       | SWDIO (dedicated) | TX2              | 47Ω series      |
 | 7       | WEIGHT_STOP | GPIO21          | GPIO19           | 4.7kΩ pull-down |
-| 8       | SWCLK       | SWCLK (dedicated) | RX2               | 47Ω series      |
+| 8       | SWCLK       | SWCLK (dedicated) | RX2               | 22Ω series      |
 
 ### Test Firmware - RP2354 Side (MicroPython)
 

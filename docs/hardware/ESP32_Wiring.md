@@ -17,12 +17,12 @@ The control PCB provides an 8-pin JST-XH connector (J15) for the ESP32 display m
 | 5   | RUN         | Output    | 3.3V    | ESP32 GPIO20 (screen) / GPIO4 (no-screen) → RP2354 RUN pin (reset control)  |
 | 6   | SWDIO       | I/O       | 3.3V    | ESP32 TX2 (GPIO17) ↔ RP2354 SWDIO (dedicated pin, 47Ω series only)          |
 | 7   | WEIGHT_STOP | Output    | 3.3V    | ESP32 GPIO19 (screen) / GPIO6 (no-screen) → RP2354 GPIO21 (4.7kΩ pull-down) |
-| 8   | SWCLK       | I/O       | 3.3V    | ESP32 RX2 (GPIO16) ↔ RP2354 SWCLK (dedicated pin, 47Ω series only)          |
+| 8   | SWCLK       | I/O       | 3.3V    | ESP32 RX2 (GPIO16) ↔ RP2354 SWCLK (dedicated pin, 22Ω series only)          |
 
 **⚠️ CRITICAL:** Always power the control PCB BEFORE connecting USB to ESP32 module. See [Safety - 5V Tolerance](spec/09-Safety.md#rp2354-5v-tolerance-and-power-sequencing) for details.
 
 **Note on SWD vs GPIO Resistors:**
-- **SWD lines (Pins 6/8):** Use **47Ω series resistors only** - NO pull-down resistors needed. The dedicated SWD pins are separate from the GPIO bank and are not affected by the RP2350 E9 errata.
+- **SWD lines (Pins 6/8):** Use **series resistors only** (R_SWDIO: 47Ω, R_SWCLK: 22Ω optimized) - NO pull-down resistors needed. The dedicated SWD pins are separate from the GPIO bank and are not affected by the RP2350 E9 errata.
 - **GPIO inputs (Pin 7/WEIGHT_STOP):** Require **4.7kΩ pull-down resistors** (R73) for RP2350 E9 errata mitigation. This applies to GPIO inputs only, not the dedicated Debug Port interface.
 
 **Note:** This document references "RP2354" throughout. The current design uses the discrete RP2354A chip (QFN-60) with 2MB stacked flash, replacing the previous Raspberry Pi Pico 2 module.
@@ -374,7 +374,7 @@ Pin 8 (SWCLK)  ────────────────────►  
 
 1. **Check wiring:** Verify ESP32 TX2 → J15 Pin 6 (SWDIO), RX2 → J15 Pin 8 (SWCLK)
 2. **Check RP2354 side:** Verify J15 Pins 6/8 connect to dedicated SWDIO/SWCLK pins (not GPIO16/22)
-3. **Check series resistors:** Verify 47Ω series resistors (R_SWDIO, R_SWCLK) are present
+3. **Check series resistors:** Verify R_SWDIO (47Ω) and R_SWCLK (22Ω) series resistors are present
 4. **Note:** SWDIO and SWCLK are dedicated physical pins on RP2354, not multiplexed GPIOs
 5. **Important:** SWD lines do NOT require pull-down resistors - only GPIO inputs (like GPIO21/WEIGHT_STOP) need the 4.7kΩ pull-down for RP2350 E9 errata mitigation
 

@@ -245,7 +245,7 @@ The RC filter capacitors (C8, C9, C11) suppress AC noise but do NOT mitigate DC 
 
 - **SWDIO and SWCLK are dedicated physical pins** on the RP2354, NOT multiplexed on GPIO 16/22
 - **GPIO 16 and 22 are now available** since J15 traces connect to the dedicated SWD pins instead
-- **Series protection resistors (R_SWD, 47Ω)** are required on SWDIO/SWCLK lines for safety
+- **Series protection resistors** are required on SWDIO/SWCLK lines: R_SWDIO (47Ω) for SWDIO, R_SWCLK (22Ω optimized) for SWCLK
 
 **Benefits:**
 

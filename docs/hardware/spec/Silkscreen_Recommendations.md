@@ -88,7 +88,7 @@ Use dual-row labeling: pin numbers above, function labels below.
 | 5   | RUN       | RP2354 Reset Control | ESP32 → RP2354 RUN pin                    |
 | 6   | **SWDIO** | **SWD Data I/O**     | **RP2354 SWDIO ↔ ESP32 TX2 (47Ω series)** |
 | 7   | WGT       | Weight Stop Signal   | ESP32 → RP2354 GPIO21 (4.7kΩ pull-down)   |
-| 8   | **SWCLK** | **SWD Clock**        | **RP2354 SWCLK ↔ ESP32 RX2 (47Ω series)** |
+| 8   | **SWCLK** | **SWD Clock**        | **RP2354 SWCLK ↔ ESP32 RX2 (22Ω series)** |
 
 **Pin 1 indicator:** Use filled square pad or dot
 

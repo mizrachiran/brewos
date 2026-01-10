@@ -438,7 +438,7 @@ Standard FR4 coating is NOT sufficient for high-voltage isolation. IPC-2221B sta
      - Usage: Hold SW2, press & release SW1 (Reset), release SW2 → Enters USB boot mode
      - Placement: Accessible to user, near SW1 (Reset button)
      - Protection: R_BOOTSEL (1kΩ) limits current if button pressed during active flash access
-7. **SWD routing**: SWDIO/SWCLK (dedicated pins) traces to J15 Pins 6/8 via 47Ω series resistors (R_SWD)
+7. **SWD routing**: SWDIO/SWCLK (dedicated pins) traces to J15 Pins 6/8 via series resistors (R_SWDIO: 47Ω, R_SWCLK: 22Ω optimized)
    - Route as differential-like pair with ground guard trace
    - Keep short and away from noisy signals
    - **Reset line protection**: Place R_RUN_EXT (1kΩ) between J15 Pin 5 and RP2354_RUN net
