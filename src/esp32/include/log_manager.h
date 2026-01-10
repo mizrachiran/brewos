@@ -176,11 +176,16 @@ private:
     bool _picoLogForwarding;    // Pico log forwarding enabled
     bool _enabled;              // Log buffer is enabled
     unsigned long _lastSaveTime; // Last auto-save time (millis)
+    size_t _lastSavedHead;      // Last saved head position (for delta saving)
     
     // Internal helpers
     void writeToBuffer(const char* data, size_t len);
     const char* levelToString(BrewOSLogLevel level);
     const char* sourceToString(LogSource source);
+    
+    // Delta/append mode saving (fast, only writes new entries)
+    void saveDelta();
+    void rotateLogs();
     
     /**
      * Get logs without acquiring mutex (assumes caller already has mutex)

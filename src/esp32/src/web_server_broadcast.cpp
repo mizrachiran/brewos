@@ -672,15 +672,19 @@ void BrewWebServer::broadcastFullStatus(const ui_state_t& state) {
                 // Delta built successfully - stats included if changed.stats is true
             } else {
                 // No changes detected
-                // If this is a cloud heartbeat with no changes, send lightweight keepalive instead of full status
-                if (cloudHeartbeatDue && !hasLocalClients && cloudConnected) {
+                // If this is a cloud heartbeat with no changes, always send lightweight keepalive
+                // Cloud heartbeat is just a keepalive - doesn't need full status
+                if (cloudHeartbeatDue && cloudConnected) {
                     // Cloud heartbeat with no changes - send lightweight keepalive
                     doc.clear();
                     doc["type"] = "keepalive";
                     doc["seq"] = statusSequence;
                     doc["uptime"] = millis();
+                } else if (localChanged && !hasLocalClients) {
+                    // Local changed but no local clients - skip (nothing to send)
+                    return;
                 } else {
-                    // Fall back to full status for other cases
+                    // Fall back to full status for other cases (should be rare)
                     sendFullStatus = true;
                 }
             }

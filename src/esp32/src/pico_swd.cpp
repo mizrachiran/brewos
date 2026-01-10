@@ -733,15 +733,13 @@ void PicoSWD::end() {
     
     _connected = false;
     
-    // Release pins - set to high-Z (INPUT) to avoid interfering with normal operation
-    pinMode(g_pin_swdio, INPUT); 
-    pinMode(g_pin_swclk, INPUT);
+    // FIX: Release pins with pull-ups instead of floating to prevent EMI-induced ghost debugging
+    // Floating pins act as antennas and can pick up noise from pumps/solenoids, causing
+    // the Pico to enter debug halt state. Pull-ups keep the lines stable when idle.
+    pinMode(g_pin_swdio, INPUT_PULLUP); 
+    pinMode(g_pin_swclk, INPUT_PULLUP);
     
-    // Disable pull-ups to avoid interfering
-    gpio_set_pull_mode((gpio_num_t)g_pin_swdio, GPIO_FLOATING);
-    gpio_set_pull_mode((gpio_num_t)g_pin_swclk, GPIO_FLOATING);
-    
-    LOG_D("SWD: Pins released (INPUT, floating)");
+    LOG_D("SWD: Pins released (INPUT_PULLUP) - prevents EMI-induced ghost debugging");
     LOG_I("SWD: Disconnected");
 }
 

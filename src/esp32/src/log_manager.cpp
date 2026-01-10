@@ -40,6 +40,7 @@ LogManager::LogManager()
     , _picoLogForwarding(false)
     , _enabled(false)
     , _lastSaveTime(0)
+    , _lastSavedHead(0)
 {
     // Set global pointer
     // Note: Mutex is created in enable() to avoid static initialization order issues
@@ -132,6 +133,7 @@ bool LogManager::enable() {
     
     _enabled = true;
     _lastSaveTime = 0;  // Initialize save time (will be set on first loop call)
+    _lastSavedHead = _head;  // Initialize saved head position
     
     Serial.printf("[LogManager] Enabled - allocated %dKB buffer\n", LOG_BUFFER_SIZE / 1024);
     if (restored) {
@@ -458,7 +460,7 @@ bool LogManager::saveToFlash() {
     // Try to use LittleFS - first try if already mounted, then try to mount
     bool fsMounted = false;
     // Try to open a file to check if already mounted
-    File testFile = LittleFS.open("/logs.bin", "r");
+    File testFile = LittleFS.open("/logs.txt", "r");
     if (testFile) {
         testFile.close();
         fsMounted = true;
@@ -507,27 +509,7 @@ bool LogManager::saveToFlash() {
         success = true;
     }
     
-    // Also keep binary format for restoreFromFlash (for backward compatibility)
-    // But primary storage is now text format
-    File binFile = LittleFS.open("/logs.bin", "w");
-    if (binFile) {
-        // Write header: size (4 bytes), head (4 bytes), tail (4 bytes), wrapped (1 byte)
-        binFile.write((uint8_t*)&_size, sizeof(_size));
-        binFile.write((uint8_t*)&_head, sizeof(_head));
-        binFile.write((uint8_t*)&_tail, sizeof(_tail));
-        binFile.write((uint8_t*)&_wrapped, sizeof(_wrapped));
-        
-        if (_size > 0) {
-            if (_wrapped) {
-                size_t firstPart = LOG_BUFFER_SIZE - _tail;
-                binFile.write((uint8_t*)(_buffer + _tail), firstPart);
-                binFile.write((uint8_t*)_buffer, _head);
-            } else {
-                binFile.write((uint8_t*)_buffer, _head);
-            }
-        }
-        binFile.close();
-    }
+    // Note: logs.bin removed - we now use delta/append mode with logs.txt only
     
     if (hasMutex) {
         xSemaphoreGive(_mutex);
@@ -541,75 +523,98 @@ bool LogManager::restoreFromFlash() {
         return false;  // Buffer not allocated yet
     }
     
-    // Check if LittleFS is mounted
-    if (!LittleFS.begin(false)) {  // false = don't format if mount fails
-        return false;
+    // Note: restoreFromFlash() is no longer used with delta/append mode.
+    // Logs are saved incrementally to /logs.txt and can be read via getLogsFromFlash().
+    // The RAM buffer starts fresh on each boot - logs persist in /logs.txt for viewing.
+    // This is an acceptable trade-off for eliminating slow loop blocking.
+    
+    return false;  // No restore from binary format (logs.bin removed)
+}
+
+void LogManager::rotateLogs() {
+    if (!LittleFS.exists("/logs.txt")) return;
+
+    File f = LittleFS.open("/logs.txt", "r");
+    if (!f) return;
+    
+    size_t size = f.size();
+    f.close();
+
+    // If file is larger than 100KB, rotate it
+    if (size > 100000) {
+        LittleFS.remove("/logs.bak");        // Delete old backup
+        LittleFS.rename("/logs.txt", "/logs.bak"); // Rotate current to backup
+        _lastSavedHead = _head; // Reset delta tracking for new file
     }
+}
+
+void LogManager::saveDelta() {
+    if (!_buffer || _size == 0) return;
     
-    // Check if log file exists
-    if (!LittleFS.exists("/logs.bin")) {
-        return false;  // No saved logs
-    }
-    
-    File file = LittleFS.open("/logs.bin", "r");
-    if (!file) {
-        return false;
-    }
-    
-    // Read header
-    size_t savedSize = 0;
-    size_t savedHead = 0;
-    size_t savedTail = 0;
-    bool savedWrapped = false;
-    
-    if (file.read((uint8_t*)&savedSize, sizeof(savedSize)) != sizeof(savedSize) ||
-        file.read((uint8_t*)&savedHead, sizeof(savedHead)) != sizeof(savedHead) ||
-        file.read((uint8_t*)&savedTail, sizeof(savedTail)) != sizeof(savedTail) ||
-        file.read((uint8_t*)&savedWrapped, sizeof(savedWrapped)) != sizeof(savedWrapped)) {
-        file.close();
-        return false;  // Invalid header
-    }
-    
-    // Validate header values
-    if (savedHead >= LOG_BUFFER_SIZE || savedTail >= LOG_BUFFER_SIZE || savedSize > LOG_BUFFER_SIZE) {
-        file.close();
-        return false;  // Invalid data
-    }
-    
-    // Clear buffer first
-    memset(_buffer, 0, LOG_BUFFER_SIZE);
-    
-    // Read buffer data
-    bool success = false;
-    if (savedWrapped) {
-        // Read from tail to end, then from start to head
-        size_t firstPart = LOG_BUFFER_SIZE - savedTail;
-        if (file.read((uint8_t*)(_buffer + savedTail), firstPart) == firstPart &&
-            file.read((uint8_t*)_buffer, savedHead) == savedHead) {
-            _head = savedHead;
-            _tail = savedTail;
-            _size = savedSize;
-            _wrapped = savedWrapped;
-            success = true;
-        }
+    // Try to use LittleFS - first try if already mounted, then try to mount
+    bool fsMounted = false;
+    File testFile = LittleFS.open("/logs.txt", "r");
+    if (testFile) {
+        testFile.close();
+        fsMounted = true;
     } else {
-        // Read from start to head
-        if (file.read((uint8_t*)_buffer, savedHead) == savedHead) {
-            _head = savedHead;
-            _tail = savedTail;
-            _size = savedSize;
-            _wrapped = savedWrapped;
-            success = true;
+        fsMounted = LittleFS.begin(false);
+    }
+    
+    if (!fsMounted) {
+        return;  // LittleFS not available
+    }
+    
+    // Nothing new to save?
+    if (_head == _lastSavedHead) return;
+
+    // Try to get mutex (with short timeout)
+    bool hasMutex = false;
+    if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+        hasMutex = true;
+    }
+    
+    // Use "a" (append) mode - extremely fast for small updates
+    File file = LittleFS.open("/logs.txt", "a");
+    if (!file) {
+        if (hasMutex) {
+            xSemaphoreGive(_mutex);
         }
+        return;
     }
-    
+
+    // Calculate what to write
+    size_t bytesToWrite = 0;
+    if (_head > _lastSavedHead) {
+        // Linear case: Write from lastSavedHead to head
+        bytesToWrite = _head - _lastSavedHead;
+        file.write((const uint8_t*)(_buffer + _lastSavedHead), bytesToWrite);
+    } else {
+        // Wrapped case: Write to end of buffer, then from start
+        size_t lenToEnd = LOG_BUFFER_SIZE - _lastSavedHead;
+        if (lenToEnd > 0) {
+            file.write((const uint8_t*)(_buffer + _lastSavedHead), lenToEnd);
+        }
+        if (_head > 0) {
+            file.write((const uint8_t*)_buffer, _head);
+        }
+        bytesToWrite = lenToEnd + _head;
+    }
+
     file.close();
+    _lastSavedHead = _head; // Mark as saved
     
-    if (success) {
-        Serial.printf("[LogManager] Restored %zu bytes of logs from flash\n", _size);
+    if (hasMutex) {
+        xSemaphoreGive(_mutex);
     }
     
-    return success;
+    // Check if we need to rotate logs (don't do this every loop)
+    static unsigned long lastRotationCheck = 0;
+    unsigned long now = millis();
+    if (now - lastRotationCheck > 60000) {  // Check every 60 seconds
+        rotateLogs();
+        lastRotationCheck = now;
+    }
 }
 
 void LogManager::loop() {
@@ -619,28 +624,20 @@ void LogManager::loop() {
     
     unsigned long now = millis();
     
-    // SAVE INTERVAL: 60 seconds
-    // Writing 50KB to flash takes ~1.2s and blocks the CPU.
-    // For a circular buffer, being full is the normal steady state.
-    // We don't need aggressive saving - periodic saves are sufficient.
-    const unsigned long AUTO_SAVE_INTERVAL_MS = 60000;  // 60 seconds
+    // NOW WE CAN SAVE FREQUENTLY!
+    // Since we only write ~100 bytes (delta), we can do this every 5 seconds
+    // without blocking the network.
+    const unsigned long DELTA_SAVE_INTERVAL_MS = 5000;  // 5 seconds
     
-    // Initialize timer on first run
     if (_lastSaveTime == 0) {
         _lastSaveTime = now;
+        _lastSavedHead = _head; // Mark current state as "saved" initially
         return;
     }
     
-    // Only save periodically - don't check buffer fill level
-    // A wrapped buffer is normal for circular logging and doesn't require emergency saves
-    if (now - _lastSaveTime >= AUTO_SAVE_INTERVAL_MS) {
-        if (_size > 0) {
-            // Save to flash (non-blocking, uses mutex with timeout)
-            if (saveToFlash()) {
-                _lastSaveTime = now;
-            }
-            // If save fails, we'll try again next interval
-        }
+    if (now - _lastSaveTime >= DELTA_SAVE_INTERVAL_MS) {
+        saveDelta();
+        _lastSaveTime = now;
     }
 }
 
@@ -661,7 +658,7 @@ String LogManager::getLogsFromFlash() {
         return String("ERROR: LittleFS not available");
     }
     
-    // Read from text file (primary storage)
+    // Read from text file (delta/append mode storage)
     File file = LittleFS.open("/logs.txt", "r");
     if (file) {
         result = file.readString();
@@ -669,70 +666,9 @@ String LogManager::getLogsFromFlash() {
         return result;
     }
     
-    // Fallback to binary format (for backward compatibility)
-    File binFile = LittleFS.open("/logs.bin", "r");
-    if (!binFile) {
-        return String("ERROR: Could not open log file");
-    }
-    
-    // Read header
-    size_t savedSize = 0;
-    size_t savedHead = 0;
-    size_t savedTail = 0;
-    bool savedWrapped = false;
-    
-    if (binFile.read((uint8_t*)&savedSize, sizeof(savedSize)) != sizeof(savedSize) ||
-        binFile.read((uint8_t*)&savedHead, sizeof(savedHead)) != sizeof(savedHead) ||
-        binFile.read((uint8_t*)&savedTail, sizeof(savedTail)) != sizeof(savedTail) ||
-        binFile.read((uint8_t*)&savedWrapped, sizeof(savedWrapped)) != sizeof(savedWrapped)) {
-        binFile.close();
-        return String("ERROR: Invalid log file header");
-    }
-    
-    // Validate header
-    if (savedHead >= LOG_BUFFER_SIZE || savedTail >= LOG_BUFFER_SIZE || savedSize > LOG_BUFFER_SIZE) {
-        binFile.close();
-        return String("ERROR: Invalid log file data");
-    }
-    
-    // Read buffer data - use temporary buffer to avoid O(N²) character-by-character concatenation
-    result.reserve(savedSize + 1);
-    
-    if (savedWrapped) {
-        size_t firstPart = LOG_BUFFER_SIZE - savedTail;
-        // Read first part into temporary buffer
-        char* tempBuf = (char*)malloc(firstPart);
-        if (tempBuf) {
-            if (binFile.read((uint8_t*)tempBuf, firstPart) == firstPart) {
-                result.concat(tempBuf, firstPart);
-            }
-            free(tempBuf);
-        }
-        // Read second part
-        if (savedHead > 0) {
-            tempBuf = (char*)malloc(savedHead);
-            if (tempBuf) {
-                if (binFile.read((uint8_t*)tempBuf, savedHead) == savedHead) {
-                    result.concat(tempBuf, savedHead);
-                }
-                free(tempBuf);
-            }
-        }
-    } else {
-        // Read single contiguous block
-        if (savedHead > 0) {
-            char* tempBuf = (char*)malloc(savedHead);
-            if (tempBuf) {
-                if (binFile.read((uint8_t*)tempBuf, savedHead) == savedHead) {
-                    result.concat(tempBuf, savedHead);
-                }
-                free(tempBuf);
-            }
-        }
-    }
-    
-    binFile.close();
-    return result;
+    // Note: logs.bin removed - we now use delta/append mode with logs.txt only
+    // If logs.txt doesn't exist, return empty string
+    return String("");
 }
 
 String LogManager::getLogsComplete() {

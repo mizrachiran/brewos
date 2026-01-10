@@ -856,6 +856,17 @@ static void setupEarlyInitialization() {
         }
         prefs.end();
     }
+    
+    // FIX: Enable pull-ups on SWD pins to prevent ghost debugging from EMI
+    // When SWD is wired but not actively in use, floating pins act as antennas
+    // and can pick up noise from pumps/solenoids, causing Pico to enter debug halt state
+    // GPIO 21 (SWDIO) and GPIO 45 (SWCLK) are pulled high to keep lines stable
+#if ENABLE_SWD
+    pinMode(SWD_DIO_PIN, INPUT_PULLUP);
+    pinMode(SWD_CLK_PIN, INPUT_PULLUP);
+    Serial.printf("SWD pins initialized with pull-ups: GPIO%d (SWDIO), GPIO%d (SWCLK)\n", 
+                  SWD_DIO_PIN, SWD_CLK_PIN);
+#endif
 }
 
 static void setupCheckPendingOTA() {
