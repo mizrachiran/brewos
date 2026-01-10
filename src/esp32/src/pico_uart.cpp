@@ -1,5 +1,17 @@
 #include "pico_uart.h"
 #include "config.h"
+#include <driver/gpio.h>  // For ESP-IDF GPIO functions (SWD pin stabilization)
+
+// Fallback SWD pin definitions if not defined in config.h (for no-screen variant)
+// Some hardware may use GPIO 16/17 instead of GPIO 21/45
+#if !ENABLE_SCREEN
+    #ifndef SWD_DIO_PIN
+        #define SWD_DIO_PIN 17  // Fallback: GPIO 17 for SWDIO (no-screen variant)
+    #endif
+    #ifndef SWD_CLK_PIN
+        #define SWD_CLK_PIN 16  // Fallback: GPIO 16 for SWCLK (no-screen variant)
+    #endif
+#endif
 
 PicoUART::PicoUART(HardwareSerial& serial)
     : _serial(serial)
@@ -18,6 +30,22 @@ PicoUART::PicoUART(HardwareSerial& serial)
 
 void PicoUART::begin() {
     LOG_I("Initializing Pico UART at %d baud", PICO_UART_BAUD);
+    
+#if !ENABLE_SCREEN
+    // CRITICAL: Drive SWCLK HIGH (Output) to kill noise
+    // Internal pull-ups (~45kΩ) are too weak to fight EMI from pumps/solenoids.
+    // OUTPUT mode creates low-impedance connection that physically forces line to 3.3V.
+    // NOTE: This is safe here because begin() is called AFTER reset is released in recovery sequence
+    gpio_reset_pin((gpio_num_t)SWD_CLK_PIN);
+    gpio_set_level((gpio_num_t)SWD_CLK_PIN, 1);
+    gpio_set_direction((gpio_num_t)SWD_CLK_PIN, GPIO_MODE_OUTPUT);
+    
+    // SWDIO Safe Input Pullup
+    gpio_reset_pin((gpio_num_t)SWD_DIO_PIN);
+    gpio_set_direction((gpio_num_t)SWD_DIO_PIN, GPIO_MODE_INPUT);
+    gpio_set_pull_mode((gpio_num_t)SWD_DIO_PIN, GPIO_PULLUP_ONLY);
+    LOG_D("SWD pins stabilized (Strong Drive)");
+#endif // !ENABLE_SCREEN
     
     // Configure RX pin with pull-down to prevent floating when Pico is not connected
     // This prevents noise from being interpreted as data
@@ -272,10 +300,27 @@ bool PicoUART::enterBootloader() {
 void PicoUART::resetPico() {
     LOG_I("Resetting Pico via GPIO%d...", PICO_RUN_PIN);
     
-    // Pull RUN pin LOW to reset Pico (PICO_RUN_PIN)
+#if !ENABLE_SCREEN
+    // CRITICAL: Drive SWCLK HIGH (Output) to kill noise
+    gpio_reset_pin((gpio_num_t)SWD_CLK_PIN);
+    gpio_set_level((gpio_num_t)SWD_CLK_PIN, 1);
+    gpio_set_direction((gpio_num_t)SWD_CLK_PIN, GPIO_MODE_OUTPUT);
+    
+    // SWDIO Safe Input
+    gpio_reset_pin((gpio_num_t)SWD_DIO_PIN);
+    gpio_set_direction((gpio_num_t)SWD_DIO_PIN, GPIO_MODE_INPUT);
+    gpio_set_pull_mode((gpio_num_t)SWD_DIO_PIN, GPIO_PULLUP_ONLY);
+    LOG_D("SWD pins stabilized (Strong Drive)");
+#endif
+
+    // Reset Sequence
+    pinMode(PICO_RUN_PIN, OUTPUT);
+    digitalWrite(PICO_RUN_PIN, HIGH);
+    delay(10);
     digitalWrite(PICO_RUN_PIN, LOW);
     delay(100);
-    digitalWrite(PICO_RUN_PIN, HIGH);  // Release - Pico will boot
+    digitalWrite(PICO_RUN_PIN, HIGH);
+    delay(300);
     
     LOG_I("Pico reset complete");
 }

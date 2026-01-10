@@ -5,6 +5,13 @@
 // Forward declaration
 class File;
 
+// RP2350 AP Selection (from reference)
+#define AP_ROM_TABLE    0x0   // ROM Table
+#define AP_ARM_CORE0    0x2   // ARM Core 0 AHB-AP (used for memory operations and BootROM)
+#define AP_ARM_CORE1    0x4   // ARM Core 1 AHB-AP
+#define AP_RP_SPECIFIC  0x8   // RP-AP (Raspberry Pi specific)
+#define AP_RISCV        0xA   // RISC-V APB-AP (used only for Debug Module initialization)
+
 // ACK Response Codes (from reference)
 #define SWD_ACK_OK     0x1
 #define SWD_ACK_WAIT   0x2
@@ -112,8 +119,8 @@ private:
     // Protocol Wrappers
     swd_error_t readDP(uint8_t addr, uint32_t *data);
     swd_error_t writeDP(uint8_t addr, uint32_t data, bool ignoreAck = false);
-    swd_error_t readAP(uint8_t addr, uint32_t *data);
-    swd_error_t writeAP(uint8_t addr, uint32_t data);
+    swd_error_t readAP(uint8_t addr, uint32_t *data, uint8_t ap_id = AP_ARM_CORE0);
+    swd_error_t writeAP(uint8_t addr, uint32_t data, uint8_t ap_id = AP_ARM_CORE0);
     
     // RP2350-specific helpers
     uint32_t makeDPSelectRP2350(uint8_t apsel, uint8_t bank, bool ctrlsel);

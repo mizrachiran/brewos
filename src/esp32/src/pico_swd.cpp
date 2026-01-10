@@ -25,12 +25,7 @@
 #define AP_DRW  0x0C   // Data Read/Write Register
 #define AP_IDR  0xFC   // Identification Register
 
-// RP2350 AP Selection (from reference)
-#define AP_ROM_TABLE    0x0   // ROM Table
-#define AP_ARM_CORE0    0x2   // ARM Core 0 AHB-AP
-#define AP_ARM_CORE1    0x4   // ARM Core 1 AHB-AP
-#define AP_RP_SPECIFIC  0x8   // RP-AP (Raspberry Pi specific)
-#define AP_RISCV        0xA   // RISC-V APB-AP (this is what we need!)
+// RP2350 AP Selection constants are now defined in pico_swd.h
 
 // Debug Module Register Addresses (RP2350)
 #define DM_DMCONTROL   (0x10 * 4)  // Hart control
@@ -53,6 +48,8 @@
 // Registers
 #define DHCSR 0xE000EDF0
 #define AIRCR 0xE000ED0C
+#define DCRSR 0xE000EDF4  // Debug Core Register Selector Register
+#define DCRDR 0xE000EDF8  // Debug Core Register Data Register
 
 static int g_pin_swdio = -1;
 static int g_pin_swclk = -1;
@@ -422,12 +419,12 @@ uint32_t PicoSWD::makeDPSelectRP2350(uint8_t apsel, uint8_t bank, bool ctrlsel) 
     return ((apsel & 0xF) << 12) | (0xD << 8) | ((bank & 0xF) << 4) | (ctrlsel ? 1 : 0);
 }
 
-swd_error_t PicoSWD::readAP(uint8_t addr, uint32_t *data) {
-    LOG_D("SWD: ReadAP(0x%02X) - selecting bank", addr);
+swd_error_t PicoSWD::readAP(uint8_t addr, uint32_t *data, uint8_t ap_id) {
+    LOG_D("SWD: ReadAP(0x%02X) on AP 0x%X - selecting bank", addr, ap_id);
     // Extract bank from address (bits 7:4)
     uint8_t bank = (addr >> 4) & 0xF;
-    // For RP2350, we need to use the special encoding with AP_RISCV (0xA)
-    uint32_t select_val = makeDPSelectRP2350(AP_RISCV, bank, true);
+    // Use the passed ap_id (defaults to AP_ARM_CORE0, but can be AP_RISCV for Debug Module init)
+    uint32_t select_val = makeDPSelectRP2350(ap_id, bank, true);
     swd_error_t err = writeDP(DP_SELECT, select_val, false);
     if (err != SWD_OK) {
         LOG_E("SWD: ReadAP failed to select bank: %s", errorToString(err));
@@ -437,19 +434,19 @@ swd_error_t PicoSWD::readAP(uint8_t addr, uint32_t *data) {
     uint8_t ap_reg = addr & 0xF;
     err = swdReadPacket((ap_reg << 1) | 0x09, data);  // APnDP=1, RnW=1
     if (err == SWD_OK && data) {
-        LOG_D("SWD: ReadAP(0x%02X) = 0x%08X", addr, *data);
+        LOG_D("SWD: ReadAP(0x%02X) on AP 0x%X = 0x%08X", addr, ap_id, *data);
     } else if (err != SWD_OK) {
-        LOG_E("SWD: ReadAP(0x%02X) failed: %s", addr, errorToString(err));
+        LOG_E("SWD: ReadAP(0x%02X) on AP 0x%X failed: %s", addr, ap_id, errorToString(err));
     }
     return err;
 }
 
-swd_error_t PicoSWD::writeAP(uint8_t addr, uint32_t data) {
-    LOG_D("SWD: WriteAP(0x%02X, 0x%08X) - selecting bank", addr, data);
+swd_error_t PicoSWD::writeAP(uint8_t addr, uint32_t data, uint8_t ap_id) {
+    LOG_D("SWD: WriteAP(0x%02X, 0x%08X) on AP 0x%X - selecting bank", addr, data, ap_id);
     // Extract bank from address (bits 7:4)
     uint8_t bank = (addr >> 4) & 0xF;
-    // For RP2350, we need to use the special encoding with AP_RISCV (0xA)
-    uint32_t select_val = makeDPSelectRP2350(AP_RISCV, bank, true);
+    // Use the passed ap_id (defaults to AP_ARM_CORE0, but can be AP_RISCV for Debug Module init)
+    uint32_t select_val = makeDPSelectRP2350(ap_id, bank, true);
     swd_error_t err = writeDP(DP_SELECT, select_val, false);
     if (err != SWD_OK) {
         LOG_E("SWD: WriteAP failed to select bank: %s", errorToString(err));
@@ -459,7 +456,7 @@ swd_error_t PicoSWD::writeAP(uint8_t addr, uint32_t data) {
     uint8_t ap_reg = addr & 0xF;
     err = swdWritePacket((ap_reg << 1) | 0x01, data, false);  // APnDP=1, RnW=0
     if (err != SWD_OK) {
-        LOG_E("SWD: WriteAP(0x%02X, 0x%08X) failed: %s", addr, data, errorToString(err));
+        LOG_E("SWD: WriteAP(0x%02X, 0x%08X) on AP 0x%X failed: %s", addr, data, ap_id, errorToString(err));
     }
     return err;
 }
@@ -733,13 +730,14 @@ void PicoSWD::end() {
     
     _connected = false;
     
-    // FIX: Release pins with pull-ups instead of floating to prevent EMI-induced ghost debugging
-    // Floating pins act as antennas and can pick up noise from pumps/solenoids, causing
-    // the Pico to enter debug halt state. Pull-ups keep the lines stable when idle.
-    pinMode(g_pin_swdio, INPUT_PULLUP); 
+    // FIX: Release pins to INPUT (High-Z) to prevent parasitic powering
+    // When Pico is disconnected, driving SWCLK HIGH causes back-feeding through protection diodes.
+    // We only drive SWCLK HIGH during active boot/reset sequences, not when idle.
+    // Weak pull-ups are okay - they don't provide enough current to latch up disconnected Pico.
+    pinMode(g_pin_swdio, INPUT_PULLUP);
     pinMode(g_pin_swclk, INPUT_PULLUP);
     
-    LOG_D("SWD: Pins released (INPUT_PULLUP) - prevents EMI-induced ghost debugging");
+    LOG_D("SWD: Pins released (INPUT_PULLUP) - prevents parasitic powering when Pico offline");
     LOG_I("SWD: Disconnected");
 }
 
@@ -762,7 +760,7 @@ bool PicoSWD::initRP2350DebugModule() {
     // Step 2: Configure CSW for 32-bit word access
     uint32_t csw = 0xA2000002;  // Standard CSW value (from reference)
     LOG_D("SWD: Configuring CSW=0x%08X", csw);
-    err = writeAP(AP_CSW, csw);
+    err = writeAP(AP_CSW, csw, AP_RISCV);
     if (err != SWD_OK) {
         LOG_E("SWD: Failed to configure CSW: %s", errorToString(err));
         _lastErrorStr = errorToString(err);
@@ -771,7 +769,7 @@ bool PicoSWD::initRP2350DebugModule() {
     
     // Step 3: Point TAR at DMCONTROL
     LOG_D("SWD: Setting TAR to DM_DMCONTROL (0x%08X)", DM_DMCONTROL);
-    err = writeAP(AP_TAR, DM_DMCONTROL);
+    err = writeAP(AP_TAR, DM_DMCONTROL, AP_RISCV);
     if (err != SWD_OK) {
         LOG_E("SWD: Failed to set TAR: %s", errorToString(err));
         _lastErrorStr = errorToString(err);
@@ -793,7 +791,7 @@ bool PicoSWD::initRP2350DebugModule() {
     
     // Phase 1: Reset
     LOG_D("SWD: DM activation - Reset phase");
-    err = writeAP(AP_CSW, 0x00000000);
+    err = writeAP(AP_CSW, 0x00000000, AP_RISCV);
     if (err != SWD_OK) {
         LOG_E("SWD: DM activation reset failed: %s", errorToString(err));
         _lastErrorStr = errorToString(err);
@@ -806,7 +804,7 @@ bool PicoSWD::initRP2350DebugModule() {
     
     // Phase 2: Activate
     LOG_D("SWD: DM activation - Activate phase");
-    err = writeAP(AP_CSW, 0x00000001);
+    err = writeAP(AP_CSW, 0x00000001, AP_RISCV);
     if (err != SWD_OK) {
         LOG_E("SWD: DM activation activate failed: %s", errorToString(err));
         _lastErrorStr = errorToString(err);
@@ -817,7 +815,7 @@ bool PicoSWD::initRP2350DebugModule() {
     
     // Phase 3: Configure
     LOG_D("SWD: DM activation - Configure phase");
-    err = writeAP(AP_CSW, 0x07FFFFC1);
+    err = writeAP(AP_CSW, 0x07FFFFC1, AP_RISCV);
     if (err != SWD_OK) {
         LOG_E("SWD: DM activation configure failed: %s", errorToString(err));
         _lastErrorStr = errorToString(err);
@@ -828,7 +826,7 @@ bool PicoSWD::initRP2350DebugModule() {
     
     // Step 6: Verify DM is responding
     LOG_D("SWD: Verifying DM status...");
-    err = readAP(AP_CSW, &dummy);  // Trigger read
+    err = readAP(AP_CSW, &dummy, AP_RISCV);  // Trigger read
     if (err != SWD_OK) {
         LOG_E("SWD: Failed to read AP_CSW: %s", errorToString(err));
         _lastErrorStr = errorToString(err);
@@ -887,26 +885,26 @@ bool PicoSWD::initDebugModule() {
     }
     
     // Configure CSW (32-bit, auto-inc off)
-    err = writeAP(AP_CSW, 0xA2000002);
+    err = writeAP(AP_CSW, 0xA2000002, AP_RISCV);
     if (err != SWD_OK) {
         LOG_W("SWD: Failed to configure CSW: %s (continuing anyway)", errorToString(err));
     }
     
     // Set TAR to point at DMCONTROL (0x10 * 4 = 0x40)
-    err = writeAP(AP_TAR, DM_DMCONTROL * 4);
+    err = writeAP(AP_TAR, DM_DMCONTROL * 4, AP_RISCV);
     if (err != SWD_OK) {
         LOG_W("SWD: Failed to set TAR: %s (continuing anyway)", errorToString(err));
     }
     
     // Reset DM: dmactive=0
-    err = writeAP(AP_DRW, 0x00000000);
+    err = writeAP(AP_DRW, 0x00000000, AP_RISCV);
     if (err != SWD_OK) {
         LOG_W("SWD: Failed to reset DM: %s (continuing anyway)", errorToString(err));
     }
     delay(10);
     
     // Activate DM: dmactive=1
-    err = writeAP(AP_DRW, 0x00000001);
+    err = writeAP(AP_DRW, 0x00000001, AP_RISCV);
     if (err != SWD_OK) {
         LOG_W("SWD: Failed to activate DM: %s (continuing anyway)", errorToString(err));
     }
@@ -927,53 +925,87 @@ bool PicoSWD::initAP() {
     LOG_D("SWD: initAP() called (legacy - using RP2350 init instead)");
     return initRP2350DebugModule();
 }
-bool PicoSWD::writeWord(uint32_t addr, uint32_t data) { return writeAP(0x0C, data) == SWD_OK; }
-uint32_t PicoSWD::readWord(uint32_t addr) { uint32_t d; readAP(0x0C, &d); return d; }
+// FIX: writeWord/readWord must use TAR/DRW sequence with ARM AP (0x2)
+// TAR (0x04) sets the address, DRW (0x0C) performs the read/write
+bool PicoSWD::writeWord(uint32_t addr, uint32_t data) {
+    // Set transfer address via TAR
+    if (writeAP(AP_TAR, addr) != SWD_OK) return false;
+    // Write data via DRW
+    return writeAP(AP_DRW, data) == SWD_OK;
+}
+uint32_t PicoSWD::readWord(uint32_t addr) {
+    // Set transfer address via TAR
+    if (writeAP(AP_TAR, addr) != SWD_OK) return 0;
+    // Read data via DRW
+    uint32_t d = 0;
+    if (readAP(AP_DRW, &d) != SWD_OK) return 0;
+    return d;
+}
 bool PicoSWD::haltCore() { return writeWord(DHCSR, 0xA05F0003); }
 bool PicoSWD::runCore() { return writeWord(DHCSR, 0xA05F0001); }
-// Core Register Access (RISC-V Debug Module)
+// Core Register Access (ARM Cortex-M via DCRSR/DCRDR)
+// FIX: Use ARM DCRSR/DCRDR registers instead of RISC-V abstract commands
 bool PicoSWD::writeCoreReg(uint8_t reg, uint32_t val) {
-    // RISC-V Debug Module: Write GPR via abstract command
-    if (reg > 31) {
-        LOG_E("SWD: Invalid register %d (must be 0-31)", reg);
+    // ARM Cortex-M: R0-R3 are 0-3, PC is 15
+    if (reg > 15) {
+        LOG_E("SWD: Invalid register %d (must be 0-15 for ARM)", reg);
         return false;
     }
     
-    // Abstract command: Write GPR (command[31:24] = 0x02, command[15:0] = reg)
-    uint32_t abstract_cmd = 0x02000000 | reg;
-    if (writeAP(0x17, abstract_cmd) != SWD_OK) return false;
-    if (writeAP(0x04, val) != SWD_OK) return false;
+    // 1. Write value to DCRDR (Debug Core Register Data Register)
+    if (!writeWord(DCRDR, val)) {
+        LOG_E("SWD: Failed to write value to DCRDR");
+        return false;
+    }
     
-    // Wait for completion
-    uint32_t status = 0;
+    // 2. Write 'write' command to DCRSR (Bit 16 = Write, Bits 4:0 = Reg Index)
+    // DCRSR format: [16] = WnR (1=write), [4:0] = RegSel
+    uint32_t dcsr_cmd = (1 << 16) | (reg & 0x1F);
+    if (!writeWord(DCRSR, dcsr_cmd)) {
+        LOG_E("SWD: Failed to write DCRSR command");
+        return false;
+    }
+    
+    // 3. Wait for S_REGRDY in DHCSR (bit 16) - register transfer complete
     for (int i = 0; i < 100; i++) {
-        if (readAP(0x17, &status) == SWD_OK && (status & 0x80000000) == 0) {
+        uint32_t dhcsr = readWord(DHCSR);
+        if (dhcsr & (1 << 16)) {  // S_REGRDY bit
             return true;
         }
         delay(1);
     }
+    
+    LOG_E("SWD: writeCoreReg timeout - S_REGRDY not set");
     return false;
 }
 
 uint32_t PicoSWD::readCoreReg(uint8_t reg) {
-    if (reg > 31) {
-        LOG_E("SWD: Invalid register %d", reg);
+    // ARM Cortex-M: R0-R3 are 0-3, PC is 15
+    if (reg > 15) {
+        LOG_E("SWD: Invalid register %d (must be 0-15 for ARM)", reg);
         return 0;
     }
     
-    // Abstract command: Read GPR
-    uint32_t abstract_cmd = 0x01000000 | reg;
-    if (writeAP(0x17, abstract_cmd) != SWD_OK) return 0;
+    // 1. Write 'read' command to DCRSR (Bit 16 = 0 for read, Bits 4:0 = Reg Index)
+    // DCRSR format: [16] = WnR (0=read), [4:0] = RegSel
+    uint32_t dcsr_cmd = (0 << 16) | (reg & 0x1F);
+    if (!writeWord(DCRSR, dcsr_cmd)) {
+        LOG_E("SWD: Failed to write DCRSR read command");
+        return 0;
+    }
     
-    // Wait and read result
-    uint32_t status = 0;
+    // 2. Wait for S_REGRDY in DHCSR (bit 16) - register transfer complete
     for (int i = 0; i < 100; i++) {
-        if (readAP(0x17, &status) == SWD_OK && (status & 0x80000000) == 0) {
-            uint32_t data = 0;
-            if (readAP(0x04, &data) == SWD_OK) return data;
+        uint32_t dhcsr = readWord(DHCSR);
+        if (dhcsr & (1 << 16)) {  // S_REGRDY bit
+            // 3. Read value from DCRDR
+            uint32_t data = readWord(DCRDR);
+            return data;
         }
         delay(1);
     }
+    
+    LOG_E("SWD: readCoreReg timeout - S_REGRDY not set");
     return 0;
 }
 
@@ -1023,12 +1055,11 @@ bool PicoSWD::callRomFunc(uint32_t funcAddr, uint32_t r0, uint32_t r1, uint32_t 
     if (!writeCoreReg(2, r2)) return false;
     if (!writeCoreReg(3, r3)) return false;
     
-    // Set PC (abstract command regno=0x1000)
-    if (writeAP(0x17, 0x02001000) != SWD_OK) return false;
-    if (writeAP(0x04, funcAddr) != SWD_OK) return false;
+    // FIX: Set PC using ARM register access (PC is register 15)
+    if (!writeCoreReg(15, funcAddr)) return false;
     
-    // Set LR to trap address
-    if (!writeCoreReg(1, 0x20000000)) return false;
+    // Set LR (Link Register, R14) to trap address
+    if (!writeCoreReg(14, 0x20000000)) return false;
     
     // Run and wait for halt
     if (!runCore()) return false;

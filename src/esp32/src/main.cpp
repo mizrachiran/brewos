@@ -26,7 +26,19 @@
 #include <freertos/task.h>  // For vTaskDelay
 #include <freertos/semphr.h>  // For xSemaphoreCreateMutex
 #include <esp_wifi.h>       // For esp_wifi_set_ps, esp_wifi_get_ps
+#include <driver/gpio.h>    // For early GPIO initialization
 #include "config.h"
+
+// Fallback SWD pin definitions if not defined in config.h (for no-screen variant)
+// Some hardware may use GPIO 16/17 instead of GPIO 21/45
+#if !ENABLE_SCREEN
+    #ifndef SWD_DIO_PIN
+        #define SWD_DIO_PIN 17  // Fallback: GPIO 17 for SWDIO (no-screen variant)
+    #endif
+    #ifndef SWD_CLK_PIN
+        #define SWD_CLK_PIN 16  // Fallback: GPIO 16 for SWCLK (no-screen variant)
+    #endif
+#endif
 #include "memory_utils.h"   // For heap fragmentation monitoring
 #include "wifi_manager.h"
 #include "web_server.h"
@@ -709,12 +721,65 @@ static void handlePicoDiagnostics(const PicoPacket& packet) {
 }
 
 static void setupEarlyInitialization() {
-#if ENABLE_SCREEN
+#if !ENABLE_SCREEN
+    // CRITICAL: Safe Boot Sequence (NO-SCREEN VARIANT)
+    
+    // 1. FLOAT EVERYTHING FIRST (Prevent Parasitic Power Latch-up)
+    // Ensure we are NOT driving 3.3V into the Pico yet.
+    gpio_reset_pin((gpio_num_t)SWD_CLK_PIN);
+    gpio_reset_pin((gpio_num_t)SWD_DIO_PIN);
+    gpio_set_direction((gpio_num_t)SWD_CLK_PIN, GPIO_MODE_INPUT);
+    gpio_set_direction((gpio_num_t)SWD_DIO_PIN, GPIO_MODE_INPUT);
+    // Use weak pull-ups for safety (harmless)
+    gpio_set_pull_mode((gpio_num_t)SWD_CLK_PIN, GPIO_PULLUP_ONLY);
+    gpio_set_pull_mode((gpio_num_t)SWD_DIO_PIN, GPIO_PULLUP_ONLY);
+
+    // 2. ASSERT RESET (Hold LOW)
+    // Now that signals are safe, grab the Pico and hold it in reset.
+    pinMode(PICO_RUN_PIN, OUTPUT);
+    digitalWrite(PICO_RUN_PIN, LOW);
+    
+    // 3. DISCHARGE WAIT
+    // Wait 100ms for Pico to fully discharge/stabilize in Reset state.
+    // This clears any "Ghost Debug" or Latch-up states.
+    delay(100);
+
+    // 4. ENABLE STRONG DRIVE (While Reset is still LOW)
+    // NOW we drive SWCLK HIGH to prevent noise. 
+    // Since Reset is held LOW, the Pico ignores this signal and won't latch up.
+    gpio_reset_pin((gpio_num_t)SWD_CLK_PIN);
+    gpio_set_level((gpio_num_t)SWD_CLK_PIN, 1);
+    gpio_set_direction((gpio_num_t)SWD_CLK_PIN, GPIO_MODE_OUTPUT);
+    
+    // Re-verify DIO is Input (Safe)
+    gpio_reset_pin((gpio_num_t)SWD_DIO_PIN);
+    gpio_set_direction((gpio_num_t)SWD_DIO_PIN, GPIO_MODE_INPUT);
+    gpio_set_pull_mode((gpio_num_t)SWD_DIO_PIN, GPIO_PULLUP_ONLY);
+    
+    delay(10); // Electrical stabilization
+
+    // 5. RELEASE RESET (Boot)
+    // Release the Pico. It wakes up seeing a clean, stable 3.3V Clock.
+    digitalWrite(PICO_RUN_PIN, HIGH);
+    
+    // 6. Init Serial (logging)
+    Serial.begin(115200);
+    #if ARDUINO_USB_MODE == 1
+    Serial.setTxTimeoutMs(10);
+    delay(100);
+    #endif
+
+    // 7. Boot Wait
+    // Give Pico 300ms to boot firmware before we try to talk to it.
+    delay(300);
+    Serial.println("Pico booted with Safe Sequence.");
+    
+#else // ENABLE_SCREEN
+    // Screen variant: Normal initialization (no SWD reset needed)
     // Turn on backlight immediately so user knows device is running
     // Backlight is GPIO7, active LOW (LOW = ON)
     pinMode(7, OUTPUT);
     digitalWrite(7, LOW);
-#endif
     
     // Initialize Serial (USB CDC if enabled, hardware UART if disabled)
     // When USB CDC is disabled (ARDUINO_USB_MODE=0), Serial uses hardware UART
@@ -726,6 +791,7 @@ static void setupEarlyInitialization() {
     // Give USB CDC time to initialize (not waiting, just a brief delay)
     delay(100);
     #endif
+#endif // !ENABLE_SCREEN
     
     // Note: Watchdog is kept enabled - it helps catch hangs and crashes
     // Attempting to disable it causes errors on ESP32-S3
@@ -857,14 +923,10 @@ static void setupEarlyInitialization() {
         prefs.end();
     }
     
-    // FIX: Enable pull-ups on SWD pins to prevent ghost debugging from EMI
-    // When SWD is wired but not actively in use, floating pins act as antennas
-    // and can pick up noise from pumps/solenoids, causing Pico to enter debug halt state
-    // GPIO 21 (SWDIO) and GPIO 45 (SWCLK) are pulled high to keep lines stable
-#if ENABLE_SWD
-    pinMode(SWD_DIO_PIN, INPUT_PULLUP);
-    pinMode(SWD_CLK_PIN, INPUT_PULLUP);
-    Serial.printf("SWD pins initialized with pull-ups: GPIO%d (SWDIO), GPIO%d (SWCLK)\n", 
+#if !ENABLE_SCREEN && ENABLE_SWD
+    // SWD pins are already initialized at the very beginning of setupEarlyInitialization()
+    // (no-screen variant only) to prevent Pico from entering debug mode during power-on boot sequence
+    Serial.printf("SWD enabled: GPIO%d (SWDIO), GPIO%d (SWCLK) with pull-ups\n", 
                   SWD_DIO_PIN, SWD_CLK_PIN);
 #endif
 }
@@ -1233,6 +1295,16 @@ static void setupWaitForPicoConnection() {
     // Increased to 10 seconds to allow for simultaneous power-on initialization
     Serial.println("[4.6/8] Waiting for Pico connection (10 seconds)...");
     // Serial.flush(); // Removed - can block on USB CDC
+    
+#if !ENABLE_SCREEN
+    // CRITICAL: Force reset Pico before waiting (ESP32 restart recovery)
+    // When ESP32 restarts, Pico might be stuck in debug mode from previous session.
+    // This ensures Pico is in a clean state before we start waiting for connection.
+    Serial.println("[4.6/8] Performing safety reset of Pico before connection wait...");
+    picoUart->resetPico();  // This includes SWD pin stabilization
+    Serial.println("[4.6/8] Pico reset complete, waiting for connection...");
+#endif // !ENABLE_SCREEN
+    
     unsigned long picoWaitStart = millis();
     bool picoConnected = false;
     uint32_t initialPackets = picoUart->getPacketsReceived();
@@ -2178,10 +2250,175 @@ static void loopUpdateMQTTStatus() {
 }
 
 static void loopPeriodicTasks() {
-    // Periodic ping to Pico for connection monitoring
-    if (millis() - lastPing > 5000) {
+    // 1. DELETE any "maintenance" blocks here.
+    // Do NOT continuously drive pins, or you will cause latch-up.
+
+    // 2. Track Connection State
+    bool connected = (picoUart && picoUart->isConnected());
+    static unsigned long lastPacketReceivedTime = 0;
+    static unsigned long bootTime = 0;
+    
+    // Initialize boot time on first run
+    if (bootTime == 0) {
+        bootTime = millis();
+        lastPacketReceivedTime = millis();
+        Serial.println("[Watchdog] Initialized. Waiting for Pico connection...");
+    }
+    
+    // Update heartbeat
+    if (connected) {
+        lastPacketReceivedTime = millis();
+    }
+    
+    // Debug: Log connection state periodically
+    static unsigned long lastDebugLog = 0;
+    if (millis() - lastDebugLog > 10000) {  // Every 10 seconds
+        lastDebugLog = millis();
+        unsigned long timeSinceLastPacket = millis() - lastPacketReceivedTime;
+        Serial.printf("[Watchdog] Status: connected=%d, packets=%lu, time_since_last=%lums\n", 
+                      connected, picoUart ? picoUart->getPacketsReceived() : 0, timeSinceLastPacket);
+    }
+
+    // 3. DEAD PICO WATCHDOG & RECOVERY LOGIC
+    static unsigned long lastResetAttemptTime = 0;
+    static int recoveryAttemptCount = 0;
+    
+    // Trigger recovery if unresponsive for > 5 seconds
+    if (!connected && (millis() - lastPacketReceivedTime > 5000)) {
+        
+        // Limit recovery attempts to once every 5 seconds
+        if (millis() - lastResetAttemptTime > 5000) {
+            lastResetAttemptTime = millis();
+            recoveryAttemptCount++;
+            
+            unsigned long timeSinceLastPacket = millis() - lastPacketReceivedTime;
+            Serial.printf("[Watchdog] Pico unresponsive for %lums. Recovery attempt #%d...\n", 
+                         timeSinceLastPacket, recoveryAttemptCount);
+
+#if !ENABLE_SCREEN
+            // === PHASE 1: KILL PARASITIC POWER (The Fix) ===
+            // The Pico is likely latched up because 3.3V is flowing into it 
+            // via UART TX or SWD CLK. We must FLOAT everything to kill it.
+            Serial.println("[Watchdog] Phase 1: Killing all drivers...");
+            
+            // 1. Kill UART Driver
+            Serial1.end(); 
+            // Force UART pins to Float (Input) - NO pull-ups to ensure true High-Z
+            pinMode(PICO_UART_TX_PIN, INPUT); 
+            pinMode(PICO_UART_RX_PIN, INPUT); 
+            // Explicitly disable pull-ups on UART pins
+            gpio_set_pull_mode((gpio_num_t)PICO_UART_TX_PIN, GPIO_FLOATING);
+            gpio_set_pull_mode((gpio_num_t)PICO_UART_RX_PIN, GPIO_FLOATING);
+
+            // 2. Kill SWD Drivers - completely floating
+            gpio_set_direction((gpio_num_t)SWD_CLK_PIN, GPIO_MODE_INPUT);
+            gpio_set_direction((gpio_num_t)SWD_DIO_PIN, GPIO_MODE_INPUT);
+            gpio_set_pull_mode((gpio_num_t)SWD_CLK_PIN, GPIO_FLOATING);
+            gpio_set_pull_mode((gpio_num_t)SWD_DIO_PIN, GPIO_FLOATING);
+            
+            // === PHASE 2: ASSERT RESET (Extreme Recovery) ===
+            Serial.println("[Watchdog] Phase 2: Extreme reset sequence...");
+            pinMode(PICO_RUN_PIN, OUTPUT);
+            
+            // Try many rapid reset pulses to break out of debug halt
+            Serial.println("[Watchdog] Sending 10 rapid reset pulses...");
+            for (int pulse = 0; pulse < 10; pulse++) {
+                digitalWrite(PICO_RUN_PIN, LOW);   // Assert reset
+                delayMicroseconds(500);             // Very short pulse
+                digitalWrite(PICO_RUN_PIN, HIGH);  // Release reset
+                delayMicroseconds(500);
+            }
+            
+            // Then try slower pulses
+            Serial.println("[Watchdog] Sending 5 slower reset pulses...");
+            for (int pulse = 0; pulse < 5; pulse++) {
+                digitalWrite(PICO_RUN_PIN, LOW);
+                delay(50);
+                digitalWrite(PICO_RUN_PIN, HIGH);
+                delay(50);
+            }
+            
+            // Final reset assertion - hold LOW for extended period
+            Serial.println("[Watchdog] Holding reset LOW...");
+            digitalWrite(PICO_RUN_PIN, LOW);
+            
+            // === PHASE 3: DISCHARGE WAIT (Critical) ===
+            // Progressive discharge time: start with 2000ms, increase by 500ms each attempt
+            unsigned long dischargeTime = 2000 + (recoveryAttemptCount - 1) * 500;
+            if (dischargeTime > 8000) dischargeTime = 8000; // Cap at 8 seconds
+            
+            Serial.printf("[Watchdog] Phase 3: Discharging for %lums (attempt #%d)...\n", 
+                         dischargeTime, recoveryAttemptCount);
+            delay(dischargeTime);
+
+            // === PHASE 4: PREPARE FOR BOOT (Strong Drive) ===
+            // Now that Pico is effectively "off", we set up the Strong Drive
+            // *before* we release reset. This prevents noise from triggering
+            // debug mode during the boot process.
+            Serial.println("[Watchdog] Phase 4: Preparing SWD pins for boot...");
+            
+            // Drive SWCLK High (Strong) - but ONLY while reset is still LOW
+            gpio_reset_pin((gpio_num_t)SWD_CLK_PIN);
+            gpio_set_level((gpio_num_t)SWD_CLK_PIN, 1);
+            gpio_set_direction((gpio_num_t)SWD_CLK_PIN, GPIO_MODE_OUTPUT);
+            
+            // Set SWDIO to Safe Input
+            gpio_reset_pin((gpio_num_t)SWD_DIO_PIN);
+            gpio_set_direction((gpio_num_t)SWD_DIO_PIN, GPIO_MODE_INPUT);
+            gpio_set_pull_mode((gpio_num_t)SWD_DIO_PIN, GPIO_PULLUP_ONLY);
+            
+            delay(50); // Longer stabilization time
+
+            // === PHASE 5: RELEASE RESET (Boot) ===
+            Serial.println("[Watchdog] Phase 5: Releasing reset...");
+            digitalWrite(PICO_RUN_PIN, HIGH);
+            
+            // === PHASE 6: RESTORE UART ===
+            // Wait longer for Pico bootloader to start before blasting it with UART
+            Serial.println("[Watchdog] Phase 6: Restoring UART...");
+            delay(1000); // Much longer delay - Pico may need time to boot from debug halt
+            picoUart->begin(); // This re-initializes Serial1 and drives SWCLK HIGH
+            
+            // Check for any UART activity multiple times
+            for (int check = 0; check < 5; check++) {
+                delay(200);
+                int bytesAvailable = Serial1.available();
+                if (bytesAvailable > 0) {
+                    Serial.printf("[Watchdog] ✓ Detected %d bytes in UART buffer (check #%d)!\n", bytesAvailable, check+1);
+                    break;
+                }
+            }
+            
+            // Final check
+            int finalBytes = Serial1.available();
+            if (finalBytes == 0) {
+                Serial.println("[Watchdog] ⚠ No UART activity detected. Pico may be:");
+                Serial.println("[Watchdog]   1. Not powered");
+                Serial.println("[Watchdog]   2. Firmware not flashed");
+                Serial.println("[Watchdog]   3. Stuck in debug halt");
+                Serial.println("[Watchdog]   4. Hardware connection issue");
+            }
+            
+            Serial.println("[Watchdog] Recovery sequence complete. Waiting for Pico response...");
+#else
+            // Screen variant (standard reset)
+            picoUart->resetPico();
+#endif
+            // Attempt to reconnect
+            delay(500);
+            picoUart->sendHandshake();
+        }
+    } else if (connected) {
+        // Reset recovery attempt count when connection is restored
+        recoveryAttemptCount = 0;
+    }
+
+    // 4. Standard Ping (Keep alive)
+    static unsigned long lastPing = 0;
+    if (millis() - lastPing > 2000) {
         lastPing = millis();
-        if (picoUart->isConnected() || picoUart->getPacketsReceived() == 0) {
+        // Ping if connected OR if we haven't heard anything yet
+        if (connected || picoUart->getPacketsReceived() == 0) {
             picoUart->sendPing();
         }
     }
