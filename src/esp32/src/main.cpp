@@ -1349,14 +1349,22 @@ static void setupWaitForPicoConnection() {
     Serial.println("[4.6/8] Waiting for Pico connection (10 seconds)...");
     // Serial.flush(); // Removed - can block on USB CDC
     
-#if !ENABLE_SCREEN
     // CRITICAL: Force reset Pico before waiting (ESP32 restart recovery)
     // When ESP32 restarts, Pico might be stuck in debug mode from previous session.
     // This ensures Pico is in a clean state before we start waiting for connection.
+    // This reset uses the safe method (floats pins before reset) to prevent RP2350 latch-up.
     Serial.println("[4.6/8] Performing safety reset of Pico before connection wait...");
-    picoUart->resetPico();  // This includes SWD pin stabilization
+    
+    // Clear connection state before reset so we detect a fresh connection
+    picoUart->clearConnectionState();
+    
+    // Perform safe reset (floats pins, prevents latch-up, restores UART)
+    picoUart->resetPico();
+    
+    // Wait for Pico to boot after reset (resetPico() already has delays, but give extra time)
+    delay(500);
+    
     Serial.println("[4.6/8] Pico reset complete, waiting for connection...");
-#endif // !ENABLE_SCREEN
     
     unsigned long picoWaitStart = millis();
     bool picoConnected = false;
@@ -1424,9 +1432,18 @@ static void setupWaitForPicoConnection() {
                 
                 // Try resetting Pico and retrying ping
                 Serial.println("Resetting Pico and retrying...");
+                
+                // Clear connection state before reset so we detect a fresh connection
+                picoUart->clearConnectionState();
+                
+                // Perform safe reset (floats pins, prevents latch-up, restores UART)
                 picoUart->resetPico();
-                delay(1000);  // Wait for Pico to boot after reset
-                picoUart->loop();  // Process any initial data
+                
+                // Wait for Pico to boot after reset (resetPico() already has delays, but give extra time)
+                delay(1000);
+                
+                // Process any initial data from Pico boot
+                picoUart->loop();
                 
                 // Retry ping after reset
                 if (picoUart->sendPing()) {

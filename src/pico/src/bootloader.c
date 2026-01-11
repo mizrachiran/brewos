@@ -366,11 +366,13 @@ bootloader_result_t bootloader_receive_firmware(void) {
     // We skip sending it here to avoid duplicate ACK
     LOG_PRINT("Bootloader: ACK already sent, waiting for firmware...\n");
     
-    // CRITICAL: NOW disable UART interrupts to prevent protocol handler from stealing firmware bytes
-    // NOTE: This only affects hardware UART (ESP32 communication), NOT USB serial
-    // USB serial logging will continue to work normally - all LOG_PRINT statements work over USB
+    // CRITICAL: Disable UART interrupts to prevent protocol handler from stealing firmware bytes
+    // NOTE: We disable interrupts because protocol handler uses interrupts, but bootloader uses polling
+    // This ensures protocol handler doesn't process bootloader data
+    // USB serial logging is NOT affected - it uses a different UART
+    // The bootloader will use polling (uart_is_readable/uart_getc) to read data
     uart_set_irq_enables(ESP32_UART_ID, false, false);
-    LOG_PRINT("Bootloader: UART interrupts disabled for firmware reception (USB serial still active)\n");
+    LOG_PRINT("Bootloader: UART interrupts disabled, using polling for firmware reception\n");
      
      // Use SDK Flash Safe functions for the download phase
      static uint8_t page_buffer[FLASH_PAGE_SIZE];
@@ -392,30 +394,34 @@ bootloader_result_t bootloader_receive_firmware(void) {
          }
          
          uint32_t chunk_num; uint16_t chunk_size;
+         LOG_PRINT("Bootloader: Waiting for chunk header (expecting chunk %lu)...\n", (unsigned long)g_chunk_count);
          if (!receive_chunk_header(&chunk_num, &chunk_size)) {
+             LOG_PRINT("Bootloader: ERROR - Chunk header timeout\n");
              uart_write_byte(0xFF); uart_write_byte(BOOTLOADER_ERROR_TIMEOUT);
              return BOOTLOADER_ERROR_TIMEOUT;
          }
          
+         LOG_PRINT("Bootloader: Received chunk header: num=%lu, size=%u\n", (unsigned long)chunk_num, chunk_size);
+         
          if (chunk_num == 0xFFFFFFFF) break; // End marker
          
          if (chunk_size == 0 || chunk_size > BOOTLOADER_CHUNK_MAX_SIZE || chunk_num != g_chunk_count) {
+             LOG_PRINT("Bootloader: ERROR - Invalid chunk: num=%lu (expected %lu), size=%u\n", 
+                      (unsigned long)chunk_num, (unsigned long)g_chunk_count, chunk_size);
              uart_write_byte(0xFF); uart_write_byte(BOOTLOADER_ERROR_INVALID_SIZE);
              return BOOTLOADER_ERROR_INVALID_SIZE;
          }
          
          uint8_t chunk_data[BOOTLOADER_CHUNK_MAX_SIZE];
          uint8_t csum;
+         LOG_PRINT("Bootloader: Receiving chunk %lu data (%u bytes)...\n", (unsigned long)chunk_num, chunk_size);
          if (!receive_chunk_data(chunk_data, chunk_size, &csum)) {
+             LOG_PRINT("Bootloader: ERROR - Chunk data receive failed (timeout or checksum)\n");
              uart_write_byte(0xFF); uart_write_byte(BOOTLOADER_ERROR_CHECKSUM);
              return BOOTLOADER_ERROR_CHECKSUM;
          }
          
-        // Log progress more frequently for better visibility (every 10 chunks instead of 50)
-        if (g_chunk_count % 10 == 0) {
-            LOG_PRINT("Bootloader: Chunk %lu (%u bytes), total: %lu bytes\n", 
-                     (unsigned long)g_chunk_count, chunk_size, (unsigned long)g_received_size);
-        }
+         LOG_PRINT("Bootloader: Chunk %lu data received, processing...\n", (unsigned long)chunk_num);
          
          uint32_t offset = 0;
          while (offset < chunk_size) {
@@ -460,14 +466,16 @@ bootloader_result_t bootloader_receive_firmware(void) {
         g_received_size += chunk_size;
         g_chunk_count++;
         
-        // CRITICAL: Feed watchdog before sending ACK (UART TX can block briefly)
+        // CRITICAL: Send ACK AFTER processing and flashing chunk data
+        // This ensures we're ready to receive the next chunk (not stuck in flash operations)
+        // Flash operations disable interrupts, so we can't receive UART data during flash
+        // By sending ACK after flash, we ensure we're ready for the next chunk
+        LOG_PRINT("Bootloader: Chunk %lu processed, sending ACK...\n", (unsigned long)chunk_num);
         watchdog_update();
-        
         uart_write_byte(0xAA);
         uart_tx_wait_blocking(ESP32_UART_ID);
-        
-        // Feed watchdog after ACK sent to ensure we're alive
         watchdog_update();
+        LOG_PRINT("Bootloader: ACK sent for chunk %lu\n", (unsigned long)chunk_num);
      }
      
      if (page_buffer_offset > 0) {

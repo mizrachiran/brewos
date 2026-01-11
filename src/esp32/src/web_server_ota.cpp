@@ -377,7 +377,7 @@ static void handleOTAFailure(AsyncWebSocket* ws) {
 // Timeouts (in milliseconds)
 constexpr unsigned long OTA_TOTAL_TIMEOUT_MS = 300000;     // 5 minutes total OTA timeout
 constexpr unsigned long OTA_DOWNLOAD_TIMEOUT_MS = 300000;  // 5 minutes per download (accommodate slow networks)
-constexpr unsigned long OTA_HTTP_TIMEOUT_MS = 30000;       // 30 seconds HTTP timeout
+constexpr unsigned long OTA_HTTP_TIMEOUT_MS = 15000;       // 15 seconds HTTP timeout (reduced to fail faster on DNS/SSL hangs)
 constexpr unsigned long OTA_WATCHDOG_FEED_INTERVAL_MS = 20;// Feed watchdog every 20ms to prevent slow loop warnings
 
 // Buffer sizes
@@ -619,10 +619,14 @@ static bool downloadToFile(const char* url, const char* filePath,
     WiFiClientSecure client;
     client.setInsecure();
     // CRITICAL FIX: Set underlying TCP timeout to prevent indefinite hangs
-    client.setTimeout(15); // 15 seconds read timeout
+    // Note: setTimeout() sets the read timeout, but SSL handshake might still hang
+    // We'll pre-resolve DNS and use a shorter timeout to fail faster
+    client.setTimeout(OTA_HTTP_TIMEOUT_MS / 1000); // Convert ms to seconds
     
     HTTPClient http;
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    // Set timeout - this applies to HTTP request, but DNS/SSL can still block
+    // We pre-resolve DNS above to avoid DNS hangs, but SSL handshake can still hang
     http.setTimeout(OTA_HTTP_TIMEOUT_MS);
     
     int httpCode = 0;
@@ -632,9 +636,16 @@ static bool downloadToFile(const char* url, const char* filePath,
     for (int retry = 0; retry < OTA_MAX_RETRIES; retry++) {
         feedWatchdog();
         
-        if (!http.begin(client, url)) {
-            LOG_E("HTTP begin failed (attempt %d/%d)", retry + 1, OTA_MAX_RETRIES);
+        LOG_D("HTTP begin attempt %d/%d for URL: %s", retry + 1, OTA_MAX_RETRIES, url);
+        unsigned long beginStart = millis();
+        bool beginResult = http.begin(client, url);
+        unsigned long beginTime = millis() - beginStart;
+        LOG_D("HTTP begin completed: result=%d, time=%lu ms", beginResult, beginTime);
+        
+        if (!beginResult) {
+            LOG_E("HTTP begin failed (attempt %d/%d, time=%lu ms)", retry + 1, OTA_MAX_RETRIES, beginTime);
             if (retry < OTA_MAX_RETRIES - 1) {
+                LOG_D("Retrying HTTP begin in 3 seconds...");
                 for (int i = 0; i < 30; i++) { delay(100); feedWatchdog(); }
                 continue;
             }
@@ -643,9 +654,100 @@ static bool downloadToFile(const char* url, const char* filePath,
         
         http.addHeader("User-Agent", "BrewOS-ESP32/" ESP32_VERSION);
         
+        // CRITICAL: Check WiFi status before attempting GET
+        // If WiFi is disconnected, GET will hang indefinitely
+        if (WiFi.status() != WL_CONNECTED) {
+            LOG_E("WiFi disconnected before HTTP GET (attempt %d/%d)", retry + 1, OTA_MAX_RETRIES);
+            http.end();
+            if (retry < OTA_MAX_RETRIES - 1) {
+                LOG_I("Waiting for WiFi reconnection before retry...");
+                for (int i = 0; i < 50; i++) {  // Wait up to 5 seconds for WiFi
+                    delay(100);
+                    feedWatchdog();
+                    if (WiFi.status() == WL_CONNECTED) {
+                        LOG_I("WiFi reconnected, retrying HTTP GET...");
+                        break;
+                    }
+                }
+                continue;
+            }
+            return false;
+        }
+        
         feedWatchdog();
+        
+        // CRITICAL: Pre-resolve DNS before GET to avoid DNS hang
+        // Extract hostname from URL (e.g., "github.com" from "https://github.com/path")
+        String urlStr(url);  // Convert const char* to String for parsing
+        String hostname = "";
+        int hostStart = urlStr.indexOf("://");
+        if (hostStart >= 0) {
+            hostStart += 3;
+            int hostEnd = urlStr.indexOf("/", hostStart);
+            if (hostEnd < 0) hostEnd = urlStr.length();
+            hostname = urlStr.substring(hostStart, hostEnd);
+            // Remove port if present (e.g., "github.com:443" -> "github.com")
+            int portColon = hostname.indexOf(":");
+            if (portColon >= 0) {
+                hostname = hostname.substring(0, portColon);
+            }
+        }
+        
+        if (hostname.length() > 0) {
+            LOG_I("Resolving DNS for: %s", hostname.c_str());
+            IPAddress resolvedIP;
+            unsigned long dnsStart = millis();
+            bool dnsResolved = WiFi.hostByName(hostname.c_str(), resolvedIP);
+            unsigned long dnsTime = millis() - dnsStart;
+            
+            if (!dnsResolved) {
+                LOG_E("DNS resolution failed for %s (took %lu ms)", hostname.c_str(), dnsTime);
+                http.end();
+                if (retry < OTA_MAX_RETRIES - 1) {
+                    LOG_I("Retrying DNS resolution...");
+                    delay(2000);
+                    continue;
+                }
+                return false;
+            }
+            LOG_I("DNS resolved: %s -> %s (%lu ms)", hostname.c_str(), resolvedIP.toString().c_str(), dnsTime);
+        }
+        
+        LOG_I("Sending HTTP GET request (attempt %d/%d, timeout=%lu ms)...", 
+              retry + 1, OTA_MAX_RETRIES, OTA_HTTP_TIMEOUT_MS);
+        LOG_I("WiFi status: %d, IP: %s", WiFi.status(), WiFi.localIP().toString().c_str());
+        
+        feedWatchdog();
+        unsigned long getStart = millis();
+        
+        // CRITICAL: http.GET() can hang indefinitely on DNS/SSL even with timeout set
+        // The timeout only applies to the HTTP request, not DNS resolution or SSL handshake
+        // We've already resolved DNS above, but SSL handshake can still hang
+        // If GET takes longer than timeout + 5s, we'll abort and retry
         httpCode = http.GET();
+        unsigned long getTime = millis() - getStart;
         feedWatchdog();
+        
+        LOG_I("HTTP GET completed: code=%d, time=%lu ms", httpCode, getTime);
+        
+        // CRITICAL: Check if GET hung (took way too long)
+        // If GET took longer than timeout, the timeout mechanism failed
+        // This usually indicates SSL handshake hung (DNS was already resolved above)
+        if (getTime > OTA_HTTP_TIMEOUT_MS + 5000) {  // Allow 5s margin
+            LOG_E("HTTP GET took %lu ms (exceeded timeout of %lu ms by %lu ms) - timeout failed!", 
+                  getTime, OTA_HTTP_TIMEOUT_MS, getTime - OTA_HTTP_TIMEOUT_MS);
+            LOG_E("This indicates SSL handshake may be hanging - DNS was already resolved");
+            http.end();
+            if (retry < OTA_MAX_RETRIES - 1) {
+                LOG_I("Retrying with fresh connection...");
+                delay(2000);  // Wait before retry
+                continue;
+            }
+            return false;
+        } else if (getTime > OTA_HTTP_TIMEOUT_MS) {
+            LOG_W("HTTP GET took %lu ms (slightly exceeded timeout of %lu ms)", 
+                  getTime, OTA_HTTP_TIMEOUT_MS);
+        }
         
         if (httpCode == HTTP_CODE_OK) {
             break;
@@ -1310,26 +1412,26 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
             broadcastOtaProgress(&_ws, "flash", 45, "Retrying installation...");
             feedWatchdog();
             
-            // CRITICAL: Reset Pico before retry to ensure clean state
-            // The previous attempt may have left the Pico in bootloader mode or error state
-            // A reset ensures the Pico is back in normal mode and ready for a new bootloader command
-            LOG_I("Resetting Pico before retry to ensure clean state...");
-            
-            // CRITICAL: Resume UART processing so we can detect Pico reconnection
-            // UART was paused during firmware streaming, we need it active to receive boot messages
+            // CRITICAL: Resume UART processing first so we can detect Pico state
+            // UART was paused during firmware streaming, we need it active to receive messages
             _picoUart.resume();
             
-            // Clear connection state BEFORE reset so we detect a fresh connection
+            // CRITICAL: Wait for Pico to exit bootloader mode naturally before resetting
+            // Resetting while Pico is in bootloader mode (especially during flash operations)
+            // can corrupt flash or leave Pico unresponsive. We must wait for it to exit first.
+            // The bootloader has a 30-second timeout, but we'll wait up to 10 seconds for it to exit
+            // to avoid waiting too long while still being safe.
+            LOG_I("Waiting for Pico to exit bootloader mode before retry (max 10 seconds)...");
+            
+            // Clear connection state to detect fresh packets
             _picoUart.clearConnectionState();
             
-            _picoUart.resetPico();
-            delay(1000);  // Wait for Pico to boot after reset
-            
-            // Wait for Pico to reconnect and send a fresh boot message
-            // We need to wait for a NEW packet, not just rely on old connection state
-            LOG_I("Waiting for Pico to reconnect and send boot message after reset...");
-            bool picoReady = false;
-            uint32_t resetTime = millis();
+            // Wait for Pico to exit bootloader mode and resume normal operation
+            // The Pico should exit bootloader mode when it times out waiting for chunks
+            // (bootloader timeout is 30 seconds, but we'll check for up to 10 seconds)
+            // We'll detect it exited bootloader when it sends protocol packets
+            bool picoExitedBootloader = false;
+            uint32_t waitStart = millis();
             uint32_t lastPacketCount = _picoUart.getPacketsReceived();
             
             for (int i = 0; i < 100; i++) {  // Wait up to 10 seconds
@@ -1337,24 +1439,62 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
                 feedWatchdog();
                 _picoUart.loop();
                 
-                // Check if we received a NEW packet after reset (boot message or handshake)
+                // Check if we received a NEW protocol packet (Pico exited bootloader)
                 uint32_t currentPacketCount = _picoUart.getPacketsReceived();
                 if (currentPacketCount > lastPacketCount) {
-                    // We got a new packet - Pico is alive and communicating
-                    uint32_t reconnectTime = millis() - resetTime;
-                    LOG_I("Pico reconnected after reset (%lu ms, received %lu packets)", 
-                          reconnectTime, currentPacketCount - lastPacketCount);
-                    
-                    // Wait a bit more for Pico to fully initialize and be ready for commands
-                    delay(1000);
-                    picoReady = true;
+                    // Pico sent a protocol packet - it has exited bootloader mode
+                    uint32_t waitTime = millis() - waitStart;
+                    LOG_I("Pico exited bootloader mode after %lu ms (received %lu packets)", 
+                          waitTime, currentPacketCount - lastPacketCount);
+                    picoExitedBootloader = true;
                     break;
                 }
             }
             
-            if (!picoReady) {
-                LOG_E("Pico did not send boot message after reset, aborting retry");
-                continue;  // Try next update retry
+            // If Pico didn't exit bootloader mode, reset it as a last resort
+            // But only after waiting to ensure we're not interrupting a flash operation
+            // Note: Bootloader timeout is 30 seconds, but we only wait 10 seconds to avoid long delays
+            if (!picoExitedBootloader) {
+                LOG_W("Pico did not exit bootloader mode after 10 seconds, resetting as last resort...");
+                _picoUart.resetPico();
+                delay(1000);  // Wait for Pico to boot after reset
+                
+                // Wait for Pico to reconnect and send a fresh boot message
+                LOG_I("Waiting for Pico to reconnect and send boot message after reset...");
+                bool picoReady = false;
+                uint32_t resetTime = millis();
+                lastPacketCount = _picoUart.getPacketsReceived();
+                
+                for (int i = 0; i < 100; i++) {  // Wait up to 10 seconds
+                    delay(100);
+                    feedWatchdog();
+                    _picoUart.loop();
+                    
+                    // Check if we received a NEW packet after reset (boot message or handshake)
+                    uint32_t currentPacketCount = _picoUart.getPacketsReceived();
+                    if (currentPacketCount > lastPacketCount) {
+                        // We got a new packet - Pico is alive and communicating
+                        uint32_t reconnectTime = millis() - resetTime;
+                        LOG_I("Pico reconnected after reset (%lu ms, received %lu packets)", 
+                              reconnectTime, currentPacketCount - lastPacketCount);
+                        
+                        // Wait a bit more for Pico to fully initialize and be ready for commands
+                        delay(1000);
+                        picoReady = true;
+                        break;
+                    }
+                }
+                
+                if (!picoReady) {
+                    LOG_E("Pico did not send boot message after reset, aborting retry");
+                    // Clear connection state and wait a bit more before trying next retry
+                    _picoUart.clearConnectionState();
+                    delay(2000);
+                    continue;  // Try next update retry
+                }
+            } else {
+                // Pico exited bootloader mode naturally - give it a moment to stabilize
+                delay(500);
             }
             
             // Reset file position for retry

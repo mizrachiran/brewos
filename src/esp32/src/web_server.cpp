@@ -2691,7 +2691,7 @@ bool BrewWebServer::streamFirmwareToPico(File& firmwareFile, size_t firmwareSize
             bool ackReceived = false;
             uint8_t errorCode = 0;
             unsigned long ackStart = millis();
-            const unsigned long ACK_TIMEOUT_MS = 2000;  // 2 second timeout (flash ops can be slow)
+            const unsigned long ACK_TIMEOUT_MS = 5000;  // 5 second timeout (flash erase can take 3-4 seconds)
             
             while ((millis() - ackStart) < ACK_TIMEOUT_MS) {
                 if (Serial1.available()) {
