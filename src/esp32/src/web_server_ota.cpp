@@ -924,9 +924,9 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
     }
     
     // Flash to Pico
-    // Method selection: SWD if hardware supports it (SWD_SUPPORTED), otherwise UART bootloader
-    // Screen variant: SWD pins not wired → uses UART bootloader
-    // No-screen variant: SWD pins wired → can use SWD or UART bootloader
+    // Method selection: SWD if enabled (SWD_SUPPORTED=1), otherwise UART bootloader
+    // Both screen and no-screen variants use UART bootloader (SWD_SUPPORTED=0)
+    // UART bootloader is the default and recommended method for OTA updates
 #if SWD_SUPPORTED
     // SWD method: Uses GPIO 21 (SWDIO) and GPIO 45 (SWCLK) for direct flash programming
     broadcastOtaProgress(&_ws, "flash", 40, "Installing Pico firmware (SWD)...");
@@ -1030,78 +1030,133 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
     // Initialize SWD interface
     PicoSWD swd(SWD_DIO_PIN, SWD_CLK_PIN, SWD_RESET_PIN);
     
-    if (!swd.begin()) {
-        LOG_E("SWD connection failed");
-        broadcastLogLevel("error", "Update error: SWD connection failed");
-        broadcastOtaProgress(&_ws, "error", 0, "SWD connection failed");
+    bool swdSuccess = false;
+    if (swd.begin()) {
+        swdSuccess = true;
+        LOG_I("SWD connection successful, using SWD method");
+    } else {
+        LOG_W("SWD connection failed, falling back to UART bootloader");
+        broadcastLogLevel("warning", "SWD unavailable, using UART bootloader");
+        broadcastOtaProgress(&_ws, "flash", 40, "SWD unavailable, using UART...");
         
         // CRITICAL: Always reset Pico even on failure to ensure it's not stuck
-        LOG_W("SWD: Resetting Pico after failed connection attempt...");
+        LOG_W("SWD: Resetting Pico after failed SWD attempt...");
         swd.end();  // Clean up SWD connection
         swd.resetTarget();  // Reset Pico to ensure it boots normally
         
-        // Reinitialize Serial1 UART on failure
+        // Reinitialize Serial1 UART for fallback to UART bootloader
         Serial1.begin(PICO_UART_BAUD, SERIAL_8N1, PICO_UART_RX_PIN, PICO_UART_TX_PIN);
         delay(10);
-        _picoUart.resume();  // Resume on failure
+        _picoUart.resume();  // Resume UART processing for bootloader method
+        
+        // Fall through to UART bootloader method below
+        swdSuccess = false;
+    }
+    
+    if (swdSuccess) {
+        // Continue with SWD method
+        broadcastOtaProgress(&_ws, "flash", 45, "Flashing firmware...");
+        feedWatchdog();
+        
+        // Flash firmware via SWD
+        bool success = swd.flashFirmware(flashFile, firmwareSize);
+        
+        // Clean up SWD connection
+        swd.end();
+        
         flashFile.close();
+        
+        // Clean up temp file regardless of success
         cleanupOtaFiles();
-        return false;
+        
+        if (!success) {
+            LOG_E("SWD firmware flashing failed, falling back to UART bootloader");
+            broadcastLogLevel("warning", "SWD flash failed, trying UART bootloader");
+            broadcastOtaProgress(&_ws, "flash", 40, "SWD failed, using UART...");
+            
+            // CRITICAL: Always reset Pico even on failure to ensure it's not stuck
+            LOG_W("SWD: Resetting Pico after failed flash attempt...");
+            swd.end();  // Clean up SWD connection
+            swd.resetTarget();  // Reset Pico to ensure it boots normally
+            
+            // Reinitialize Serial1 UART for fallback to UART bootloader
+            Serial1.begin(PICO_UART_BAUD, SERIAL_8N1, PICO_UART_RX_PIN, PICO_UART_TX_PIN);
+            delay(10);
+            _picoUart.resume();  // Resume UART processing for bootloader method
+            
+            // Reset file position for UART bootloader
+            flashFile = LittleFS.open(OTA_FILE_PATH, "r");
+            if (!flashFile) {
+                LOG_E("Failed to reopen firmware file for UART bootloader");
+                cleanupOtaFiles();
+                return false;
+            }
+            
+            // Fall through to UART bootloader method below
+            swdSuccess = false;
+        } else {
+            // SWD succeeded - reset and wait for reconnect
+            LOG_I("Resetting Pico after successful SWD flash...");
+            swd.end();  // Clean up SWD connection first
+            swd.resetTarget();  // Then reset
+            
+            broadcastOtaProgress(&_ws, "flash", 55, "Waiting for device restart...");
+            
+            // Reinitialize Serial1 UART after SWD is done
+            Serial1.begin(PICO_UART_BAUD, SERIAL_8N1, PICO_UART_RX_PIN, PICO_UART_TX_PIN);
+            delay(10);
+            
+            // Resume packet processing to detect when Pico comes back
+            _picoUart.resume();
+            LOG_I("Resumed UART packet processing");
+            
+            // Clear connection state so we can detect when Pico actually reconnects
+            _picoUart.clearConnectionState();
+            
+            // Wait for Pico to reconnect (same logic as UART bootloader)
+            bool picoReconnected = false;
+            for (int i = 0; i < 350; i++) {
+                delay(100);
+                feedWatchdog();
+                _picoUart.loop();
+                
+                if (_picoUart.isConnected()) {
+                    LOG_I("Pico reconnected after SWD flash (%d ms)", i * 100);
+                    picoReconnected = true;
+                    break;
+                }
+            }
+            
+            if (!picoReconnected) {
+                LOG_W("Pico did not reconnect after SWD flash, forcing manual reset...");
+                _picoUart.resetPico();
+                
+                for (int i = 0; i < 100; i++) {
+                    delay(100);
+                    feedWatchdog();
+                    _picoUart.loop();
+                    
+                    if (_picoUart.isConnected()) {
+                        LOG_I("Pico connected after manual reset (%d ms)", i * 100);
+                        picoReconnected = true;
+                        break;
+                    }
+                }
+                
+                if (!picoReconnected) {
+                    LOG_E("Pico failed to connect after SWD flash and manual reset");
+                    return false;
+                }
+            }
+            
+            LOG_I("Pico OTA complete!");
+            return true;
+        }
     }
     
-    broadcastOtaProgress(&_ws, "flash", 45, "Flashing firmware...");
-    feedWatchdog();
-    
-    // Flash firmware via SWD
-    bool success = swd.flashFirmware(flashFile, firmwareSize);
-    
-    // Clean up SWD connection
-    swd.end();
-    
-    flashFile.close();
-    
-    // Clean up temp file regardless of success
-    cleanupOtaFiles();
-    
-    if (!success) {
-        LOG_E("SWD firmware flashing failed");
-        broadcastLogLevel("error", "Update error: Installation failed");
-        broadcastOtaProgress(&_ws, "error", 0, "Installation failed");
-        
-        // CRITICAL: Always reset Pico even on failure to ensure it's not stuck
-        LOG_W("SWD: Resetting Pico after failed flash attempt...");
-        swd.end();  // Clean up SWD connection
-        swd.resetTarget();  // Reset Pico to ensure it boots normally
-        
-        // Reinitialize Serial1 UART on failure
-        Serial1.begin(PICO_UART_BAUD, SERIAL_8N1, PICO_UART_RX_PIN, PICO_UART_TX_PIN);
-        delay(10);
-        _picoUart.resume();  // Resume on failure
-        return false;
-    }
-    
-    // Reset Pico via SWD or hardware pin after successful flash
-    LOG_I("Resetting Pico after successful SWD flash...");
-    swd.end();  // Clean up SWD connection first
-    swd.resetTarget();  // Then reset
-    
-    broadcastOtaProgress(&_ws, "flash", 55, "Waiting for device restart...");
-    
-    // Reinitialize Serial1 UART after SWD is done
-    // SWD pins are now back to GPIO, but we need to reinitialize UART1 for Pico communication
-    Serial1.begin(PICO_UART_BAUD, SERIAL_8N1, PICO_UART_RX_PIN, PICO_UART_TX_PIN);
-    delay(10); // Allow UART to initialize
-    
-    // Resume packet processing to detect when Pico comes back
-    _picoUart.resume();
-    LOG_I("Resumed UART packet processing");
-    
-    // Clear connection state so we can detect when Pico actually reconnects
-    _picoUart.clearConnectionState();
-    
-#else
+#else // SWD_SUPPORTED == 0
     // =============================================================================
-    // UART BOOTLOADER METHOD (Default - SWD disabled until fixed)
+    // UART BOOTLOADER METHOD (when SWD_SUPPORTED is 0)
     // =============================================================================
     
     // Retry configuration (defined at function scope for use in multiple retry loops)
@@ -1181,7 +1236,8 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
         }
         
         // Give Pico time to process command and enter bootloader mode
-        // Pico sends protocol ACK, waits 50ms, then sends 0xAA 0x55
+        // Pico sequence: sends protocol ACK, calls bootloader_prepare(), then sends bootloader ACK
+        // bootloader_prepare() ensures system is ready before ACK is sent
         LOG_I("Sent bootloader command, waiting for Pico to enter bootloader...");
         feedWatchdog();
         
@@ -1253,6 +1309,53 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
             LOG_W("Retrying Pico firmware update (attempt %d/%d)...", updateRetry + 1, MAX_UPDATE_RETRIES);
             broadcastOtaProgress(&_ws, "flash", 45, "Retrying installation...");
             feedWatchdog();
+            
+            // CRITICAL: Reset Pico before retry to ensure clean state
+            // The previous attempt may have left the Pico in bootloader mode or error state
+            // A reset ensures the Pico is back in normal mode and ready for a new bootloader command
+            LOG_I("Resetting Pico before retry to ensure clean state...");
+            
+            // CRITICAL: Resume UART processing so we can detect Pico reconnection
+            // UART was paused during firmware streaming, we need it active to receive boot messages
+            _picoUart.resume();
+            
+            // Clear connection state BEFORE reset so we detect a fresh connection
+            _picoUart.clearConnectionState();
+            
+            _picoUart.resetPico();
+            delay(1000);  // Wait for Pico to boot after reset
+            
+            // Wait for Pico to reconnect and send a fresh boot message
+            // We need to wait for a NEW packet, not just rely on old connection state
+            LOG_I("Waiting for Pico to reconnect and send boot message after reset...");
+            bool picoReady = false;
+            uint32_t resetTime = millis();
+            uint32_t lastPacketCount = _picoUart.getPacketsReceived();
+            
+            for (int i = 0; i < 100; i++) {  // Wait up to 10 seconds
+                delay(100);
+                feedWatchdog();
+                _picoUart.loop();
+                
+                // Check if we received a NEW packet after reset (boot message or handshake)
+                uint32_t currentPacketCount = _picoUart.getPacketsReceived();
+                if (currentPacketCount > lastPacketCount) {
+                    // We got a new packet - Pico is alive and communicating
+                    uint32_t reconnectTime = millis() - resetTime;
+                    LOG_I("Pico reconnected after reset (%lu ms, received %lu packets)", 
+                          reconnectTime, currentPacketCount - lastPacketCount);
+                    
+                    // Wait a bit more for Pico to fully initialize and be ready for commands
+                    delay(1000);
+                    picoReady = true;
+                    break;
+                }
+            }
+            
+            if (!picoReady) {
+                LOG_E("Pico did not send boot message after reset, aborting retry");
+                continue;  // Try next update retry
+            }
             
             // Reset file position for retry
             flashFile.seek(0);
@@ -1352,7 +1455,7 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
     
 #endif // SWD_SUPPORTED
     
-    // Wait for Pico to self-reset and reconnect
+    // Wait for Pico to self-reset and reconnect (common code for both SWD and UART methods)
     // The bootloader copies firmware (~3-5s for 22 sectors * ~100ms each) then resets.
     // Total time: copy (~5s) + reboot (~1s) + reconnect (~1s) = ~7s minimum
     // Use generous 25s timeout to be safe.
@@ -1634,14 +1737,31 @@ void BrewWebServer::startGitHubOTA(const String& version) {
     LOG_I("ESP32 firmware update successful!");
     
     // Update LittleFS (optional - continue even if fails)
-    // Use timeout to ensure we don't hang forever
+    // CRITICAL: LittleFS update is non-critical - firmware is already flashed
+    // If LittleFS update hangs, we MUST still restart to boot the new firmware
+    // The watchdog is disabled during OTA, so we can't rely on it for timeout
+    // Instead, we'll try LittleFS update but ensure we always proceed to restart
     unsigned long littlefsStart = millis();
+    const unsigned long LITTLEFS_MAX_TIME_MS = 120000;  // 2 minutes absolute max
+    LOG_I("Starting LittleFS update (non-critical, max %lu seconds)...", LITTLEFS_MAX_TIME_MS / 1000);
+    
+    // Call updateLittleFS - it has internal timeouts, but we'll check duration
     updateLittleFS(tag);
+    
     unsigned long littlefsTime = millis() - littlefsStart;
-    LOG_I("LittleFS update completed in %lu ms", littlefsTime);
+    if (littlefsTime > LITTLEFS_MAX_TIME_MS) {
+        LOG_W("LittleFS update took too long (%lu ms > %lu ms), proceeding to restart", 
+              littlefsTime, LITTLEFS_MAX_TIME_MS);
+    } else {
+        LOG_I("LittleFS update completed in %lu ms", littlefsTime);
+    }
+    
+    // CRITICAL: Log that we're about to restart - this helps diagnose if we get stuck
+    LOG_I("About to restart ESP32 - firmware update complete");
     
     // CRITICAL: Always restart after successful OTA, regardless of LittleFS result
     // The new firmware is already flashed, we MUST reboot to use it
+    // Even if LittleFS update failed or timed out, we must restart
     LOG_I("OTA complete - restarting device in 2 seconds...");
     broadcastOtaProgress(&_ws, "complete", 100, "Update complete!");
     broadcastLogLevel("info", "BrewOS updated! Restarting...");
@@ -1775,8 +1895,19 @@ void BrewWebServer::updateLittleFS(const char* tag) {
     size_t written = 0;
     size_t offset = 0;
     unsigned long lastYield = millis();
+    unsigned long downloadStart = millis();
+    unsigned long lastDataReceived = millis();
+    const unsigned long LITTLEFS_STALL_TIMEOUT_MS = 30000;  // 30 seconds stall timeout
+    const unsigned long LITTLEFS_TOTAL_TIMEOUT_MS = 120000;  // 2 minutes total timeout
     
     while (http.connected() && written < (size_t)contentLength && offset < partition->size) {
+        // Check for total timeout
+        if (millis() - downloadStart > LITTLEFS_TOTAL_TIMEOUT_MS) {
+            LOG_W("LittleFS download timeout after %lu ms (wrote %d/%d)", 
+                  millis() - downloadStart, written, contentLength);
+            break;
+        }
+        
         if (millis() - lastYield >= OTA_WATCHDOG_FEED_INTERVAL_MS) {
             feedWatchdog();
             yield();
@@ -1784,7 +1915,15 @@ void BrewWebServer::updateLittleFS(const char* tag) {
         }
         
         size_t available = stream->available();
+        
+        // Check for stall (no data received for too long)
+        if (available == 0 && millis() - lastDataReceived > LITTLEFS_STALL_TIMEOUT_MS) {
+            LOG_W("LittleFS download stalled - no data for %lu ms (wrote %d/%d)", 
+                  LITTLEFS_STALL_TIMEOUT_MS, written, contentLength);
+            break;
+        }
         if (available > 0) {
+            lastDataReceived = millis();  // Reset stall timer when data arrives
             // Limit read size to prevent blocking main loop for too long
             size_t maxChunkSize = min(available, (size_t)4096);  // Max 4KB per chunk
             size_t toRead = min(maxChunkSize, HEAP_BUFFER_SIZE);

@@ -475,28 +475,24 @@ void handle_cmd_bootloader(const packet_t* packet) {
     // CRITICAL: Wait for protocol ACK to finish transmitting
     uart_tx_wait_blocking(ESP32_UART_ID);
     
-    // CRITICAL: Send bootloader ACK IMMEDIATELY to avoid ESP32 timeout
-    // ESP32 waits only 100ms for this ACK, so we must send it as fast as possible
-    // We send it BEFORE bootloader_prepare() to minimize delay
-    // Protocol handler is still active, but this is safe because:
-    // 1. We just sent protocol ACK, so protocol handler won't process this bootloader ACK
-    // 2. Bootloader ACK is a fixed 4-byte sequence that won't be misinterpreted
+    // CRITICAL: Prepare system FIRST before sending bootloader ACK
+    // This ensures the system is fully ready when firmware chunks start arriving
+    // bootloader_prepare() will:
+    // 1. Drain UART FIFO completely
+    // 2. Reset protocol state machine
+    // 3. Set bootloader_active flag with memory barriers (pauses Core 0 and protocol processing)
+    // 4. Final drain to catch any race condition bytes
+    bootloader_prepare();
+    LOG_INFO("Bootloader: System prepared, sending ACK to ESP32...\n");
+    
+    // NOW send bootloader ACK after system is fully prepared
+    // This ensures we're ready to receive firmware chunks immediately
     static const uint8_t BOOT_ACK[] = {0xB0, 0x07, 0xAC, 0x4B};
-    LOG_INFO("Bootloader: Sending immediate ACK to ESP32...\n");
     for (size_t i = 0; i < sizeof(BOOT_ACK); i++) {
         uart_putc(ESP32_UART_ID, BOOT_ACK[i]);
     }
     uart_tx_wait_blocking(ESP32_UART_ID);
-    LOG_INFO("Bootloader: ACK sent, preparing system...\n");
-    
-    // CRITICAL: Signal bootloader mode - pauses Core 0 control loop and protocol processing
-    // bootloader_prepare() will:
-    // 1. Drain UART FIFO completely
-    // 2. Reset protocol state machine
-    // 3. Set bootloader_active flag with memory barriers
-    // 4. Final drain to catch any race condition bytes
-    bootloader_prepare();
-    LOG_INFO("Bootloader: System paused, starting firmware receive\n");
+    LOG_INFO("Bootloader: ACK sent, ready for firmware reception\n");
     
     // Enter bootloader mode (does not return on success)
     // bootloader_receive_firmware() will NOT send ACK again (already sent above)

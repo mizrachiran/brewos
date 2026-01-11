@@ -123,9 +123,10 @@
 // SWD Hardware Support: Automatically set based on hardware variant
 // ═══════════════════════════════════════════════════════════════════════════
 // 
-// SWD_SUPPORTED: Indicates if SWD pins are physically wired on this hardware variant
+// SWD_SUPPORTED: Indicates if SWD should be used for OTA updates
 //   - Screen variant: SWD pins NOT wired → SWD_SUPPORTED = 0 (uses UART bootloader)
-//   - No-screen variant: SWD pins wired → SWD_SUPPORTED = 1 (can use SWD or UART)
+//   - No-screen variant: SWD pins wired but disabled → SWD_SUPPORTED = 0 (uses UART bootloader)
+// Both variants use UART bootloader for OTA updates
 //
 // This is a hardware capability flag, automatically set based on ENABLE_SCREEN.
 // UART bootloader is always available as a fallback method.
@@ -149,13 +150,14 @@
     // J15 Pin 8 - SPARE2: ESP32 GPIO22 ↔ Pico GPIO22 (4.7kΩ pull-down on Pico side)
     #define SPARE2_PIN              22              // J15 Pin 8 - General purpose bidirectional I/O
 #else
-    // No-screen variant (ESP32-S3 N16R8): SWD pins are physically wired
+    // No-screen variant (ESP32-S3 N16R8): SWD pins are physically wired but SWD is disabled
     // Changed from GPIO 16/17 (UART2 pins, potential PSRAM conflict) to GPIO 21/45
     // GPIO 21 is recommended in ADIv6 Multidrop analysis document (Section 2.1.1)
     // GPIO 45 is safe for ESP32-S3 and available
-    // Pin 6: SWDIO - ESP32 GPIO21 ↔ RP2354 SWDIO Pin, 47Ω series (R_SWD) - WIRED
-    // Pin 8: SWCLK - ESP32 GPIO45 ↔ RP2354 SWCLK Pin, 47Ω series (R_SWD) - WIRED
-    #define SWD_SUPPORTED           0               // SWD pins are wired on no-screen variant
+    // Pin 6: SWDIO - ESP32 GPIO21 ↔ RP2354 SWDIO Pin, 47Ω series (R_SWD) - WIRED (but not used)
+    // Pin 8: SWCLK - ESP32 GPIO45 ↔ RP2354 SWCLK Pin, 47Ω series (R_SWD) - WIRED (but not used)
+    // SWD is intentionally disabled - no-screen variant uses UART bootloader for OTA updates
+    #define SWD_SUPPORTED           0               // SWD disabled, use UART bootloader for no-screen variant
     #define SWD_DIO_PIN             21              // ESP32 GPIO21 -> Pico SWDIO (J15 Pin 6) - Safe, recommended
     #define SWD_CLK_PIN             45              // ESP32 GPIO45 -> Pico SWCLK (J15 Pin 8) - Safe for ESP32-S3
     #define SWD_RESET_PIN           PICO_RUN_PIN    // Use existing PICO_RUN_PIN for reset

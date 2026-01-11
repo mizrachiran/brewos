@@ -116,10 +116,10 @@ void bootloader_prepare(void) {
     __dmb();
     
     // CRITICAL: Minimal delay to ensure all cores see the flag change
-    // Reduced from 100ms to 10ms to avoid ESP32 timeout (ESP32 waits 100ms for bootloader ACK)
     // The flag is set with memory barriers, so cores should see it within microseconds
-    // 10ms is sufficient for Core 1's main loop to check the flag and suspend
-    sleep_ms(10);
+    // 5ms is sufficient for Core 0 and Core 1's main loops to check the flag and suspend
+    // We keep this short because bootloader_prepare() is now called BEFORE sending ACK
+    sleep_ms(5);
     
     // Final drain to catch any bytes that arrived during the transition
     // This is critical - bytes could arrive between setting flag and protocol_process() checking it
@@ -220,8 +220,17 @@ void bootloader_prepare(void) {
  
  static bool uart_read_byte_timeout(uint8_t* byte, uint32_t timeout_ms) {
      absolute_time_t timeout = make_timeout_time_ms(timeout_ms);
+     uint32_t last_watchdog_feed = 0;
      while (!uart_is_readable(ESP32_UART_ID)) {
          if (time_reached(timeout)) return false;
+         
+         // Feed watchdog periodically during long waits (every ~100ms)
+         uint32_t now_ms = to_ms_since_boot(get_absolute_time());
+         if (now_ms - last_watchdog_feed > 100) {
+             watchdog_update();
+             last_watchdog_feed = now_ms;
+         }
+         
          // [TUNED] 10us allows ~1 byte at 921k baud (9us/byte).
          // This is safe for the FIFO (32 bytes) while being efficient.
          sleep_us(10); 
@@ -247,6 +256,9 @@ void bootloader_prepare(void) {
  static bool receive_chunk_header(uint32_t* chunk_num, uint16_t* chunk_size) {
      absolute_time_t timeout_time = make_timeout_time_ms(BOOTLOADER_CHUNK_TIMEOUT_MS);
      while (!time_reached(timeout_time)) {
+         // Feed watchdog during long waits to prevent reset
+         watchdog_update();
+         
          uint8_t b1;
          if (!uart_read_byte_timeout(&b1, 100)) continue;
          
@@ -275,7 +287,10 @@ void bootloader_prepare(void) {
  }
  
  static bool receive_chunk_data(uint8_t* buffer, uint16_t size, uint8_t* checksum) {
+     // Feed watchdog before potentially long read operations
+     watchdog_update();
      if (!uart_read_bytes_timeout(buffer, size, BOOTLOADER_CHUNK_TIMEOUT_MS)) return false;
+     watchdog_update();
      if (!uart_read_byte_timeout(checksum, BOOTLOADER_CHUNK_TIMEOUT_MS)) return false;
      uint8_t calc = 0;
      for(int i=0; i<size; i++) calc ^= buffer[i];
@@ -346,8 +361,8 @@ bootloader_result_t bootloader_receive_firmware(void) {
     // This ensures no stale bytes remain from the transition period
     while (uart_is_readable(ESP32_UART_ID)) (void)uart_getc(ESP32_UART_ID);
      
-    // NOTE: Bootloader ACK is now sent in handle_cmd_bootloader() BEFORE bootloader_prepare()
-    // This ensures ESP32 receives the ACK within its 100ms timeout window
+    // NOTE: Bootloader ACK is sent in handle_cmd_bootloader() AFTER bootloader_prepare()
+    // This ensures the system is fully ready before ESP32 starts sending firmware chunks
     // We skip sending it here to avoid duplicate ACK
     LOG_PRINT("Bootloader: ACK already sent, waiting for firmware...\n");
     
@@ -412,21 +427,47 @@ bootloader_result_t bootloader_receive_firmware(void) {
              
              if (page_buffer_offset >= FLASH_PAGE_SIZE) {
                  uint32_t sect_start = current_page_start & ~(FLASH_SECTOR_SIZE - 1);
+                 
+                 // CRITICAL: Feed watchdog before flash operations (they can take 50-100ms)
+                 // Flash operations disable interrupts and pause Core 0, so watchdog must be fed first
+                 watchdog_update();
+                 
                  if (!sector_erased || (sect_start != current_sector)) {
-                     if (!flash_safe_erase(sect_start, FLASH_SECTOR_SIZE)) return BOOTLOADER_ERROR_FLASH_ERASE;
+                     // Sector erase can take 50-100ms - feed watchdog before and after
+                     watchdog_update();
+                     if (!flash_safe_erase(sect_start, FLASH_SECTOR_SIZE)) {
+                         LOG_PRINT("Bootloader: Flash erase failed at offset 0x%lx\n", (unsigned long)sect_start);
+                         return BOOTLOADER_ERROR_FLASH_ERASE;
+                     }
+                     watchdog_update();  // Feed after erase completes
                      sector_erased = true;
                      current_sector = sect_start;
                  }
-                 if (!flash_safe_program(current_page_start, page_buffer, FLASH_PAGE_SIZE)) return BOOTLOADER_ERROR_FLASH_WRITE;
+                 
+                 // Flash program can take 10-20ms - feed watchdog before
+                 watchdog_update();
+                 if (!flash_safe_program(current_page_start, page_buffer, FLASH_PAGE_SIZE)) {
+                     LOG_PRINT("Bootloader: Flash program failed at offset 0x%lx\n", (unsigned long)current_page_start);
+                     return BOOTLOADER_ERROR_FLASH_WRITE;
+                 }
+                 watchdog_update();  // Feed after program completes
+                 
                  current_page_start += FLASH_PAGE_SIZE;
                  page_buffer_offset = 0;
              }
          }
          
-         g_received_size += chunk_size;
-         g_chunk_count++;
-         uart_write_byte(0xAA);
-         uart_tx_wait_blocking(ESP32_UART_ID);
+        g_received_size += chunk_size;
+        g_chunk_count++;
+        
+        // CRITICAL: Feed watchdog before sending ACK (UART TX can block briefly)
+        watchdog_update();
+        
+        uart_write_byte(0xAA);
+        uart_tx_wait_blocking(ESP32_UART_ID);
+        
+        // Feed watchdog after ACK sent to ensure we're alive
+        watchdog_update();
      }
      
      if (page_buffer_offset > 0) {
