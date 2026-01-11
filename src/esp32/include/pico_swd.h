@@ -79,6 +79,12 @@ public:
     bool resetTarget();
     
     /**
+     * Resume Pico core from debug halt (breaks out of debug halt state)
+     * @return true if resume successful
+     */
+    bool resumeFromHalt();
+    
+    /**
      * Check if SWD connection is active
      * @return true if connected
      */
@@ -87,6 +93,18 @@ public:
     // Diagnostic
     const char* getLastError() { return _lastErrorStr; }
     static const char* errorToString(swd_error_t error);
+    
+    /**
+     * Diagnostic function to check device state and pin connectivity
+     * @return true if device appears to be responding
+     */
+    bool diagnoseDevice();
+    
+    /**
+     * Read raw ACK bits with detailed logging
+     * @return Raw ACK value and detailed diagnostic info
+     */
+    uint8_t readAckDiagnostic();
 
 private:
     int _swdio;

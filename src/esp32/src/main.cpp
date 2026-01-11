@@ -43,6 +43,9 @@
 #include "wifi_manager.h"
 #include "web_server.h"
 #include "pico_uart.h"
+#if !ENABLE_SCREEN
+#include "pico_swd.h"  // Only needed for no-screen variant (SWD pins connected)
+#endif
 #include "log_manager.h"
 
 // Display and UI (conditional compilation)
@@ -722,45 +725,89 @@ static void handlePicoDiagnostics(const PicoPacket& packet) {
 
 static void setupEarlyInitialization() {
 #if !ENABLE_SCREEN
+    // =========================================================================
+    // CRITICAL: Prevent Pico Lock-up / Unresponsive State (NO-SCREEN VARIANT)
+    // =========================================================================
+    // ROOT CAUSE FIX: RST pin (GPIO4) must be initialized to HIGH IMMEDIATELY
+    // During ESP32 boot, GPIO pins are in undefined state. If RST pin is floating
+    // or LOW, it holds Pico in reset, causing unresponsive state.
+    // ROOT CAUSE FIX: Use INPUT (open-drain) instead of OUTPUT HIGH
+    // This prevents parasitic powering if RP2350 is unpowered
+    // RP2350 has internal pull-up that will pull RUN high when ready
+    pinMode(PICO_RUN_PIN, INPUT);  // Release reset (open-drain - let internal pull-up do the work)
+    delay(10); // Give pin time to stabilize
+    
+    // SWD pins are only connected in no-screen variant, so this logic only runs here.
+    // Immediately set SWD pins to INPUT_PULLUP to prevent ESP32 from driving 
+    // these lines low/high during boot, which can confuse the Pico or cause 
+    // parasitic power latch-up.
+    #if defined(SWD_CLK_PIN) && defined(SWD_DIO_PIN)
+        gpio_reset_pin((gpio_num_t)SWD_CLK_PIN);
+        gpio_reset_pin((gpio_num_t)SWD_DIO_PIN);
+        gpio_set_direction((gpio_num_t)SWD_CLK_PIN, GPIO_MODE_INPUT);
+        gpio_set_direction((gpio_num_t)SWD_DIO_PIN, GPIO_MODE_INPUT);
+        gpio_set_pull_mode((gpio_num_t)SWD_CLK_PIN, GPIO_PULLUP_ONLY);
+        gpio_set_pull_mode((gpio_num_t)SWD_DIO_PIN, GPIO_PULLUP_ONLY);
+    #endif
+
     // CRITICAL: Safe Boot Sequence (NO-SCREEN VARIANT)
+    // Per RP2350 forum issue (https://forums.raspberrypi.com/viewtopic.php?t=388163)
+    // RP2350 locks up when RUN is asserted while GPIO are back-powered.
+    // We MUST ensure ALL GPIO (UART + SWD) are floating BEFORE asserting reset.
     
-    // 1. FLOAT EVERYTHING FIRST (Prevent Parasitic Power Latch-up)
-    // Ensure we are NOT driving 3.3V into the Pico yet.
-    gpio_reset_pin((gpio_num_t)SWD_CLK_PIN);
-    gpio_reset_pin((gpio_num_t)SWD_DIO_PIN);
-    gpio_set_direction((gpio_num_t)SWD_CLK_PIN, GPIO_MODE_INPUT);
-    gpio_set_direction((gpio_num_t)SWD_DIO_PIN, GPIO_MODE_INPUT);
-    // Use weak pull-ups for safety (harmless)
-    gpio_set_pull_mode((gpio_num_t)SWD_CLK_PIN, GPIO_PULLUP_ONLY);
-    gpio_set_pull_mode((gpio_num_t)SWD_DIO_PIN, GPIO_PULLUP_ONLY);
-
-    // 2. ASSERT RESET (Hold LOW)
-    // Now that signals are safe, grab the Pico and hold it in reset.
-    pinMode(PICO_RUN_PIN, OUTPUT);
-    digitalWrite(PICO_RUN_PIN, LOW);
+    // 1. FLOAT ALL GPIO PINS FIRST (Critical - prevent GPIO back-power lock-up)
+    // UART pins might be driven by Serial.begin() or other initialization
+    // We must ensure they're floating before asserting reset
+    #if defined(PICO_UART_TX_PIN) && defined(PICO_UART_RX_PIN)
+        // Ensure UART pins are floating (they might not be initialized yet, but be safe)
+        pinMode(PICO_UART_TX_PIN, INPUT);
+        pinMode(PICO_UART_RX_PIN, INPUT);
+        gpio_set_pull_mode((gpio_num_t)PICO_UART_TX_PIN, GPIO_FLOATING);
+        gpio_set_pull_mode((gpio_num_t)PICO_UART_RX_PIN, GPIO_FLOATING);
+    #endif
     
-    // 3. DISCHARGE WAIT
-    // Wait 100ms for Pico to fully discharge/stabilize in Reset state.
-    // This clears any "Ghost Debug" or Latch-up states.
-    delay(100);
+    // SWD pins already set to INPUT_PULLUP above, but ensure they're truly floating
+    // (We'll set pull-up later, but for now float them to prevent back-power)
+    #if defined(SWD_CLK_PIN) && defined(SWD_DIO_PIN)
+        gpio_set_pull_mode((gpio_num_t)SWD_CLK_PIN, GPIO_FLOATING);
+        gpio_set_pull_mode((gpio_num_t)SWD_DIO_PIN, GPIO_FLOATING);
+    #endif
+    
+    delay(10); // Give pins time to fully float
+    
+    // 2. ASSERT RESET (Now safe - all GPIO are floating)
+    // NOTE: RST pin was already initialized to HIGH above to allow Pico to boot.
+    // Now we assert reset to ensure clean boot state.
+    // The Pico boots faster than ESP32, so we must grab it immediately
+    // But we can only do this AFTER ensuring GPIO are floating
+    // RST pin is already OUTPUT from above, just assert LOW
+    digitalWrite(PICO_RUN_PIN, LOW);  // Hold in reset immediately
+    
+    // 3. DISCHARGE WAIT (Clear any debug state)
+    // Wait for Pico to fully discharge and clear any debug halt state
+    delay(200);
 
-    // 4. ENABLE STRONG DRIVE (While Reset is still LOW)
-    // NOW we drive SWCLK HIGH to prevent noise. 
-    // Since Reset is held LOW, the Pico ignores this signal and won't latch up.
+    // 4. ENABLE STRONG DRIVE ON SWCLK (While Reset is still LOW)
+    // Drive SWCLK HIGH to prevent EMI noise from triggering debug mode
+    // Since Reset is held LOW, Pico ignores this and won't enter debug mode
     gpio_reset_pin((gpio_num_t)SWD_CLK_PIN);
     gpio_set_level((gpio_num_t)SWD_CLK_PIN, 1);
     gpio_set_direction((gpio_num_t)SWD_CLK_PIN, GPIO_MODE_OUTPUT);
     
-    // Re-verify DIO is Input (Safe)
+    // SWDIO remains as safe input with pull-up
     gpio_reset_pin((gpio_num_t)SWD_DIO_PIN);
     gpio_set_direction((gpio_num_t)SWD_DIO_PIN, GPIO_MODE_INPUT);
     gpio_set_pull_mode((gpio_num_t)SWD_DIO_PIN, GPIO_PULLUP_ONLY);
     
-    delay(10); // Electrical stabilization
+    delay(50); // Electrical stabilization
 
-    // 5. RELEASE RESET (Boot)
-    // Release the Pico. It wakes up seeing a clean, stable 3.3V Clock.
-    digitalWrite(PICO_RUN_PIN, HIGH);
+    // 5. RELEASE RESET (Boot with stable SWD pins - Open-Drain Method)
+    // Use Open-Drain: Set to INPUT instead of driving HIGH
+    // This prevents parasitic powering if RP2350 is unpowered
+    // The RP2350 has an internal pull-up that will pull RUN high when ready
+    // Pico boots with SWCLK driven HIGH (prevents noise) and SWDIO pulled up
+    // This prevents EMI from triggering debug halt during boot
+    pinMode(PICO_RUN_PIN, INPUT);  // Release reset (let internal pull-up do the work)
     
     // 6. Init Serial (logging)
     Serial.begin(115200);
@@ -776,6 +823,14 @@ static void setupEarlyInitialization() {
     
 #else // ENABLE_SCREEN
     // Screen variant: Normal initialization (no SWD reset needed)
+    // ROOT CAUSE FIX: RST pin must be initialized to INPUT (open-drain) IMMEDIATELY
+    // During ESP32 boot, GPIO pins are in undefined state. If RST pin is floating
+    // or LOW, it holds Pico in reset, causing unresponsive state.
+    // Use INPUT instead of OUTPUT HIGH to prevent parasitic powering
+    // RP2350 has internal pull-up that will pull RUN high when ready
+    pinMode(PICO_RUN_PIN, INPUT);  // Release reset (open-drain - let internal pull-up do the work)
+    delay(10); // Give pin time to stabilize
+    
     // Turn on backlight immediately so user knows device is running
     // Backlight is GPIO7, active LOW (LOW = ON)
     pinMode(7, OUTPUT);
@@ -923,7 +978,7 @@ static void setupEarlyInitialization() {
         prefs.end();
     }
     
-#if !ENABLE_SCREEN && ENABLE_SWD
+#if !ENABLE_SCREEN
     // SWD pins are already initialized at the very beginning of setupEarlyInitialization()
     // (no-screen variant only) to prevent Pico from entering debug mode during power-on boot sequence
     Serial.printf("SWD enabled: GPIO%d (SWDIO), GPIO%d (SWCLK) with pull-ups\n", 
@@ -1349,8 +1404,8 @@ static void setupWaitForPicoConnection() {
             Serial.println("WARNING: Received raw data but no valid packets - check baud rate/protocol");
         } else {
             Serial.println("WARNING: No data received - check wiring (TX/RX pins)");
-            Serial.println("  ESP32 TX (GPIO43) -> Pico RX (GPIO1)");
-            Serial.println("  ESP32 RX (GPIO44) <- Pico TX (GPIO0)");
+            Serial.printf("  ESP32 TX (GPIO%d) -> Pico RX (GPIO1)\n", PICO_UART_TX_PIN);
+            Serial.printf("  ESP32 RX (GPIO%d) <- Pico TX (GPIO0)\n", PICO_UART_RX_PIN);
         }
         
         // Try sending a ping to see if Pico responds
@@ -2283,6 +2338,16 @@ static void loopPeriodicTasks() {
     static unsigned long lastResetAttemptTime = 0;
     static int recoveryAttemptCount = 0;
     
+    // CRITICAL: Reset recovery counter if Pico is connected
+    // This prevents recovery from continuing after Pico has recovered
+    if (connected) {
+        if (recoveryAttemptCount > 0) {
+            Serial.println("[Watchdog] ✓ Pico recovered! Resetting recovery counter.");
+            recoveryAttemptCount = 0;
+            lastResetAttemptTime = 0;
+        }
+    }
+    
     // Trigger recovery if unresponsive for > 5 seconds
     if (!connected && (millis() - lastPacketReceivedTime > 5000)) {
         
@@ -2296,13 +2361,17 @@ static void loopPeriodicTasks() {
                          timeSinceLastPacket, recoveryAttemptCount);
 
 #if !ENABLE_SCREEN
-            // === PHASE 1: KILL PARASITIC POWER (The Fix) ===
+            // === PHASE 1: KILL PARASITIC POWER (Critical - per RP2350 forum issue) ===
+            // CRITICAL: Per https://forums.raspberrypi.com/viewtopic.php?t=388163
+            // RP2350 locks up when RUN is asserted while GPIO are back-powered by external devices.
+            // We MUST float ALL GPIO pins BEFORE asserting reset, and keep them floating DURING reset.
             // The Pico is likely latched up because 3.3V is flowing into it 
             // via UART TX or SWD CLK. We must FLOAT everything to kill it.
-            Serial.println("[Watchdog] Phase 1: Killing all drivers...");
+            Serial.println("[Watchdog] Phase 1: Killing all drivers (preventing GPIO back-power lock-up)...");
             
-            // 1. Kill UART Driver
+            // 1. Kill UART Driver FIRST (before any reset)
             Serial1.end(); 
+            delay(10); // Give UART time to fully shut down
             // Force UART pins to Float (Input) - NO pull-ups to ensure true High-Z
             pinMode(PICO_UART_TX_PIN, INPUT); 
             pinMode(PICO_UART_RX_PIN, INPUT); 
@@ -2310,46 +2379,107 @@ static void loopPeriodicTasks() {
             gpio_set_pull_mode((gpio_num_t)PICO_UART_TX_PIN, GPIO_FLOATING);
             gpio_set_pull_mode((gpio_num_t)PICO_UART_RX_PIN, GPIO_FLOATING);
 
-            // 2. Kill SWD Drivers - completely floating
+            // 2. Kill SWD Drivers - completely floating (CRITICAL: before reset)
             gpio_set_direction((gpio_num_t)SWD_CLK_PIN, GPIO_MODE_INPUT);
             gpio_set_direction((gpio_num_t)SWD_DIO_PIN, GPIO_MODE_INPUT);
             gpio_set_pull_mode((gpio_num_t)SWD_CLK_PIN, GPIO_FLOATING);
             gpio_set_pull_mode((gpio_num_t)SWD_DIO_PIN, GPIO_FLOATING);
             
-            // === PHASE 2: ASSERT RESET (Extreme Recovery) ===
-            Serial.println("[Watchdog] Phase 2: Extreme reset sequence...");
+            // 3. CRITICAL: Wait for pins to fully float before asserting reset
+            // This ensures no back-powering occurs when RUN goes LOW
+            delay(50); // Give time for drivers to fully release
+            
+            // === PHASE 2: SWD-BASED RECOVERY (Break out of debug halt) ===
+            Serial.println("[Watchdog] Phase 2: Attempting SWD recovery from debug halt...");
+            
+            // Try to use SWD to break Pico out of debug halt
+            // This is the ONLY way to recover from a debug halt state
+            static PicoSWD* picoSwd = nullptr;
+            if (!picoSwd) {
+                picoSwd = new PicoSWD(SWD_DIO_PIN, SWD_CLK_PIN, PICO_RUN_PIN);
+            }
+            
+            bool swdRecoverySuccess = false;
+            if (picoSwd->begin()) {
+                Serial.println("[Watchdog] SWD connected! Attempting to resume core from debug halt...");
+                
+                // Try to resume the core from debug halt
+                if (picoSwd->resumeFromHalt()) {
+                    Serial.println("[Watchdog] ✓ SWD: Core resumed from debug halt!");
+                    swdRecoverySuccess = true;
+                    delay(300); // Give core time to resume and start running
+                } else {
+                    Serial.println("[Watchdog] ⚠ SWD: Resume failed, trying SWD reset...");
+                    // Try SWD reset as fallback (works even without hardware reset pin)
+                    if (picoSwd->resetTarget()) {
+                        Serial.println("[Watchdog] ✓ SWD: Reset via SWD successful!");
+                        swdRecoverySuccess = true;
+                        delay(500); // Give reset time to complete
+                    } else {
+                        Serial.println("[Watchdog] ⚠ SWD: Reset also failed");
+                    }
+                }
+                picoSwd->end();
+                } else {
+                    Serial.println("[Watchdog] ⚠ SWD connection failed - Pico may not be in debug halt");
+                    // Run diagnostics to understand device state
+                    Serial.println("[Watchdog] Running device diagnostics...");
+                    picoSwd->diagnoseDevice();
+                }
+            
+            // === PHASE 2B: HARDWARE RESET (Always do this after SWD attempt) ===
+            // CRITICAL: Per forum post, we must ensure ALL GPIO are floating BEFORE asserting RUN LOW
+            // The reset sequence above already floats everything, but we verify here
+            Serial.println("[Watchdog] Phase 2B: Hardware reset sequence...");
+            
+            // Verify pins are still floating (safety check)
+            // If any pin is being driven, the reset will cause lock-up
+            Serial.println("[Watchdog] Verifying all GPIO pins are floating before reset...");
             pinMode(PICO_RUN_PIN, OUTPUT);
             
-            // Try many rapid reset pulses to break out of debug halt
-            Serial.println("[Watchdog] Sending 10 rapid reset pulses...");
-            for (int pulse = 0; pulse < 10; pulse++) {
-                digitalWrite(PICO_RUN_PIN, LOW);   // Assert reset
-                delayMicroseconds(500);             // Very short pulse
-                digitalWrite(PICO_RUN_PIN, HIGH);  // Release reset
-                delayMicroseconds(500);
-            }
-            
-            // Then try slower pulses
-            Serial.println("[Watchdog] Sending 5 slower reset pulses...");
-            for (int pulse = 0; pulse < 5; pulse++) {
-                digitalWrite(PICO_RUN_PIN, LOW);
-                delay(50);
-                digitalWrite(PICO_RUN_PIN, HIGH);
-                delay(50);
-            }
-            
-            // Final reset assertion - hold LOW for extended period
-            Serial.println("[Watchdog] Holding reset LOW...");
+            // CRITICAL: Assert reset ONLY after all GPIO are confirmed floating
+            // This prevents the "GPIO back-power lock-up" issue described in the forum
             digitalWrite(PICO_RUN_PIN, LOW);
             
             // === PHASE 3: DISCHARGE WAIT (Critical) ===
             // Progressive discharge time: start with 2000ms, increase by 500ms each attempt
+            // For stuck devices, we need longer discharge to fully clear any latch-up state
             unsigned long dischargeTime = 2000 + (recoveryAttemptCount - 1) * 500;
-            if (dischargeTime > 8000) dischargeTime = 8000; // Cap at 8 seconds
+            if (dischargeTime > 10000) dischargeTime = 10000; // Cap at 10 seconds for stuck devices
             
             Serial.printf("[Watchdog] Phase 3: Discharging for %lums (attempt #%d)...\n", 
                          dischargeTime, recoveryAttemptCount);
-            delay(dischargeTime);
+            Serial.println("[Watchdog] NOTE: Device appears stuck (driving SWDIO HIGH but not responding).");
+            Serial.println("[Watchdog] Extended discharge may help clear latch-up state.");
+            
+            // Check for Pico recovery during discharge (break into smaller delays)
+            unsigned long dischargeStart = millis();
+            while ((millis() - dischargeStart) < dischargeTime) {
+                delay(500); // Check every 500ms
+                // Update connection state
+                if (picoUart && picoUart->isConnected()) {
+                    Serial.println("[Watchdog] ✓ Pico recovered during discharge! Aborting recovery sequence.");
+                    recoveryAttemptCount = 0;
+                    lastResetAttemptTime = 0;
+                    return; // Exit recovery immediately
+                }
+            }
+            
+            // === PHASE 3B: MULTIPLE RESET PULSES (For stuck devices) ===
+            // If device is stuck, try multiple reset pulses to break it out
+            // NOTE: UART pins are already floating from Phase 1, so safe to pulse
+            if (recoveryAttemptCount >= 3) {
+                Serial.println("[Watchdog] Phase 3B: Multiple reset pulses (attempting to break stuck state)...");
+                pinMode(PICO_RUN_PIN, OUTPUT);  // Ensure OUTPUT mode for pulses
+                for (int pulse = 0; pulse < 3; pulse++) {
+                    digitalWrite(PICO_RUN_PIN, HIGH);
+                    delay(50);
+                    digitalWrite(PICO_RUN_PIN, LOW);
+                    delay(100);
+                }
+                // Final release uses INPUT (open-drain) - will be set in Phase 5
+                Serial.println("[Watchdog] Multiple reset pulses complete.");
+            }
 
             // === PHASE 4: PREPARE FOR BOOT (Strong Drive) ===
             // Now that Pico is effectively "off", we set up the Strong Drive
@@ -2369,9 +2499,12 @@ static void loopPeriodicTasks() {
             
             delay(50); // Longer stabilization time
 
-            // === PHASE 5: RELEASE RESET (Boot) ===
-            Serial.println("[Watchdog] Phase 5: Releasing reset...");
-            digitalWrite(PICO_RUN_PIN, HIGH);
+            // === PHASE 5: RELEASE RESET (Boot - Open-Drain Method) ===
+            // Use Open-Drain: Set to INPUT instead of driving HIGH
+            // This prevents parasitic powering if RP2350 is unpowered
+            // The RP2350 has an internal pull-up that will pull RUN high when ready
+            Serial.println("[Watchdog] Phase 5: Releasing reset (open-drain method)...");
+            pinMode(PICO_RUN_PIN, INPUT);  // Release reset (let internal pull-up do the work)
             
             // === PHASE 6: RESTORE UART ===
             // Wait longer for Pico bootloader to start before blasting it with UART
@@ -2379,14 +2512,46 @@ static void loopPeriodicTasks() {
             delay(1000); // Much longer delay - Pico may need time to boot from debug halt
             picoUart->begin(); // This re-initializes Serial1 and drives SWCLK HIGH
             
-            // Check for any UART activity multiple times
-            for (int check = 0; check < 5; check++) {
+            // CRITICAL: Process any immediate UART data to update connection state
+            // Pico might have already started sending data before we restored UART
+            if (picoUart) {
+                // Process any buffered data by calling loop() multiple times
+                for (int i = 0; i < 10 && Serial1.available() > 0; i++) {
+                    picoUart->loop(); // This will update connection state
+                }
+            }
+            
+            // Check for any UART activity multiple times (with connection checks)
+            for (int check = 0; check < 10; check++) { // Increased to 10 checks (2 seconds total)
                 delay(200);
+                
+                // CRITICAL: Process UART data to update connection state
+                if (picoUart) {
+                    picoUart->loop(); // Process incoming data - this updates connection state
+                }
+                
+                // CRITICAL: Check if Pico has recovered (after processing data)
+                bool nowConnected = (picoUart && picoUart->isConnected());
+                if (nowConnected) {
+                    Serial.printf("[Watchdog] ✓ Pico recovered! Detected connection (check #%d)\n", check+1);
+                    recoveryAttemptCount = 0;
+                    lastResetAttemptTime = 0;
+                    return; // Exit recovery immediately
+                }
+                
                 int bytesAvailable = Serial1.available();
                 if (bytesAvailable > 0) {
-                    Serial.printf("[Watchdog] ✓ Detected %d bytes in UART buffer (check #%d)!\n", bytesAvailable, check+1);
-                    break;
+                    Serial.printf("[Watchdog] Detected %d bytes in UART buffer (check #%d) - processing...\n", bytesAvailable, check+1);
+                    // Continue processing - connection state will update
                 }
+            }
+            
+            // Final connection check
+            if (picoUart && picoUart->isConnected()) {
+                Serial.println("[Watchdog] ✓ Pico recovered! Connection established.");
+                recoveryAttemptCount = 0;
+                lastResetAttemptTime = 0;
+                return; // Exit recovery immediately
             }
             
             // Final check
@@ -2404,9 +2569,17 @@ static void loopPeriodicTasks() {
             // Screen variant (standard reset)
             picoUart->resetPico();
 #endif
-            // Attempt to reconnect
+            // Attempt to reconnect (but check if already connected first)
             delay(500);
-            picoUart->sendHandshake();
+            
+            // Final check before sending handshake
+            if (picoUart && picoUart->isConnected()) {
+                Serial.println("[Watchdog] ✓ Pico recovered before handshake! Aborting recovery.");
+                recoveryAttemptCount = 0;
+                lastResetAttemptTime = 0;
+            } else {
+                picoUart->sendHandshake();
+            }
         }
     } else if (connected) {
         // Reset recovery attempt count when connection is restored

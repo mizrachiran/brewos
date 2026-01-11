@@ -922,7 +922,8 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
     
     // Flash to Pico
     // Method selection controlled by ENABLE_SWD in config.h (single configuration point)
-#if ENABLE_SWD
+    // NOTE: SWD method is only available for no-screen variant (!ENABLE_SCREEN)
+#if ENABLE_SWD && !ENABLE_SCREEN
     // SWD method: Uses GPIO 21 (SWDIO) and GPIO 45 (SWCLK) for direct flash programming
     broadcastOtaProgress(&_ws, "flash", 40, "Installing Pico firmware (SWD)...");
 #else
@@ -939,9 +940,10 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
         return false;
     }
     
-#if ENABLE_SWD
+#if ENABLE_SWD && !ENABLE_SCREEN
     // =============================================================================
     // SWD METHOD (Currently disabled - kept for future development)
+    // NOTE: SWD is only available for no-screen variant (!ENABLE_SCREEN)
     // =============================================================================
     
     broadcastOtaProgress(&_ws, "flash", 42, "Connecting via SWD...");
@@ -1290,7 +1292,7 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
     // Clear connection state so we can detect when Pico actually reconnects
     _picoUart.clearConnectionState();
     
-#endif // ENABLE_SWD
+#endif // ENABLE_SWD && !ENABLE_SCREEN
     
     // Wait for Pico to self-reset and reconnect
     // The bootloader copies firmware (~3-5s for 22 sectors * ~100ms each) then resets.

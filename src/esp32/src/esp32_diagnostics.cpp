@@ -69,9 +69,10 @@ uint8_t diag_test_pico_run_output(diag_result_t* result, PicoUART* picoUart) {
     result->expected_max = 1;
     strncpy(result->message, "Testing...", sizeof(result->message) - 1);
     
+    // Test requires OUTPUT mode to drive the pin, but we'll restore to INPUT after
     pinMode(PICO_RUN_PIN, OUTPUT);
     
-    // Ensure Pico is running (HIGH state)
+    // Ensure Pico is running (HIGH state) - but use INPUT for final state
     digitalWrite(PICO_RUN_PIN, HIGH);
     delay(50);  // Allow signal to settle
     
@@ -81,8 +82,10 @@ uint8_t diag_test_pico_run_output(diag_result_t* result, PicoUART* picoUart) {
     digitalWrite(PICO_RUN_PIN, LOW);
     delay(1);  // Very short pulse - should not reset Pico
     
-    // Immediately return to HIGH (Pico running)
-    digitalWrite(PICO_RUN_PIN, HIGH);
+    // Restore to INPUT (open-drain) - Pico running
+    // ROOT CAUSE FIX: Use INPUT instead of OUTPUT HIGH to prevent parasitic powering
+    // RP2350 internal pull-up will handle the HIGH state
+    pinMode(PICO_RUN_PIN, INPUT);  // Release reset (let internal pull-up do the work)
     delay(100);  // Allow Pico to stabilize
     
     // Verify Pico is still connected (didn't reset)

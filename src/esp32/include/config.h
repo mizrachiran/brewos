@@ -140,7 +140,7 @@
 //       Hardware must be wired accordingly for SWD to work.
 //
 #ifndef ENABLE_SWD
-#define ENABLE_SWD 1  // Enabled by default - use SWD method (change to 0 for UART bootloader)
+#define ENABLE_SWD 0  // Enabled by default - use SWD method (change to 0 for UART bootloader)
 #endif
 
 #if ENABLE_SCREEN

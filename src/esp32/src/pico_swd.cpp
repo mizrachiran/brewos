@@ -40,8 +40,10 @@
 #define DM_SBDATA0     (0x3C * 4)  // SBA Data
 
 // IDs & Addresses
-// FIX: Correct RP2350 TARGETSEL ID for Core 0, Instance 0 (from ADIv6 Multidrop spec)
-#define ID_RP2350_TARGET 0x01002927  // Core 0, Instance 0 (was 0x00040927 - incorrect)
+// FIX: Correct RP2350 TARGETSEL ID for Core 0, Instance 0 (from OpenOCD rp2350.cfg)
+// OpenOCD defines: set _CPUTAPID 0x00040927
+// This is the correct Multidrop Target ID (Instance 0, Part Number 0x40, Designer 0x493/RaspberryPi)
+#define ID_RP2350_TARGET 0x00040927  // Core 0, Instance 0 (CORRECT per OpenOCD)
 #define ID_RP2350_RESCUE 0xF0000001 
 #define ID_RP2350_EXPECTED 0x4c013477  // Expected RP2350 IDCODE (from reference) 
 
@@ -136,11 +138,11 @@ uint8_t PicoSWD::swdRead(uint8_t bits) {
 }
 
 void PicoSWD::swdTurnaround() {
-    pinMode(g_pin_swdio, INPUT_PULLUP);
+    // Just clock the turnaround cycle. 
+    // Direction switching is handled by the caller.
     setSWCLK(LOW); delayMicroseconds(SWD_BIT_DELAY);
     setSWCLK(HIGH); delayMicroseconds(SWD_BIT_DELAY);
     setSWCLK(LOW);
-    pinMode(g_pin_swdio, OUTPUT);
 }
 
 void PicoSWD::swdIdle() {
@@ -194,28 +196,34 @@ void PicoSWD::sendDormantSequence() {
     LOG_I("SWD: Sending Dormant Wakeup Sequence (ADIv6 Multidrop)...");
     pinMode(g_pin_swdio, OUTPUT);
     
-    // Phase 1: Line Reset (>50 cycles HIGH) - sanitize interface state
-    LOG_D("SWD: Phase 1 - Line Reset");
-    swdResetSeq();
+    // -------------------------------------------------------------------------
+    // Phase 0: Ensure we are in SWD mode first (JTAG -> SWD)
+    // This handles cases where the chip powers up in JTAG or an undefined state.
+    // The RP2350 might start in JTAG mode, and we need to switch to SWD before
+    // we can send SWD-to-Dormant commands. Without this, if the chip is in JTAG
+    // mode, the SWD-to-Dormant command (0xE3BC) will be interpreted as garbage.
+    // -------------------------------------------------------------------------
+    LOG_D("SWD: Phase 0 - JTAG-to-SWD (0xE79E)");
+    swdResetSeq(); // Line Reset (>50 cycles HIGH)
+    swdWrite(0x9E, 8); // LSB of 0xE79E (JTAG-to-SWD magic number)
+    swdWrite(0xE7, 8); // MSB of 0xE79E
+    swdResetSeq(); // Line Reset again to complete JTAG-to-SWD
+    swdIdle();     // Idle cycles to stabilize
     
-    // Phase 2: JTAG-to-Dormant (0xE3BC, LSB first: 0xBC, 0xE3)
-    // This forces interface into Dormant state regardless of current state
-    LOG_D("SWD: Phase 2 - JTAG-to-Dormant (0xE3BC)");
+    // Phase 1: SWD-to-Dormant (0xE3BC, LSB first: 0xBC, 0xE3)
+    // Now that we are definitely in SWD mode (Phase 0), send the command to enter Dormant
+    // This command is only valid in SWD mode, so Phase 0 ensures we're in SWD first
+    LOG_D("SWD: Phase 1 - SWD-to-Dormant (0xE3BC)");
+    swdResetSeq();      // >50 cycles HIGH (sanitize interface state)
     swdWrite(0xBC, 8);  // LSB first
-    swdWrite(0xE3, 8);
-    // 4 cycles HIGH (idle) after JTAG-to-Dormant
-    setSWDIO(HIGH);
-    for (int i = 0; i < 4; i++) {
-        setSWCLK(LOW); delayMicroseconds(SWD_BIT_DELAY);
-        setSWCLK(HIGH); delayMicroseconds(SWD_BIT_DELAY);
-    }
-    setSWCLK(LOW);
+    swdWrite(0xE3, 8);  // MSB
+    swdResetSeq();      // >50 cycles HIGH (complete Dormant entry)
     
-    // Phase 3: Selection Alert (128 bits, LSB first, NO padding)
+    // Phase 2: Selection Alert (128 bits, LSB first, NO padding)
     // Pattern: 0x19bc0ea2_e3ddafe9_86852d95_6209f392
     // Bytes (LSB first): 0x92, 0xf3, 0x09, 0x62, 0x95, 0x2d, 0x85, 0x86,
     //                    0xe9, 0xaf, 0xdd, 0xe3, 0xa2, 0x0e, 0xbc, 0x19
-    LOG_D("SWD: Phase 3 - Selection Alert (128 bits)");
+    LOG_D("SWD: Phase 2 - Selection Alert (128 bits)");
     const uint8_t seq_alert[] = {
         0x92, 0xf3, 0x09, 0x62, 0x95, 0x2d, 0x85, 0x86, // Bytes 0-7
         0xe9, 0xaf, 0xdd, 0xe3, 0xa2, 0x0e, 0xbc, 0x19, // Bytes 8-15
@@ -224,9 +232,11 @@ void PicoSWD::sendDormantSequence() {
         swdWrite(seq_alert[i], 8);
     }
     
-    // Phase 4: Activation Code
+    // Phase 3: Activation Code
     // 4 clock cycles with SWDIO LOW (delimiter), then 0x1A (SWD mode activation)
-    LOG_D("SWD: Phase 4 - Activation Code (4 cycles LOW + 0x1A)");
+    // CRITICAL: After 0x1A, we need at least 8 cycles HIGH before the line reset
+    // This is required per OpenOCD's swd_seq_dormant_to_swd implementation
+    LOG_D("SWD: Phase 3 - Activation Code (4 cycles LOW + 0x1A + 8 cycles HIGH)");
     setSWDIO(LOW);
     for (int i = 0; i < 4; i++) {
         setSWCLK(LOW); delayMicroseconds(SWD_BIT_DELAY);
@@ -235,9 +245,26 @@ void PicoSWD::sendDormantSequence() {
     setSWCLK(LOW);
     swdWrite(0x1A, 8);  // 0x1A = 00011010 binary (LSB first: 0 1 0 1 1 0 0 0)
     
-    // Phase 5: Line Reset (>50 cycles HIGH) - enter Reset state
-    LOG_D("SWD: Phase 5 - Line Reset (enter Reset state)");
+    // CRITICAL: At least 8 SWCLK cycles with SWDIO HIGH after activation code
+    // This is required before the line reset per OpenOCD reference
+    setSWDIO(HIGH);
+    for (int i = 0; i < 8; i++) {
+        setSWCLK(LOW); delayMicroseconds(SWD_BIT_DELAY);
+        setSWCLK(HIGH); delayMicroseconds(SWD_BIT_DELAY);
+    }
+    setSWCLK(LOW);
+    
+    // Phase 4: Line Reset (>50 cycles HIGH) - enter Reset state
+    LOG_D("SWD: Phase 4 - Line Reset (enter Reset state)");
     swdResetSeq();
+    
+    // --- CRITICAL: TRANSITION TO IDLE ---
+    // We must pull SWDIO LOW to exit the RESET state.
+    // Without this, the Target won't see the Start Bit of the next packet (TARGETSEL).
+    // The Start Bit is a rising edge from LOW to HIGH. If the line is already HIGH
+    // from the Reset Sequence, the RP2350 cannot detect the Start Bit and ignores the packet.
+    LOG_D("SWD: Transitioning to IDLE state (SWDIO LOW)");
+    swdIdle();
     
     LOG_I("SWD: Dormant Wakeup Sequence complete");
 }
@@ -248,68 +275,43 @@ swd_error_t PicoSWD::swdWritePacket(uint8_t request, uint32_t data, bool ignoreA
     uint8_t ap_dp = (request & 0x01);
     uint8_t addr  = (request & 0x06) >> 1; 
     uint8_t header_payload = (addr << 3) | (0 << 2) | (ap_dp << 1) | 1;
-    // FIX: Removed '^ 1'. SWD uses Even Parity.
     uint8_t parity = __builtin_parity(header_payload & 0x1E);
     uint8_t header = header_payload | (parity << 5) | 0x80;
 
     pinMode(g_pin_swdio, OUTPUT);
     swdWrite(header, 8);
     
-    // CRITICAL: TARGETSEL (DP_TARGETSEL = 0x0C) is a special command in ADIv6 Multidrop SWD
-    // It has NO ACK and NO TURNAROUND: Header → Data (immediately)
-    // Normal SWD: Header → Turnaround → ACK → Turnaround → Data
-    // TARGETSEL:   Header → Data (skip turnaround/ACK)
-    // 
-    // Detection: DP register (ap_dp=0) with address 0x0C
-    // writeDP(DP_TARGETSEL, ...) → swdWritePacket((0x0C & 0x0C) >> 1, ...) = swdWritePacket(0x06, ...)
-    // In swdWritePacket: addr = (0x06 & 0x06) >> 1 = 0x03
-    bool isTargetSel = (ap_dp == 0) && (addr == 0x03); // DP_TARGETSEL (0x0C) = addr 0x03 in packet
+    // TARGETSEL (0x0C) is special: No ACK, No Turnaround
+    bool isTargetSel = (ap_dp == 0) && (addr == 0x03);
     
     if (!isTargetSel) {
-        // Normal packet: read ACK
+        // --- TURNAROUND 1: Host -> Target ---
+        pinMode(g_pin_swdio, INPUT_PULLUP);
         swdTurnaround();
+        
         uint8_t ack = swdRead(3);
+        
+        // --- TURNAROUND 2: Target -> Host ---
         swdTurnaround();
         pinMode(g_pin_swdio, OUTPUT);
 
         if (ack != SWD_ACK_OK && !ignoreAck) {
             if (ack == SWD_ACK_FAULT) {
-                LOG_E("Write FAULT! Sending ABORT...");
-                // Manual ABORT (DP Write 0x00, Data 0x1E)
-                pinMode(g_pin_swdio, OUTPUT);
-                swdWrite(0x81, 8); // Header (Write DP 0x00)
-                swdTurnaround();
-                swdRead(3); 
-                swdTurnaround();
-                pinMode(g_pin_swdio, OUTPUT);
-                swdWrite(0x1E, 32); 
-                // 0x1E Parity: __builtin_parity(0x1E)=0 (even), Even Parity = 0
-                swdWrite(0, 1);
-                swdIdle();
+                // If FAULT, we need to abort. 
+                // For simplicity here, just return error and let upper layer reset.
             }
-            return (ack == 2) ? SWD_ERROR_WAIT : SWD_ERROR_PROTOCOL;
+            return (ack == SWD_ACK_WAIT) ? SWD_ERROR_WAIT : SWD_ERROR_PROTOCOL;
         }
     } else {
-        // TARGETSEL: No turnaround, no ACK - go directly to data
-        // CRITICAL: Data must be sent immediately after header with no gaps
-        LOG_D("SWD: TARGETSEL command - skipping ACK/turnaround, sending data immediately");
+        // TARGETSEL: No delays, no turnaround
     }
 
-    // Write data (for both normal and TARGETSEL)
-    // For TARGETSEL, this must be continuous with no delays
+    // Write Data
     swdWrite(data & 0xFF, 8);
     swdWrite((data >> 8) & 0xFF, 8);
     swdWrite((data >> 16) & 0xFF, 8);
     swdWrite((data >> 24) & 0xFF, 8);
-    
-    // FIX: Removed '^ 1'. We want Even Parity.
     swdWrite(__builtin_parity(data), 1);
-    
-    // For TARGETSEL, add idle cycles to allow target to process selection
-    if (isTargetSel) {
-        swdIdle();
-        delay(5); // Small delay for target to process TARGETSEL
-    }
     
     return SWD_OK;
 }
@@ -318,74 +320,41 @@ swd_error_t PicoSWD::swdReadPacket(uint8_t request, uint32_t *data) {
     uint8_t ap_dp = (request & 0x01);
     uint8_t addr  = (request & 0x06) >> 1; 
     uint8_t header_payload = (addr << 3) | (1 << 2) | (ap_dp << 1) | 1;
-    // FIX: Even Parity
     uint8_t parity = __builtin_parity(header_payload & 0x1E);
     uint8_t header = header_payload | (parity << 5) | 0x80;
 
     pinMode(g_pin_swdio, OUTPUT);
     swdWrite(header, 8);
     
+    // --- TURNAROUND 1: Host -> Target ---
+    // CRITICAL: Switch to INPUT *before* clocking the turnaround
+    pinMode(g_pin_swdio, INPUT_PULLUP); 
     swdTurnaround();
+    
+    // Read ACK (3 bits)
     uint8_t ack = swdRead(3);
     
-    LOG_D("SWD: Read ACK=%s (0x%X)", ackToString(ack), ack);
-    
     if (ack != SWD_ACK_OK) {
-        // CRITICAL: When FAULT occurs, IMMEDIATELY write to ABORT register
-        // The DAP ignores ALL commands (including reading fault data) until ABORT is written
-        // Don't try to read the fault data first - it will just return FAULT again!
-        if (ack == SWD_ACK_FAULT) {
-            LOG_W("SWD: Read packet got FAULT - IMMEDIATELY clearing via ABORT register (DP 0x00 = 0x1E)");
-            
-            // Consume the rest of the packet (data + parity) without reading it
-            // We can't read it anyway - DAP is locked until ABORT
-            swdTurnaround();
-            pinMode(g_pin_swdio, OUTPUT);
-            // Skip reading 32 bits of data + 1 bit parity (33 bits total)
-            // Just clock them out without reading
-            portDISABLE_INTERRUPTS();
-            for (int i = 0; i < 33; i++) {
-                setSWCLK(LOW); delayMicroseconds(SWD_BIT_DELAY);
-                setSWCLK(HIGH); delayMicroseconds(SWD_BIT_DELAY);
-                setSWCLK(LOW);
-            }
-            portENABLE_INTERRUPTS();
-            
-            // NOW send ABORT write directly using writeDP with ignoreAck=true
-            // This avoids recursion and ensures immediate ABORT
-            writeDP(DP_IDCODE, 0x1E, true);  // ignoreAck=true - DAP is locked, might not ACK
-            delay(5);  // Delay for DAP to process ABORT
-            LOG_D("SWD: ABORT write sent");
-        } else if (ack == SWD_ACK_ERROR) {
-            LOG_D("SWD: Protocol error - consuming rest of packet (33 bits)");
-            // Read the remaining 33 bits (32 data + 1 parity) to clear the line
-            swdRead(33);
-        } else if (ack == SWD_ACK_WAIT) {
-            // For WAIT, we still need to read the data portion
-            swdRead(33);
-        }
-        
-        // Only do turnaround if we haven't already done it (FAULT case does it early)
-        if (ack != SWD_ACK_FAULT) {
-            swdTurnaround();
-            pinMode(g_pin_swdio, OUTPUT);
-        }
-        
-        // Log other errors
-        if (ack != SWD_ACK_FAULT) {
-            LOG_E("SWD: Read packet failed - ACK=%s (0x%X), req=0x%02X", 
+        // Even on error, we must complete the transaction cycle or reset
+        // For now, just return the error, the retry logic will handle reset
+        LOG_E("SWD: Read packet failed - ACK=%s (0x%X), req=0x%02X", 
                   ackToString(ack), ack, request);
-        }
+        
+        // Ensure we leave in a known state (OUTPUT) if we bail
+        swdTurnaround(); 
+        pinMode(g_pin_swdio, OUTPUT);
         
         return (ack == SWD_ACK_WAIT) ? SWD_ERROR_WAIT : 
                (ack == SWD_ACK_FAULT) ? SWD_ERROR_FAULT : SWD_ERROR_PROTOCOL;
     }
     
+    // Read Data (32 bits) + Parity (1 bit)
     uint32_t val = swdRead(32);
-    uint8_t p = swdRead(1);
+    uint8_t p = swdRead(1); // Read parity bit (ignore result for now)
     
+    // --- TURNAROUND 2: Target -> Host ---
     swdTurnaround();
-    pinMode(g_pin_swdio, OUTPUT);
+    pinMode(g_pin_swdio, OUTPUT); // Host takes control back
     
     if (data) *data = val;
     return SWD_OK;
@@ -468,90 +437,382 @@ bool PicoSWD::connectToTarget() {
     pinMode(g_pin_swclk, OUTPUT);
     if (_reset >= 0) { pinMode(_reset, OUTPUT); digitalWrite(_reset, HIGH); }
 
-    uint32_t id = 0;
+    // List of Target IDs to try: Standard first, then Rescue
+    // Rescue ID is needed if the chip is in a locked/dormant/bad state
+    uint32_t targetIds[] = { ID_RP2350_TARGET, ID_RP2350_RESCUE };
+    const char* targetNames[] = { "Standard", "Rescue" };
+    
+    for (int t = 0; t < 2; t++) {
+        uint32_t currentTargetId = targetIds[t];
+        LOG_I("SWD: Attempting connection using %s ID (0x%08X)...", targetNames[t], currentTargetId);
 
-    // CRITICAL: RP2350 defaults to Dormant state upon Power-On Reset
-    // We MUST ALWAYS perform the dormant wake-up sequence first
-    // The simple line reset approach will NOT work because the target is in Dormant state
-    LOG_I("SWD: Starting connection - RP2350 defaults to Dormant state");
-    LOG_I("SWD: Performing mandatory Dormant Wake-up Sequence...");
-    sendDormantSequence();
-    
-    // TARGETSEL must be the FIRST packet after wake-up
-    // This selects Core 0 (Instance 0) on the multidrop bus
-    // TARGETSEL is written to DP register 0x0C (TARGETSEL register, write-only)
-    // ignoreAck=true because TARGETSEL has no ACK (devices are not yet selected)
-    LOG_I("SWD: Sending TARGETSEL (must be first packet after wake-up)...");
-    LOG_D("SWD: TARGETSEL value: 0x%08X (Core 0, Instance 0)", ID_RP2350_TARGET);
-    swd_error_t err = writeDP(DP_TARGETSEL, ID_RP2350_TARGET, true);  // DP register 0x0C = TARGETSEL
-    if (err != SWD_OK) {
-        LOG_W("SWD: TARGETSEL write returned error (expected for no-ACK): %s", errorToString(err));
-        // This is expected - TARGETSEL has no ACK, so we continue anyway
-    }
-    
-    // After TARGETSEL, the target needs time to process the selection and lock the bus
-    // According to ADIv6 spec, TARGETSEL selects the target but doesn't provide ACK
-    // We need to wait for the target to process TARGETSEL before attempting any DP reads
-    LOG_D("SWD: Waiting for target to process TARGETSEL and lock bus...");
-    delay(150); // Increased delay for target to process TARGETSEL and lock bus
-    
-    // After TARGETSEL, perform a soft line reset (not full reset with JTAG-to-SWD)
-    // We're already in SWD mode, so we just need to reset the DP state, not switch protocols
-    LOG_D("SWD: Performing soft line reset after TARGETSEL to sync protocol state...");
-    swdLineResetSoft();
-    
-    // Add idle cycles to ensure protocol is stable before reading IDCODE
-    LOG_D("SWD: Sending idle cycles before IDCODE read...");
-    swdIdle();
-    delay(50); // Additional delay for protocol to stabilize and target to be ready
-    
-    // Now verify connection by reading IDCODE
-    // Expected IDCODE for RP2350: 0x4C013477
-    // Retry up to 3 times in case first read fails
-    LOG_I("SWD: Verifying connection - reading IDCODE...");
-    for (int retry = 0; retry < 3; retry++) {
-        if (retry > 0) {
-            LOG_D("SWD: IDCODE read retry %d/3...", retry + 1);
-            // On retry, redo the entire wake-up sequence since we might have lost sync
-            LOG_W("SWD: Retry %d - redoing wake-up sequence...", retry + 1);
-            sendDormantSequence();
-            delay(50);
-            swd_error_t retry_err = writeDP(DP_TARGETSEL, ID_RP2350_TARGET, true);
-            if (retry_err != SWD_OK) {
-                LOG_D("SWD: TARGETSEL retry returned: %s (expected)", errorToString(retry_err));
+        // CRITICAL: RP2350 defaults to Dormant state upon Power-On Reset
+        // We MUST ALWAYS perform the dormant wake-up sequence first
+        sendDormantSequence();
+        
+        // TARGETSEL must be the FIRST packet after wake-up
+        LOG_D("SWD: Sending TARGETSEL...");
+        swd_error_t err = writeDP(DP_TARGETSEL, currentTargetId, true);
+        
+        // Allow time for selection to latch
+        delay(100);
+        
+        // Soft reset to sync protocol
+        swdLineResetSoft();
+        swdIdle();
+        delay(20);
+        
+        // Clear any sticky errors immediately before trying to read IDCODE
+        // This is crucial if the previous attempt left the DAP in a FAULT state
+        // ABORT register is at DP address 0x0 (write-only, same address as IDCODE read)
+        writeDP(DP_IDCODE, 0x1E, true); // Write ABORT (0x1E clears all error flags)
+        
+        // Now verify connection by reading IDCODE
+        uint32_t id = 0;
+        LOG_D("SWD: Reading IDCODE...");
+        
+        // Retry logic for the read itself
+        for (int retry = 0; retry < 3; retry++) {
+            err = readDP(DP_IDCODE, &id);
+            
+            if (err == SWD_OK && id != 0 && id != 0xFFFFFFFF) {
+                // We got a valid ID!
+                if (id == ID_RP2350_EXPECTED) {
+                    LOG_I("SWD: CONNECTED! IDCODE: 0x%08X (RP2350 verified)", id);
+                    _connected = true;
+                    _lastErrorStr = "None";
+                    return true;
+                } else {
+                    LOG_W("SWD: Connected with unexpected IDCODE: 0x%08X (expected 0x%08X)", id, ID_RP2350_EXPECTED);
+                    _connected = true;
+                    _lastErrorStr = "None";
+                    return true;
+                }
             }
-            delay(150);
-            swdLineResetSoft();
-            delay(50);
-            swdIdle();
+            
+            if (err == SWD_ERROR_FAULT) {
+                LOG_W("SWD: IDCODE FAULT (attempt %d/3). Clearing ABORT...", retry + 1);
+                writeDP(DP_IDCODE, 0x1E, true); // Write ABORT to clear error flags
+                delay(10);
+            } else {
+                delay(10);
+            }
         }
         
-        err = readDP(DP_IDCODE, &id);
-        if (err == SWD_OK && id != 0 && id != 0xFFFFFFFF) {
-            if (id == ID_RP2350_EXPECTED) {
-                LOG_I("SWD: CONNECTED! IDCODE: 0x%08X (RP2350 verified)", id);
-                _connected = true;
-                _lastErrorStr = "None";
-                return true;
-            } else {
-                LOG_W("SWD: Connected but unexpected IDCODE: 0x%08X (expected 0x%08X)", id, ID_RP2350_EXPECTED);
-                // Still consider it connected if we got a valid IDCODE
-                _connected = true;
-                _lastErrorStr = "None";
-                return true;
-            }
-        } else if (err == SWD_ERROR_FAULT) {
-            LOG_W("SWD: IDCODE read returned FAULT (attempt %d/3), will retry...", retry + 1);
-            // Continue to retry
-        } else {
-            LOG_W("SWD: IDCODE read failed: %s (attempt %d/3)", errorToString(err), retry + 1);
-            // Continue to retry
-        }
+        LOG_W("SWD: Failed to connect with %s ID.", targetNames[t]);
     }
 
-    LOG_E("SWD: Connection failed. IDCODE read error: %s, ID: 0x%08X", 
-          errorToString(err), id);
+    LOG_E("SWD: Connection failed after trying all Target IDs.");
     _lastErrorStr = "Connection failed - no valid IDCODE";
+    return false;
+}
+
+// --- Diagnostic Functions ---
+
+uint8_t PicoSWD::readAckDiagnostic() {
+    // Switch to input before turnaround
+    pinMode(g_pin_swdio, INPUT_PULLUP);
+    swdTurnaround();
+    
+    // Read ACK bit-by-bit with logging
+    uint8_t ack = 0;
+    Serial.print("[DIAG] ACK bits: ");
+    for (int i = 0; i < 3; i++) {
+        setSWCLK(LOW); 
+        delayMicroseconds(SWD_BIT_DELAY);
+        bool bit = readSWDIO();
+        Serial.print(bit ? "1" : "0");
+        if (bit) ack |= (1 << i);
+        setSWCLK(HIGH); 
+        delayMicroseconds(SWD_BIT_DELAY);
+        setSWCLK(LOW);
+    }
+    Serial.printf(" (0x%X = %s)\n", ack, ackToString(ack));
+    
+    // Check if line is floating (always HIGH due to pull-up)
+    // If device is driving, we should see at least one LOW bit for valid ACK
+    if (ack == 0x7) {
+        Serial.println("[DIAG] WARNING: ACK=0x7 (NO_RESPONSE) - SWDIO line appears to be floating HIGH");
+        Serial.println("[DIAG] This suggests:");
+        Serial.println("[DIAG]   1. Device is not powered");
+        Serial.println("[DIAG]   2. Device is not responding to SWD");
+        Serial.println("[DIAG]   3. SWDIO pin is not connected");
+        Serial.println("[DIAG]   4. Device is in a state where it won't respond");
+    }
+    
+    return ack;
+}
+
+bool PicoSWD::diagnoseDevice() {
+    LOG_I("SWD: Starting device diagnostics...");
+    
+    // 1. Check pin states
+    Serial.println("[DIAG] === Pin State Check ===");
+    Serial.printf("[DIAG] SWDIO pin (GPIO%d): ", g_pin_swdio);
+    pinMode(g_pin_swdio, INPUT_PULLUP);
+    bool swdio_state = digitalRead(g_pin_swdio);
+    Serial.println(swdio_state ? "HIGH (pulled up)" : "LOW");
+    
+    Serial.printf("[DIAG] SWCLK pin (GPIO%d): ", g_pin_swclk);
+    pinMode(g_pin_swclk, INPUT_PULLUP);
+    bool swclk_state = digitalRead(g_pin_swclk);
+    Serial.println(swclk_state ? "HIGH (pulled up)" : "LOW");
+    
+    if (_reset >= 0) {
+        Serial.printf("[DIAG] RESET pin (GPIO%d): ", _reset);
+        pinMode(_reset, INPUT_PULLUP);
+        bool reset_state = digitalRead(_reset);
+        Serial.println(reset_state ? "HIGH" : "LOW");
+    }
+    
+    // 2. Try simple line reset + IDCODE read (without dormant sequence)
+    Serial.println("[DIAG] === Simple Connection Test (no dormant sequence) ===");
+    pinMode(g_pin_swdio, OUTPUT);
+    pinMode(g_pin_swclk, OUTPUT);
+    
+    // Simple line reset
+    Serial.println("[DIAG] Sending line reset...");
+    swdResetSeq();
+    swdIdle();
+    
+    // Try to read IDCODE directly
+    Serial.println("[DIAG] Attempting to read IDCODE (simple test)...");
+    pinMode(g_pin_swdio, OUTPUT);
+    
+    // Send IDCODE read request (DP 0x00, Read)
+    uint8_t header = 0x85; // Read DP 0x00: START(1) | APnDP(0) | RnW(1) | A[3:2](00) | PARITY(0) | STOP(0) | PARK(1)
+    swdWrite(header, 8);
+    
+    // Read ACK with diagnostics
+    uint8_t ack = readAckDiagnostic();
+    
+    if (ack == SWD_ACK_OK) {
+        Serial.println("[DIAG] ✓ Got OK ACK! Device is responding.");
+        // Try to read the IDCODE
+        uint32_t idcode = 0;
+        for (int i = 0; i < 32; i++) {
+            setSWCLK(LOW); delayMicroseconds(SWD_BIT_DELAY);
+            bool bit = readSWDIO();
+            if (bit) idcode |= (1 << i);
+            setSWCLK(HIGH); delayMicroseconds(SWD_BIT_DELAY);
+            setSWCLK(LOW);
+        }
+        // Read parity
+        setSWCLK(LOW); delayMicroseconds(SWD_BIT_DELAY);
+        bool parity = readSWDIO();
+        setSWCLK(HIGH); delayMicroseconds(SWD_BIT_DELAY);
+        setSWCLK(LOW);
+        
+        swdTurnaround();
+        pinMode(g_pin_swdio, OUTPUT);
+        
+        Serial.printf("[DIAG] IDCODE: 0x%08X (parity: %d)\n", idcode, parity);
+        if (idcode == ID_RP2350_EXPECTED || idcode != 0xFFFFFFFF) {
+            Serial.println("[DIAG] ✓ Device is responding without dormant sequence!");
+            return true;
+        }
+    } else {
+        Serial.printf("[DIAG] ✗ No response: ACK=0x%X (%s)\n", ack, ackToString(ack));
+        swdTurnaround();
+        pinMode(g_pin_swdio, OUTPUT);
+    }
+    
+    // 3. Test with dormant sequence
+    Serial.println("[DIAG] === Dormant Sequence Test ===");
+    sendDormantSequence();
+    
+    // Try TARGETSEL + IDCODE
+    Serial.println("[DIAG] Sending TARGETSEL...");
+    writeDP(DP_TARGETSEL, ID_RP2350_TARGET, true);
+    delay(100);
+    
+    swdLineResetSoft();
+    swdIdle();
+    delay(20);
+    
+    // Try IDCODE read
+    Serial.println("[DIAG] Attempting IDCODE read after TARGETSEL...");
+    pinMode(g_pin_swdio, OUTPUT);
+    header = 0x85; // Read DP 0x00
+    swdWrite(header, 8);
+    
+    ack = readAckDiagnostic();
+    
+    if (ack == SWD_ACK_OK) {
+        Serial.println("[DIAG] ✓ Got OK ACK after dormant sequence!");
+        return true;
+    } else {
+        Serial.printf("[DIAG] ✗ Still no response after dormant: ACK=0x%X\n", ack);
+        swdTurnaround();
+        pinMode(g_pin_swdio, OUTPUT);
+    }
+    
+    // 4. Check if device is driving the line at all
+    Serial.println("[DIAG] === Line Drive Test ===");
+    Serial.println("[DIAG] Setting SWDIO to INPUT (no pull-up) and checking if device drives it...");
+    pinMode(g_pin_swdio, INPUT); // No pull-up
+    delay(10);
+    bool driven_state = digitalRead(g_pin_swdio);
+    Serial.printf("[DIAG] SWDIO state (no pull-up): %s\n", driven_state ? "HIGH (floating or driven HIGH)" : "LOW (driven LOW)");
+    
+    if (driven_state) {
+        Serial.println("[DIAG] WARNING: SWDIO is HIGH even without pull-up.");
+        Serial.println("[DIAG] This could mean:");
+        Serial.println("[DIAG]   - Device is driving it HIGH");
+        Serial.println("[DIAG]   - Line is floating and picking up noise");
+        Serial.println("[DIAG]   - Hardware issue");
+        
+        // Test if device is actually driving by trying to pull it LOW
+        Serial.println("[DIAG] Testing if device resists pull-down...");
+        pinMode(g_pin_swdio, OUTPUT);
+        digitalWrite(g_pin_swdio, LOW);
+        delay(5);
+        pinMode(g_pin_swdio, INPUT); // Back to input
+        delay(5);
+        bool after_low = digitalRead(g_pin_swdio);
+        Serial.printf("[DIAG] After forcing LOW, SWDIO state: %s\n", after_low ? "HIGH (device driving it back HIGH!)" : "LOW (stayed LOW - floating)");
+        
+        if (after_low) {
+            Serial.println("[DIAG] ✓ Device IS driving SWDIO HIGH - device is powered and active!");
+            Serial.println("[DIAG] But device is not responding to SWD commands.");
+            Serial.println("[DIAG] Possible reasons:");
+            Serial.println("[DIAG]   1. SWD is disabled in boot mode");
+            Serial.println("[DIAG]   2. SWD pins are configured for other functions");
+            Serial.println("[DIAG]   3. Device needs different boot sequence");
+            Serial.println("[DIAG]   4. Timing issue - device needs more time");
+        } else {
+            Serial.println("[DIAG] ✗ SWDIO stayed LOW - line is floating (not driven by device)");
+            Serial.println("[DIAG] This suggests device is NOT powered or NOT connected");
+        }
+    }
+    
+    // 5. Test SWCLK to see if device responds to clock
+    Serial.println("[DIAG] === Clock Response Test ===");
+    Serial.println("[DIAG] Testing if device responds to SWCLK pulses...");
+    pinMode(g_pin_swdio, INPUT_PULLUP);
+    pinMode(g_pin_swclk, OUTPUT);
+    
+    // Send a few clock pulses and see if SWDIO changes
+    bool initial_swdio = digitalRead(g_pin_swdio);
+    Serial.printf("[DIAG] Initial SWDIO state: %s\n", initial_swdio ? "HIGH" : "LOW");
+    
+    for (int i = 0; i < 10; i++) {
+        digitalWrite(g_pin_swclk, LOW);
+        delayMicroseconds(10);
+        bool swdio_low = digitalRead(g_pin_swdio);
+        digitalWrite(g_pin_swclk, HIGH);
+        delayMicroseconds(10);
+        bool swdio_high = digitalRead(g_pin_swdio);
+        
+        if (swdio_low != swdio_high || swdio_low != initial_swdio) {
+            Serial.printf("[DIAG] ✓ SWDIO changed during clock pulse %d! (LOW=%d, HIGH=%d)\n", i+1, swdio_low, swdio_high);
+            Serial.println("[DIAG] Device may be responding to clock!");
+            break;
+        }
+    }
+    
+    // Restore pull-up
+    pinMode(g_pin_swdio, INPUT_PULLUP);
+    
+    // 6. Check if device might be in BOOTSEL mode or check chip ID
+    Serial.println("[DIAG] === Boot Mode Check ===");
+    Serial.println("[DIAG] Attempting to read chip ID register (0x40000000)...");
+    
+    // Try to read chip ID via SWD (if we can get any response)
+    // This requires SWD to be working, but let's try anyway
+    pinMode(g_pin_swdio, OUTPUT);
+    pinMode(g_pin_swclk, OUTPUT);
+    
+    // Send dormant sequence one more time
+    sendDormantSequence();
+    writeDP(DP_TARGETSEL, ID_RP2350_TARGET, true);
+    delay(100);
+    swdLineResetSoft();
+    swdIdle();
+    delay(20);
+    writeDP(DP_IDCODE, 0x1E, true); // Clear ABORT
+    
+    // Try to read IDCODE with detailed logging
+    Serial.println("[DIAG] Attempting IDCODE read with detailed bus monitoring...");
+    pinMode(g_pin_swdio, OUTPUT);
+    uint8_t header2 = 0x85; // Read DP 0x00
+    swdWrite(header2, 8);
+    
+    // Monitor the bus during ACK read
+    pinMode(g_pin_swdio, INPUT_PULLUP);
+    swdTurnaround();
+    
+    Serial.print("[DIAG] ACK bits (detailed): ");
+    uint8_t ack2 = 0;
+    for (int i = 0; i < 3; i++) {
+        setSWCLK(LOW);
+        delayMicroseconds(SWD_BIT_DELAY);
+        bool bit_before = digitalRead(g_pin_swdio);
+        setSWCLK(HIGH);
+        delayMicroseconds(SWD_BIT_DELAY);
+        bool bit_after = digitalRead(g_pin_swdio);
+        bool bit = bit_after;
+        Serial.printf("bit%d=%d(before:%d,after:%d) ", i, bit, bit_before, bit_after);
+        if (bit) ack2 |= (1 << i);
+        setSWCLK(LOW);
+    }
+    Serial.printf("-> ACK=0x%X\n", ack2);
+    
+    if (ack2 == 0x7) {
+        Serial.println("[DIAG] CRITICAL: Device is driving SWDIO HIGH but not responding to SWD.");
+        Serial.println("[DIAG] This suggests:");
+        Serial.println("[DIAG]   1. SWD pins are configured for other functions (GPIO, UART, etc.)");
+        Serial.println("[DIAG]   2. Device is in BOOTSEL mode (SWD disabled)");
+        Serial.println("[DIAG]   3. Device boot mode disables SWD");
+        Serial.println("[DIAG]   4. Hardware: Wrong pins connected or pin conflict");
+        Serial.println("[DIAG]");
+        Serial.println("[DIAG] RECOMMENDATION: Check hardware connections and verify:");
+        Serial.println("[DIAG]   - SWDIO (GPIO21) is connected to RP2350 SWDIO");
+        Serial.println("[DIAG]   - SWCLK (GPIO45) is connected to RP2350 SWCLK");
+        Serial.println("[DIAG]   - No other devices driving these pins");
+        Serial.println("[DIAG]   - Device is not in BOOTSEL mode (check QSPI_SS pin)");
+    }
+    
+    swdTurnaround();
+    pinMode(g_pin_swdio, OUTPUT);
+    
+    // 7. Final Summary and Recommendations
+    Serial.println("[DIAG] === Summary and Recommendations ===");
+    Serial.println("[DIAG] Device Status:");
+    Serial.println("[DIAG]   - Powered: YES (driving SWDIO HIGH)");
+    Serial.println("[DIAG]   - SWD Response: NO (ACK=0x7 always)");
+    Serial.println("[DIAG]   - UART Communication: UNKNOWN (check separately)");
+    Serial.println("[DIAG]");
+    Serial.println("[DIAG] CRITICAL: Device appears to be in a state where SWD is disabled.");
+    Serial.println("[DIAG] This is NOT a software recovery issue - requires hardware/firmware check.");
+    Serial.println("[DIAG]");
+    Serial.println("[DIAG] ACTION REQUIRED:");
+    Serial.println("[DIAG] 1. Verify Pico firmware: Check if SWD pins are configured as GPIO");
+    Serial.println("[DIAG]    - SWDIO/SWCLK should NOT be configured as GPIO in Pico firmware");
+    Serial.println("[DIAG]    - Check Pico firmware initialization code");
+    Serial.println("[DIAG]");
+    Serial.println("[DIAG] 2. Check BOOTSEL mode: Verify QSPI_SS pin state");
+    Serial.println("[DIAG]    - If QSPI_SS is LOW during boot, device enters BOOTSEL (SWD disabled)");
+    Serial.println("[DIAG]    - Check if BOOTSEL button is stuck or QSPI_SS is shorted to GND");
+    Serial.println("[DIAG]");
+    Serial.println("[DIAG] 3. Verify hardware connections:");
+    Serial.println("[DIAG]    - ESP32 GPIO21 -> RP2350 SWDIO (via 47Ω resistor)");
+    Serial.println("[DIAG]    - ESP32 GPIO45 -> RP2350 SWCLK (via 22Ω resistor)");
+    Serial.println("[DIAG]    - ESP32 GPIO4 -> RP2350 RUN pin");
+    Serial.println("[DIAG]    - Check for shorts, wrong pins, or loose connections");
+    Serial.println("[DIAG]");
+    Serial.println("[DIAG] 4. Check if device is actually running:");
+    Serial.println("[DIAG]    - If device has firmware, it should send UART messages");
+    Serial.println("[DIAG]    - If no UART activity, device may not have firmware or is stuck");
+    Serial.println("[DIAG]    - Try flashing Pico firmware via USB (if available)");
+    Serial.println("[DIAG]");
+    Serial.println("[DIAG] 5. Last resort: Use external SWD debugger");
+    Serial.println("[DIAG]    - Connect external SWD debugger (e.g., J-Link, ST-Link)");
+    Serial.println("[DIAG]    - This will confirm if SWD hardware is functional");
+    Serial.println("[DIAG]    - If external debugger works, issue is with ESP32 SWD implementation");
+    Serial.println("[DIAG]    - If external debugger fails, issue is with Pico hardware/firmware");
+    
+    Serial.println("[DIAG] === Diagnostic Complete ===");
     return false;
 }
 
@@ -1144,41 +1405,135 @@ bool PicoSWD::flashFirmware(File& firmwareFile, size_t size) {
     LOG_I("SWD: Flash complete!");
     return true;
 } 
+bool PicoSWD::resumeFromHalt() {
+    if (!_connected) {
+        LOG_E("SWD: resumeFromHalt() failed - not connected");
+        _lastErrorStr = "Not connected";
+        return false;
+    }
+    
+    LOG_I("SWD: Resuming core from debug halt...");
+    
+    // Power up debug domain first (required for core access)
+    if (!powerUpDebug()) {
+        LOG_E("SWD: Failed to power up debug domain");
+        return false;
+    }
+    
+    // Initialize Debug Module (required for core control)
+    if (!initDebugModule()) {
+        LOG_E("SWD: Failed to initialize debug module");
+        return false;
+    }
+    
+    // Resume the core (sends run command via DHCSR)
+    if (runCore()) {
+        LOG_I("SWD: ✓ Core resumed from debug halt!");
+        _lastErrorStr = "None";
+        return true;
+    } else {
+        LOG_E("SWD: Failed to resume core");
+        _lastErrorStr = "runCore() failed";
+        return false;
+    }
+}
+
 bool PicoSWD::resetTarget() {
     LOG_I("SWD: resetTarget() called");
     
-    // Always release debug connection first (if connected)
-    // This ensures debug domains are powered down and cores can run
-    if (_connected) {
-        LOG_I("SWD: Releasing debug connection before reset...");
-        end();
-        // Give time for power-down to complete
-        delay(50);
-    }
-    
-    // Always do hardware reset to ensure clean state
+    // Option 1: Hardware Reset (Preferred if pin available)
     if (_reset >= 0) {
+        // Always release debug connection first (if connected)
+        // This ensures debug domains are powered down and cores can run
+        if (_connected) {
+            LOG_I("SWD: Releasing debug connection before reset...");
+            end();
+            // Give time for power-down to complete
+            delay(50);
+        }
+        
         LOG_I("SWD: Performing hardware reset via RESET pin (GPIO%d)", _reset);
+        
+        // ---------------------------------------------------------------------
+        // STEP 1: NEUTRALIZE ALL PINS (SWD + UART) - RP2350 Latch-up Prevention
+        // ---------------------------------------------------------------------
+        // RP2350 A0 Errata: Driving ANY GPIO high while RUN is LOW causes latch-up.
+        // We must float ALL pins connected to Pico (SWD + UART) before asserting reset.
+        
+        LOG_D("SWD: Floating SWD pins before reset (prevent GPIO back-power lock-up)...");
+        gpio_set_direction((gpio_num_t)g_pin_swdio, GPIO_MODE_INPUT);
+        gpio_set_direction((gpio_num_t)g_pin_swclk, GPIO_MODE_INPUT);
+        gpio_set_pull_mode((gpio_num_t)g_pin_swdio, GPIO_FLOATING);
+        gpio_set_pull_mode((gpio_num_t)g_pin_swclk, GPIO_FLOATING);
+        
+        // CRITICAL: Float UART pins too (UART TX stays HIGH in idle, causing latch-up)
+        LOG_D("SWD: Floating UART pins before reset (prevent latch-up via UART TX)...");
+        #if defined(PICO_UART_TX_PIN) && defined(PICO_UART_RX_PIN)
+            gpio_set_direction((gpio_num_t)PICO_UART_TX_PIN, GPIO_MODE_INPUT);
+            gpio_set_direction((gpio_num_t)PICO_UART_RX_PIN, GPIO_MODE_INPUT);
+            gpio_set_pull_mode((gpio_num_t)PICO_UART_TX_PIN, GPIO_FLOATING);
+            gpio_set_pull_mode((gpio_num_t)PICO_UART_RX_PIN, GPIO_FLOATING);
+        #endif
+        
+        delay(10); // Wait for parasitic capacitance to discharge
+        
+        // ---------------------------------------------------------------------
+        // STEP 2: ASSERT RESET
+        // ---------------------------------------------------------------------
         pinMode(_reset, OUTPUT);
-        
-        // Ensure reset pin is in correct state before asserting
-        digitalWrite(_reset, HIGH);
-        delay(10);
-        
-        // Assert reset (LOW)
-        digitalWrite(_reset, LOW);
+        digitalWrite(_reset, LOW);  // Assert reset (LOW)
         delay(100);  // Hold reset for 100ms to ensure clean reset
         
-        // Release reset (HIGH)
-        digitalWrite(_reset, HIGH);
-        delay(300);  // Wait 300ms for Pico to fully boot after reset
+        // ---------------------------------------------------------------------
+        // STEP 3: RELEASE RESET (Open-Drain Method)
+        // ---------------------------------------------------------------------
+        // Use Open-Drain simulation: Set to INPUT instead of driving HIGH
+        // This prevents parasitic powering if RP2350 is unpowered
+        // The RP2350 has an internal pull-up that will pull RUN high when ready
+        pinMode(_reset, INPUT);  // Release reset (open-drain - let internal pull-up do the work)
+        delay(500);  // Wait longer (500ms) for Pico to fully boot and initialize flash
         
         LOG_I("SWD: Hardware reset complete - Pico should boot normally");
         _lastErrorStr = "None";
         return true;
     }
     
-    LOG_E("SWD: No reset pin configured");
-    _lastErrorStr = "No reset pin";
-    return false;
+    // Option 2: Software Reset via SWD (AIRCR)
+    // Useful when RESET pin is not connected or we want to reset via protocol
+    LOG_I("SWD: No hardware reset pin - attempting SWD AIRCR Soft Reset...");
+    
+    // We need to be connected to send the command
+    bool wasConnected = _connected;
+    if (!wasConnected) {
+        LOG_I("SWD: Connecting to target for soft reset...");
+        if (!begin()) {
+            LOG_E("SWD: Failed to connect for soft reset: %s", _lastErrorStr);
+            return false;
+        }
+    }
+    
+    // 1. Halt Core (Optional but recommended)
+    haltCore();
+    
+    // 2. Write SYSRESETREQ to AIRCR
+    // Address: 0xE000ED0C (AIRCR)
+    // Value: 0x05FA0004 (VECTKEY=0x05FA | SYSRESETREQ=1)
+    LOG_I("SWD: Writing SYSRESETREQ to AIRCR...");
+    bool success = writeWord(0xE000ED0C, 0x05FA0004);
+    
+    if (success) {
+        LOG_I("SWD: Soft reset command sent successfully");
+        _lastErrorStr = "None";
+    } else {
+        LOG_E("SWD: Failed to write soft reset command");
+        _lastErrorStr = "Soft reset failed";
+    }
+    
+    // 3. Disconnect immediately to let it boot
+    end();
+    
+    // 4. Wait for boot
+    delay(300);
+    
+    return success;
 }

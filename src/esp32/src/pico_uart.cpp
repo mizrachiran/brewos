@@ -57,8 +57,10 @@ void PicoUART::begin() {
     // Initialize control pins
     // PICO_RUN_PIN: GPIO20 (screen variant) or GPIO4 (no-screen variant)
     // WEIGHT_STOP_PIN: GPIO19 (screen variant) or GPIO6 (no-screen variant)
-    pinMode(PICO_RUN_PIN, OUTPUT);
-    digitalWrite(PICO_RUN_PIN, HIGH);      // HIGH = Pico running (LOW = reset)
+    // ROOT CAUSE FIX: Use INPUT (open-drain) instead of OUTPUT HIGH
+    // This prevents parasitic powering if RP2350 is unpowered
+    // RP2350 has internal pull-up that will pull RUN high when ready
+    pinMode(PICO_RUN_PIN, INPUT);  // Release reset (open-drain - let internal pull-up do the work)
     
     pinMode(WEIGHT_STOP_PIN, OUTPUT);
     digitalWrite(WEIGHT_STOP_PIN, LOW);    // LOW = no weight stop signal
@@ -301,26 +303,55 @@ void PicoUART::resetPico() {
     LOG_I("Resetting Pico via GPIO%d...", PICO_RUN_PIN);
     
 #if !ENABLE_SCREEN
-    // CRITICAL: Drive SWCLK HIGH (Output) to kill noise
+    // ---------------------------------------------------------------------
+    // STEP 1: NEUTRALIZE ALL PINS (SWD + UART) - RP2350 Latch-up Prevention
+    // ---------------------------------------------------------------------
+    // RP2350 A0 Errata: Driving ANY GPIO high while RUN is LOW causes latch-up.
+    // We must float ALL pins connected to Pico (SWD + UART) before asserting reset.
+    
+    // Float SWD pins
+    gpio_set_direction((gpio_num_t)SWD_DIO_PIN, GPIO_MODE_INPUT);
+    gpio_set_direction((gpio_num_t)SWD_CLK_PIN, GPIO_MODE_INPUT);
+    gpio_set_pull_mode((gpio_num_t)SWD_DIO_PIN, GPIO_FLOATING);
+    gpio_set_pull_mode((gpio_num_t)SWD_CLK_PIN, GPIO_FLOATING);
+    
+    // CRITICAL: Float UART pins too (UART TX stays HIGH in idle, causing latch-up)
+    gpio_set_direction((gpio_num_t)PICO_UART_TX_PIN, GPIO_MODE_INPUT);
+    gpio_set_direction((gpio_num_t)PICO_UART_RX_PIN, GPIO_MODE_INPUT);
+    gpio_set_pull_mode((gpio_num_t)PICO_UART_TX_PIN, GPIO_FLOATING);
+    gpio_set_pull_mode((gpio_num_t)PICO_UART_RX_PIN, GPIO_FLOATING);
+    
+    delay(10); // Wait for parasitic capacitance to discharge
+    
+    // After reset, we'll restore SWD pins to strong drive
+#endif
+
+    // ---------------------------------------------------------------------
+    // STEP 2: RESET SEQUENCE
+    // ---------------------------------------------------------------------
+    pinMode(PICO_RUN_PIN, OUTPUT);
+    digitalWrite(PICO_RUN_PIN, LOW);  // Assert reset
+    delay(100);  // Hold reset
+    
+    // ---------------------------------------------------------------------
+    // STEP 3: RELEASE RESET (Open-Drain Method)
+    // ---------------------------------------------------------------------
+    // Use Open-Drain: Set to INPUT instead of driving HIGH
+    // This prevents parasitic powering if RP2350 is unpowered
+    pinMode(PICO_RUN_PIN, INPUT);  // Release reset (let internal pull-up do the work)
+    delay(300);
+    
+#if !ENABLE_SCREEN
+    // Restore SWD pins to strong drive after reset release
     gpio_reset_pin((gpio_num_t)SWD_CLK_PIN);
     gpio_set_level((gpio_num_t)SWD_CLK_PIN, 1);
     gpio_set_direction((gpio_num_t)SWD_CLK_PIN, GPIO_MODE_OUTPUT);
     
-    // SWDIO Safe Input
     gpio_reset_pin((gpio_num_t)SWD_DIO_PIN);
     gpio_set_direction((gpio_num_t)SWD_DIO_PIN, GPIO_MODE_INPUT);
     gpio_set_pull_mode((gpio_num_t)SWD_DIO_PIN, GPIO_PULLUP_ONLY);
-    LOG_D("SWD pins stabilized (Strong Drive)");
+    LOG_D("SWD pins restored (Strong Drive)");
 #endif
-
-    // Reset Sequence
-    pinMode(PICO_RUN_PIN, OUTPUT);
-    digitalWrite(PICO_RUN_PIN, HIGH);
-    delay(10);
-    digitalWrite(PICO_RUN_PIN, LOW);
-    delay(100);
-    digitalWrite(PICO_RUN_PIN, HIGH);
-    delay(300);
     
     LOG_I("Pico reset complete");
 }
