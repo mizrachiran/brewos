@@ -112,17 +112,19 @@ void core1_main(void) {
     while (true) {
         uint32_t now = to_ms_since_boot(get_absolute_time());
         
-        // Process incoming packets (skips automatically when bootloader is active)
-        protocol_process();
-        
-        // Skip all periodic sends when bootloader is active
-        // Bootloader has full control of UART
+        // CRITICAL: When bootloader is active, Core 1 must be completely suspended
+        // Bootloader has exclusive access to UART and flash
         if (bootloader_is_active()) {
-            // Still signal alive so Core 0 doesn't think we're dead
+            // Signal alive so Core 0 doesn't think we're dead
             g_core1_alive = true;
-            sleep_us(100);
+            // Sleep longer to reduce CPU usage and avoid any interference
+            // UART interrupts are disabled, so we won't miss anything
+            sleep_ms(10);
             continue;
         }
+        
+        // Process incoming packets (only when bootloader is NOT active)
+        protocol_process();
         
         // Send status periodically
         if (now - last_status_send >= STATUS_SEND_PERIOD_MS) {
@@ -518,13 +520,13 @@ int main(void) {
         // Skip all operations when bootloader is active
         // Core 1 (running bootloader) handles everything during OTA
         if (bootloader_is_active()) {
-            // Feed watchdog only - don't do any special lockout init
-            // The SDK's flash_safe_execute handles multicore coordination internally
-            // when called from Core 1. Core 0 just needs to be in a simple state.
+            // CRITICAL: Feed watchdog to prevent reset during OTA
+            // Bootloader can take several seconds, so Core 0 must keep watchdog alive
             watchdog_update();
             
-            // Simple tight loop - be responsive to any SDK coordination
-            tight_loop_contents();
+            // Small delay to avoid busy-waiting and reduce CPU usage
+            // Bootloader on Core 1 handles all the work, Core 0 just needs to stay alive
+            sleep_ms(10);
             continue;
         }
         
@@ -595,7 +597,14 @@ int main(void) {
             // This means the watchdog catches CPU freezes/hangs, but not timing violations.
             // Timing violations are logged separately (see loop overrun detection below).
             // This design prioritizes safety (catching freezes) over timing precision.
-            if (g_core1_alive) {
+            //
+            // CRITICAL: During bootloader, Core 1 sets g_core1_alive but doesn't process packets
+            // We still need to feed watchdog to prevent reset during OTA
+            if (bootloader_is_active()) {
+                // Bootloader is active - Core 1 is handling OTA
+                // Still feed watchdog to prevent reset during long OTA operations
+                safety_kick_watchdog();
+            } else if (g_core1_alive) {
                 // Core 1 is alive - reset flag and kick watchdog
                 g_core1_alive = false;
                 g_core1_last_seen = now;

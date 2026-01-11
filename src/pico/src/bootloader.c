@@ -82,7 +82,13 @@ void bootloader_prepare(void) {
     LOG_PRINT("Bootloader: Entering safe state (heaters OFF)\n");
     safety_enter_safe_state();
     
+    // NOTE: USB serial logging is NOT affected by UART interrupt settings
+    // UART interrupts only control hardware UART (ESP32 communication), not USB serial
+    // All LOG_PRINT statements will continue to work over USB
+    
     // CRITICAL: Drain UART FIFO completely BEFORE resetting protocol state
+    // Note: We disable UART interrupts AFTER sending bootloader ACK (in bootloader_receive_firmware)
+    // This allows protocol ACK and bootloader ACK to be sent properly
     // This prevents any bytes in the FIFO from being processed by protocol handler
     // We must drain while protocol is still active, then reset state, then set flag
     // Drain multiple times to ensure FIFO is completely empty
@@ -109,10 +115,13 @@ void bootloader_prepare(void) {
     // Full memory barrier to ensure flag is visible to all cores immediately
     __dmb();
     
-    // Small delay to ensure all cores see the flag change and protocol_process() exits
-    sleep_ms(100);
+    // CRITICAL: Minimal delay to ensure all cores see the flag change
+    // Reduced from 100ms to 10ms to avoid ESP32 timeout (ESP32 waits 100ms for bootloader ACK)
+    // The flag is set with memory barriers, so cores should see it within microseconds
+    // 10ms is sufficient for Core 1's main loop to check the flag and suspend
+    sleep_ms(10);
     
-    // Final drain to catch any bytes that arrived during the delay or transition
+    // Final drain to catch any bytes that arrived during the transition
     // This is critical - bytes could arrive between setting flag and protocol_process() checking it
     drain_count = 0;
     while (uart_is_readable(ESP32_UART_ID)) {
@@ -127,8 +136,70 @@ void bootloader_prepare(void) {
 }
  
  void bootloader_exit(void) {
-     g_bootloader_active = false;
-     __dmb();
+     // CRITICAL: Aggressively drain ALL bootloader data before exiting
+     // ESP32 may still be sending firmware chunks even after bootloader fails
+     // We must consume ALL of this data or it will be processed as protocol packets
+     
+     // Keep bootloader flag set and interrupts disabled while draining
+     // This prevents protocol handler from processing bytes during drain
+     
+     int total_drained = 0;
+     uint32_t drain_start = to_ms_since_boot(get_absolute_time());
+     const uint32_t DRAIN_TIMEOUT_MS = 2000;  // Drain for up to 2 seconds
+     
+     // Aggressive drain loop: keep draining until no bytes arrive for 100ms
+     uint32_t last_byte_time = drain_start;
+     while ((to_ms_since_boot(get_absolute_time()) - drain_start) < DRAIN_TIMEOUT_MS) {
+         int cycle_drained = 0;
+         while (uart_is_readable(ESP32_UART_ID)) {
+             (void)uart_getc(ESP32_UART_ID);
+             cycle_drained++;
+             total_drained++;
+             last_byte_time = to_ms_since_boot(get_absolute_time());
+         }
+         
+         // If no bytes arrived in last 100ms, assume ESP32 stopped sending
+         if ((to_ms_since_boot(get_absolute_time()) - last_byte_time) > 100) {
+             break;
+         }
+         
+         // Small delay to avoid busy-waiting
+         sleep_ms(10);
+     }
+     
+     if (total_drained > 0) {
+         LOG_PRINT("Bootloader: Drained %d total bytes before exit\n", total_drained);
+     }
+     
+     // CRITICAL: Final drain with interrupts still disabled
+     // This catches any bytes that arrived during the aggressive drain
+     int final_drain = 0;
+     uint32_t final_start = to_ms_since_boot(get_absolute_time());
+     while ((to_ms_since_boot(get_absolute_time()) - final_start) < 200) {  // 200ms final drain
+         if (uart_is_readable(ESP32_UART_ID)) {
+             (void)uart_getc(ESP32_UART_ID);
+             final_drain++;
+         } else {
+             sleep_ms(10);
+         }
+     }
+     if (final_drain > 0) {
+         LOG_PRINT("Bootloader: Drained %d additional bytes (final drain)\n", final_drain);
+     }
+     
+     // CRITICAL: Bootloader failed - reset Pico to resume normal operation
+     // Don't try to resume protocol handler - system is in inconsistent state
+     // Reset ensures clean state and proper recovery
+     LOG_PRINT("Bootloader: Failed, resetting Pico to resume normal operation\n");
+     
+     // Small delay to ensure log message is sent
+     sleep_ms(100);
+     
+     // Reset via watchdog (clean reset method)
+     watchdog_reboot(0, 0, 0);
+     
+     // Should never reach here, but just in case
+     while(1) __asm volatile("nop");
  }
  
  // -----------------------------------------------------------------------------
@@ -275,11 +346,16 @@ bootloader_result_t bootloader_receive_firmware(void) {
     // This ensures no stale bytes remain from the transition period
     while (uart_is_readable(ESP32_UART_ID)) (void)uart_getc(ESP32_UART_ID);
      
-     // Send ACK
-     static const uint8_t BOOT_ACK[] = {0xB0, 0x07, 0xAC, 0x4B};
-     for (size_t i = 0; i < sizeof(BOOT_ACK); i++) uart_write_byte(BOOT_ACK[i]);
-     uart_tx_wait_blocking(ESP32_UART_ID);
-     LOG_PRINT("Bootloader: ACK sent, waiting for firmware...\n");
+    // NOTE: Bootloader ACK is now sent in handle_cmd_bootloader() BEFORE bootloader_prepare()
+    // This ensures ESP32 receives the ACK within its 100ms timeout window
+    // We skip sending it here to avoid duplicate ACK
+    LOG_PRINT("Bootloader: ACK already sent, waiting for firmware...\n");
+    
+    // CRITICAL: NOW disable UART interrupts to prevent protocol handler from stealing firmware bytes
+    // NOTE: This only affects hardware UART (ESP32 communication), NOT USB serial
+    // USB serial logging will continue to work normally - all LOG_PRINT statements work over USB
+    uart_set_irq_enables(ESP32_UART_ID, false, false);
+    LOG_PRINT("Bootloader: UART interrupts disabled for firmware reception (USB serial still active)\n");
      
      // Use SDK Flash Safe functions for the download phase
      static uint8_t page_buffer[FLASH_PAGE_SIZE];
@@ -288,10 +364,11 @@ bootloader_result_t bootloader_receive_firmware(void) {
      uint32_t current_sector = FLASH_TARGET_OFFSET / FLASH_SECTOR_SIZE;
      bool sector_erased = false;
      
-     absolute_time_t start_time = get_absolute_time();
-     watchdog_enable(BOOTLOADER_CHUNK_TIMEOUT_MS + 2000, 1);
-     
-     while (true) {
+    absolute_time_t start_time = get_absolute_time();
+    watchdog_enable(BOOTLOADER_CHUNK_TIMEOUT_MS + 2000, 1);
+    LOG_PRINT("Bootloader: Starting firmware reception loop (watchdog enabled)\n");
+    
+    while (true) {
          watchdog_update();
          
          if (absolute_time_diff_us(start_time, get_absolute_time()) > BOOTLOADER_TIMEOUT_MS * 1000) {
@@ -319,9 +396,11 @@ bootloader_result_t bootloader_receive_firmware(void) {
              return BOOTLOADER_ERROR_CHECKSUM;
          }
          
-         if (g_chunk_count % 50 == 0) {
-             LOG_PRINT("Bootloader: Chunk %lu (%u bytes)\n", (unsigned long)g_chunk_count, chunk_size);
-         }
+        // Log progress more frequently for better visibility (every 10 chunks instead of 50)
+        if (g_chunk_count % 10 == 0) {
+            LOG_PRINT("Bootloader: Chunk %lu (%u bytes), total: %lu bytes\n", 
+                     (unsigned long)g_chunk_count, chunk_size, (unsigned long)g_received_size);
+        }
          
          uint32_t offset = 0;
          while (offset < chunk_size) {

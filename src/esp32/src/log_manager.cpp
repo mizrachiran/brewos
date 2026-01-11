@@ -353,11 +353,9 @@ void LogManager::clear() {
 }
 
 void LogManager::setPicoLogForwarding(bool enabled, std::function<bool(uint8_t*, size_t)> sendCommand) {
-    // Can only enable Pico forwarding if log buffer is enabled
-    if (enabled && !_enabled) {
-        Serial.println("[LogManager] Cannot enable Pico forwarding - log buffer not enabled");
-        return;
-    }
+    // Note: Pico log forwarding can work even without log buffer enabled
+    // Logs will be printed to Serial for diagnostics (see handlePicoLog)
+    // The buffer is only needed for storing logs in memory
     
     _picoLogForwarding = enabled;
     
@@ -375,7 +373,32 @@ void LogManager::setPicoLogForwarding(bool enabled, std::function<bool(uint8_t*,
 }
 
 void LogManager::handlePicoLog(const uint8_t* payload, size_t length) {
-    // No-op if disabled
+    // Always print to Serial for diagnostics (even if buffer is disabled)
+    // This allows OTA diagnostics without requiring the log buffer
+    if (payload && length >= 2) {
+        BrewOSLogLevel level = (BrewOSLogLevel)payload[0];
+        if (level > BREWOS_LOG_DEBUG) level = BREWOS_LOG_INFO;
+        
+        // Copy message (ensure null termination, truncate if too long)
+        char message[200]; // Sufficient size for log messages
+        size_t msgLen = length - 1;
+        if (msgLen >= sizeof(message)) msgLen = sizeof(message) - 1;
+        memcpy(message, &payload[1], msgLen);
+        message[msgLen] = '\0';
+        
+        // Print to Serial with prefix
+        const char* levelStr = "INFO";
+        switch (level) {
+            case BREWOS_LOG_ERROR: levelStr = "ERROR"; break;
+            case BREWOS_LOG_WARN: levelStr = "WARN"; break;
+            case BREWOS_LOG_INFO: levelStr = "INFO"; break;
+            case BREWOS_LOG_DEBUG: levelStr = "DEBUG"; break;
+            default: break;
+        }
+        Serial.printf("[Pico %s] %s\n", levelStr, message);
+    }
+    
+    // Add to log buffer only if enabled
     if (!_enabled || !payload || length == 0) return;
     
     // Safety: Don't log from interrupt context (mutex can't be used in ISR)

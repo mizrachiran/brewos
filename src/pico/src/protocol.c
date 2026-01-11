@@ -538,6 +538,17 @@ bool protocol_send_diag_result(const diag_result_payload_t* result) {
 // -----------------------------------------------------------------------------
 
 static void process_byte(uint8_t byte) {
+    // CRITICAL: Don't process bytes if bootloader is active
+    // This prevents bootloader data (0x55AA chunks) from being misinterpreted as protocol packets
+    if (bootloader_is_active()) {
+        // Bootloader is active - ignore this byte completely
+        // Reset state to prevent partial packet corruption
+        g_rx_state = RX_WAIT_SYNC;
+        g_rx_index = 0;
+        g_rx_length = 0;
+        return;
+    }
+    
     // Update byte timestamp for timeout detection
     g_rx_last_byte_time = to_ms_since_boot(get_absolute_time());
     g_stats.bytes_received++;

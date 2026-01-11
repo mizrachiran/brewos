@@ -20,6 +20,7 @@
 #include "log_forward.h"
 #include "safety.h"
 #include "pico/stdlib.h"  // For sleep_ms
+#include "hardware/uart.h"  // For uart_putc, uart_tx_wait_blocking
 #include <string.h>
 #include <stdio.h>  // For snprintf
 // =============================================================================
@@ -471,9 +472,22 @@ void handle_cmd_bootloader(const packet_t* packet) {
     LOG_INFO("Entering bootloader mode\n");
     protocol_send_ack(MSG_CMD_BOOTLOADER, packet->seq, ACK_SUCCESS);
     
-    // Small delay to ensure ACK is fully transmitted before entering bootloader
-    // This prevents the ACK from being corrupted by the bootloader transition
-    sleep_ms(50);
+    // CRITICAL: Wait for protocol ACK to finish transmitting
+    uart_tx_wait_blocking(ESP32_UART_ID);
+    
+    // CRITICAL: Send bootloader ACK IMMEDIATELY to avoid ESP32 timeout
+    // ESP32 waits only 100ms for this ACK, so we must send it as fast as possible
+    // We send it BEFORE bootloader_prepare() to minimize delay
+    // Protocol handler is still active, but this is safe because:
+    // 1. We just sent protocol ACK, so protocol handler won't process this bootloader ACK
+    // 2. Bootloader ACK is a fixed 4-byte sequence that won't be misinterpreted
+    static const uint8_t BOOT_ACK[] = {0xB0, 0x07, 0xAC, 0x4B};
+    LOG_INFO("Bootloader: Sending immediate ACK to ESP32...\n");
+    for (size_t i = 0; i < sizeof(BOOT_ACK); i++) {
+        uart_putc(ESP32_UART_ID, BOOT_ACK[i]);
+    }
+    uart_tx_wait_blocking(ESP32_UART_ID);
+    LOG_INFO("Bootloader: ACK sent, preparing system...\n");
     
     // CRITICAL: Signal bootloader mode - pauses Core 0 control loop and protocol processing
     // bootloader_prepare() will:
@@ -485,17 +499,25 @@ void handle_cmd_bootloader(const packet_t* packet) {
     LOG_INFO("Bootloader: System paused, starting firmware receive\n");
     
     // Enter bootloader mode (does not return on success)
+    // bootloader_receive_firmware() will NOT send ACK again (already sent above)
     bootloader_result_t result = bootloader_receive_firmware();
     
-    // If we get here, bootloader failed - resume normal operation
-    bootloader_exit();
+    // If we get here, bootloader failed
+    // Log error before resetting
     LOG_ERROR("Bootloader error: %s\n", bootloader_get_status_message(result));
     
-    // Send error message via debug
+    // Send error message via debug (if possible before reset)
     char error_msg[64];
     snprintf(error_msg, sizeof(error_msg), "Bootloader failed: %s", 
              bootloader_get_status_message(result));
     protocol_send_debug(error_msg);
+    
+    // Small delay to ensure error message is sent
+    sleep_ms(100);
+    
+    // Reset Pico to resume normal operation (bootloader_exit() will handle this)
+    bootloader_exit();
+    // Should never reach here - bootloader_exit() resets
 }
 
 void handle_cmd_diagnostics(const packet_t* packet) {

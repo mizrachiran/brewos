@@ -10,6 +10,7 @@
 #include "power_meter/power_meter_manager.h"
 #include "notifications/notification_manager.h"
 #include "state/state_manager.h"
+#include "log_manager.h"  // For Pico log forwarding during OTA
 #if ENABLE_SCREEN
 #include "display/display.h"
 #endif
@@ -1106,14 +1107,48 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
     // Retry configuration (defined at function scope for use in multiple retry loops)
     const int MAX_HANDSHAKE_RETRIES = 3;  // Retry bootloader handshake up to 3 times
     
+    // CRITICAL: Enable Pico log forwarding BEFORE starting OTA for better diagnostics
+    // This allows us to see Pico logs over Serial during the entire OTA process
+    // Note: Logs are printed to Serial even without the log buffer enabled (see LogManager::handlePicoLog)
+    bool picoLogForwardingWasEnabled = LogManager::instance().isPicoLogForwardingEnabled();
+    
+    // Enable Pico log forwarding (if not already enabled)
+    // This sends MSG_CMD_LOG_CONFIG to Pico to start forwarding logs
+    // Logs will be printed to Serial for diagnostics (no buffer required)
+    // CRITICAL: Enable BEFORE pausing UART so Pico can process the command
+    if (!picoLogForwardingWasEnabled) {
+        LOG_I("Enabling Pico log forwarding for OTA diagnostics (Serial output)");
+        LogManager::instance().setPicoLogForwarding(true, [this](uint8_t* payload, size_t len) {
+            return _picoUart.sendCommand(MSG_CMD_LOG_CONFIG, payload, len);
+        });
+        
+        // Give Pico time to process the log forwarding command and start forwarding logs
+        // This ensures we see "Entering bootloader mode" and other bootloader logs
+        delay(200);
+        
+        // Process any pending packets to ensure log forwarding ACK is received
+        _picoUart.loop();
+        delay(50);
+    }
+    
+    // Helper lambda to restore log forwarding state on cleanup
+    auto restoreLogForwarding = [picoLogForwardingWasEnabled, this]() {
+        // Restore Pico log forwarding state
+        if (!picoLogForwardingWasEnabled && LogManager::instance().isPicoLogForwardingEnabled()) {
+            LOG_I("Restoring Pico log forwarding state (disabling)");
+            LogManager::instance().setPicoLogForwarding(false, [this](uint8_t* payload, size_t len) {
+                return _picoUart.sendCommand(MSG_CMD_LOG_CONFIG, payload, len);
+            });
+        }
+    };
+    
     // Send bootloader command with retry mechanism
     broadcastOtaProgress(&_ws, "flash", 42, "Preparing device...");
     feedWatchdog();
     
-    // IMPORTANT: Pause packet processing BEFORE sending bootloader command
-    // This prevents the main loop's picoUart.loop() from consuming the bootloader ACK bytes
-    _picoUart.pause();
-    LOG_I("Paused UART packet processing for bootloader handshake");
+    // NOTE: We keep UART processing ACTIVE during bootloader handshake so we can receive log messages
+    // The waitForBootloaderAck() function reads directly from Serial1, so it won't be affected
+    // We only pause UART processing AFTER receiving the bootloader ACK, before firmware streaming
     bool handshakeSuccess = false;
     
     for (int handshakeRetry = 0; handshakeRetry < MAX_HANDSHAKE_RETRIES && !handshakeSuccess; handshakeRetry++) {
@@ -1140,6 +1175,7 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
                 _picoUart.resume();  // Resume on failure
                 flashFile.close();
                 cleanupOtaFiles();
+                restoreLogForwarding();  // Restore log forwarding state
                 return false;
             }
         }
@@ -1149,12 +1185,23 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
         LOG_I("Sent bootloader command, waiting for Pico to enter bootloader...");
         feedWatchdog();
         
-        // Wait for bootloader ACK with timeout
-        feedWatchdog();
-        if (_picoUart.waitForBootloaderAck(5000)) {
-            handshakeSuccess = true;
-            LOG_I("Bootloader handshake successful");
-        } else {
+        // Process UART packets while waiting for bootloader ACK
+        // This allows us to receive log messages from Pico (e.g., "Entering bootloader mode")
+        // waitForBootloaderAck() reads directly from Serial1 and looks for the specific pattern
+        // The protocol handler might consume some bytes, but bootloader ACK (0xB0 0x07 0xAC 0x4B)
+        // doesn't start with 0xAA, so it should pass through
+        unsigned long ackStartTime = millis();
+        while (millis() - ackStartTime < 5000) {
+            _picoUart.loop();  // Process incoming packets (including log messages)
+            feedWatchdog();
+            if (_picoUart.waitForBootloaderAck(100)) {  // Check with short timeout
+                handshakeSuccess = true;
+                LOG_I("Bootloader handshake successful");
+                break;
+            }
+        }
+        
+        if (!handshakeSuccess) {
             LOG_W("Bootloader ACK timeout (attempt %d/%d)", handshakeRetry + 1, MAX_HANDSHAKE_RETRIES);
             if (handshakeRetry < MAX_HANDSHAKE_RETRIES - 1) {
                 // Will retry
@@ -1165,10 +1212,17 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
                 _picoUart.resume();  // Resume on failure
                 flashFile.close();
                 cleanupOtaFiles();
+                restoreLogForwarding();  // Restore log forwarding state
                 return false;
             }
         }
     }
+    
+    // Now pause UART processing before firmware streaming
+    // Bootloader ACK received, so we can safely pause protocol processing
+    // This prevents the protocol handler from consuming bootloader data during firmware streaming
+    _picoUart.pause();
+    LOG_I("Paused UART packet processing for firmware streaming");
     
     // CRITICAL: Wait for Pico to fully enter bootloader mode
     // The ACK detection might have false-positived on protocol data.
@@ -1272,6 +1326,7 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
         broadcastLogLevel("error", "Update error: Installation failed after retries");
         broadcastOtaProgress(&_ws, "error", 0, "Installation failed after retries");
         _picoUart.resume();  // Resume on failure
+        restoreLogForwarding();  // Restore log forwarding state
         return false;
     }
     
@@ -1338,11 +1393,13 @@ bool BrewWebServer::startPicoGitHubOTA(const String& version) {
         
         if (!picoReconnected) {
             LOG_E("Pico failed to connect after manual reset");
+            restoreLogForwarding();  // Restore log forwarding state
             return false;
         }
     }
     
     LOG_I("Pico OTA complete!");
+    restoreLogForwarding();  // Restore log forwarding state
     return true;
 }
 
@@ -1577,18 +1634,45 @@ void BrewWebServer::startGitHubOTA(const String& version) {
     LOG_I("ESP32 firmware update successful!");
     
     // Update LittleFS (optional - continue even if fails)
+    // Use timeout to ensure we don't hang forever
+    unsigned long littlefsStart = millis();
     updateLittleFS(tag);
+    unsigned long littlefsTime = millis() - littlefsStart;
+    LOG_I("LittleFS update completed in %lu ms", littlefsTime);
     
+    // CRITICAL: Always restart after successful OTA, regardless of LittleFS result
+    // The new firmware is already flashed, we MUST reboot to use it
+    LOG_I("OTA complete - restarting device in 2 seconds...");
     broadcastOtaProgress(&_ws, "complete", 100, "Update complete!");
     broadcastLogLevel("info", "BrewOS updated! Restarting...");
     
-    // Give time for message to send
-    for (int i = 0; i < 10; i++) {
+    // Flush any pending serial output
+    Serial.flush();
+    delay(100);
+    
+    // Give time for WebSocket message to send
+    for (int i = 0; i < 20; i++) {
         delay(100);
         feedWatchdog();
+        yield();
+        Serial.flush();  // Ensure logs are sent
     }
     
+    LOG_I("Restarting ESP32 now (firmware update complete)...");
+    Serial.flush();
+    delay(500);  // Final delay to ensure all messages are sent
+    
+    // Force restart - this should never return
     ESP.restart();
+    
+    // Should never reach here, but if ESP.restart() somehow fails, force reset via watchdog
+    LOG_E("ESP.restart() returned - this should never happen!");
+    delay(1000);
+    // Force watchdog reset as last resort
+    while(1) {
+        // Don't feed watchdog - let it reset the device
+        delay(100);
+    }
 }
 
 /**
@@ -1741,8 +1825,12 @@ void BrewWebServer::updateLittleFS(const char* tag) {
     if (written == (size_t)contentLength) {
         LOG_I("LittleFS updated: %d bytes", written);
     } else {
-        LOG_W("LittleFS incomplete: %d/%d bytes", written, contentLength);
+        LOG_W("LittleFS incomplete: %d/%d bytes (non-critical, continuing)", written, contentLength);
     }
+    
+    // NOTE: Do NOT remount LittleFS here - device will restart and mount on next boot
+    // Attempting to mount/use LittleFS immediately after writing can cause corruption errors
+    // The filesystem will be properly mounted on the next boot after ESP.restart()
 }
 
 // =============================================================================
