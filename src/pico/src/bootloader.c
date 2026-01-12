@@ -572,13 +572,14 @@ bootloader_result_t bootloader_receive_firmware(void) {
      // We must do this BEFORE entering the RAM function, because rom_func_lookup might be in Flash
      boot_rom_funcs_t rom_funcs;
      
-     // The SDK provided rom_func_lookup_inline handles the differences between RP2040 and RP2350
+     // The SDK provided rom_func_lookup handles the differences between RP2040 and RP2350
      // These constants are defined in pico/bootrom.h
-     rom_funcs.connect_internal_flash = (rom_connect_internal_flash_fn)rom_func_lookup_inline(ROM_FUNC_CONNECT_INTERNAL_FLASH);
-     rom_funcs.flash_exit_xip = (rom_flash_exit_xip_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_EXIT_XIP);
-     rom_funcs.flash_range_erase = (rom_flash_range_erase_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_RANGE_ERASE);
-     rom_funcs.flash_range_program = (rom_flash_range_program_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_RANGE_PROGRAM);
-     rom_funcs.flash_flush_cache = (rom_flash_flush_cache_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_FLUSH_CACHE);
+     // NOTE: We use rom_func_lookup (not rom_func_lookup_inline) because we're not in a RAM function yet
+     rom_funcs.connect_internal_flash = (rom_connect_internal_flash_fn)rom_func_lookup(ROM_FUNC_CONNECT_INTERNAL_FLASH);
+     rom_funcs.flash_exit_xip = (rom_flash_exit_xip_fn)rom_func_lookup(ROM_FUNC_FLASH_EXIT_XIP);
+     rom_funcs.flash_range_erase = (rom_flash_range_erase_fn)rom_func_lookup(ROM_FUNC_FLASH_RANGE_ERASE);
+     rom_funcs.flash_range_program = (rom_flash_range_program_fn)rom_func_lookup(ROM_FUNC_FLASH_RANGE_PROGRAM);
+     rom_funcs.flash_flush_cache = (rom_flash_flush_cache_fn)rom_func_lookup(ROM_FUNC_FLASH_FLUSH_CACHE);
      
      watchdog_enable(8300, 1);
      

@@ -717,6 +717,11 @@ static bool downloadToFile(const char* url, const char* filePath,
         }
         
         LOG_W("HTTP error %d (attempt %d/%d)", httpCode, retry + 1, OTA_MAX_RETRIES);
+        // Log response body if small (helps diagnose S3 errors like "Access Denied" or "NoSuchKey")
+        if (http.getSize() > 0 && http.getSize() < 512) {
+            String errorResponse = http.getString();
+            LOG_W("Error Response: %s", errorResponse.c_str());
+        }
         http.end();
         
         // Retry on transient errors
@@ -991,13 +996,17 @@ static bool downloadToFile(const char* url, const char* filePath,
                 LOG_I("CRC32 stored successfully: 0x%08X", fileCRC32);
             }
             
-    http.end();
             LOG_I("Download complete: %d bytes, CRC32=0x%08X", written, fileCRC32);
+            http.end();
             return true;
         }
         
-        // Handle Error
+        // Handle Error - log response body if small (helps diagnose S3 errors like "Access Denied" or "NoSuchKey")
         LOG_E("HTTP Error: %d", httpCode);
+        if (http.getSize() > 0 && http.getSize() < 512) {
+            String errorResponse = http.getString();
+            LOG_W("Error Response: %s", errorResponse.c_str());
+        }
         http.end();
         return false;
     }
@@ -1724,14 +1733,14 @@ void BrewWebServer::startGitHubOTA(const String& version) {
             return;
         }
         
-    http.addHeader("User-Agent", "BrewOS-ESP32/" ESP32_VERSION);
+        http.addHeader("User-Agent", "BrewOS-ESP32/" ESP32_VERSION);
     // CRITICAL FIX: Force server to close connection after transfer
     // This prevents hanging on Keep-Alive when Content-Length is unknown/wrong
     http.addHeader("Connection", "close");
     // CRITICAL: Force HTTPClient to collect headers even when redirects are disabled
     const char* headers[] = {"Location"};
     http.collectHeaders(headers, 1);
-    feedWatchdog();
+        feedWatchdog();
         httpCode = http.GET();
         feedWatchdog();
         
@@ -2154,27 +2163,36 @@ void BrewWebServer::updateLittleFS(const char* tag) {
     int httpCode = 0;
     
     // Handle redirects manually (up to 3 redirects)
+    // CRITICAL: We must handle redirects manually to ensure "Connection: close" header
+    // is applied to the FINAL request (not dropped by HTTPClient's auto-redirect)
     for (int redirect = 0; redirect < 3; redirect++) {
         // Setup client for this redirect attempt
+        // Create fresh client instance to ensure no state leaks between redirects
+        client.stop(); // Ensure previous connection is fully closed
         client.setInsecure();
         client.setTimeout(15);
+        
+        // Create fresh HTTPClient instance to ensure no state leaks
+        http.end(); // Clean up previous instance
         http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
-    http.setTimeout(OTA_HTTP_TIMEOUT_MS);
-    
-    feedWatchdog();
+        http.setTimeout(OTA_HTTP_TIMEOUT_MS);
+        
+        feedWatchdog();
         LOG_I("Starting LittleFS HTTP connection to: %s", currentUrl.c_str());
         if (!http.begin(client, currentUrl)) {
             LOG_W("LittleFS HTTP begin failed - continuing");
-        return;
-    }
-    
-    http.addHeader("User-Agent", "BrewOS-ESP32/" ESP32_VERSION);
-    // CRITICAL FIX: Force server to close connection after transfer
-    // This prevents hanging on Keep-Alive when Content-Length is unknown/wrong
-    http.addHeader("Connection", "close");
-    // CRITICAL: Force HTTPClient to collect headers even when redirects are disabled
-    const char* headers[] = {"Location"};
-    http.collectHeaders(headers, 1);
+            return;
+        }
+        
+        // Clear any previous headers and add fresh ones
+        http.addHeader("User-Agent", "BrewOS-ESP32/" ESP32_VERSION);
+        // CRITICAL FIX: Force server to close connection after transfer
+        // This prevents hanging on Keep-Alive when Content-Length is unknown/wrong
+        // Must be added to EACH request (including final one after redirects)
+        http.addHeader("Connection", "close");
+        // CRITICAL: Force HTTPClient to collect headers even when redirects are disabled
+        const char* headers[] = {"Location", "Content-Length", "Content-Type"};
+        http.collectHeaders(headers, 3);
     feedWatchdog();
         LOG_I("Sending HTTP GET request for LittleFS (timeout=%lu ms)...", OTA_HTTP_TIMEOUT_MS);
         unsigned long getStart = millis();
@@ -2283,8 +2301,12 @@ void BrewWebServer::updateLittleFS(const char* tag) {
             break;
         }
         
-        // Error
+        // Error - log response body if small (helps diagnose S3 errors like "Access Denied" or "NoSuchKey")
         LOG_W("LittleFS HTTP error: %d", httpCode);
+        if (http.getSize() > 0 && http.getSize() < 512) {
+            String errorResponse = http.getString();
+            LOG_W("Error Response: %s", errorResponse.c_str());
+        }
         http.end();
         return;
     }
@@ -2384,12 +2406,12 @@ void BrewWebServer::updateLittleFS(const char* tag) {
         http.end();
         return;
     }
-        
+    
         erasedBytes += toErase;
         
         // CRITICAL: Yield to allow other tasks to run and flash cache to refill
         // This prevents the system from hanging during long erase operations
-        feedWatchdog();
+    feedWatchdog();
         yield();
         
         // Log progress every 1MB so you know it's alive
@@ -2418,7 +2440,12 @@ void BrewWebServer::updateLittleFS(const char* tag) {
     const unsigned long LITTLEFS_TOTAL_TIMEOUT_MS = 120000;  // 2 minutes total timeout
     
     // FIX: Use readBytes loop (more robust for SSL streams) + check connection close
-    while ((http.connected() || stream->available()) && written < partition->size) {
+    // CRITICAL: When Content-Length is unknown, add safety limit (actual file is ~1.5MB, partition is 8MB)
+    // This prevents downloading the entire partition when server doesn't close connection properly
+    const size_t MAX_DOWNLOAD_SIZE = 2 * 1024 * 1024; // 2MB safety limit when Content-Length is unknown
+    size_t maxDownloadSize = useContentLength ? (size_t)contentLength : MAX_DOWNLOAD_SIZE;
+    
+    while ((http.connected() || stream->available()) && written < partition->size && written < maxDownloadSize) {
         // A. Check Global Timeout (2 minutes)
         if (millis() - start > LITTLEFS_TOTAL_TIMEOUT_MS) {
             LOG_E("Timeout: Download took too long (%lu ms, wrote %d bytes)", 
@@ -2435,17 +2462,17 @@ void BrewWebServer::updateLittleFS(const char* tag) {
         
         // C. Blocking read (waits for data, more robust for SSL)
         size_t bytesRead = stream->readBytes(buffer.get(), HEAP_BUFFER_SIZE);
-        
-        if (bytesRead > 0) {
+            
+            if (bytesRead > 0) {
             // Write to partition
             if (esp_partition_write(partition, written, buffer.get(), bytesRead) != ESP_OK) {
                 LOG_E("Write failed at offset %u", written);
-                break;
-            }
+                    break;
+                }
             
-            written += bytesRead;
+                written += bytesRead;
             lastRx = millis(); // Reset stall timer
-            
+                
             // Feed watchdog every 10KB or so
             if ((written % 10240) == 0) {
                 feedWatchdog();
@@ -2456,8 +2483,8 @@ void BrewWebServer::updateLittleFS(const char* tag) {
                 size_t progress = (written * 100) / contentLength;
                 if (written % (1024 * 100) == 0) {  // Every 100KB
                     LOG_I("LittleFS download: %d%% (%d/%d bytes)", progress, written, contentLength);
-                }
-            } else {
+            }
+        } else {
                 // When not using Content-Length, log every 1MB
                 if (written > 0 && written % (1024 * 1024) == 0) {
                     LOG_I("LittleFS download: %d bytes (%.1f MB)", 
@@ -2466,8 +2493,15 @@ void BrewWebServer::updateLittleFS(const char* tag) {
             }
         } else {
             // No data read - check if connection closed
-            if (!http.connected()) {
+            // CRITICAL: Check both http.connected() AND stream->available() to detect connection close
+            // Even with "Connection: close", http.connected() may remain true briefly
+            if (!http.connected() && stream->available() == 0) {
                 LOG_I("Connection closed by server - download complete");
+                break;
+            }
+            // Also check if we've hit the safety limit (when Content-Length is unknown)
+            if (!useContentLength && written >= MAX_DOWNLOAD_SIZE) {
+                LOG_I("Download reached safety limit (%d bytes) - stopping", MAX_DOWNLOAD_SIZE);
                 break;
             }
             // Connection still open but no data - yield
