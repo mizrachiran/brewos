@@ -32,6 +32,7 @@
 #include <AsyncTCP.h>
 #include <AsyncWebSocket.h>
 #include <memory>
+#include <algorithm>  // For std::min
 #include <driver/gpio.h>  // For gpio_reset_pin() to detach pins from UART2
 
 // Forward declare PicoUART class if not already included
@@ -2142,394 +2143,142 @@ void BrewWebServer::updateLittleFS(const char* tag) {
     LOG_I("Updating LittleFS...");
     broadcastOtaProgress(&_ws, "flash", 96, "Updating web UI...");
     
-    // CRITICAL: Unmount LittleFS before raw partition operations
-    // This prevents "Corrupted dir pair" errors and conflicts with LogManager
-    // LogManager's loop() periodically calls saveToFlash() which opens /logs.txt
-    // If LittleFS is mounted during partition erase, it causes corruption
-    // Just call end() directly - it's safe to call even if not mounted
     LittleFS.end();
-    LOG_I("LittleFS unmounted for update");
     
-    char littlefsUrl[256];
-    snprintf(littlefsUrl, sizeof(littlefsUrl), 
+    char url[256];
+    snprintf(url, sizeof(url), 
              "https://github.com/" GITHUB_OWNER "/" GITHUB_REPO "/releases/download/%s/" GITHUB_ESP32_LITTLEFS_ASSET, 
              tag);
+
+    const esp_partition_t* partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "littlefs");
+    if (!partition) partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, NULL);
     
-    LOG_I("LittleFS download URL: %s", littlefsUrl);
-    
-    String currentUrl = String(littlefsUrl);
+    if (!partition) {
+        LOG_E("LittleFS partition not found");
+        return;
+    }
+
+    // 1. Manual Redirect Loop with "Connection: close"
     HTTPClient http;
     WiFiClientSecure client;
+    client.setInsecure();
+    client.setTimeout(15); 
+    
+    String currentUrl = String(url);
+    bool connected = false;
     int httpCode = 0;
     
-    // Handle redirects manually (up to 3 redirects)
-    // CRITICAL: We must handle redirects manually to ensure "Connection: close" header
-    // is applied to the FINAL request (not dropped by HTTPClient's auto-redirect)
-    for (int redirect = 0; redirect < 3; redirect++) {
-        // Setup client for this redirect attempt
-        // Create fresh client instance to ensure no state leaks between redirects
-        client.stop(); // Ensure previous connection is fully closed
-        client.setInsecure();
-        client.setTimeout(15);
-        
-        // Create fresh HTTPClient instance to ensure no state leaks
-        http.end(); // Clean up previous instance
+    for (int i = 0; i < 3; i++) {
         http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
-        http.setTimeout(OTA_HTTP_TIMEOUT_MS);
+        http.begin(client, currentUrl);
+        http.addHeader("User-Agent", "BrewOS/" ESP32_VERSION);
+        http.addHeader("Connection", "close"); // Force server to close socket after send
         
-        feedWatchdog();
-        LOG_I("Starting LittleFS HTTP connection to: %s", currentUrl.c_str());
-        if (!http.begin(client, currentUrl)) {
-            LOG_W("LittleFS HTTP begin failed - continuing");
-            return;
-        }
-        
-        // Clear any previous headers and add fresh ones
-        http.addHeader("User-Agent", "BrewOS-ESP32/" ESP32_VERSION);
-        // CRITICAL FIX: Force server to close connection after transfer
-        // This prevents hanging on Keep-Alive when Content-Length is unknown/wrong
-        // Must be added to EACH request (including final one after redirects)
-        http.addHeader("Connection", "close");
-        // CRITICAL: Force HTTPClient to collect headers even when redirects are disabled
-        const char* headers[] = {"Location", "Content-Length", "Content-Type"};
-        http.collectHeaders(headers, 3);
-    feedWatchdog();
-        LOG_I("Sending HTTP GET request for LittleFS (timeout=%lu ms)...", OTA_HTTP_TIMEOUT_MS);
-        unsigned long getStart = millis();
         httpCode = http.GET();
-        unsigned long getTime = millis() - getStart;
-    feedWatchdog();
-        LOG_I("LittleFS HTTP GET completed: code=%d, time=%lu ms", httpCode, getTime);
         
-        // Handle redirects
         if (httpCode == 301 || httpCode == 302 || httpCode == 307) {
-            // Try HTTPClient's header() method first (should work with collectHeaders())
             String newUrl = http.header("Location");
-            if (newUrl.length() == 0) {
-                newUrl = http.header("location");
-            }
-            if (newUrl.length() == 0) {
-                newUrl = http.header("LOCATION");
-            }
-            
-            // Fallback: Read from stream if header() didn't work
-            if (newUrl.length() == 0) {
-                LOG_W("Location header not found via header() method, trying stream read...");
-                WiFiClient* stream = http.getStreamPtr();
-                if (stream && stream->available() > 0) {
-                    // Read response headers line by line
-                    String headerLine;
-                    bool foundLocation = false;
-                    int bytesRead = 0;
-                    const int MAX_HEADER_BYTES = 4096;
-                    
-                    while (stream->available() > 0 && bytesRead < MAX_HEADER_BYTES && !foundLocation) {
-                        char c = stream->read();
-                        bytesRead++;
-                        
-                        if (c == '\n') {
-                            headerLine.trim();
-                            if (headerLine.length() == 0) {
-                                break;
-                            }
-                            
-                            if (headerLine.startsWith("Location:") || headerLine.startsWith("location:")) {
-                                int colonIdx = headerLine.indexOf(':');
-                                if (colonIdx >= 0) {
-                                    newUrl = headerLine.substring(colonIdx + 1);
-                                    newUrl.trim();
-                                    foundLocation = true;
-                                    LOG_I("Found Location header in stream: %s", newUrl.length() > 100 ? (newUrl.substring(0, 100) + "...").c_str() : newUrl.c_str());
-                                    break;
-                                }
-                            }
-                            headerLine = "";
-                        } else if (c != '\r') {
-                            headerLine += c;
-                        }
-                    }
-                    
-                    if (!foundLocation) {
-                        LOG_W("Location header not found in stream (read %d bytes)", bytesRead);
-                    }
-                }
-            }
-            
-            LOG_I("Redirect detected (code=%d) to: %s", httpCode, newUrl.length() > 0 ? (newUrl.length() > 100 ? (newUrl.substring(0, 100) + "...").c_str() : newUrl.c_str()) : "(empty)");
-            
-            if (newUrl.length() == 0) {
-                LOG_W("Redirect with no Location header");
-                http.end();
-                return;
-            }
-            
-            // Handle relative URLs
-            if (!newUrl.startsWith("http://") && !newUrl.startsWith("https://")) {
-                int schemeEnd = currentUrl.indexOf("://");
-                if (schemeEnd >= 0) {
-                    int pathStart = currentUrl.indexOf("/", schemeEnd + 3);
-                    if (pathStart >= 0) {
-                        String baseUrl = currentUrl.substring(0, pathStart);
-                        if (newUrl.startsWith("/")) {
-                            newUrl = baseUrl + newUrl;
-                        } else {
-                            int lastSlash = currentUrl.lastIndexOf("/");
-                            if (lastSlash > schemeEnd + 3) {
-                                newUrl = currentUrl.substring(0, lastSlash + 1) + newUrl;
-                            } else {
-                                newUrl = baseUrl + "/" + newUrl;
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // CRITICAL: End the current connection completely to free SSL buffers
             http.end();
             client.stop();
-            
-            // Update URL and loop to try again with fresh connection
-            currentUrl = newUrl;
-            
-            // Small delay to let heap settle
-            delay(100);
-            continue;
+            if (newUrl.length() > 0) {
+                currentUrl = newUrl;
+                continue;
+            }
         }
-        
-        // Success or error - break out of redirect loop
-        if (httpCode == HTTP_CODE_OK) {
+        if (httpCode == 200) {
+            connected = true;
             break;
         }
-        
-        // Error - log response body if small (helps diagnose S3 errors like "Access Denied" or "NoSuchKey")
-        LOG_W("LittleFS HTTP error: %d", httpCode);
-        if (http.getSize() > 0 && http.getSize() < 512) {
-            String errorResponse = http.getString();
-            LOG_W("Error Response: %s", errorResponse.c_str());
-        }
+        http.end();
+        break;
+    }
+    
+    if (!connected) {
+        LOG_E("Download failed: %d", httpCode);
+        return;
+    }
+
+    // 2. Parse Content-Length
+    // CRITICAL: If server says 8MB, we MUST accept 8MB.
+    // The file is likely padded to the full partition size.
+    size_t contentLength = http.getSize();
+    if (contentLength > partition->size) {
+        LOG_E("File too large (%u > %u). Aborting.", contentLength, partition->size);
         http.end();
         return;
     }
-    
-    if (httpCode != HTTP_CODE_OK) {
-        LOG_W("LittleFS HTTP error: %d", httpCode);
-        http.end();
-        return;
-    }
-    
-    // Get Content-Length from response headers
-    // CRITICAL: http.getSize() may return wrong value (partition size instead of file size)
-    // Parse Content-Length header string directly to get the actual file size
-    String contentType = http.header("Content-Type");
-    String contentLengthHeader = http.header("Content-Length");
-    int contentLengthFromGetSize = http.getSize();
-    
-    LOG_I("LittleFS HTTP headers - Content-Length header: '%s', getSize(): %d, Content-Type: '%s'", 
-          contentLengthHeader.c_str(), contentLengthFromGetSize, contentType.c_str());
-    
-    // Parse Content-Length header string directly (more reliable than getSize())
-    int contentLength = -1;
-    if (contentLengthHeader.length() > 0) {
-        contentLength = contentLengthHeader.toInt();
-        LOG_I("Parsed Content-Length from header string: %d bytes (%.1f MB)", 
-              contentLength, contentLength / (1024.0f * 1024.0f));
-    } else {
-        // Fallback to getSize() if header string is empty
-        contentLength = contentLengthFromGetSize;
-        LOG_W("Content-Length header string is empty, using getSize(): %d", contentLength);
-    }
-    
-    // If getSize() and header string differ significantly, log a warning
-    if (contentLengthFromGetSize > 0 && contentLength > 0) {
-        int difference = (contentLengthFromGetSize > contentLength) ? 
-                         (contentLengthFromGetSize - contentLength) : 
-                         (contentLength - contentLengthFromGetSize);
-        if (difference > 1024 * 1024) {  // > 1MB difference
-            LOG_W("Content-Length mismatch: header='%s' (%d), getSize()=%d (difference: %d bytes)", 
-                  contentLengthHeader.c_str(), contentLength, contentLengthFromGetSize, difference);
-        }
-    }
-    
-    // Find filesystem partition (could be named "littlefs" or "spiffs" depending on partition table)
-    // PlatformIO's default partition tables use "spiffs" name even when using LittleFS filesystem
-    const esp_partition_t* partition = esp_partition_find_first(
-        ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "littlefs");
-    
-    if (!partition) {
-        // Try "spiffs" name (used in default_8MB.csv and other default partition tables)
-        partition = esp_partition_find_first(
-            ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, NULL);
-    }
-    
-    if (!partition) {
-        LOG_W("Filesystem partition not found (tried littlefs and spiffs)");
-        http.end();
-        return;
-    }
-    
-    LOG_I("Found filesystem partition: %s (%d bytes)", partition->label, partition->size);
-    
-    // CRITICAL FIX: If Content-Length equals partition size exactly, it's likely a default 'unknown' value.
-    // Treat it as unknown to prevent waiting for 8MB of data that doesn't exist.
-    // Also check if it's suspiciously large (>= 5MB) or equals partition size
-    bool useContentLength = (contentLength > 0 && 
-                             (size_t)contentLength < partition->size && 
-                             contentLength != (int)partition->size &&
-                             contentLength < 5 * 1024 * 1024);  // < 5MB
-    
-    if (useContentLength) {
-        LOG_I("Content-Length: %d bytes (%.1f MB)", 
-              contentLength, contentLength / (1024.0f * 1024.0f));
-    } else {
-        LOG_W("Content-Length unknown or suspicious (%d bytes, partition=%d) - downloading until connection closes", 
-              contentLength, partition->size);
-    }
-    
-    // Erase in chunks instead of one giant block
-    // 8MB erase blocks the flash controller for too long, causing crashes/hangs
-    // Erasing 64KB at a time allows the system to yield and service interrupts
-    LOG_I("Erasing filesystem in chunks...");
-    broadcastOtaProgress(&_ws, "flash", 97, "Erasing storage...");
-    
-    const size_t ERASE_CHUNK_SIZE = 65536; // 64KB chunks (matches block size)
-    size_t erasedBytes = 0;
-    
-    while (erasedBytes < partition->size) {
-        size_t toErase = partition->size - erasedBytes;
-        if (toErase > ERASE_CHUNK_SIZE) {
-            toErase = ERASE_CHUNK_SIZE;
-        }
-        
-        feedWatchdog();
-        if (esp_partition_erase_range(partition, erasedBytes, toErase) != ESP_OK) {
-            LOG_W("Failed to erase LittleFS at offset %u", erasedBytes);
-        http.end();
-        return;
-    }
-    
-        erasedBytes += toErase;
-        
-        // CRITICAL: Yield to allow other tasks to run and flash cache to refill
-        // This prevents the system from hanging during long erase operations
-    feedWatchdog();
+    LOG_I("Downloading %u bytes...", contentLength);
+
+    // 3. Erase Partition
+    LOG_I("Erasing LittleFS partition...");
+    const size_t ERASE_CHUNK = 65536;
+    for (size_t offset = 0; offset < partition->size; offset += ERASE_CHUNK) {
+        size_t len = std::min<size_t>(ERASE_CHUNK, partition->size - offset);
+        esp_partition_erase_range(partition, offset, len);
+        if (offset % (ERASE_CHUNK * 4) == 0) feedWatchdog();
         yield();
-        
-        // Log progress every 1MB so you know it's alive
-        if (erasedBytes % (1024 * 1024) == 0) {
-            LOG_I("Erased %u/%u bytes...", erasedBytes, partition->size);
-        }
     }
-    LOG_I("Erase complete: %u bytes", erasedBytes);
-    
-    broadcastOtaProgress(&_ws, "flash", 98, "Installing web UI...");
-    
+
+    // 4. Stream Download
     WiFiClient* stream = http.getStreamPtr();
-    const size_t HEAP_BUFFER_SIZE = 4096;
-    std::unique_ptr<uint8_t[]> buffer(new (std::nothrow) uint8_t[HEAP_BUFFER_SIZE]);
+    const size_t BUFFER_SIZE = 4096;
+    std::unique_ptr<uint8_t[]> buffer(new (std::nothrow) uint8_t[BUFFER_SIZE]);
+    
     if (!buffer) {
-        LOG_W("Failed to allocate buffer for LittleFS update");
+        LOG_E("OOM");
         http.end();
         return;
     }
-    LOG_I("Starting LittleFS download...");
-    
+
     size_t written = 0;
     unsigned long start = millis();
     unsigned long lastRx = millis();
-    const unsigned long LITTLEFS_STALL_TIMEOUT_MS = 15000;  // 15 seconds stall timeout
-    const unsigned long LITTLEFS_TOTAL_TIMEOUT_MS = 120000;  // 2 minutes total timeout
     
-    // FIX: Use readBytes loop (more robust for SSL streams) + check connection close
-    // CRITICAL: When Content-Length is unknown, add safety limit (actual file is ~1.5MB, partition is 8MB)
-    // This prevents downloading the entire partition when server doesn't close connection properly
-    const size_t MAX_DOWNLOAD_SIZE = 2 * 1024 * 1024; // 2MB safety limit when Content-Length is unknown
-    size_t maxDownloadSize = useContentLength ? (size_t)contentLength : MAX_DOWNLOAD_SIZE;
-    
-    while ((http.connected() || stream->available()) && written < partition->size && written < maxDownloadSize) {
-        // A. Check Global Timeout (2 minutes)
-        if (millis() - start > LITTLEFS_TOTAL_TIMEOUT_MS) {
-            LOG_E("Timeout: Download took too long (%lu ms, wrote %d bytes)", 
-                  millis() - start, written);
-            break;
-        }
+    // Loop until:
+    // a) Connection closes (http.connected() == false && stream empty)
+    // b) We received expected Content-Length
+    // c) Partition is full
+    // d) Timeout
+    while (written < partition->size) {
+        // Timeouts
+        if (millis() - start > 180000) { LOG_E("Timeout: >3min"); break; } // Increased to 3min for 8MB
+        if (millis() - lastRx > 15000) { LOG_E("Stall: 15s"); break; }
         
-        // B. Check Stall Timeout (no data for 15s)
-        if (millis() - lastRx > LITTLEFS_STALL_TIMEOUT_MS) {
-            LOG_E("Stall: No data for %lu ms (wrote %d bytes)", 
-                  LITTLEFS_STALL_TIMEOUT_MS, written);
-            break;
-        }
-        
-        // C. Blocking read (waits for data, more robust for SSL)
-        size_t bytesRead = stream->readBytes(buffer.get(), HEAP_BUFFER_SIZE);
-            
-            if (bytesRead > 0) {
-            // Write to partition
-            if (esp_partition_write(partition, written, buffer.get(), bytesRead) != ESP_OK) {
-                LOG_E("Write failed at offset %u", written);
+        size_t available = stream->available();
+        if (available > 0) {
+            size_t toRead = std::min<size_t>(available, (size_t)BUFFER_SIZE);
+            int len = stream->readBytes(buffer.get(), toRead);
+            if (len > 0) {
+                if (esp_partition_write(partition, written, buffer.get(), len) != ESP_OK) {
+                    LOG_E("Write failed");
                     break;
                 }
-            
-                written += bytesRead;
-            lastRx = millis(); // Reset stall timer
+                written += len;
+                lastRx = millis();
+                if (written % 10240 == 0) feedWatchdog();
                 
-            // Feed watchdog every 10KB or so
-            if ((written % 10240) == 0) {
-                feedWatchdog();
-            }
-            
-            // Log progress
-            if (useContentLength) {
-                size_t progress = (written * 100) / contentLength;
-                if (written % (1024 * 100) == 0) {  // Every 100KB
-                    LOG_I("LittleFS download: %d%% (%d/%d bytes)", progress, written, contentLength);
-            }
-        } else {
-                // When not using Content-Length, log every 1MB
-                if (written > 0 && written % (1024 * 1024) == 0) {
-                    LOG_I("LittleFS download: %d bytes (%.1f MB)", 
-                          written, written / (1024.0f * 1024.0f));
+                // If we hit Content-Length exactly, we are done
+                if (contentLength > 0 && written >= contentLength) {
+                    LOG_I("Download complete (size match)");
+                    break;
                 }
             }
         } else {
-            // No data read - check if connection closed
-            // CRITICAL: Check both http.connected() AND stream->available() to detect connection close
-            // Even with "Connection: close", http.connected() may remain true briefly
-            if (!http.connected() && stream->available() == 0) {
-                LOG_I("Connection closed by server - download complete");
+            // No data available
+            if (!http.connected()) {
+                LOG_I("Connection closed by server. Download done.");
                 break;
             }
-            // Also check if we've hit the safety limit (when Content-Length is unknown)
-            if (!useContentLength && written >= MAX_DOWNLOAD_SIZE) {
-                LOG_I("Download reached safety limit (%d bytes) - stopping", MAX_DOWNLOAD_SIZE);
-                break;
-            }
-            // Connection still open but no data - yield
             delay(10);
-            feedWatchdog();
-        }
-        
-        // D. Strict size check (if Content-Length was valid)
-        if (useContentLength && written >= (size_t)contentLength) {
-            LOG_I("Download finished (matched Content-Length: %d bytes)", written);
-            break;
         }
     }
     
     http.end();
-    feedWatchdog();
+    LOG_I("LittleFS update complete: %u bytes", written);
     
-    if (useContentLength && written == (size_t)contentLength) {
-        LOG_I("LittleFS updated: %d bytes", written);
-    } else if (!useContentLength) {
-        LOG_I("LittleFS updated: %d bytes (downloaded until connection closed)", written);
-    } else {
-        LOG_W("LittleFS incomplete: %d/%d bytes (non-critical, continuing)", written, contentLength);
-    }
-    
-    // NOTE: Do NOT remount LittleFS here - device will restart and mount on next boot
-    // Attempting to mount/use LittleFS immediately after writing can cause corruption errors
-    // The filesystem will be properly mounted on the next boot after ESP.restart()
+    // Reboot to apply
+    delay(500);
+    ESP.restart();
 }
 
 // =============================================================================
