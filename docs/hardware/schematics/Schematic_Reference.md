@@ -1618,12 +1618,18 @@ using the machine's existing high-voltage wiring. NO HIGH CURRENT flows through 
     6. ESP32 pulses RUN LOW to reset Pico
     7. Pico boots with new firmware
 
-    Recovery (if Pico firmware corrupted):
-    ───────────────────────────────────────
-    1. Hold BOOTSEL button on Pico module
-    2. Press RUN button (or power cycle)
-    3. Release BOOTSEL - Pico appears as USB drive "RPI-RP2"
+    Recovery (if RP2354 firmware corrupted):
+    ─────────────────────────────────────────
+    Method 1: USB Bootloader (via J_USB USB-C port)
+    1. Disconnect mains power (USB debugging safety!)
+    2. Hold SW2 (BOOTSEL button) while pressing SW1 (Reset) or power cycling
+    3. Release BOOTSEL - RP2354 appears as USB drive "RPI-RP2"
     4. Drag-drop .uf2 firmware file to the USB drive
+
+    Method 2: SWD via ESP32 (if USB port inaccessible)
+    1. ESP32 uses SWD interface (J15 pins 6/8) to flash blank/corrupted RP2354
+    2. Requires ESP32 firmware with DAP (Debug Access Port) implementation
+    3. Used for factory flash of blank chips and remote recovery
 
 
     J15 Pinout Summary (8-pin, v2.31):
@@ -1652,6 +1658,314 @@ using the machine's existing high-voltage wiring. NO HIGH CURRENT flows through 
 
     **Note:** R74 and R75 are DNP (Do Not Populate) in v2.31 - GPIO16/22 are no longer used for SWD.
 ```
+
+## 6.2 USB-C Programming Port (J_USB)
+
+USB-C connector for direct RP2354 programming, debugging, and serial logging via USB.
+
+```
+                        USB-C PROGRAMMING PORT (J_USB)
+    ════════════════════════════════════════════════════════════════════════════
+
+    ⚠️ SAFETY WARNING: NEVER connect USB while machine is mains-powered!
+    See Safety section for details on floating ground risks.
+
+    ═══════════════════════════════════════════════════════════════════════════
+                              CIRCUIT SCHEMATIC
+    ═══════════════════════════════════════════════════════════════════════════
+
+                          J_USB (USB-C 2.0 Connector)
+                       ┌──────────────────────────────┐
+                       │                              │
+                       │  VBUS ─────────┬─────────────┼──────────────────────────┐
+                       │                │             │                          │
+                       │           ┌────┴────┐        │                          │
+                       │           │  F_USB  │        │                          │
+                       │           │  1A PTC │        │                          │
+                       │           │  Fuse   │        │                          │
+                       │           └────┬────┘        │                          │
+                       │                │             │                          │
+                       │                │        ┌────┴────┐                     │
+                       │                │        │ D_VBUS  │                     │
+                       │                │        │  SS14   │ Schottky            │
+                       │                │        │ 1A diode│ (prevents backfeed) │
+                       │                │        └────┬────┘                     │
+                       │                │             │                          │
+                       │                └─────────────┴────────────────► +5V_USB │
+                       │                              │                (to VSYS) │
+                       │                              │                          │
+                       │   D+ ────────┬───────────────┼──────────────────────────┤
+                       │              │               │                          │
+                       │         ┌────┴────┐         │                          │
+                       │         │D_USB_DP │         │                          │
+                       │         │PESD5V0  │  ESD    │                          │
+                       │         │  S1BL   │  Clamp  │                          │
+                       │         └────┬────┘         │                          │
+                       │              │              │                          │
+                       │             GND             │                          │
+                       │                             │                          │
+                       │   D- ────────┬──────────────┼──────────────────────────┤
+                       │              │              │                          │
+                       │         ┌────┴────┐        │                          │
+                       │         │D_USB_DM │        │                          │
+                       │         │PESD5V0  │  ESD   │                          │
+                       │         │  S1BL   │  Clamp │                          │
+                       │         └────┬────┘        │                          │
+                       │              │             │                          │
+                       │             GND            │                          │
+                       │                            │                          │
+                       │   CC1 ──────┬──────────────┤                          │
+                       │             │              │                          │
+                       │        ┌────┴────┐        │                          │
+                       │        │ R_CC1   │        │                          │
+                       │        │ 5.1kΩ   │        │                          │
+                       │        └────┬────┘        │                          │
+                       │             │             │                          │
+                       │            GND            │                          │
+                       │                           │                          │
+                       │   CC2 ──────┬─────────────┤                          │
+                       │             │             │                          │
+                       │        ┌────┴────┐       │                          │
+                       │        │ R_CC2   │       │                          │
+                       │        │ 5.1kΩ   │       │                          │
+                       │        └────┬────┘       │                          │
+                       │             │            │                          │
+                       │            GND           │                          │
+                       │                          │                          │
+                       │   GND ───────────────────┴──────────────────► GND   │
+                       │                                                      │
+                       └──────────────────────────────────────────────────────┘
+
+
+    ═══════════════════════════════════════════════════════════════════════════
+                         USB DATA LINES TO RP2354
+    ═══════════════════════════════════════════════════════════════════════════
+
+    USB D+ Path:
+    ────────────
+
+    J_USB D+ ───┬───────────────────────────────────────────────────────────────┐
+                │                                                               │
+           ┌────┴────┐                                                          │
+           │D_USB_DP │                                                          │
+           │PESD5V0  │ ESD Clamp (place CLOSE to J_USB connector)               │
+           │  S1BL   │                                                          │
+           └────┬────┘                                                          │
+                │                                                               │
+               GND                    ┌────────────┐                            │
+                                      │  R_USB_DP  │                            │
+    RP2354 USB_DP Pin ◄───────────────┤    27Ω    ├────────────────────────────┘
+                                      │  1% 0603  │ (place CLOSE to RP2354)
+                                      └────────────┘
+
+
+    USB D- Path:
+    ────────────
+
+    J_USB D- ───┬───────────────────────────────────────────────────────────────┐
+                │                                                               │
+           ┌────┴────┐                                                          │
+           │D_USB_DM │                                                          │
+           │PESD5V0  │ ESD Clamp (place CLOSE to J_USB connector)               │
+           │  S1BL   │                                                          │
+           └────┬────┘                                                          │
+                │                                                               │
+               GND                    ┌────────────┐                            │
+                                      │  R_USB_DM  │                            │
+    RP2354 USB_DM Pin ◄───────────────┤    27Ω    ├────────────────────────────┘
+                                      │  1% 0603  │ (place CLOSE to RP2354)
+                                      └────────────┘
+
+
+    ═══════════════════════════════════════════════════════════════════════════
+                            VBUS POWER PATH
+    ═══════════════════════════════════════════════════════════════════════════
+
+    VBUS (5V from USB Host)
+          │
+     ┌────┴────┐
+     │  F_USB  │ PTC Fuse (1A, 1206 package)
+     │   1A    │ Overcurrent protection
+     └────┬────┘
+          │
+          │        ┌────────────────────────────────────────┐
+          │        │                                        │
+          │   ┌────┴────┐                              ┌────┴────┐
+          │   │ D_VBUS  │                              │ +5V_HLK │
+          │   │  SS14   │ Schottky Diode               │ (from   │
+          │   │  1A     │ (prevents backfeed           │  HLK    │
+          │   └────┬────┘  to HLK when both            │ module) │
+          │        │       sources present)            └────┬────┘
+          │        │                                        │
+          │        └────────────────┬───────────────────────┘
+          │                         │
+          │                    ┌────┴────┐
+          │                    │  VSYS   │ (RP2354 power input)
+          │                    │  5V     │
+          │                    └─────────┘
+
+    POWER FLOW:
+    ───────────
+    • USB connected (no HLK): VBUS → F_USB → D_VBUS → VSYS
+    • HLK powered (no USB):   HLK → VSYS (D_VBUS reverse-biased, no backfeed)
+    • Both connected:         HLK powers system, D_VBUS blocks USB from sourcing
+                              (D_VBUS Vf ~0.3V means HLK wins when both present)
+
+
+    ═══════════════════════════════════════════════════════════════════════════
+                              COMPONENT VALUES
+    ═══════════════════════════════════════════════════════════════════════════
+
+    CONNECTOR:
+    ──────────
+    J_USB:    USB-C 2.0 connector (e.g., USB-C-016, Molex 47346-0001)
+              16-pin mid-mount SMD, USB 2.0 compatible
+
+    POWER PROTECTION:
+    ─────────────────
+    F_USB:    1A PTC fuse, 1206 package (e.g., Littelfuse 1206L100THYR)
+              - Overcurrent protection for USB power faults
+              - Self-resetting polyfuse
+    D_VBUS:   SS14, SMA package (1A 40V Schottky)
+              - Prevents backfeeding HLK module when USB is connected
+              - Must be 1A rated (ESP32 can draw 355mA typical, 910mA peak)
+              - Low Vf (~0.3V) minimizes voltage drop
+
+    USB DATA LINE PROTECTION:
+    ─────────────────────────
+    D_USB_DP: PESD5V0S1BL, SOD-323 (ESD protection, place CLOSE to J_USB)
+    D_USB_DM: PESD5V0S1BL, SOD-323 (ESD protection, place CLOSE to J_USB)
+              - Clamp voltage: 5.0V
+              - Capacitance: <1pF (USB 2.0 compatible)
+
+    USB TERMINATION:
+    ────────────────
+    R_USB_DP: 27Ω 1%, 0603 (series termination, place CLOSE to RP2354)
+    R_USB_DM: 27Ω 1%, 0603 (series termination, place CLOSE to RP2354)
+              - Required for USB impedance matching (45Ω ±10% differential)
+              - Value per Raspberry Pi RP2354 hardware design guidelines
+
+    CC CONFIGURATION:
+    ─────────────────
+    R_CC1:    5.1kΩ 1%, 0603 (CC1 to GND)
+    R_CC2:    5.1kΩ 1%, 0603 (CC2 to GND)
+              - 5.1kΩ pull-down indicates UFP (device) role
+              - Enables 5V/3A power delivery from USB host
+
+
+    ═══════════════════════════════════════════════════════════════════════════
+                              USB FEATURES
+    ═══════════════════════════════════════════════════════════════════════════
+
+    PROGRAMMING MODES:
+    ──────────────────
+    1. USB Mass Storage (BOOTSEL mode):
+       - Hold SW2 (BOOTSEL) while powering on or pressing SW1 (Reset)
+       - RP2354 appears as "RPI-RP2" USB drive
+       - Drag-drop .uf2 firmware file to flash
+
+    2. USB CDC Serial (if enabled in firmware):
+       - Appears as virtual COM port for serial logging
+       - Useful for debugging and diagnostics
+       - 115200 baud default (configurable)
+
+    3. CMSIS-DAP (debug probe mode):
+       - RP2354 can act as debug probe for itself (picoprobe)
+       - Enables GDB debugging via USB
+
+    BOOTSEL BUTTON (SW2):
+    ─────────────────────
+                                    +3.3V
+                                      │
+                                 ┌────┴────┐
+                                 │ R_QSPI  │
+                                 │   CS    │ Internal pull-up
+                                 │  10kΩ   │
+                                 └────┬────┘
+                                      │
+    RP2354 QSPI_SS Pin ◄──────────────┼──────────────────┐
+                                      │                  │
+                                 ┌────┴────┐        ┌────┴────┐
+                                 │R_BOOTSEL│        │   SW2   │
+                                 │   1kΩ   │        │ BOOTSEL │
+                                 │(current │        │ Tactile │
+                                 │ limit)  │        │  6x6mm  │
+                                 └────┬────┘        └────┬────┘
+                                      │                  │
+                                     ─┴─                ─┴─
+                                     GND                GND
+
+    - Press SW2 during reset to enter USB bootloader mode
+    - R_BOOTSEL limits current if button pressed during active flash access
+    - R_QSPI_CS (internal or external 10kΩ) ensures QSPI remains active normally
+
+
+    ═══════════════════════════════════════════════════════════════════════════
+                            ⚠️ SAFETY WARNINGS
+    ═══════════════════════════════════════════════════════════════════════════
+
+    1. NEVER CONNECT USB WHILE MAINS-POWERED:
+       ──────────────────────────────────────
+       This PCB uses the SRif (Chassis Reference) grounding architecture where
+       the logic ground (GND) is NOT directly connected to Mains Earth. When
+       USB is connected, the laptop/PC ground becomes the reference.
+
+       RISK: If USB cable is connected while the machine is mains-powered:
+       • Ground loop through USB → PC → Mains Earth → Machine Chassis → SRif
+       • Potential for ground fault current through USB cable shield
+       • Risk of shock if laptop is not properly earthed
+
+       SAFE PROCEDURE FOR USB DEBUGGING:
+       1. Unplug machine from mains power
+       2. Wait 30 seconds for capacitor discharge
+       3. Connect USB cable
+       4. Power the board via USB only (limited functionality, no heaters)
+       5. Disconnect USB before reconnecting mains
+
+    2. PHYSICAL PROTECTION:
+       ─────────────────────
+       USB port should be COVERED or INTERNAL (requiring panel removal to access)
+       to discourage casual use while machine is mains-powered.
+
+    3. POWER SEQUENCING:
+       ──────────────────
+       If using USB power only (without HLK mains supply):
+       • IOVDD (3.3V) must be present before applying 5V signals to GPIOs
+       • Series resistors on ESP32 UART lines provide protection during sequencing
+       • Do not connect ESP32 module when running from USB power alone
+
+
+    ═══════════════════════════════════════════════════════════════════════════
+                            PCB LAYOUT NOTES
+    ═══════════════════════════════════════════════════════════════════════════
+
+    1. USB TRACE ROUTING:
+       ─────────────────────
+       • D+ and D- must be routed as 90Ω differential pair
+       • Keep traces short (<50mm total) and matched length (±0.5mm)
+       • No vias in USB data path if possible
+       • Reference to solid ground plane underneath
+
+    2. COMPONENT PLACEMENT:
+       ─────────────────────
+       • ESD diodes (D_USB_DP, D_USB_DM): Place as CLOSE as possible to J_USB
+       • Termination resistors (R_USB_DP, R_USB_DM): Place CLOSE to RP2354
+       • Signal flow: Connector → ESD → Trace → Termination → MCU
+
+    3. CONNECTOR ORIENTATION:
+       ──────────────────────
+       • J_USB should face board edge for easy access
+       • Consider placement relative to enclosure opening (bottom-opening design)
+       • Keep away from HV section (maintain 6mm clearance)
+
+    4. USB SHIELD:
+       ────────────
+       • Connect USB connector shell to GND via 0Ω resistor or ferrite bead
+       • Place connection point close to connector
+       • Provides EMI shielding while allowing controlled ground reference
+```
+
+---
 
 # Sheet 7: User Interface
 
@@ -2321,6 +2635,15 @@ using the machine's existing high-voltage wiring. NO HIGH CURRENT flows through 
     K2_COM       → Relay K2 Common (internal to L_FUSED)
     K3_COM       → Relay K3 Common (internal to L_FUSED)
 
+    DEDICATED RP2354 PINS (NOT GPIO):
+    ──────────────────────────────────
+    USB_DP   → USB Data+ (J_USB D+ via 27Ω termination + ESD)
+    USB_DM   → USB Data- (J_USB D- via 27Ω termination + ESD)
+    QSPI_SS  → BOOTSEL button SW2 (enters USB bootloader when held during reset)
+    SWDIO    → SWD Data I/O (J15-6 via 47Ω series protection)
+    SWCLK    → SWD Clock (J15-8 via 22Ω series protection)
+    RUN      → Reset button SW1 + ESP32 reset control (J15-5)
+
     GPIO NETS:
     ──────────
     GPIO0  → ESP32_TX (J15-3)
@@ -2366,6 +2689,16 @@ using the machine's existing high-voltage wiring. NO HIGH CURRENT flows through 
     J17-4  (RX)    → GPIO7 (from meter TX, via 33Ω)
     J17-5  (TX)    → GPIO6 (to meter RX, via 33Ω)
     J17-6  (DE/RE) → GPIO20 (RS485 direction control)
+
+    J_USB USB-C PROGRAMMING PORT:
+    ─────────────────────────────
+    VBUS   → +5V_USB (via F_USB fuse + D_VBUS Schottky to VSYS)
+    D+     → RP2354 USB_DP (via ESD D_USB_DP + 27Ω R_USB_DP termination)
+    D-     → RP2354 USB_DM (via ESD D_USB_DM + 27Ω R_USB_DM termination)
+    CC1    → GND (via 5.1kΩ R_CC1, enables 5V power delivery)
+    CC2    → GND (via 5.1kΩ R_CC2, enables 5V power delivery)
+    GND    → System ground
+    ⚠️ WARNING: Disconnect mains before connecting USB! (Floating ground safety)
 
     J24 POWER METER HV TERMINALS (Screw Terminal 2-pos, 5.08mm):
     ────────────────────────────────────────────────────────────

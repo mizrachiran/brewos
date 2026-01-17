@@ -14,6 +14,7 @@
 | I2C               | 2× peripherals                                 |
 | PWM               | 12× slices (24 channels)                       |
 | PIO               | 3× programmable I/O blocks (12 state machines) |
+| **USB**           | **USB 1.1 device/host (Full Speed 12 Mbps)**   |
 | Operating Voltage | 1.8V - 5.5V (via VSYS), 3.3V logic             |
 | Temperature Range | -20°C to +85°C                                 |
 | Security          | ARM TrustZone, signed boot, 8KB OTP            |
@@ -98,8 +99,17 @@
 │  └─────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                 │
 │  ┌─────────────────────────────────────────────────────────────────────────┐  │
-│  │  HARDWARE CONTROL (Direct to Pico pins, not GPIO)                       │  │
-│  │  └── RUN Pin ─── Reset Button (SMD tactile, to GND)                    │  │
+│  │  HARDWARE CONTROL (Direct to RP2354 pins, not GPIO)                     │  │
+│  │  └── RUN Pin ─── Reset Button SW1 (SMD tactile, to GND)                │  │
+│  └─────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐  │
+│  │  USB INTERFACE (Dedicated RP2354 pins via J_USB USB-C connector)       │  │
+│  │  ├── USB_DP ─── USB Data+ (via 27Ω termination R_USB_DP + ESD D_USB_DP)│  │
+│  │  ├── USB_DM ─── USB Data- (via 27Ω termination R_USB_DM + ESD D_USB_DM)│  │
+│  │  └── QSPI_SS ── BOOTSEL Button SW2 (enters USB bootloader when held)  │  │
+│  │  Features: USB Mass Storage (flashing), USB CDC Serial (logging)       │  │
+│  │  ⚠️ WARNING: Disconnect mains before connecting USB! (Safety)          │  │
 │  └─────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                 │
 │  GPIO UTILIZATION: 22/30 used (GPIO8,9,16,22,23,24,25 available)              │

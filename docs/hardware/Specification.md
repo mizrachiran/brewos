@@ -58,6 +58,7 @@
 | 4× Digital In   | Water switch, Tank level, Brew handle, Steam level |
 | UART0           | ESP32 display module                               |
 | UART1           | Power meter (TTL/RS485)                            |
+| USB-C (J_USB)   | Programming, debugging, serial logging             |
 
 ### Critical Design Points
 

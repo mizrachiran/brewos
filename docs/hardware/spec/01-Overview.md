@@ -146,6 +146,7 @@ This specification defines a custom control PCB to replace the factory GICAR con
 | --------- | ---------- | ------------------------------------- | --------- |
 | ESP32     | UART0      | Display module, WiFi, user interface  | J15       |
 | Meter     | UART/RS485 | External power meter communication    | J17       |
+| USB       | USB 2.0    | Programming, debugging, serial logging | J_USB     |
 
 ### User Interface (Onboard)
 
