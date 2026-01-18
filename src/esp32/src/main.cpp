@@ -2726,30 +2726,32 @@ static void loopHandleWiFiTasks() {
         webServer->broadcastLog("WiFi connected");
         wifiConnectedLogSent = true;
     }
-    // Start mDNS immediately when WiFi connects - no delay needed
-    // Web server is already running, mDNS just makes it discoverable
-    if (wifiConnectedTime > 0 && !mDNSStarted) {
-        // Force restart of mDNS to ensure clean state
+    // Start mDNS after WiFi has stabilized (1 second delay)
+    // Web server is already running, mDNS just makes it discoverable via brewos.local
+    // Note: ESP32's ESPmDNS library handles mDNS queries automatically in the background
+    // via lwIP - no manual update() call is needed (unlike ESP8266)
+    if (state.wifi_connected && wifiConnectedTime > 0 && 
+        millis() - wifiConnectedTime > 1000 && !mDNSStarted) {
+        
+        // Clean up any previous mDNS state before starting
+        // This is safe to call even if nothing was started
         MDNS.end();
+        delay(50);  // Brief delay for cleanup
         
         if (MDNS.begin("brewos")) {
             LOG_I("mDNS started: http://brewos.local");
-            // Add service and check result
+            // Add HTTP service for discovery
             if (MDNS.addService("http", "tcp", 80)) {
-                LOG_I("mDNS service added");
-                mDNSStarted = true;
+                LOG_I("mDNS HTTP service registered");
             } else {
-                LOG_E("mDNS addService failed - will retry");
-                // Retry next loop
+                LOG_W("mDNS addService failed (hostname still works)");
             }
+            // Mark as started - hostname resolution works even if service registration fails
+            mDNSStarted = true;
         } else {
-            LOG_W("mDNS failed to start - will retry");
-            // Retry on next loop iteration (don't set mDNSStarted = true on failure)
+            LOG_W("mDNS failed to start - will retry next loop");
         }
     }
-    
-    // Note: ESP32's ESPmDNS library handles mDNS queries automatically in the background
-    // via lwIP - no manual update() call is needed (unlike ESP8266)
     
     if (!state.wifi_connected) {
         // Reset when WiFi disconnects
@@ -2757,6 +2759,7 @@ static void loopHandleWiFiTasks() {
         wifiConnectedLogSent = false;
         mDNSStarted = false;
         ntpConfigured = false;
+        // Note: MDNS.end() is called in onWiFiDisconnected() callback
     }
     
     // Periodically ensure WiFi power save is disabled (every 30s when connected)
