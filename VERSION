@@ -9,5 +9,5 @@
 # Protocol version is tracked separately in src/shared/protocol_defs.h
 # Increment PROTOCOL_VERSION for breaking protocol changes
 
-FIRMWARE_VERSION=0.8.53
+FIRMWARE_VERSION=0.8.54
 PROTOCOL_VERSION=1
