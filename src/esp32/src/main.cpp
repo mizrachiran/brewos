@@ -2748,11 +2748,8 @@ static void loopHandleWiFiTasks() {
         }
     }
     
-    // CRITICAL: Update mDNS responder every loop iteration when started
-    // Without this, mDNS won't respond to queries and brewos.local won't resolve
-    if (mDNSStarted && state.wifi_connected) {
-        MDNS.update();
-    }
+    // Note: ESP32's ESPmDNS library handles mDNS queries automatically in the background
+    // via lwIP - no manual update() call is needed (unlike ESP8266)
     
     if (!state.wifi_connected) {
         // Reset when WiFi disconnects
